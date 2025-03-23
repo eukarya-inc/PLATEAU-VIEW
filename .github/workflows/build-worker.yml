@@ -17,14 +17,13 @@ jobs:
         uses: actions/checkout@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Build and load docker image
+      - name: Build docker image
         uses: docker/build-push-action@v3
         id: docker
         with:
           file: worker/Dockerfile
           platforms: linux/amd64
-          load: true
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          push: false
+          push: true
