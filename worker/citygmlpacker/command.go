@@ -25,6 +25,8 @@ func Run(conf Config) (err error) {
 		conf.Timeout = defaultTimeout
 	}
 
+	log.Printf("start citygml-packer: timeout=%s", conf.Timeout)
+
 	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
 	defer cancel()
 
@@ -120,8 +122,6 @@ func Run(conf Config) (err error) {
 			}
 		}
 	}()
-
-	log.Printf("packing... timeout=%s", conf.Timeout)
 
 	if err := p.Pack(ctx, conf.Domain, conf.URLs); err != nil {
 		return fmt.Errorf("pack: %w", err)

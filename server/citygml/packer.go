@@ -196,13 +196,18 @@ func (p *packer) packAsync(ctx context.Context, req PackAsyncRequest) error {
 	urls := strings.Join(req.URLs, ",")
 	log.Debugfc(ctx, "citygml: packer: enqueue pack job: dest=%s, domain=%s, urls=%s", req.Dest, req.Domain, urls)
 
+	args := []string{"citygml-packer", "-dest", req.Dest, "-domain", req.Domain}
+	if req.Timeout > 0 {
+		args = append(args, "-timeout", req.Timeout.String())
+	}
+
 	build := &cloudbuild.Build{
 		Timeout:  "86400s", // 1 day
 		QueueTtl: "86400s", // 1 day
 		Steps: []*cloudbuild.BuildStep{
 			{
 				Name: p.conf.CityGMLPackerImage,
-				Args: append([]string{"citygml-packer", "-dest", req.Dest, "-domain", req.Domain, "-timeout", req.Timeout.String()}, urls),
+				Args: append(args, urls),
 			},
 		},
 		Tags: []string{"citygml-packer"},
@@ -244,5 +249,5 @@ type PackAsyncRequest struct {
 	Dest    string        `json:"dest"`
 	Domain  string        `json:"domain"`
 	URLs    []string      `json:"urls"`
-	Timeout time.Duration `json:"timeout"`
+	Timeout time.Duration `json:"timeout,omitempty"`
 }
