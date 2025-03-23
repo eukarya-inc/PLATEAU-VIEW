@@ -177,12 +177,26 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 		URLs:    req.URLs,
 		Timeout: time.Duration(p.conf.PackerTimeout) * time.Second,
 	}
-	if err := p.packAsync(ctx, packReq); err != nil {
-		log.Errorfc(ctx, "citygml: packer: failed to write metadata: %v", err)
-		return c.JSON(http.StatusInternalServerError, map[string]any{
-			"error": "failed to enqueue pack job",
-		})
+
+	// when args are too long, Cloud Build sometimes fails, but retrying usually works.
+	// googleapi: Error 400: invalid build: invalid .steps field: build step 0 arg 5 too long (max: 10000), badRequest
+	const retry = 2
+	for i := range retry {
+		err := p.packAsync(ctx, packReq)
+		if err == nil {
+			break
+		}
+
+		if i == retry-1 {
+			log.Errorfc(ctx, "citygml: packer: failed to enqueue pack job: %v", err)
+			return c.JSON(http.StatusInternalServerError, map[string]any{
+				"error": "failed to enqueue pack job",
+			})
+		}
+
+		log.Debugfc(ctx, "citygml: packer: failed to enqueue pack job (%d): %v", i, err)
 	}
+
 	return c.JSON(http.StatusOK, resp)
 }
 
