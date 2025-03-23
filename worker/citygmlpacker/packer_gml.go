@@ -34,6 +34,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 	depsMap := map[string]struct{}{}
 	ustr := u.String()
 
+	log.Infof("downloading... %s", ustr)
 	body, err := httpGet(ctx, p.httpClient, ustr)
 	if body != nil {
 		defer body.Close()
@@ -66,7 +67,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 
 	deps := depsMapToSlice(depsMap, pctx.seen, u)
 
-	log.Infof("completed %s (%d deps)", ustr, len(deps))
+	log.Infof("%d deps detected from %s", ustr, len(deps), ustr)
 
 	p.p.AddDep(int64(len(deps)))
 	defer p.p.DepEnd()
@@ -96,7 +97,6 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 
 				log.Infof("downloading... %s", d.URL())
 				if d.Download(p.httpClient) {
-					log.Infof("downloaded: %s", d.URL())
 					return
 				}
 
