@@ -41,7 +41,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	if u == nil {
+	if body == nil {
 		log.Warnf("skipped download: %s", ustr)
 		return nil // skip
 	}
@@ -94,11 +94,19 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 					<-sem
 				}()
 
+				log.Infof("downloading... %s", d.URL())
 				if d.Download(p.httpClient) {
 					log.Infof("downloaded: %s", d.URL())
-				} else if d.Err() == nil {
-					log.Warnf("skipped download: %s", d.URL())
+					return
 				}
+
+				err := d.Err()
+				if err == nil {
+					log.Warnf("skipped download: %s", d.URL())
+					return
+				}
+
+				log.Errorf("failed to download: %s: %v", d.URL(), err)
 			}()
 		}
 	}()
