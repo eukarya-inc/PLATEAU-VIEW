@@ -155,6 +155,7 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 
 	// sort urls and calculate hash
 	slices.Sort(req.URLs)
+	req.URLs = slices.Compact(req.URLs)
 	checksum := sha256.Sum256([]byte(strings.Join(req.URLs, ",")))
 	hash := hex.EncodeToString(checksum[:])
 
