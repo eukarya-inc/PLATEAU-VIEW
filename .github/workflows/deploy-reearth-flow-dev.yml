@@ -1,5 +1,6 @@
 name: 🌊 Deploy Re:earth Flow Development Environment
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       only_policies:

@@ -5,12 +5,17 @@ on:
       local:
         required: true
         type: boolean
+    outputs:
+      image:
+        value: ${{ jobs.docker.outputs.image }}
 jobs:
   docker:
     name: Build and push Docker image
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-api:latest
+    outputs:
+      image: ${{ env.IMAGE_NAME }}@sha256:${{ steps.docker.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -33,9 +38,9 @@ jobs:
         with:
           name: extension
           path: server
-
       - name: Build and load docker image
         uses: docker/build-push-action@v3
+        id: docker
         with:
           context: ./server
           platforms: linux/amd64
@@ -44,11 +49,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           push: false
-      - name: Save docker image
-        run: docker save ${{ env.IMAGE_NAME }} | gzip > plateauview-api.tar.gz
-      - name: Save imaged to artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: plateauview-api
-          path: plateauview-api.tar.gz
-          if-no-files-found: error
