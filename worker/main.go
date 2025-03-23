@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/eukarya-inc/reearth-plateauview/worker/citygmlpacker"
 	"github.com/eukarya-inc/reearth-plateauview/worker/extractmaxlod"
@@ -97,7 +96,7 @@ func cityGMLPacker(*Config) {
 	flag := flag.NewFlagSet("citygml-packer", flag.ExitOnError)
 	flag.StringVar(&config.Dest, "dest", "", "destination url (gs://...)")
 	flag.StringVar(&config.Domain, "domain", "", "allowed domain")
-	flag.DurationVar(&config.Timeout, "timeout", 10*time.Minute, "timeout")
+	flag.DurationVar(&config.Timeout, "timeout", 0, "timeout")
 	if err := flag.Parse(os.Args[2:]); err != nil {
 		panic(err)
 	}

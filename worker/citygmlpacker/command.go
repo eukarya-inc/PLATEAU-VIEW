@@ -18,7 +18,13 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
+const defaultTimeout = 10 * time.Minute
+
 func Run(conf Config) (err error) {
+	if conf.Timeout <= 0 {
+		conf.Timeout = defaultTimeout
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
 	defer cancel()
 
@@ -114,6 +120,8 @@ func Run(conf Config) (err error) {
 			}
 		}
 	}()
+
+	log.Printf("packing... timeout=%s", conf.Timeout)
 
 	if err := p.Pack(ctx, conf.Domain, conf.URLs); err != nil {
 		return fmt.Errorf("pack: %w", err)

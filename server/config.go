@@ -91,7 +91,7 @@ type Config struct {
 	CityGML_CityGMLPackerImage         string   `pp:",omitempty"`
 	CityGML_WorkerRegion               string   `pp:",omitempty"`
 	CityGML_WorkerProject              string   `pp:",omitempty"`
-	CityGML_PackerTimeout              uint     `default:"30" pp:",omitempty"`
+	CityGML_PackerTimeout              uint     `pp:",omitempty"`
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
 }
