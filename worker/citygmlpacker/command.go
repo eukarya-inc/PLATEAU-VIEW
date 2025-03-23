@@ -25,12 +25,7 @@ func Run(conf Config) (err error) {
 		conf.Timeout = defaultTimeout
 	}
 
-	log.Printf("start citygml-packer: timeout=%s", conf.Timeout)
-
-	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
-	defer cancel()
-
-	startedAt := time.Now().Format(time.RFC3339Nano)
+	ctx := context.Background()
 
 	destURL, err := url.Parse(conf.Dest)
 	if err != nil {
@@ -43,6 +38,12 @@ func Run(conf Config) (err error) {
 	}
 
 	obj := gcs.Bucket(destURL.Host).Object(path.Join(strings.TrimPrefix(destURL.Path, "/")))
+
+	ctx, cancel := context.WithTimeout(ctx, conf.Timeout)
+	defer cancel()
+
+	startedAt := time.Now().Format(time.RFC3339Nano)
+	log.Printf("start citygml-packer: timeout=%s", conf.Timeout)
 
 	defer func() {
 		if err == nil {
