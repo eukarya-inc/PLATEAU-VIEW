@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,19 +77,23 @@ func (h *Handler) UpdateCache(c echo.Context) error {
 }
 
 func (h *Handler) GetTile(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
 	z := c.Param("z")
 	x := c.Param("x")
 	y := c.Param("y")
+	y2 := strings.TrimSuffix(y, path.Ext(y))
 	zi, errx := strconv.Atoi(z)
 	xi, erry := strconv.Atoi(x)
-	yi, errz := strconv.Atoi(y)
+	yi, errz := strconv.Atoi(y2)
 	if errx != nil || erry != nil || errz != nil || zi < 0 || xi < 0 || yi < 0 {
+		log.Debugfc(ctx, "tiles: invalid params: %s/%s/%s", z, x, y2)
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 
 	tileURL := h.getTileURL(id, zi, xi, yi)
 	if tileURL == "" {
+		log.Debugfc(ctx, "tiles: not found: %d/%d/%d", zi, xi, yi)
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 

@@ -27,6 +27,14 @@ func TestTiles_Find(t *testing.T) {
 	assert.Equal(t, "", tiles.Find("name", 2, 3, 11))
 }
 
+func TestRange_In(t *testing.T) {
+	assert.True(t, Range{ZMin: -1, ZMax: -1, XMin: -1, XMax: -1, YMin: -1, YMax: -1}.In(0, 0, 10))
+	assert.True(t, Range{ZMin: 0, ZMax: 0, XMin: -1, XMax: -1, YMin: 10, YMax: 20}.In(0, 0, 10))
+	assert.True(t, Range{ZMin: 0, ZMax: 0, XMin: -1, XMax: -1, YMin: 10, YMax: 20}.In(0, 0, 20))
+	assert.True(t, Range{ZMin: 1, ZMax: -1, XMin: 1, XMax: 2, YMin: 10, YMax: 20}.In(2, 1, 10))
+	assert.False(t, Range{ZMin: 1, ZMax: -1, XMin: 1, XMax: 2, YMin: 10, YMax: 20}.In(2, 3, 11))
+}
+
 func TestExtractRange(t *testing.T) {
 	assert.Equal(t, Range{
 		ZMin: 0, ZMax: 0, YMin: -1, YMax: -1, XMin: -1, XMax: -1,
