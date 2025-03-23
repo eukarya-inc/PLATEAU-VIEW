@@ -1,15 +1,19 @@
-name: build-tiles
 on:
   workflow_call:
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
+    outputs:
+      image:
+        value: ${{ jobs.docker.outputs.image }}
 jobs:
   docker:
     name: Build and push Docker image
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-tiles:latest
+    outputs:
+      image: ${{ env.IMAGE_NAME }}@sha256:${{ steps.docker.outputs.digest }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +21,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Build docker image
         uses: docker/build-push-action@v5
+        id: docker
         with:
           context: ./tiles
           platforms: linux/amd64
