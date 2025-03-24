@@ -20,7 +20,7 @@ func TestHanlder_GetTile(t *testing.T) {
 		httpmock.NewStringResponder(200, "image"))
 	httpmock.RegisterResponderWithQuery(
 		"GET", "https://ciitiler.example.com/tiles/1/2/3.png",
-		map[string]string{"url": "https://example.com/styles/light-map.json"},
+		map[string]string{"url": "https://example.com/styles/light-map"},
 		httpmock.NewStringResponder(200, "ciitiler"))
 
 	h := &Handler{
