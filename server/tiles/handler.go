@@ -88,6 +88,7 @@ func (h *Handler) Init(ctx context.Context) {
 }
 
 func (h *Handler) Route(g *echo.Group) {
+	g = g.Group("/tiles")
 	g.GET("/:id/:z/:x/:y", h.GetTile)
 	g.GET("/styles/:id", styleHandler)
 	g.POST("/update", h.UpdateCache)
