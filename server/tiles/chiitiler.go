@@ -40,7 +40,7 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 	y := c.Param("y")
 
 	styleURL := *h.host
-	styleURL.Path = fmt.Sprintf("/styles/%s.json", style)
+	styleURL.Path = fmt.Sprintf("/styles/%s", style)
 	u := *h.chiitilerURL
 	u.Path = fmt.Sprintf("/tiles/%s/%s/%s", z, x, y)
 	q := u.Query()
