@@ -21,14 +21,18 @@ const modelKey = "tiles"
 type Config struct {
 	CMS          plateaucms.Config
 	CacheControl string
+	Host         string
+	ChiitilerURL string
 }
 
 type Handler struct {
-	pcms  *plateaucms.CMS
-	http  *http.Client
-	lock  sync.RWMutex
-	tiles Tiles
-	conf  Config
+	pcms         *plateaucms.CMS
+	http         *http.Client
+	lock         sync.RWMutex
+	host         *url.URL
+	chiitilerURL *url.URL
+	tiles        Tiles
+	conf         Config
 }
 
 func New(conf Config) (*Handler, error) {
@@ -37,9 +41,27 @@ func New(conf Config) (*Handler, error) {
 		return nil, fmt.Errorf("failed to create plateau cms: %w", err)
 	}
 
+	var host, chiitilerURL *url.URL
+
+	if conf.Host != "" {
+		host, err = url.Parse(conf.Host)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse host: %w", err)
+		}
+	}
+
+	if conf.ChiitilerURL != "" {
+		chiitilerURL, err = url.Parse(conf.ChiitilerURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse chiitiler url: %w", err)
+		}
+	}
+
 	return &Handler{
-		pcms: pcms,
-		conf: conf,
+		pcms:         pcms,
+		conf:         conf,
+		host:         host,
+		chiitilerURL: chiitilerURL,
 		http: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -66,8 +88,9 @@ func (h *Handler) Init(ctx context.Context) {
 }
 
 func (h *Handler) Route(g *echo.Group) {
-	g.GET("/tiles/:id/:z/:x/:y", h.GetTile)
-	g.POST("/tiles/update", h.UpdateCache)
+	g.GET("/:id/:z/:x/:y", h.GetTile)
+	g.GET("/styles/:id.json", styleHandler)
+	g.POST("/update", h.UpdateCache)
 }
 
 func (h *Handler) UpdateCache(c echo.Context) error {
@@ -77,8 +100,12 @@ func (h *Handler) UpdateCache(c echo.Context) error {
 }
 
 func (h *Handler) GetTile(c echo.Context) error {
-	ctx := c.Request().Context()
 	id := c.Param("id")
+	if _, ok := styles[id]; ok {
+		return h.chiitilerHandler(c)
+	}
+
+	ctx := c.Request().Context()
 	z := c.Param("z")
 	x := c.Param("x")
 	y := c.Param("y")

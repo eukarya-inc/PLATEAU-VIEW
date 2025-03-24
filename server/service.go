@@ -187,7 +187,7 @@ func Tiles(conf *Config) (*Service, error) {
 				return err
 			}
 
-			h.Route(g.Group(""))
+			h.Route(g.Group("/tiles"))
 			h.Init(context.Background())
 			return nil
 		},
