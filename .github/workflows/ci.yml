@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0
       - name: changed files for extension
         id: extension
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
             extension/**
@@ -43,7 +43,7 @@ jobs:
             .github/workflows/deploy-extension-*.yml
       - name: changed files for server
         id: server
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
             server/**
@@ -52,14 +52,14 @@ jobs:
             .github/workflows/deploy-server-*.yml
       - name: changed files for tools
         id: tools
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
             tools/**
             .github/workflows/ci-tools.yml
       - name: changed files for geo
         id: geo
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
             geo/**
@@ -68,7 +68,7 @@ jobs:
             .github/workflows/deploy-geo-*.yml
       - name: changed files for tiles
         id: tiles
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
             tiles/**
@@ -77,7 +77,7 @@ jobs:
             .github/workflows/deploy-tiles-*.yml
       - name: changed files for worker
         id: worker
-        uses: step-security/changed-files@v45
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           since_last_remote_commit: true
           files: |
