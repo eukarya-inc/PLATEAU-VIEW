@@ -37,11 +37,11 @@ func minorVersionsFromMax(major, max int) []string {
 }
 
 func (h *CMS) PlateauSpecs(ctx context.Context) ([]PlateauSpec, error) {
-	if h.cmsMetadataProject == "" {
+	if h.cmsSysProject == "" {
 		return nil, rerror.ErrNotFound
 	}
 
-	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsMetadataProject, plateauSpecModel, true, 100)
+	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsSysProject, plateauSpecModel, true, 100)
 	if err != nil || items == nil {
 		if errors.Is(err, cms.ErrNotFound) || items == nil {
 			return nil, rerror.ErrNotFound

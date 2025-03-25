@@ -36,9 +36,9 @@ func TestCMS_PlateauSpecs(t *testing.T) {
 	mockCMSPlateauSpec(t)
 
 	cms := &CMS{
-		cmsbase:            testCMSHost,
-		cmsMetadataProject: tokenProject,
-		cmsMain:            lo.Must(cms.New(testCMSHost, testCMSToken)),
+		cmsbase:       testCMSHost,
+		cmsSysProject: tokenProject,
+		cmsMain:       lo.Must(cms.New(testCMSHost, testCMSToken)),
 	}
 
 	expected := []PlateauSpec{

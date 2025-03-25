@@ -8,8 +8,8 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
-func ValidatePayload(ctx context.Context, w *cmswebhook.Payload, conf Config) bool {
-	if !w.Operator.IsUser() && w.Operator.IsIntegrationBy(conf.CMSIntegration) {
+func ValidatePayload(ctx context.Context, w *cmswebhook.Payload, cmsintegration string) bool {
+	if !w.Operator.IsUser() && w.Operator.IsIntegrationBy(cmsintegration) {
 		log.Debugfc(ctx, "invalid event operator: %+v", w.Operator)
 		return false
 	}

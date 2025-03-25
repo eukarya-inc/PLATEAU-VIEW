@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationv3"
+	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
@@ -18,7 +18,7 @@ func setupCityItems(conf *Config, args []string) error {
 	println("setup-city-items")
 
 	var base, token, file string
-	inp := cmsintegrationv3.SetupCityItemsInput{}
+	inp := cmsintsetup.SetupCityItemsInput{}
 
 	flags := flag.NewFlagSet("setup-city-items", flag.ExitOnError)
 	flags.StringVar(&base, "base", conf.CMS_BaseURL, "CMS base URL")
@@ -59,14 +59,14 @@ func setupCityItems(conf *Config, args []string) error {
 	defer f.Close()
 
 	inp.DataBody = f
-	err = cmsintegrationv3.SetupCityItems(
+	err = cmsintsetup.SetupCityItems(
 		context.Background(),
-		&cmsintegrationv3.Services{
+		&cmsintsetup.Services{
 			CMS:  lo.Must(cms.New(base, token)),
 			HTTP: http.DefaultClient,
 		},
 		inp,
-		func(i, l int, item cmsintegrationv3.SetupCSVItem) {
+		func(i, l int, item cmsintsetup.SetupCSVItem) {
 			fmt.Printf("processing %d/%d %s\n", i, l, item.Name)
 		},
 	)

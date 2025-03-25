@@ -15,7 +15,7 @@ import (
 
 type Reader interface {
 	Open(ctx context.Context) (io.Reader, func() error, error)
-	Resolver() codeResolver
+	Resolver() CodeResolver
 }
 
 type urlReader struct {
@@ -65,7 +65,7 @@ func (r *urlReader) Open(ctx context.Context) (io.Reader, func() error, error) {
 	return resp.Body, resp.Body.Close, nil
 }
 
-func (r *urlReader) Resolver() codeResolver {
+func (r *urlReader) Resolver() CodeResolver {
 	return &fetchCodeResolver{
 		client: r.client,
 		url:    r.URL,

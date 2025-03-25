@@ -1,8 +1,8 @@
-output "auth0_client_spa" {
+output "client_spa" {
   value = auth0_client.spa
 }
 
-output "auth0_client_m2m" {
+output "client_m2m" {
   value = auth0_client_credentials.m2m
 }
 

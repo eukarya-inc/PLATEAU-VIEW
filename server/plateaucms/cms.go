@@ -44,18 +44,18 @@ var HTTPMethodsExceptGET = []string{
 }
 
 type Config struct {
-	CMSBaseURL      string
-	CMSMainToken    string
-	CMSTokenProject string
+	CMSBaseURL       string
+	CMSMainToken     string
+	CMSSystemProject string
 	// compat
 	CMSMainProject string
 	AdminToken     string
 }
 
 type CMS struct {
-	cmsbase            string
-	cmsMetadataProject string
-	cmsMain            cms.Interface
+	cmsbase       string
+	cmsSysProject string
+	cmsMain       cms.Interface
 	// comapt
 	cmsMainProject string
 	cmsToken       string
@@ -68,14 +68,14 @@ func New(c Config) (*CMS, error) {
 		return nil, fmt.Errorf("failed to initialize cms: %w", err)
 	}
 
-	if c.CMSTokenProject == "" {
-		c.CMSTokenProject = tokenProject
+	if c.CMSSystemProject == "" {
+		c.CMSSystemProject = tokenProject
 	}
 
 	return &CMS{
-		cmsbase:            c.CMSBaseURL,
-		cmsMetadataProject: c.CMSTokenProject,
-		cmsMain:            cmsMain,
+		cmsbase:       c.CMSBaseURL,
+		cmsSysProject: c.CMSSystemProject,
+		cmsMain:       cmsMain,
 		// compat
 		cmsMainProject: c.CMSMainProject,
 		cmsToken:       c.CMSMainToken,
@@ -85,9 +85,9 @@ func New(c Config) (*CMS, error) {
 
 func (h *CMS) Clone() *CMS {
 	return &CMS{
-		cmsbase:            h.cmsbase,
-		cmsMetadataProject: h.cmsMetadataProject,
-		cmsMain:            h.cmsMain,
+		cmsbase:       h.cmsbase,
+		cmsSysProject: h.cmsSysProject,
+		cmsMain:       h.cmsMain,
 		// compat
 		cmsMainProject: h.cmsMainProject,
 		cmsToken:       h.cmsToken,

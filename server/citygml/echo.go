@@ -18,6 +18,7 @@ type Config struct {
 	WorkerRegion       string `json:"workerRegion"`
 	WorkerProject      string `json:"workerProject"`
 	DataCatalogAPIURL  string `json:"dataCatalogApiUrl"`
+	PackerTimeout      uint   `json:"packerTimeout"`
 }
 
 var httpClient = &http.Client{
@@ -53,6 +54,9 @@ func Echo(conf Config, g *echo.Group) error {
 	g.GET("/attributes", attributeHandler(p.conf.Domain))
 	g.GET("/features", featureHandler(p.conf.Domain))
 	g.GET("/spatialid_attributes", spatialIDAttributesHandler(dc))
+
+	// ジオイド高取得API
+	g.GET("/geoid_height", GeoidHanlder)
 
 	return nil
 }
@@ -110,7 +114,7 @@ func attributeHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		var resolver codeResolver
+		var resolver CodeResolver
 		if !skipCodeListFetch {
 			resolver = &fetchCodeResolver{
 				client: httpClient,

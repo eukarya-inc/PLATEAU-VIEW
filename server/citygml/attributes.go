@@ -281,7 +281,7 @@ func (h objectHandler) handleChildren(obj map[string]any, ae *attributeExtractor
 type sliceHandler struct {
 	au attributeUnmarshaler
 
-	codeResolver codeResolver
+	codeResolver CodeResolver
 }
 
 func (h sliceHandler) Handle(obj map[string]any, ae *attributeExtractor, e xml.StartElement) error {
@@ -333,7 +333,7 @@ func (h sliceHandler) Handle(obj map[string]any, ae *attributeExtractor, e xml.S
 type valueHandler struct {
 	au attributeUnmarshaler
 
-	codeResolver codeResolver
+	codeResolver CodeResolver
 }
 
 func (h valueHandler) Handle(obj map[string]any, ae *attributeExtractor, e xml.StartElement) error {
@@ -411,7 +411,7 @@ func (u anyAttrUnmarshaler) UnmarshalAttr(ae *attributeExtractor, e xml.StartEle
 	return parseText(t), nil
 }
 
-func toTagHandler(t string, types map[string][]schemaProperty, resolver codeResolver) tagHandler {
+func toTagHandler(t string, types map[string][]schemaProperty, resolver CodeResolver) tagHandler {
 	m := map[string]tagHandler{}
 	nonNumericTypes := map[string]bool{
 		"xs:string":    true,
@@ -499,7 +499,7 @@ func init() {
 	initSchema()
 }
 
-type codeResolver interface {
+type CodeResolver interface {
 	Resolve(codeSpace, code string) (string, error)
 }
 
@@ -542,7 +542,7 @@ func (r *fetchCodeResolver) Resolve(codeSpace, code string) (string, error) {
 	return resolved, nil
 }
 
-func Attributes(r io.Reader, gmlID []string, resolver codeResolver) ([]map[string]any, error) {
+func Attributes(r io.Reader, gmlID []string, resolver CodeResolver) ([]map[string]any, error) {
 	var attributes []map[string]any
 	dec := xmlb.NewDecoder(r, make([]byte, 32*1024))
 	fs := featureScanner{

@@ -73,5 +73,4 @@ export const lookAtTileFeature = (properties: Record<string, any> | undefined) =
       { duration: 2 },
     );
   });
-  window.reearth?.camera?.flyTo({ lng: x, lat: y, height: 500 });
 };

@@ -23,6 +23,7 @@ type CityGMLFilesCity struct {
 	Spec             string                        `json:"spec"`
 	URL              string                        `json:"url"`
 	Files            CityGMLFiles                  `json:"files"`
+	MetadataZipUrls  []string                      `json:"metadataZipUrls"`
 	FeatureTypes     map[string]CityGMLFeatureType `json:"featureTypes,omitempty"`
 }
 
@@ -134,6 +135,7 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 		Spec:             spec.Version,
 		URL:              citygml.URL,
 		Files:            files,
+		MetadataZipUrls:  citygml.MetadataZipUrls,
 		FeatureTypes:     featureTypes,
 	}, nil
 }

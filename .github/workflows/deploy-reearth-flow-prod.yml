@@ -1,42 +1,56 @@
 name: 🌊 Deploy Re:earth Flow Production Environment
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       web_run_id:
         type: string
         description: Deploy the specific version of web to specify the run ID. If specified, deployment of the server will be skipped. (Optional)
         required: false
+      only_policies:
+        description: 'Run only update-policies and deploy-cerbos jobs'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 env:
-  IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view-3.0/reearth-flow-api:latest
-  IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-api:latest
-  IMAGE_NAME_HUB: eukarya/plateauview2-reearth-flow-api:latest
+  API_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-flow-api:latest
+  API_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-api:latest
+  API_IMAGE_NAME_HUB: eukarya/plateauview-flow-api:latest
 
-  WEB_IMAGE_NAME: reearth/reearth-flow-web:nightly
-  WEB_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view-3.0/reearth-flow-web:latest
+  SUBSCRIBER_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-flow-subscriber:latest
+  SUBSCRIBER_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-subscriber:latest
+  SUBSCRIBER_IMAGE_NAME_HUB: eukarya/plateauview-flow-subscriber:latest
+
+  WEB_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-flow-web:latest
   WEB_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-web:latest
+  WEB_IMAGE_NAME_HUB: eukarya/plateauview-flow-web:latest
 
-  WS_IMAGE_NAME: reearth/reearth-flow-websocket:nightly
-  WS_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view-3.0/reearth-flow-websocket:latest
+  WS_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-flow-websocket:latest
   WS_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-websocket:latest
-  WS_IMAGE_NAME_HUB: eukarya/plateauview2-reearth-flow-websocket:latest
+  WS_IMAGE_NAME_HUB: eukarya/plateauview-flow-websocket:latest
 
-  WORKER_IMAGE_NAME: reearth/reearth-flow-worker:nightly
-  WORKER_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view-3.0/reearth-flow-worker:latest
+  WORKER_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-flow-worker:latest
   WORKER_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-flow-worker:latest
-  WORKER_IMAGE_NAME_HUB: eukarya/plateauview2-reearth-flow-worker:latest
+  WORKER_IMAGE_NAME_HUB: eukarya/plateauview-flow-worker:latest
+
+  CERBOS_IMAGE_NAME: cerbos/cerbos:0.40.0
+  CERBOS_BUCKET_NAME_PLATEAU_PROD: gs://cerbos-policy-reearth-plateau
 
 concurrency:
   group: ${{ github.workflow }}
 
 jobs:
-  deploy_server:
+  deploy_api:
     runs-on: ubuntu-latest
     environment: prod
     permissions:
       contents: read
       id-token: write
       packages: read
-    if: ${{ !github.event.inputs.web_run_id && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0' }}
+    if: ${{ !github.event.inputs.web_run_id && github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -51,24 +65,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker image
-        run: docker pull $IMAGE_NAME_GHCR
-      - name: Push docker image
-        run: docker tag $IMAGE_NAME_GHCR $IMAGE_NAME_GCP && docker push $IMAGE_NAME_GCP
+        run: docker pull $API_IMAGE_NAME_GHCR
+      - name: Tag and push docker image
+        run: docker tag $API_IMAGE_NAME_GHCR $API_IMAGE_NAME_GCP && docker push $API_IMAGE_NAME_GCP
       - name: Deploy
         run: |
           gcloud run deploy reearth-flow-api \
-            --image $IMAGE_NAME_GCP \
+            --image $API_IMAGE_NAME_GCP \
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet
 
-  deploy_web:
+  deploy_subscriber:
     runs-on: ubuntu-latest
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0'
     environment: prod
     permissions:
+      contents: read
       id-token: write
-      packages: write
+      packages: read
+    if: ${{ github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -82,12 +97,43 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Pull docker images
-        run: docker pull $WEB_IMAGE_NAME
-      - name: Tag docker images
-        run: docker tag $WEB_IMAGE_NAME $WEB_IMAGE_NAME_GHCR && docker tag $WEB_IMAGE_NAME $WEB_IMAGE_NAME_GCP
-      - name: Push docker images
-        run: docker push $WEB_IMAGE_NAME_GHCR && docker push $WEB_IMAGE_NAME_GCP
+      - name: Pull docker image
+        run: docker pull $SUBSCRIBER_IMAGE_NAME_GHCR
+      - name: Tag and push docker image
+        run: docker tag $SUBSCRIBER_IMAGE_NAME_GHCR $SUBSCRIBER_IMAGE_NAME_GCP && docker push $SUBSCRIBER_IMAGE_NAME_GCP
+      - name: Deploy
+        run: |
+          gcloud run deploy reearth-flow-subscriber \
+            --image $SUBSCRIBER_IMAGE_NAME_GCP \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --quiet
+
+  deploy_web:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    if: ${{ github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull docker image
+        run: docker pull $WEB_IMAGE_NAME_GHCR
+      - name: Tag and push docker image
+        run: docker tag $WEB_IMAGE_NAME_GHCR $WEB_IMAGE_NAME_GCP && docker push $WEB_IMAGE_NAME_GCP
       - name: Deploy
         run: |
           gcloud run deploy reearth-flow-web \
@@ -98,11 +144,12 @@ jobs:
 
   deploy_websocket:
     runs-on: ubuntu-latest
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0'
     environment: prod
     permissions:
+      contents: read
       id-token: write
-      packages: write
+      packages: read
+    if: ${{ github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -117,8 +164,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker image
-        run: docker pull $WS_IMAGE_NAME
-      - name: Push docker image
+        run: docker pull $WS_IMAGE_NAME_GHCR
+      - name: Tag and push docker image
         run: docker tag $WS_IMAGE_NAME_GHCR $WS_IMAGE_NAME_GCP && docker push $WS_IMAGE_NAME_GCP
       - name: Deploy
         run: |
@@ -130,11 +177,12 @@ jobs:
 
   deploy_worker:
     runs-on: ubuntu-latest
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0'
     environment: prod
     permissions:
+      contents: read
       id-token: write
-      packages: write
+      packages: read
+    if: ${{ github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -150,35 +198,86 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker image
         run: docker pull $WORKER_IMAGE_NAME_GHCR
-      - name: Push docker image
+      - name: Tag and push docker image
         run: docker tag $WORKER_IMAGE_NAME_GHCR $WORKER_IMAGE_NAME_GCP && docker push $WORKER_IMAGE_NAME_GCP
 
-  # push_hub:
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     packages: read
-  #   if: ${{ github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0' }}
-  #   steps:
-  #     - name: Log in to GitHub Container Registry
-  #       uses: docker/login-action@v2
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-  #     - name: Pull image
-  #       run: docker pull $IMAGE_NAME_GHCR
-  #     - name: Log in to DockerHub
-  #       uses: docker/login-action@v2
-  #       with:
-  #         username: ${{ secrets.DOCKERHUB_USER }}
-  #         password: ${{ secrets.DOCKERHUB_PASSWORD }}
-  #     - name: Push image
-  #       run: docker tag $IMAGE_NAME_GHCR $IMAGE_NAME_HUB && docker push $IMAGE_NAME_HUB
-  #     - name: Pull websocket image
-  #       run: docker pull $WS_IMAGE_NAME_GHCR
-  #     - name: Push websocket image
-  #       run: docker tag $WS_IMAGE_NAME_GHCR $WS_IMAGE_NAME_HUB && docker push $WS_IMAGE_NAME_HUB
-  #     - name: Pull worker image
-  #       run: docker pull $WORKER_IMAGE_NAME_GHCR
-  #     - name: Push worker image
-  #       run: docker tag $WORKER_IMAGE_NAME_GHCR $WORKER_IMAGE_NAME_HUB && docker push $WORKER_IMAGE_NAME_HUB
+  update-policies:
+    runs-on: ubuntu-latest
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Download and merge all policies from GAR
+        run: |
+          set -euo pipefail
+
+          GCP_PROJECT_ID=reearth-oss
+          GAR_REPO=cerbos-policies
+          LOCATION=us-central1
+          OUT_DIR=merged-policies
+          ARTIFACT_DIR=artifacts
+
+          mkdir -p "$OUT_DIR"
+          mkdir -p "$ARTIFACT_DIR"
+
+          echo "Fetching package list from GAR..."
+          PACKAGE_NAMES=$(gcloud artifacts packages list \
+            --project="$GCP_PROJECT_ID" \
+            --repository="$GAR_REPO" \
+            --location="$LOCATION" \
+            --format="value(name)" | sed 's#.*/##')
+
+          for PACKAGE in $PACKAGE_NAMES; do
+            echo "→ Downloading package: $PACKAGE"
+
+            gcloud artifacts files download "${PACKAGE}:current:policies.tar.gz" \
+              --project="$GCP_PROJECT_ID" \
+              --repository="$GAR_REPO" \
+              --location="$LOCATION" \
+              --destination="$ARTIFACT_DIR"
+
+            DOWNLOADED_FILE=$(find "$ARTIFACT_DIR" -name '*.tar.gz' | head -n 1)
+            SAFE_NAME="${PACKAGE}_current_policies.tar.gz"
+            mv "$DOWNLOADED_FILE" "${ARTIFACT_DIR}/${SAFE_NAME}"
+
+            echo "→ Extracting ${SAFE_NAME}"
+            tar -xzf "${ARTIFACT_DIR}/${SAFE_NAME}" -C "$OUT_DIR"
+          done
+      - name: Sync merged policies to GCS
+        run: |
+          set -euo pipefail
+          gsutil -m rsync -r -d -x "\.cerbos\.yaml$" merged-policies/ $CERBOS_BUCKET_NAME_PLATEAU_PROD
+          echo "All policies merged and synced to $CERBOS_BUCKET_NAME_PLATEAU_PROD"
+
+  deploy-cerbos:
+    needs: update-policies
+    runs-on: ubuntu-latest
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Deploy
+        run: |
+          gcloud run deploy cerbos \
+            --image $CERBOS_IMAGE_NAME \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --quiet

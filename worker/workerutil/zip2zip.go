@@ -10,8 +10,9 @@ import (
 type Zip2zipFn = func(*zip.File) (string, error)
 
 type Zip2zip struct {
-	w *zip.Writer
-	d map[string]struct{}
+	w         *zip.Writer
+	d         map[string]struct{}
+	skipMkdir bool
 }
 
 func NewZip2zip(w *zip.Writer) *Zip2zip {
@@ -23,6 +24,11 @@ func NewZip2zip(w *zip.Writer) *Zip2zip {
 
 func (z *Zip2zip) Close() error {
 	return z.w.Close()
+}
+
+func (z *Zip2zip) SkipMkdir(s bool) *Zip2zip {
+	z.skipMkdir = s
+	return z
 }
 
 func (z *Zip2zip) Run(src *zip.Reader, fn Zip2zipFn) error {
@@ -58,7 +64,11 @@ func (z *Zip2zip) Run(src *zip.Reader, fn Zip2zipFn) error {
 }
 
 func (z *Zip2zip) copyZipFile(f *zip.File, p string) error {
-	dst, err := z.w.Create(p)
+	dst, err := z.w.CreateHeader(&zip.FileHeader{
+		Name:     p,
+		Method:   zip.Deflate,
+		Modified: f.Modified,
+	})
 	if err != nil {
 		return err
 	}
@@ -80,6 +90,10 @@ func (z *Zip2zip) copyZipFile(f *zip.File, p string) error {
 }
 
 func (z *Zip2zip) zipMkdirp(p string) error {
+	if z.skipMkdir {
+		return nil
+	}
+
 	di := strings.Split(path.Dir(p), "/")
 
 	for i := 0; i < len(di); i++ {

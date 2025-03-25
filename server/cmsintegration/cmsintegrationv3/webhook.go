@@ -7,7 +7,6 @@ import (
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/log"
-	"golang.org/x/exp/slices"
 )
 
 func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
@@ -22,22 +21,13 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 
 		log.Debugfc(ctx, "incoming: %+v", w)
 
-		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf) {
+		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf.CMSIntegration) {
 			return nil
 		}
 
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
-		var err error
 
-		if modelName == cmsintegrationcommon.RelatedModel {
-			err = handleRelatedDataset(ctx, s, w)
-		} else if modelName == cmsintegrationcommon.SampleModel || slices.Contains(cmsintegrationcommon.FeatureTypes, modelName) {
-			err = sendRequestToFME(ctx, s, &conf, w)
-			if err == nil {
-				err = handleMaxLOD(ctx, s, w)
-			}
-		}
-
+		err := sendRequestToFME(ctx, s, &conf, w)
 		if err != nil {
 			log.Errorfc(ctx, "failed to process event: %v", err)
 		}

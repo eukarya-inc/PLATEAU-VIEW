@@ -13,6 +13,19 @@ import (
 	"github.com/samber/lo"
 )
 
+type MetadataStore interface {
+	AllMetadata(ctx context.Context, findDataCatalog bool) (MetadataList, error)
+	Metadata(ctx context.Context, prj string, findDataCatalog, useDefault bool) (Metadata, MetadataList, error)
+}
+
+var _ MetadataStore = &CMS{}
+
+const (
+	ConverterFME     = "fme"
+	ConverterFlow    = "flow"
+	ConverterFMEFlow = "fme_flow"
+)
+
 type Metadata struct {
 	Name                     string `json:"name" cms:"name,text"`
 	ProjectAlias             string `json:"project_alias" cms:"project_alias,text"`
@@ -25,9 +38,18 @@ type Metadata struct {
 	WorkspaceID              string `json:"workspace_id" cms:"workspace_id,text"`
 	ProjectID                string `json:"project_id" cms:"project_id,text"`
 	MergePlateau             bool   `json:"merge_plateau" cms:"merge_plateau,boolean"`
+	Converter                string `json:"converter" cms:"converter,select"`
 	// whether the request is authenticated with sidebar access token
 	Auth       bool   `json:"-" cms:"-"`
 	CMSBaseURL string `json:"-" cms:"-"`
+}
+
+func (m Metadata) IsFMEEnabled() bool {
+	return m.Converter == ConverterFME || m.Converter == ConverterFMEFlow
+}
+
+func (m Metadata) IsFlowEnabled() bool {
+	return m.Converter == ConverterFlow || m.Converter == ConverterFMEFlow
 }
 
 func (m Metadata) CMS() (*cms.CMS, error) {
@@ -99,7 +121,7 @@ func (l MetadataList) FindMetadata(prj string, findDataCatalog, useDefault bool)
 	}
 
 	md, ok := lo.Find(l, func(i Metadata) bool {
-		return findDataCatalog && i.DataCatalogProjectAlias == prj || i.ProjectAlias == prj
+		return findDataCatalog && i.DataCatalogProjectAlias == prj || i.ProjectAlias == prj || i.ProjectID == prj
 	})
 
 	if !ok {
@@ -178,11 +200,11 @@ func (h *CMS) Metadata(ctx context.Context, prj string, findDataCatalog, useDefa
 }
 
 func (h *CMS) AllMetadata(ctx context.Context, findDataCatalog bool) (MetadataList, error) {
-	if h.cmsMetadataProject == "" {
+	if h.cmsSysProject == "" {
 		return nil, rerror.ErrNotFound
 	}
 
-	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsMetadataProject, metadataModel, false, 100)
+	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsSysProject, metadataModel, false, 100)
 	if err != nil || items == nil {
 		if errors.Is(err, cms.ErrNotFound) || items == nil {
 			return nil, rerror.ErrNotFound

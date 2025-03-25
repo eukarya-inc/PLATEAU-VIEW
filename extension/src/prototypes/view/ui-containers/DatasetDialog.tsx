@@ -8,6 +8,7 @@ import {
   styled,
   type DialogProps,
   listItemTextClasses,
+  Link,
 } from "@mui/material";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useMemo, type FC } from "react";
@@ -20,6 +21,7 @@ import { createRootLayerForDatasetAtom } from "../../../shared/view-layers";
 import { removeLayerAtom, useAddLayer } from "../../layers";
 import {
   EntityTitle,
+  ExternalLinkIcon,
   PrefixedAddSmallIcon,
   PrefixedCheckSmallIcon,
   UseCaseIcon,
@@ -147,8 +149,32 @@ export const DatasetDialog: FC<DatasetDialogProps> = ({
       />
       <Divider />
       <DialogContent>
-        <StyledDialogContentText>{dataset.description}</StyledDialogContentText>
+        <StyledDialogContentText>
+          <Linkify content={dataset.description} />
+        </StyledDialogContentText>
       </DialogContent>
     </StyledDialog>
+  );
+};
+
+const Linkify: FC<{ content: string | null | undefined }> = ({ content }) => {
+  // Ref: https://github.com/Project-PLATEAU/PLATEAU-VIEW-2.0/blob/e6f9cf3307c60d6d3a2613e34cbdf3eaa2060731/plugin/web/extensions/sidebar/modals/datacatalog/components/content/DatasetsPage/Details.tsx#L42-L55
+  return (
+    <>
+      {content
+        ?.split(
+          /(https?:\/\/[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b[-a-zA-Z0-9(@:%_+.~#?&//=]*)/,
+        )
+        .map((e, i) =>
+          (i + 1) % 2 === 0 ? (
+            <Link key={i} onClick={() => window.open(e, "_blank")}>
+              {e}
+              <ExternalLinkIcon sx={{ marginLeft: "4px" }} fontSize="small" />
+            </Link>
+          ) : (
+            <span key={i}>{e}</span>
+          ),
+        )}
+    </>
   );
 };

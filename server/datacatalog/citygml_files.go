@@ -18,6 +18,8 @@ import (
 
 type GeoCoder func(ctx context.Context, address string) (quadtree.Bounds, error)
 
+const maxBounds = 30
+
 type CityGMLFilesResponse struct {
 	Cities       []*CityGMLFilesCity           `json:"cities"`
 	FeatureTypes map[string]CityGMLFeatureType `json:"featureTypes"`
@@ -35,7 +37,7 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, qt *govpolyg
 			bounds = append(bounds, b.Bounds)
 			cityIDs = append(cityIDs, qt.FindRect(b.Bounds.QBounds())...)
 		}
-		if len(bounds) > 10 {
+		if len(bounds) > maxBounds {
 			return nil, nil, fmt.Errorf("too many bounds")
 		}
 		filter = boundsCityGMLFileFilter(bounds)
@@ -54,7 +56,7 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, qt *govpolyg
 			bounds = append(bounds, b.Bounds)
 			cityIDs = append(cityIDs, qt.FindRect(b.Bounds.QBounds())...)
 		}
-		if len(bounds) > 10 {
+		if len(bounds) > maxBounds {
 			return nil, nil, fmt.Errorf("too many bounds")
 		}
 		switch {
@@ -76,7 +78,7 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, qt *govpolyg
 			bounds = append(bounds, b)
 			cityIDs = qt.FindRect(b.QBounds())
 		}
-		if len(bounds) > 10 {
+		if len(bounds) > maxBounds {
 			return nil, nil, fmt.Errorf("too many bounds: %d", len(bounds))
 		}
 		filter = boundsCityGMLFileFilter(bounds)

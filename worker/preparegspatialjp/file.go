@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/reearth/reearthx/log"
 )
@@ -102,15 +101,4 @@ func consumeFile(p string, fn func(f *os.File, fi os.FileInfo) error) (err error
 
 	err = fn(f, s)
 	return
-}
-
-func normalizeZipFilePath(p string) string {
-	p = strings.ReplaceAll(p, `\`, "/")
-	if strings.HasPrefix(p, "__MACOSX/") ||
-		strings.HasSuffix(p, "/.DS_Store") ||
-		strings.HasSuffix(p, "/Thumbs.db") ||
-		p == ".DS_Store" || p == "Thumbs.db" {
-		return ""
-	}
-	return p
 }

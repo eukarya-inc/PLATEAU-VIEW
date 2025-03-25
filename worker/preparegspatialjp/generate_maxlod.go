@@ -34,7 +34,7 @@ func PrepareMaxLOD(ctx context.Context, cw *CMSWrapper, mc MergeContext) (err er
 
 	first := false
 	found := false
-	for _, ft := range featureTypes {
+	for _, ft := range mc.FeatureTypes {
 		fi, ok := allFeatureItems[ft]
 		if !ok || fi.MaxLOD == "" {
 			log.Infofc(ctx, "no maxlod for %s", ft)

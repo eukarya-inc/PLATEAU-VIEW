@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 )
@@ -97,7 +98,7 @@ func (c *CMSWrapper) GetItem(ctx context.Context, id string, asset bool) (*cms.I
 
 func (c *CMSWrapper) UpdateDataItem(ctx context.Context, item *GspatialjpDataItem) error {
 	if c == nil || !c.WetRun {
-		log.Debugfc(ctx, "cms: update data item (skipped): item=%s", ppp.Sprint(item))
+		log.Debugfc(ctx, "cms: update data item (skipped): item=%s", pp.Sprint(item))
 		return nil
 	}
 

@@ -78,7 +78,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 	}
 
 	// sample
-	sample := res.DatasetTypes.FindByCode(sampleCode, plateauapi.DatasetTypeCategoryGeneric).(*plateauapi.GenericDatasetType)
+	sample, _ := res.DatasetTypes.FindByCode(sampleCode, plateauapi.DatasetTypeCategoryGeneric).(*plateauapi.GenericDatasetType)
 	if sample != nil {
 		sample, w := convertSample(
 			sample,

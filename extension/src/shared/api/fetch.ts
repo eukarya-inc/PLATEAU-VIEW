@@ -8,12 +8,18 @@ export const fetchWithGet = async <V>(url: string, token?: string): Promise<V> =
     .then(toJSON);
 };
 
-export const fetchWithPost = async <D>(url: string, data: D, token?: string): Promise<D> => {
+export const fetchWithPost = async <D>(
+  url: string,
+  data: D,
+  token?: string,
+  contentType?: string,
+): Promise<D> => {
   return await window
     .fetch(url, {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
+        ...(contentType ? { "Content-Type": contentType } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
     })

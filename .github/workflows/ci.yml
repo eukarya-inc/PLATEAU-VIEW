@@ -34,62 +34,57 @@ jobs:
           fetch-depth: 0
       - name: changed files for extension
         id: extension
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           files: |
-            extension/
+            extension/**
             .github/workflows/ci-extension.yml
             .github/workflows/ci-extension-version-update.yml
-            .github/workflows/deploy-extension-dev.yml
-            .github/workflows/deploy-extension-prod.yml
+            .github/workflows/deploy-extension-*.yml
       - name: changed files for server
         id: server
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           files: |
-            server/
+            server/**
             .github/workflows/ci-server.yml
             .github/workflows/build-server.yml
-            .github/workflows/deploy-server-dev.yml
-            .github/workflows/deploy-server-prod.yml
+            .github/workflows/deploy-server-*.yml
       - name: changed files for tools
         id: tools
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           files: |
-            tools/
+            tools/**
             .github/workflows/ci-tools.yml
       - name: changed files for geo
         id: geo
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           files: |
-            geo/
+            geo/**
             .github/workflows/ci-geo.yml
             .github/workflows/build-geo.yml
-            .github/workflows/deploy-geo-dev.yml
-            .github/workflows/deploy-geo-prod.yml
+            .github/workflows/deploy-geo-*.yml
       - name: changed files for tiles
         id: tiles
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           files: |
-            tiles/
+            tiles/**
             .github/workflows/ci-tiles.yml
             .github/workflows/build-tiles.yml
-            .github/workflows/deploy-tiles-dev.yml
-            .github/workflows/deploy-tiles-prod.yml
+            .github/workflows/deploy-tiles-*.yml
       - name: changed files for worker
         id: worker
-        uses: step-security/changed-files@v45
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
         with:
           since_last_remote_commit: true
           files: |
-            worker/
+            worker/**
             .github/workflows/ci-worker.yml
             .github/workflows/build-worker.yml
-            .github/workflows/deploy-worker-dev.yml
-            .github/workflows/deploy-worker-prod.yml
+            .github/workflows/deploy-worker-*.yml
 
   # ci-extension-version-update:
   #   needs: prepare

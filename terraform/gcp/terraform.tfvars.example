@@ -20,17 +20,18 @@ fme_token = ""
 # MongoDB
 mongodb_connection_string = ""
 
-# Re:Earth
-reearth_marketplace_secret = ""
-reearth_web_config = {
+# PLATEAU Editor
+marketplace_secret = ""
+editor_project_name = ""
+web_config = {
   brand = {
     background = "linear-gradient(256.01deg, #463C64 0%, #00BEBE 33.85%, #04BFBF 66.15%, #463C64 100%)"
     logoUrl    = "https://cms.plateau.reearth.io/img/logo-white.svg"
   }
 }
 
-# Re:Earth CMS
-reearth_cms_web_config = {
+# PLATEAU CMS
+cms_web_config = {
   coverImageUrl = "https://cms.plateau.reearth.io/img/cover-image.png"
   logoUrl       = "https://cms.plateau.reearth.io/img/logo-white.svg""
 }

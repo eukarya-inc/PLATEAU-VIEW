@@ -10,23 +10,17 @@ import (
 	"strings"
 
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
 	"github.com/k0kubun/pp/v3"
 	"github.com/oklog/ulid/v2"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
 	"github.com/spkg/bom"
-	"golang.org/x/exp/slices"
 )
 
 const plateauSpecMinMajorVersionObjectListsNeeded = 4
-
-var ppp *pp.PrettyPrinter
-
-func init() {
-	ppp = pp.New()
-	ppp.SetColoringEnabled(false)
-}
+const flowTestModel = "flow"
 
 var generateID = func() string {
 	return strings.ToLower(ulid.Make().String())
@@ -45,24 +39,55 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		return err
 	}
 
-	item := cmsintegrationcommon.FeatureItemFrom(mainItem)
-
-	featureType := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
-	if featureType == cmsintegrationcommon.SampleModel && item.FeatureType != "" {
-		if ft := cmsintegrationcommon.GetLastBracketContent(item.FeatureType); ft != "" {
-			featureType = ft
-			log.Debugfc(ctx, "sample item: feature type is %s", ft)
-		}
+	// metadata
+	md, _, err := s.PCMS.Metadata(ctx, w.ProjectID(), false, false)
+	if err != nil {
+		log.Errorfc(ctx, "failed to get metadata: %v", err)
+		return nil
 	}
-
-	if !slices.Contains(cmsintegrationcommon.FeatureTypes, featureType) {
-		log.Debugfc(ctx, "not feature item: %s", featureType)
+	if !md.IsFMEEnabled() {
+		log.Debugfc(ctx, "fme is disabled")
 		return nil
 	}
 
-	skipQC, skipConv := item.IsQCAndConvSkipped(featureType)
+	// feature item
+	item := cmsintegrationcommon.FeatureItemFrom(mainItem)
+
+	featureTypeCode := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
+	if featureTypeCode == flowTestModel {
+		log.Debugfc(ctx, "skip model: %s", featureTypeCode)
+		return nil
+	}
+	if ft := item.FeatureTypeCode(); ft != "" {
+		featureTypeCode = ft
+		log.Debugfc(ctx, "feature type is overridden: %s", ft)
+	}
+
+	// feature types
+	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
+	if err != nil {
+		log.Errorfc(ctx, "failed to get feature types: %v", err)
+		return nil
+	}
+
+	featureTypeCodes := featureTypes.Codes()
+	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
+		return ft.Code == featureTypeCode
+	})
+	if !ok {
+		log.Debugfc(ctx, "invalid feature item: %s", featureTypeCode)
+		return nil
+	}
+
+	log.Debugfc(ctx, "featureType: %s", pp.Sprint(featureType))
+	if !featureType.QC && !featureType.Conv {
+		log.Debugfc(ctx, "skip qc and convert by feature type")
+		return nil
+	}
+
+	skipQC, skipConv := item.IsQCAndConvSkipped()
 	if skipQC && skipConv {
-		log.Debugfc(ctx, "skip qc and convert")
+		log.Debugfc(ctx, "skip qc and convert by item")
 		return nil
 	}
 
@@ -72,15 +97,15 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	}
 
 	ty := fmeTypeQcConv
-	if skipQC {
+	if !featureType.QC || skipQC {
 		ty = fmeTypeConv
-	} else if skipConv {
+	} else if !featureType.Conv || skipConv {
 		ty = fmeTypeQC
 	}
 
-	log.Debugfc(ctx, "itemID=%s featureType=%s", mainItem.ID, featureType)
-	log.Debugfc(ctx, "raw item: %s", ppp.Sprint(mainItem))
-	log.Debugfc(ctx, "item: %s", ppp.Sprint(item))
+	log.Debugfc(ctx, "itemID=%s featureType=%s", mainItem.ID, featureTypeCode)
+	log.Debugfc(ctx, "raw item: %s", pp.Sprint(mainItem))
+	log.Debugfc(ctx, "item: %s", pp.Sprint(item))
 
 	// update convertion status
 	err = s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning)
@@ -96,42 +121,29 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	}
 
 	// get city item
-	cityItemRaw, err := s.CMS.GetItem(ctx, item.City, false)
+	cityItemRaw, err := s.CMS.GetItem(ctx, item.City, true)
 	if err != nil {
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "都市アイテムが見つかりません。")
 		return fmt.Errorf("failed to get city item: %w", err)
 	}
 
-	cityItem := cmsintegrationcommon.CityItemFrom(cityItemRaw)
+	cityItem := cmsintegrationcommon.CityItemFrom(cityItemRaw, featureTypeCodes)
 
 	// validate city item
-	if cityItem.CodeLists == "" {
+	if cityItem.CodeLists == nil {
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "コードリストが都市アイテムに登録されていないため品質検査・変換を開始できません。")
 		return fmt.Errorf("city item has no codelist")
 	}
 
-	if !skipQC && cityItem.ObjectLists == "" && cityItem.SpecMajorVersionInt() >= plateauSpecMinMajorVersionObjectListsNeeded {
+	if !skipQC && cityItem.ObjectLists == nil && cityItem.SpecMajorVersionInt() >= plateauSpecMinMajorVersionObjectListsNeeded {
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "オブジェクトリストが都市アイテムに登録されていないため品質検査を開始できません。")
 		return fmt.Errorf("city item has no objectlists")
 	}
 
-	// get codelist asset
-	codelistAsset, err := s.CMS.Asset(ctx, cityItem.CodeLists)
-	if err != nil {
-		_ = failToConvert(ctx, s, mainItem.ID, ty, "コードリストが見つかりません。")
-		return fmt.Errorf("failed to get codelist asset: %w", err)
-	}
-
 	// get objectLists asset
 	var objectListsAssetURL string
-	if cityItem.ObjectLists != "" {
-		objectListsAsset, err := s.CMS.Asset(ctx, cityItem.ObjectLists)
-		if err != nil {
-			_ = failToConvert(ctx, s, mainItem.ID, ty, "オブジェクトリストが見つかりません。")
-			return fmt.Errorf("failed to get objectlists asset: %w", err)
-		}
-
-		objectListsAssetURL = objectListsAsset.URL
+	if cityItem.ObjectLists != nil {
+		objectListsAssetURL = cityItem.ObjectLists.URL
 	}
 
 	// get FME URL
@@ -146,12 +158,12 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		ID: fmeID{
 			ItemID:      mainItem.ID,
 			ProjectID:   w.ProjectID(),
-			FeatureType: featureType,
+			FeatureType: featureTypeCode,
 			Type:        string(ty),
 		}.String(conf.Secret),
 		Target:      cityGMLAsset.URL,
 		PRCS:        cityItem.PRCS.EPSGCode(),
-		Codelists:   codelistAsset.URL,
+		Codelists:   cityItem.CodeLists.URL,
 		ObjectLists: objectListsAssetURL,
 		ResultURL:   resultURL(conf),
 		Type:        ty,
@@ -172,12 +184,13 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 }
 
 func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeResult) error {
+	ctx = log.WithPrefixMessage(ctx, "receiveResultFromFME: ")
 	id := f.ParseID(conf.Secret)
 	if id.ItemID == "" {
 		return fmt.Errorf("invalid id: %s", f.ID)
 	}
 
-	log.Infofc(ctx, "receiveResultFromFME: itemID=%s featureType=%s type=%s", id.ItemID, id.FeatureType, id.Type)
+	log.Infofc(ctx, "itemID=%s featureType=%s type=%s", id.ItemID, id.FeatureType, id.Type)
 
 	logmsg := f.Message
 	if f.LogURL != "" {
@@ -232,6 +245,23 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		_ = failToConvert(ctx, s, id.ItemID, fmeRequestType(id.Type), "%sに失敗しました。%s", fmeRequestType(id.Type).Title(), logmsg)
 		return nil
 	}
+
+	// feature types
+	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
+	if err != nil {
+		log.Errorfc(ctx, "failed to get feature types: %v", err)
+		return nil
+	}
+
+	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
+		return ft.Code == id.FeatureType
+	})
+	if !ok {
+		log.Debugfc(ctx, "invalid feature type: %s", id.FeatureType)
+		return nil
+	}
+
+	log.Debugfc(ctx, "featureType: %s", pp.Sprint(featureType))
 
 	// get newitem
 	item, err := s.CMS.GetItem(ctx, id.ItemID, false)
@@ -316,7 +346,9 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	// items
 	var data []string
 	var items []cmsintegrationcommon.FeatureItemDatum
-	if slices.Contains(cmsintegrationcommon.FeatureTypesWithItems, id.FeatureType) {
+	if featureType.UseGroups {
+		log.Debugfc(ctx, "use groups")
+
 		for _, k := range assets.Keys {
 			assets := dataAssetMap[k]
 			i, ok := lo.Find(baseFeatureItem.Items, func(i cmsintegrationcommon.FeatureItemDatum) bool {
@@ -350,9 +382,9 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		QCResult:         qcResult,
 	}).CMSItem()
 
-	log.Debugfc(ctx, "update item: %s", ppp.Sprint(newitem))
+	log.Debugfc(ctx, "update item: %s", pp.Sprint(newitem))
 
-	_, err = s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
+	newitem2, err := s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
 	if err != nil {
 		j1, _ := json.Marshal(newitem.Fields)
 		j2, _ := json.Marshal(newitem.MetadataFields)
@@ -360,6 +392,8 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		log.Errorfc(ctx, "failed to update item: %v", err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}
+
+	log.Debugfc(ctx, "updated item: %s", pp.Sprint(newitem2))
 
 	// comment to the item
 	err = s.CMS.CommentToItem(ctx, id.ItemID, fmt.Sprintf("%sが完了しました。%s", fmeRequestType(id.Type).Title(), logmsg))

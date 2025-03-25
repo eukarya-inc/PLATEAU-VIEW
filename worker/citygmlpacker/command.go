@@ -1,31 +1,51 @@
 package citygmlpacker
 
 import (
-	"archive/zip"
 	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"path"
-	"slices"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
-	"github.com/klauspost/compress/gzip"
-	"github.com/orisano/gosax/xmlb"
 	"github.com/reearth/reearthx/log"
 	"google.golang.org/api/googleapi"
 )
 
+const defaultTimeout = 10 * time.Minute
+
 func Run(conf Config) (err error) {
+	if conf.Timeout <= 0 {
+		conf.Timeout = defaultTimeout
+	}
+
+	log.Printf("timeout: %s", conf.Timeout)
 	ctx := context.Background()
+
 	destURL, err := url.Parse(conf.Dest)
 	if err != nil {
 		return fmt.Errorf("invalid destination bucket(%s): %w", conf.Dest, err)
+	}
+	if destURL.Scheme != "gs" {
+		return fmt.Errorf("invalid destination bucket(%s): must be gs://", conf.Dest)
+	}
+
+	var sourceURL *url.URL
+	if conf.Source != "" {
+		sourceURL, err = url.Parse(conf.Source)
+		if err != nil {
+			return fmt.Errorf("invalid source bucket(%s): %w", conf.Source, err)
+		}
+		if sourceURL.Scheme != "gs" {
+			return fmt.Errorf("invalid source bucket(%s): must be gs://", conf.Source)
+		}
 	}
 
 	gcs, err := storage.NewClient(ctx)
@@ -33,14 +53,25 @@ func Run(conf Config) (err error) {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 
+	urls, err := resolveURLs(ctx, gcs, conf.URLs, sourceURL)
+	if err != nil {
+		return fmt.Errorf("resolve URLs: %w", err)
+	}
+
+	log.Printf("resolved urls:\n%s", strings.Join(urls, "\n"))
+
 	obj := gcs.Bucket(destURL.Host).Object(path.Join(strings.TrimPrefix(destURL.Path, "/")))
+
+	startedAt := time.Now().Format(time.RFC3339Nano)
 
 	defer func() {
 		if err == nil {
 			return
 		}
+		metadata := citygml.Status(PackStatusFailed)
+		metadata["startedAt"] = startedAt
 		_, uErr := obj.Update(ctx, storage.ObjectAttrsToUpdate{
-			Metadata: citygml.Status(PackStatusFailed),
+			Metadata: metadata,
 		})
 		if uErr != nil {
 			log.Printf("failed to update status: (to=%s): %v", PackStatusFailed, uErr)
@@ -56,226 +87,100 @@ func Run(conf Config) (err error) {
 		log.Printf("SKIPPED: already exists (status=%s)", status)
 		return nil
 	}
+	metadata := status(PackStatusProcessing)
+	metadata["startedAt"] = startedAt
+	{
+		_, err = obj.If(storage.Conditions{GenerationMatch: attrs.Generation, MetagenerationMatch: attrs.Metageneration}).
+			Update(ctx, storage.ObjectAttrsToUpdate{Metadata: metadata})
 
-	_, err = obj.If(storage.Conditions{GenerationMatch: attrs.Generation, MetagenerationMatch: attrs.Metageneration}).
-		Update(ctx, storage.ObjectAttrsToUpdate{Metadata: status(PackStatusProcessing)})
-	if err != nil {
-		var gErr *googleapi.Error
-		if !(errors.As(err, &gErr) && gErr.Code == http.StatusPreconditionFailed) {
-			log.Printf("SKIPPED: someone else is processing")
-			return nil
+		if err != nil {
+			var gErr *googleapi.Error
+			if !(errors.As(err, &gErr) && gErr.Code == http.StatusPreconditionFailed) {
+				log.Printf("SKIPPED: someone else is processing")
+				return nil
+			}
+			return fmt.Errorf("update metadata: %v", err)
 		}
-		return fmt.Errorf("update metadata: %v", err)
 	}
 
 	w := obj.NewWriter(ctx)
-	w.ObjectAttrs.Metadata = citygml.Status(PackStatusSucceeded)
+	completedMetadata := status(PackStatusSucceeded)
+	completedMetadata["startedAt"] = startedAt
+	w.ObjectAttrs.Metadata = completedMetadata
 	defer w.Close()
-	if err := pack(ctx, w, conf.Domain, conf.URLs); err != nil {
-		return fmt.Errorf("pack: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("close object writer: %v", err)
-	}
-	return nil
-}
 
-func pack(ctx context.Context, w io.Writer, host string, gmlURLs []string) error {
-	// gmlURLs をあらかじめパースして許可されていないホストがないことを確認する
-	var q []string
-	q = append(q, gmlURLs...)
-
-	var httpClient http.Client
-
-	seen := map[string]struct{}{}
-
-	zw := zip.NewWriter(w)
-	defer zw.Close()
-	for len(q) > 0 {
-		var nq []string
-		for _, gmlURL := range q {
-			u, err := url.Parse(gmlURL)
-			if err != nil {
-				return fmt.Errorf("invalid gml URL: %w", err)
-			}
-
-			if host != "" && u.Host != host {
-				return fmt.Errorf("invalid host: %s", u.Host)
-			}
-
-			nq, err = writeZip(ctx, zw, &httpClient, u, nq, seen)
-			if err != nil {
-				return fmt.Errorf("writeZip: %w", err)
-			}
-		}
-		q = nq
-	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("close zip: %w", err)
-	}
-	return nil
-}
-
-func writeZip(ctx context.Context, zw *zip.Writer, httpClient *http.Client, u *url.URL, q []string, seen map[string]struct{}) ([]string, error) {
-	depsMap := map[string]struct{}{}
-	gml := strings.SplitN(u.Path, "/", 5)[4]
-	root := path.Dir(gml)
-
-	ze, err := zw.Create(gml)
-	if err != nil {
-		return nil, fmt.Errorf("create: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("invalid url: %w", err)
-	}
-	req.Header.Set("Accept-Encoding", "gzip")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request gml: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var r io.Reader = resp.Body
-	if resp.Header.Get("Content-Encoding") == "gzip" {
-		gr, err := gzip.NewReader(r)
-		if err != nil {
-			return nil, fmt.Errorf("gzip.NewReader: %w", err)
-		}
-		defer gr.Close()
-		r = gr
-	}
-
-	log.Infof("parsing... %s", req.URL)
-	dec := xmlb.NewDecoder(io.TeeReader(r, ze), make([]byte, 32*1024))
-	for {
-		tok, err := dec.Token()
-		if err == io.EOF {
-			break
-		}
-		switch tok.Type() {
-		case xmlb.StartElement:
-			el, err := tok.StartElement()
-			if err != nil {
-				return nil, err
-			}
-
-			if el.Name.Space == "app" && el.Name.Local == "imageURI" {
-				uri, err := dec.Text()
-				if err != nil {
-					return nil, err
-				}
-				depsMap[uri] = struct{}{}
-			}
-
-			for _, a := range el.Attr {
-				if a.Name.Space == "" && a.Name.Local == "codeSpace" {
-					depsMap[a.Value] = struct{}{}
-				}
-
-				if a.Name.Space == "xsi" && a.Name.Local == "schemaLocation" {
-					s := a.Value
-					for _, v := range strings.Fields(s) {
-						u, err := url.Parse(v)
-						if err != nil {
-							return nil, fmt.Errorf("invalid schemaLocation: %w", err)
-						}
-						if u.Scheme == "" {
-							depsMap[u.Path] = struct{}{}
-						}
-					}
-				}
-			}
-		}
-	}
-	log.Infof("completed %s", req.URL)
-
-	deps := make([]string, 0, len(depsMap))
-	for dep := range depsMap {
-		u := *u
-		dir := path.Dir(u.Path)
-		u.Path = path.Join(dir, dep)
-		if _, ok := seen[u.String()]; ok {
-			continue
-		}
-		seen[u.String()] = struct{}{}
-		deps = append(deps, dep)
-	}
-
-	slices.Sort(deps)
-
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(ctx, conf.Timeout)
 	defer cancel()
+	p := NewPacker(w, nil)
 
-	type download struct {
-		dep string
-		req *http.Request
-		pr  *io.PipeReader
-		pw  *io.PipeWriter
-	}
-	downloads := make([]*download, 0, len(deps))
-
-	for _, dep := range deps {
-		u := *u
-		dir := path.Dir(u.Path)
-		u.Path = path.Join(dir, dep)
-		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-		if err != nil {
-			return nil, fmt.Errorf("invalid url: %w", err)
-		}
-		pr, pw := io.Pipe()
-		downloads = append(downloads, &download{
-			dep: dep,
-			req: req,
-			pr:  pr,
-			pw:  pw,
-		})
-	}
+	var finished bool
+	var finishedMu sync.Mutex
 
 	go func() {
-		sem := make(chan struct{}, 512)
-		for _, d := range downloads {
+		t := time.NewTicker(5 * time.Second)
+		defer t.Stop()
+		for {
 			select {
-			case sem <- struct{}{}:
 			case <-ctx.Done():
 				return
-			}
-			d := d
-			go func() {
-				bw := bufio.NewWriterSize(d.pw, 2*1024*1024)
-				defer func() {
-					<-sem
-				}()
-				resp, err := httpClient.Do(d.req)
+			case <-t.C:
+				finishedMu.Lock()
+				ok := finished
+				if ok {
+					finishedMu.Unlock()
+					return
+				}
+
+				progress := p.Progress()
+				metadata["total"] = strconv.FormatInt(progress.Total(), 10)
+				metadata["processed"] = strconv.FormatInt(progress.Processed(), 10)
+				_, err := obj.Update(ctx, storage.ObjectAttrsToUpdate{
+					Metadata: metadata,
+				})
+				finishedMu.Unlock()
 				if err != nil {
-					_ = d.pw.CloseWithError(err)
-					return
+					log.Printf("[WARN] failed to update progress: %s", err)
 				}
-				if resp.StatusCode != http.StatusOK {
-					_ = d.pw.CloseWithError(fmt.Errorf("status code: %d", resp.StatusCode))
-					return
-				}
-				if _, err := io.Copy(bw, resp.Body); err != nil {
-					_ = d.pw.CloseWithError(err)
-					return
-				}
-				log.Infof("downloaded: %s", d.req.URL)
-				_ = d.pw.CloseWithError(bw.Flush())
-			}()
+			}
 		}
 	}()
 
-	for _, d := range downloads {
-		w, err := zw.Create(path.Join(root, d.dep))
-		if err != nil {
-			return nil, fmt.Errorf("create: %w", err)
-		}
-		if _, err := io.Copy(w, d.pr); err != nil {
-			return nil, fmt.Errorf("copy: %w", err)
-		}
+	if err := p.Pack(ctx, conf.Domain, urls); err != nil {
+		return fmt.Errorf("pack: %w", err)
+	}
+	finishedMu.Lock()
+	defer finishedMu.Unlock()
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close object writer: %v", err)
+	}
+	finished = true
+	return nil
+}
+
+func resolveURLs(ctx context.Context, gcs *storage.Client, urls []string, source *url.URL) ([]string, error) {
+	if source == nil {
+		return urls, nil
 	}
 
-	return q, nil
+	obj := gcs.Bucket(source.Host).Object(path.Join(strings.TrimPrefix(source.Path, "/")))
+	r, err := obj.NewReader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open source file: %w", err)
+	}
+
+	defer r.Close()
+
+	var resolved []string
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		txt := sc.Text()
+		if txt == "" {
+			continue
+		}
+		resolved = append(resolved, txt)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("read source file: %w", err)
+	}
+	return resolved, nil
 }

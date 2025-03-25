@@ -1,0 +1,39 @@
+name: 👥 Run Accounts migration PLATEAU prod
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    name: Run migration For Plateau Prod
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_NAME_GAR: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-accounts-api:latest
+      GCP_REGION: asia-northeast1
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Update Migration Job
+        run: |
+          gcloud run jobs update reearth-accounts-migration \
+            --image $IMAGE_NAME_GAR \
+            --region $GCP_REGION \
+            --quiet
+
+      - name: Execute Migration Job
+        run: |
+          gcloud run jobs execute reearth-accounts-migration \
+            --region $GCP_REGION \
+            --wait \
+            --quiet

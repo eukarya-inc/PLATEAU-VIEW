@@ -66,7 +66,7 @@ variable "mongodb_connection_string" {
   sensitive   = true
 }
 
-variable "reearth_cms_web_config" {
+variable "cms_web_config" {
   type = object({
     coverImageUrl = string
     logoUrl       = string
@@ -74,13 +74,13 @@ variable "reearth_cms_web_config" {
   description = "Re:Earth CMSの設定"
 }
 
-variable "reearth_marketplace_secret" {
+variable "marketplace_secret" {
   type        = string
   description = "Re:Earth Marketplaceのシークレット"
   sensitive   = true
 }
 
-variable "reearth_web_config" {
+variable "web_config" {
   type = object({
     brand = object({
       background = string
@@ -115,4 +115,9 @@ variable "sendgrid_api_key" {
   type        = string
   description = "SendGridのAPIキー"
   sensitive   = true
+}
+
+variable "editor_project_name" {
+  type        = string
+  description = "公開予定のproject名"
 }

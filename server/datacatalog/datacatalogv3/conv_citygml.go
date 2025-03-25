@@ -37,6 +37,7 @@ func toCityGMLs(all *AllData, regYear int) (map[plateauapi.ID]*plateauapi.CityGM
 			CityCode:           plateauapi.AreaCode(city.CityCode),
 			FeatureTypes:       all.FeatureTypesOf(city.ID),
 			PlateauSpecMinorID: plateauapi.PlateauSpecIDFrom(city.Spec),
+			MetadataZipUrls:    city.MetadataZipURLs(),
 			Admin: adminFrom(Admin{
 				ItemID:      city.ID,
 				Stage:       city.SDKStage(),

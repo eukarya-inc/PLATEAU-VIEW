@@ -6,8 +6,10 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 )
@@ -29,6 +31,7 @@ type Config struct {
 	Clean               bool
 	SkipImcompleteItems bool
 	IgnoreStatus        bool
+	FeatureTypes        []string
 }
 
 type MergeContext struct {
@@ -36,16 +39,24 @@ type MergeContext struct {
 	CityItem           *CityItem
 	AllFeatureItems    map[string]FeatureItem
 	GspatialjpDataItem *GspatialjpDataItem
-	UC                 int
 	WetRun             bool
+	FeatureTypes       []string
+}
+
+func (m MergeContext) FileName(ty, suffix string) string {
+	return m.CityItem.FileName(ty, suffix)
 }
 
 func CommandSingle(conf *Config) (err error) {
 	ctx := context.Background()
-	log.Infofc(ctx, "preparegeospatialjp conf: %s", ppp.Sprint(conf))
+	log.Infofc(ctx, "preparegeospatialjp conf: %s", pp.Sprint(conf))
 
 	if conf == nil || conf.SkipCityGML && conf.SkipPlateau && conf.SkipMaxLOD && conf.SkipRelated && conf.SkipIndex && !conf.ValidateMaxLOD {
 		return fmt.Errorf("no command to run")
+	}
+
+	if len(conf.FeatureTypes) == 0 {
+		return fmt.Errorf("feature types is required")
 	}
 
 	cms, err := cms.New(conf.CMSURL, conf.CMSToken)
@@ -60,10 +71,10 @@ func CommandSingle(conf *Config) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to get city item: %w", err)
 	}
-	log.Infofc(ctx, "city item raw: %s", ppp.Sprint(cityItemRaw))
+	log.Infofc(ctx, "city item raw: %s", pp.Sprint(cityItemRaw))
 
-	cityItem := CityItemFrom(cityItemRaw)
-	log.Infofc(ctx, "city item: %s", ppp.Sprint(cityItem))
+	cityItem := CityItemFrom(cityItemRaw, conf.FeatureTypes)
+	log.Infofc(ctx, "city item: %s", pp.Sprint(cityItem))
 
 	if cityItem == nil || cityItem.CityCode == "" || cityItem.CityName == "" || cityItem.CityNameEn == "" || cityItem.GeospatialjpData == "" {
 		if conf.SkipImcompleteItems {
@@ -79,7 +90,7 @@ func CommandSingle(conf *Config) (err error) {
 	}
 
 	indexItem := GspatialjpIndexItemFrom(indexItemRaw)
-	log.Infofc(ctx, "geospatialjp index item: %s", ppp.Sprint(indexItem))
+	log.Infofc(ctx, "geospatialjp index item: %s", pp.Sprint(indexItem))
 
 	gdataItemRaw, err := cms.GetItem(ctx, cityItem.GeospatialjpData, true)
 	if err != nil {
@@ -87,7 +98,7 @@ func CommandSingle(conf *Config) (err error) {
 	}
 
 	gdataItem := GspatialjpDataItemFrom(gdataItemRaw)
-	log.Infofc(ctx, "geospatialjp data item: %s", ppp.Sprint(gdataItem))
+	log.Infofc(ctx, "geospatialjp data item: %s", pp.Sprint(gdataItem))
 
 	if gdataItem != nil && !conf.IgnoreStatus {
 		if !gdataItem.ShouldMergeCityGML() {
@@ -140,8 +151,7 @@ func CommandSingle(conf *Config) (err error) {
 		return fmt.Errorf("invalid spec version: %s", cityItem.Spec)
 	}
 
-	uc := GetUpdateCount(cityItem.CodeLists)
-	if uc == 0 {
+	if cityItem.GetUpdateCount() == 0 {
 		if conf.SkipImcompleteItems {
 			log.Infofc(ctx, "skip because update count is invalid")
 			return nil
@@ -172,18 +182,18 @@ func CommandSingle(conf *Config) (err error) {
 		return fmt.Errorf("failed to get all feature items: %w", err)
 	}
 
-	log.Infofc(ctx, "feature items: %s", ppp.Sprint(allFeatureItems))
+	log.Infofc(ctx, "feature items: %s", pp.Sprint(allFeatureItems))
 
 	dic := mergeDics(allFeatureItems)
-	log.Infofc(ctx, "dic: %s", ppp.Sprint(dic))
+	log.Infofc(ctx, "dic: %s", pp.Sprint(dic))
 
 	mc := MergeContext{
 		TmpDir:             tmpDir,
 		CityItem:           cityItem,
 		AllFeatureItems:    allFeatureItems,
 		GspatialjpDataItem: gdataItem,
-		UC:                 uc,
 		WetRun:             conf.WetRun,
+		FeatureTypes:       conf.FeatureTypes,
 	}
 
 	cw.NotifyRunning(ctx)
@@ -239,9 +249,13 @@ func CommandSingle(conf *Config) (err error) {
 
 	// plateau
 	if !conf.SkipPlateau {
-		res, err := PreparePlateau(ctx, cw, mc)
+		res, w, err := PreparePlateau(ctx, cw, mc)
 		if err != nil {
 			return err
+		}
+
+		if len(w) > 0 {
+			cw.Comment(ctx, "公開準備処理中に警告が発生しました：\n"+strings.Join(w, "\n"))
 		}
 
 		plateauPath = res
@@ -269,7 +283,7 @@ func CommandSingle(conf *Config) (err error) {
 			RelatedZipPath: relatedPath,
 			Generic:        indexItem.Generic,
 			Dic:            dic,
-		}); err != nil {
+		}, conf.FeatureTypes); err != nil {
 			return err
 		}
 	} else {

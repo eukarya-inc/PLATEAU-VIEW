@@ -43,8 +43,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: changed files for plugin
-        id: plugin/
-        uses: step-security/changed-files@v45
+        id: plugin
+        uses: reearth/changed-files@9200e69727eb73eb060652b19946b8a2fdfb654b
         with:
           files: |
             plugin

@@ -12,6 +12,9 @@ export const useProjectId = () => useAtom(projectId);
 const geoApiUrl = atom<string | undefined>(undefined);
 export const useGeoApiUrl = () => useAtom(geoApiUrl);
 
+const cityGMLApiUrl = atom<string | undefined>(undefined);
+export const useCityGMLApiUrl = () => useAtom(cityGMLApiUrl);
+
 const gsiTileUrl = atom<string | undefined>(undefined);
 export const useGsiTileUrl = () => useAtom(gsiTileUrl);
 

@@ -20,6 +20,7 @@ export type SceneMode = "3d" | "2d" | "columbus";
 export type ViewerProperty = {
   globe?: GlobeProperty;
   terrain?: TerrainProperty;
+  geoid?: GeoidProperty;
   scene?: SceneProperty;
   tiles?: TileProperty[];
   tileLabels?: TileLabelProperty[];
@@ -52,6 +53,13 @@ export type TerrainProperty = {
   url?: string;
   normal?: boolean;
   elevationHeatMap?: ElevationHeatMapProperty;
+};
+
+export type GeoidProperty = {
+  server: {
+    url: string;
+    geoidProperty: string;
+  };
 };
 
 export type ElevationHeatMapProperty = {

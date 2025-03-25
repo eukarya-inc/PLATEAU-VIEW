@@ -1,7 +1,8 @@
 package cmsintegrationcommon
 
 import (
-	"slices"
+	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -12,59 +13,9 @@ import (
 
 const ModelPrefix = "plateau-"
 const CityModel = "city"
-const SampleModel = "sample"
 const RelatedModel = "related"
 const GeospatialjpIndex = "geospatialjp-index"
 const GeospatialjpData = "geospatialjp-data"
-
-var FeatureTypes = []string{
-	"bldg", // 建築物モデル
-	"tran", // 交通（道路）モデル
-	"rwy",  // 交通（鉄道）モデル
-	"trk",  // 交通（徒歩道）モデル
-	"squr", // 交通（広場）モデル
-	"wwy",  // 交通（航路）モデル
-	"luse", // 土地利用モデル
-	"fld",  // 洪水浸水想定区域モデル
-	"tnm",  // 津波浸水想定区域モデル
-	"htd",  // 高潮浸水想定区域モデル
-	"ifld", // 内水浸水想定区域モデル
-	"rfld", // ため池ハザードマップモデル
-	"lsld", // 土砂災害モデル
-	"urf",  // 都市計画決定情報モデル*
-	"unf",  // 地下埋設物モデル
-	"brid", // 橋梁モデル
-	"tun",  // トンネルモデル
-	"cons", // その他の構造物モデル
-	"frn",  // 都市設備モデル
-	"ubld", // 地下街モデル
-	"veg",  // 植生モデル
-	"dem",  // 地形モデル
-	"wtr",  // 水部モデル
-	"area", // 区域モデル
-	"gen",  // 汎用都市オブジェクトモデル
-}
-
-var FeatureTypesWithItems = []string{
-	"veg",  // 植生モデル
-	"fld",  // 洪水浸水想定区域モデル
-	"tnm",  // 津波浸水想定区域モデル
-	"htd",  // 高潮浸水想定区域モデル
-	"ifld", // 内水浸水想定区域モデル
-	"rfld", // ため池ハザードマップモデル
-	"urf",  // 都市計画決定情報モデル
-	"gen",  // 汎用都市オブジェクトモデル
-}
-
-var RelatedDataTypes = []string{
-	"shelter",
-	"park",
-	"landmark",
-	"station",
-	"railway",
-	"emergency_route",
-	"border",
-}
 
 type ManagementStatus string
 
@@ -102,11 +53,12 @@ type CityItem struct {
 	Spec              string            `json:"spec,omitempty" cms:"spec,select"`
 	OpenDataUrl       string            `json:"open_data_url,omitempty" cms:"open_data_url,url"`
 	PRCS              PRCS              `json:"prcs,omitempty" cms:"prcs,select"`
-	CodeLists         string            `json:"codelists,omitempty" cms:"codelists,asset"`
-	Schemas           string            `json:"schemas,omitempty" cms:"schemas,asset"`
-	Metadata          string            `json:"metadata,omitempty" cms:"metadata,asset"`
-	Specification     string            `json:"specification,omitempty" cms:"specification,asset"`
-	ObjectLists       string            `json:"objectLists,omitempty" cms:"objectLists,asset"`
+	CodeLists         *cms.PublicAsset  `json:"codelists,omitempty" cms:"codelists,asset"`
+	Schemas           *cms.PublicAsset  `json:"schemas,omitempty" cms:"schemas,asset"`
+	Metadata          *cms.PublicAsset  `json:"metadata,omitempty" cms:"metadata,asset"`
+	Specification     *cms.PublicAsset  `json:"specification,omitempty" cms:"specification,asset"`
+	ObjectLists       *cms.PublicAsset  `json:"objectLists,omitempty" cms:"objectLists,asset"`
+	Misc              *cms.PublicAsset  `json:"misc,omitempty" cms:"misc,asset"`
 	References        map[string]string `json:"references,omitempty" cms:"-"`
 	RelatedDataset    string            `json:"related_dataset,omitempty" cms:"related_dataset,reference"`
 	GeospatialjpIndex string            `json:"geospatialjp-index,omitempty" cms:"geospatialjp-index,reference"`
@@ -118,13 +70,13 @@ type CityItem struct {
 	Public            map[string]bool `json:"public,omitempty" cms:"-"`
 }
 
-func CityItemFrom(item *cms.Item) (i *CityItem) {
+func CityItemFrom(item *cms.Item, featureTypes []string) (i *CityItem) {
 	i = &CityItem{}
 	item.Unmarshal(i)
 
 	references := map[string]string{}
 	public := map[string]bool{}
-	for _, ft := range FeatureTypes {
+	for _, ft := range featureTypes {
 		if ref := item.FieldByKey(ft).GetValue().String(); ref != nil {
 			references[ft] = *ref
 		}
@@ -157,11 +109,11 @@ func (i *CityItem) SpecMajorVersionInt() int {
 	return v
 }
 
-func (i *CityItem) CMSItem() *cms.Item {
+func (i *CityItem) CMSItem(featureTypes []string) *cms.Item {
 	item := &cms.Item{}
 	cms.Marshal(i, item)
 
-	for _, ft := range FeatureTypes {
+	for _, ft := range featureTypes {
 		if ref, ok := i.References[ft]; ok {
 			item.Fields = append(item.Fields, &cms.Field{
 				Key:   ft,
@@ -182,6 +134,46 @@ func (i *CityItem) CMSItem() *cms.Item {
 	return item
 }
 
+func (i *CityItem) ConvSettings() *ConvSettings {
+	if i == nil {
+		return nil
+	}
+	var schemas, codeLists, objectLists string
+	if i.Schemas != nil {
+		schemas = i.Schemas.URL
+	}
+	if i.CodeLists != nil {
+		codeLists = i.CodeLists.URL
+	}
+	if i.ObjectLists != nil {
+		objectLists = i.ObjectLists.URL
+	}
+	return &ConvSettings{
+		PRCS:        i.PRCS.EPSGCode(),
+		Schemas:     schemas,
+		CodeLists:   codeLists,
+		ObjectLists: objectLists,
+	}
+}
+
+func (i *CityItem) MetadataZipURLs() []string {
+	if i == nil {
+		return nil
+	}
+
+	files := []string{
+		i.CodeLists.URL,
+		i.Schemas.URL,
+		i.Metadata.URL,
+		i.Specification.URL,
+		i.Misc.URL,
+	}
+
+	return lo.Filter(files, func(s string, _ int) bool {
+		return path.Ext(s) == ".zip"
+	})
+}
+
 type FeatureItem struct {
 	ID          string             `json:"id,omitempty" cms:"id"`
 	City        string             `json:"city,omitempty" cms:"city,reference"`
@@ -189,19 +181,110 @@ type FeatureItem struct {
 	Data        []string           `json:"data,omitempty" cms:"data,asset"`
 	Desc        string             `json:"desc,omitempty" cms:"desc,textarea"`
 	Items       []FeatureItemDatum `json:"items,omitempty" cms:"items,group"`
-	QCResult    string             `json:"qcresult,omitempty" cms:"qc_result,asset"`
+	QCResult    string             `json:"qc_result,omitempty" cms:"qc_result,asset"`
 	SearchIndex string             `json:"search_index,omitempty" cms:"search_index,asset"`
 	Dic         string             `json:"dic,omitempty" cms:"dic,textarea"`
 	MaxLOD      string             `json:"maxlod,omitempty" cms:"maxlod,asset"`
 	FeatureType string             `json:"featureType,omitempty" cms:"feature_type,select"`
+
+	// override city item's settings
+	PRCS        string `json:"prcs" cms:"prcs,text"`
+	Schemas     string `json:"schemas" cms:"schemas,asset"`
+	CodeLists   string `json:"codelists" cms:"code_lists,asset"`
+	ObjectLists string `json:"objectLists" cms:"object_lists,asset"`
+
 	// metadata
 	SkipQCConv       *cms.Tag `json:"skip_qc_conv,omitempty" cms:"skip_qc_conv,tag,metadata"`
 	Status           *cms.Tag `json:"status,omitempty" cms:"status,select,metadata"`
 	ConvertionStatus *cms.Tag `json:"conv_status,omitempty" cms:"conv_status,tag,metadata"`
 	QCStatus         *cms.Tag `json:"qc_status,omitempty" cms:"qc_status,tag,metadata"`
+
 	// compat
 	SkipQC      bool `json:"skip_qc,omitempty" cms:"skip_qc,bool,metadata"`
 	SkipConvert bool `json:"skip_conv,omitempty" cms:"skip_conv,bool,metadata"`
+}
+
+func (f *FeatureItem) FeatureTypeCode() string {
+	if f == nil || f.FeatureType == "" {
+		return ""
+	}
+	// remain only alphabet
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r
+		}
+		return -1
+	}, f.FeatureType)
+}
+
+func (f *FeatureItem) ConvSettings() *ConvSettings {
+	if f == nil {
+		return nil
+	}
+	return &ConvSettings{
+		FeatureType: f.FeatureTypeCode(),
+		PRCS:        f.PRCS,
+		Schemas:     f.Schemas,
+		CodeLists:   f.CodeLists,
+		ObjectLists: f.ObjectLists,
+	}
+}
+
+type ConvSettings struct {
+	FeatureType string `json:"featureType"`
+	PRCS        string `json:"prcs"`
+	Schemas     string `json:"schemas"`
+	CodeLists   string `json:"codelists"`
+	ObjectLists string `json:"objectLists"`
+}
+
+func (c *ConvSettings) Merge(other *ConvSettings) *ConvSettings {
+	if c == nil {
+		return other
+	}
+	if other == nil {
+		return c
+	}
+	if other.FeatureType != "" {
+		c.FeatureType = other.FeatureType
+	}
+	if other.PRCS != "" {
+		c.PRCS = other.PRCS
+	}
+	if other.Schemas != "" {
+		c.Schemas = other.Schemas
+	}
+	if other.CodeLists != "" {
+		c.CodeLists = other.CodeLists
+	}
+	if other.ObjectLists != "" {
+		c.ObjectLists = other.ObjectLists
+	}
+	return c
+}
+
+func (c *ConvSettings) Validate(qc bool) error {
+	if c == nil {
+		return fmt.Errorf("変換設定が見つかりません。")
+	}
+	if c.FeatureType == "" {
+		return fmt.Errorf("地物型が不明です。")
+	}
+	if c.Schemas == "" {
+		return fmt.Errorf("schemasが登録されていません。")
+	}
+	if c.CodeLists == "" {
+		return fmt.Errorf("codelistsが登録されていません。")
+	}
+	if qc {
+		if c.PRCS == "" {
+			return fmt.Errorf("PRCSの指定が必要です。")
+		}
+		if c.ObjectLists == "" {
+			return fmt.Errorf("objectListsが登録されていません。")
+		}
+	}
+	return nil
 }
 
 type FeatureItemDatum struct {
@@ -278,7 +361,7 @@ type RelatedItemDatum struct {
 	Description string   `json:"description,omitempty" cms:"description,textarea"`
 }
 
-func RelatedItemFrom(item *cms.Item) (i *RelatedItem) {
+func RelatedItemFrom(item *cms.Item, relatedDataTypes []string) (i *RelatedItem) {
 	i = &RelatedItem{}
 	item.Unmarshal(i)
 
@@ -289,7 +372,7 @@ func RelatedItemFrom(item *cms.Item) (i *RelatedItem) {
 		i.ConvertStatus = map[string]*cms.Tag{}
 	}
 
-	for _, t := range RelatedDataTypes {
+	for _, t := range relatedDataTypes {
 		g := item.FieldByKey(t).GetValue().String()
 		if g == nil {
 			continue
@@ -313,11 +396,11 @@ func RelatedItemFrom(item *cms.Item) (i *RelatedItem) {
 	return
 }
 
-func (i *RelatedItem) CMSItem() *cms.Item {
+func (i *RelatedItem) CMSItem(relatedDataTypes []string) *cms.Item {
 	item := &cms.Item{}
 	cms.Marshal(i, item)
 
-	for _, t := range RelatedDataTypes {
+	for _, t := range relatedDataTypes {
 		if d, ok := i.Items[t]; ok {
 			if d.ID == "" {
 				d.ID = ulid.Make().String()
@@ -417,9 +500,11 @@ func (i *GeospatialjpDataItem) CMSItem() *cms.Item {
 	return item
 }
 
-var noconvFeatureTypes = []string{"dem", "app", "ext"}
+func (item *FeatureItem) ReqType() ReqType {
+	return ReqTypeFrom(item.IsQCAndConvSkipped())
+}
 
-func (item *FeatureItem) IsQCAndConvSkipped(featureType string) (skipQC bool, skipConv bool) {
+func (item *FeatureItem) IsQCAndConvSkipped() (skipQC bool, skipConv bool) {
 	const (
 		skip = "スキップ"
 		qc   = "品質検査"
@@ -429,8 +514,7 @@ func (item *FeatureItem) IsQCAndConvSkipped(featureType string) (skipQC bool, sk
 	if TagIsNot(item.QCStatus, ConvertionStatusNotStarted) {
 		skipQC = true
 	}
-	if TagIsNot(item.ConvertionStatus, ConvertionStatusNotStarted) ||
-		(slices.Contains(noconvFeatureTypes, featureType)) {
+	if TagIsNot(item.ConvertionStatus, ConvertionStatusNotStarted) {
 		skipConv = true
 	}
 
@@ -455,4 +539,82 @@ func (item *FeatureItem) IsQCAndConvSkipped(featureType string) (skipQC bool, sk
 	skipQC = skipQC || item.SkipQC
 	skipConv = skipConv || item.SkipConvert
 	return
+}
+
+type ReqType string
+
+const (
+	ReqTypeQC     ReqType = "qc"
+	ReqTypeConv   ReqType = "conv"
+	ReqTypeQCConv ReqType = "qc_conv"
+)
+
+func ReqTypeFrom(skipQC, skipConv bool) ReqType {
+	if skipQC && skipConv {
+		return ""
+	} else if skipQC {
+		return ReqTypeConv
+	} else if skipConv {
+		return ReqTypeQC
+	}
+	return ReqTypeQCConv
+}
+
+func (r ReqType) IsQC() bool {
+	return r == ReqTypeQC || r == ReqTypeQCConv
+}
+
+func (r ReqType) IsConv() bool {
+	return r == ReqTypeConv || r == ReqTypeQCConv
+}
+
+func (r ReqType) Title() string {
+	switch r {
+	case ReqTypeConv:
+		return "変換"
+	case ReqTypeQC:
+		return "品質検査"
+	}
+	return "品質検査・変換"
+}
+
+func (t ReqType) CMSStatus(s ConvertionStatus) (qc ConvertionStatus, conv ConvertionStatus) {
+	if t == ReqTypeConv {
+		conv = s
+	} else if t == ReqTypeQC {
+		qc = s
+	} else {
+		qc = s
+		conv = s
+	}
+	return
+}
+
+func (ty ReqType) Override(override ReqType) ReqType {
+	if override != "" {
+		return override
+	}
+	return ty
+}
+
+func (ty ReqType) Intersection(other ReqType) ReqType {
+	intersectionQC := ty.IsQC() && other.IsQC()
+	intersectionConv := ty.IsConv() && other.IsConv()
+	if intersectionQC && intersectionConv {
+		return ReqTypeQCConv
+	}
+	if intersectionQC {
+		return ReqTypeQC
+	}
+	if intersectionConv {
+		return ReqTypeConv
+	}
+	return ""
+}
+
+func (ty ReqType) Normalize() ReqType {
+	if ty == ReqTypeQCConv {
+		return ReqTypeQC
+	}
+	return ty
 }

@@ -1,5 +1,6 @@
 name: ⭐️ Deploy PLATEAU Extension dev
 on:
+  workflow_call:
   workflow_dispatch:
   repository_dispatch:
     types: [deploy-extension-dev]
@@ -14,7 +15,7 @@ env:
 jobs:
   deploy_extension:
     runs-on: ubuntu-latest
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0'
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
       contents: read
@@ -33,7 +34,7 @@ jobs:
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
         run: echo "::set-output name=dir::$(yarn cache dir)"
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
         with:
           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}

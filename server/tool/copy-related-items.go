@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationv3"
+	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
@@ -17,7 +17,7 @@ func copyRelatedItems(conf *Config, args []string) error {
 	println("copy-related")
 
 	var base, token string
-	opts := cmsintegrationv3.CopyRelatedItemsOpts{}
+	opts := cmsintsetup.CopyRelatedItemsOpts{}
 
 	flags := flag.NewFlagSet("copy-related", flag.ExitOnError)
 	flags.StringVar(&base, "base", conf.CMS_BaseURL, "CMS base URL")
@@ -51,9 +51,9 @@ func copyRelatedItems(conf *Config, args []string) error {
 
 	pp.Printf("args: %v\n", opts)
 
-	err := cmsintegrationv3.CopyRelatedDatasetItems(
+	err := cmsintsetup.CopyRelatedDatasetItems(
 		context.Background(),
-		&cmsintegrationv3.Services{
+		&cmsintsetup.Services{
 			CMS:  lo.Must(cms.New(base, token)),
 			HTTP: http.DefaultClient,
 		},

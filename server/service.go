@@ -8,6 +8,7 @@ import (
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration"
 	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
 	"github.com/eukarya-inc/reearth-plateauview/server/govpolygon"
+	"github.com/eukarya-inc/reearth-plateauview/server/openapi"
 	"github.com/eukarya-inc/reearth-plateauview/server/opinion"
 	"github.com/eukarya-inc/reearth-plateauview/server/putil"
 	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
@@ -27,6 +28,7 @@ type Service struct {
 }
 
 var services = [](func(*Config) (*Service, error)){
+	OpenAPI,
 	CMSIntegration,
 	SDKAPI,
 	SearchIndex,
@@ -51,6 +53,15 @@ func Services(conf *Config) (srv []*Service, _ error) {
 		srv = append(srv, s)
 	}
 	return
+}
+
+func OpenAPI(*Config) (*Service, error) {
+	return &Service{
+		Name: "openapi",
+		Echo: func(g *echo.Group) error {
+			return openapi.Handler(g)
+		},
+	}, nil
 }
 
 func CMSIntegration(conf *Config) (*Service, error) {
@@ -176,7 +187,7 @@ func Tiles(conf *Config) (*Service, error) {
 				return err
 			}
 
-			h.Route(g.Group(""))
+			h.Route(g)
 			h.Init(context.Background())
 			return nil
 		},

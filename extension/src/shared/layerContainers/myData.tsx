@@ -95,6 +95,18 @@ export const MyDataLayerContainer: FC<MyDataContainerProps> = ({
 
   const theme = useTheme();
 
+  const defaultAppearance = useMemo(
+    () => ({
+      ...DEFAULT_MYDATA_APPEARANCES,
+      polyline: {
+        ...DEFAULT_MYDATA_APPEARANCES.polyline,
+        // KML with clampToGround causes an error, so disable it: https://github.com/CesiumGS/cesium/issues/9555
+        clampToGround: format === "kml" ? false : true,
+      },
+    }),
+    [format],
+  );
+
   if (format === "gtfs") {
     return (
       <GTFSLayer
@@ -136,7 +148,7 @@ export const MyDataLayerContainer: FC<MyDataContainerProps> = ({
       onLoad={handleLoad}
       visible={!hidden}
       selectedFeatureColor={theme.palette.primary.main}
-      appearances={DEFAULT_MYDATA_APPEARANCES}
+      appearances={defaultAppearance}
     />
   );
 };

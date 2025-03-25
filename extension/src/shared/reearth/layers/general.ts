@@ -89,6 +89,7 @@ export const GeneralLayer: FC<GeneralProps> = ({
       },
       "3dtiles": {
         selectedFeatureColor,
+        cacheBytes: Infinity,
         ...(appearances?.["3dtiles"] ?? {}),
       },
     }),

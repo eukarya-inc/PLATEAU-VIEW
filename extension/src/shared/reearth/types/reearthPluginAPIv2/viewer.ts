@@ -7,7 +7,7 @@ import { ViewerProperty } from "../viewer";
 
 import { LatLngHeight } from "./common";
 
-export declare type InteractionModeType = "default" | "move" | "selection" | "sketch";
+export declare type InteractionModeType = "default" | "move" | "selection" | "sketch" | "spatialId";
 
 export declare type Viewer = {
   readonly property: ViewerProperty | undefined;
@@ -76,6 +76,7 @@ export declare type Tools = {
     screenOffset: [x: number, y: number],
   ) => [x: number, y: number, z: number] | undefined;
   readonly isPositionVisibleOnGlobe: (position: [x: number, y: number, z: number]) => boolean;
+  readonly getGeoidHeight: (lng?: number, lat?: number) => Promise<number | undefined>;
 };
 
 export declare type ViewerEventType = {

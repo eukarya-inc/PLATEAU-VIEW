@@ -14,7 +14,7 @@ export const SketchLayer: FC<SketchProps> = ({ features, appearances, visible, o
   const data: Data = useMemo(
     () => ({
       type: "geojson",
-      isSketchLayer: true,
+      idProperty: "id",
       value: {
         type: "FeatureCollection",
         features: features.map(f => ({ ...f, id: f.properties.id })),

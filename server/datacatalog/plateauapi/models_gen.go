@@ -256,6 +256,8 @@ type CityGMLDataset struct {
 	PlateauSpecMinor *PlateauSpecMinor `json:"plateauSpecMinor"`
 	// CityGMLが含む地物型コードのリスト。
 	FeatureTypes []string `json:"featureTypes"`
+	// CityGMLのメタデータを含むzipファイルURLのリスト。
+	MetadataZipUrls []string `json:"metadataZipUrls"`
 	// 管理者用
 	Admin interface{} `json:"admin,omitempty"`
 }

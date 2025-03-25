@@ -12,7 +12,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS) (*IndexItem, error) {
+func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS, featureTypes []string) (*IndexItem, error) {
 	data := map[string]plateauItemSeed{}
 
 	if err := fs.WalkDir(f, "", func(p string, d fs.DirEntry, err error) error {
@@ -22,7 +22,7 @@ func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS
 			return nil
 		}
 
-		featureType := extractFeatureType(base)
+		featureType := extractFeatureType(base, featureTypes)
 		if featureType == "" {
 			return nil
 		}
@@ -49,7 +49,7 @@ func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS
 		return nil, fmt.Errorf("failed to walk plateau zip: %w", err)
 	}
 
-	items := plateauItems(data)
+	items := plateauItems(data, featureTypes)
 	children := []*IndexItem{}
 	for _, d := range items {
 		children = append(children, d.Item())
@@ -61,7 +61,7 @@ func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS
 	}, nil
 }
 
-func extractFeatureType(name string) string {
+func extractFeatureType(name string, featureTypes []string) string {
 	for _, f := range featureTypes {
 		if strings.Contains(name, "_"+f+"_") {
 			return f
@@ -133,7 +133,7 @@ func (p plateauItemSeed) Item() *IndexItem {
 	}
 }
 
-func plateauItems(m map[string]plateauItemSeed) []plateauItemSeed {
+func plateauItems(m map[string]plateauItemSeed, featureTypes []string) []plateauItemSeed {
 	items := make([]plateauItemSeed, 0, len(m))
 	for _, v := range m {
 		items = append(items, v)

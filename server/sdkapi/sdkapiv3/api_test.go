@@ -22,13 +22,7 @@ func TestQueryDatasets(t *testing.T) {
 	q, err := client.QueryDatasets(context.Background())
 	assert.NoError(t, err)
 
-	t.Log(ppp.Sprint(q))
-}
-
-var ppp = pp.New()
-
-func init() {
-	ppp.SetColoringEnabled(false)
+	t.Log(pp.Sprint(q))
 }
 
 func TestQueryDatasetFiles(t *testing.T) {
@@ -46,5 +40,5 @@ func TestQueryDatasetFiles(t *testing.T) {
 	q, err := client.QueryDatasetFiles(context.Background(), cityId)
 	assert.NoError(t, err)
 
-	t.Log(ppp.Sprint(q))
+	t.Log(pp.Sprint(q))
 }

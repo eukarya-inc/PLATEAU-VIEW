@@ -24,7 +24,6 @@ type Config struct {
 	// geospatial.jp v3
 	GeospatialjpBuildType             string
 	GeospatialjpCloudRunJobsJobName   string
-	GeospatialjpCloudBuildImage       string
 	GeospatialjpCloudBuildMachineType string
 	GeospatialjpCloudBuildProject     string
 	GeospatialjpCloudBuildRegion      string
@@ -33,6 +32,9 @@ type Config struct {
 	TaskImage  string
 	GCPProject string
 	GCPRegion  string
+	// Flow
+	FlowBaseURL string
+	FlowToken   string
 
 	// compat
 	// geospatial.jp v2

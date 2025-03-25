@@ -238,8 +238,8 @@ func mock(t *testing.T) plateaucms.Config {
 	httpmock.RegisterResponderWithQuery("GET", "https://example.com/api/p/subprj/usecase", "page=1&per_page=100", lo.Must(httpmock.NewJsonResponder(http.StatusNotFound, "not found")))
 
 	return plateaucms.Config{
-		CMSBaseURL:      "https://example.com",
-		CMSMainToken:    "",
-		CMSTokenProject: "system",
+		CMSBaseURL:       "https://example.com",
+		CMSMainToken:     "",
+		CMSSystemProject: "system",
 	}
 }

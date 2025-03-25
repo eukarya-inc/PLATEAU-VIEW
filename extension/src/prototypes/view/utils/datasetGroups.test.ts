@@ -194,12 +194,14 @@ test("Dataset group with sample data", () => {
         groupId: "generic:ユースケース",
         label: "ユースケース",
         useTree: true,
+        allowContinuousAdd: true,
       },
       {
         datasets: [{ folderPath: "Mock Sample Dataset", ...d5 }],
         groupId: "generic:サンプルデータ",
         label: "サンプルデータ",
         useTree: true,
+        allowContinuousAdd: true,
       },
     ],
     cityDatasetGroups: [],
@@ -326,6 +328,7 @@ test("Dataset group with city dataset", () => {
         groupId: "generic:ユースケース",
         label: "ユースケース",
         useTree: true,
+        allowContinuousAdd: true,
       },
     ],
     cityDatasetGroups: [

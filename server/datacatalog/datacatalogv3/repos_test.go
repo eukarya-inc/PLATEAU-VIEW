@@ -32,9 +32,9 @@ func TestRepos(t *testing.T) {
 
 	cms := lo.Must(cms.New("https://example.com", "token"))
 	pcms := lo.Must(plateaucms.New(plateaucms.Config{
-		CMSBaseURL:      "https://example.com",
-		CMSMainToken:    "token",
-		CMSTokenProject: "sys",
+		CMSBaseURL:       "https://example.com",
+		CMSMainToken:     "token",
+		CMSSystemProject: "sys",
 	}))
 
 	repos := NewRepos(pcms)
@@ -172,16 +172,55 @@ func mockCMS(t *testing.T) {
 		"GET", "https://example.com/api/projects/prj/models/plateau-geospatialjp-data/items",
 		httpmock.NewJsonResponderOrPanic(200, empty),
 	)
-	for _, ft := range plateauFeatureTypes {
+	for _, ft := range []string{"bldg"} {
 		res := empty
-		if ft.Code == "bldg" {
+		if ft == "bldg" {
 			res = bldg
 		}
 		httpmock.RegisterResponder(
-			"GET", "https://example.com/api/projects/prj/models/plateau-"+ft.Code+"/items",
+			"GET", "https://example.com/api/projects/prj/models/plateau-"+ft+"/items",
 			httpmock.NewJsonResponderOrPanic(200, res),
 		)
 	}
+
+	httpmock.RegisterResponder(
+		"GET",
+		"https://example.com/api/projects/sys/models/plateau-features/items",
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Items{
+			PerPage:    1,
+			Page:       1,
+			TotalCount: 1,
+			Items: []cms.Item{
+				{
+					ID: "bldg",
+					Fields: []*cms.Field{
+						{Key: "name", Value: "建築物モデル"},
+						{Key: "code", Value: "bldg"},
+					},
+				},
+			},
+		}),
+	)
+
+	httpmock.RegisterResponder(
+		"GET",
+		"https://example.com/api/projects/sys/models/plateau-dataset-types/items",
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Items{
+			PerPage:    1,
+			Page:       1,
+			TotalCount: 1,
+			Items: []cms.Item{
+				{
+					ID: "landmark",
+					Fields: []*cms.Field{
+						{Key: "name", Value: "ランドマーク"},
+						{Key: "code", Value: "landmark"},
+						{Key: "category", Value: "その他のデータセット"},
+					},
+				},
+			},
+		}),
+	)
 
 	httpmock.RegisterResponder(
 		"GET",

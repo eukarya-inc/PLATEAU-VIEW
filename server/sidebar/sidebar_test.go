@@ -45,9 +45,9 @@ func TestHandler(t *testing.T) {
 
 	h := lo.Must(NewHandler(Config{
 		Config: plateaucms.Config{
-			CMSBaseURL:      base,
-			CMSMainToken:    token,
-			CMSTokenProject: tokenProject,
+			CMSBaseURL:       base,
+			CMSMainToken:     token,
+			CMSSystemProject: tokenProject,
 		},
 	}))
 	handler := h.cms.AuthMiddleware(plateaucms.AuthMiddlewareConfig{
@@ -564,9 +564,9 @@ func TestHandler_deleteTemplateHandler(t *testing.T) {
 func newHandler() *Handler {
 	return lo.Must(NewHandler(Config{
 		Config: plateaucms.Config{
-			CMSBaseURL:      testCMSHost,
-			CMSMainToken:    testCMSToken,
-			CMSTokenProject: tokenProject,
+			CMSBaseURL:       testCMSHost,
+			CMSMainToken:     testCMSToken,
+			CMSSystemProject: tokenProject,
 		},
 	}))
 }

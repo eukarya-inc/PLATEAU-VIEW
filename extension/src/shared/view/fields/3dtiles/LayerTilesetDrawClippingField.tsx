@@ -14,7 +14,11 @@ import {
   SwitchParameterItem,
   TrashIcon,
 } from "../../../../prototypes/ui-components";
-import { toolAtom, toolMachineAtom } from "../../../../prototypes/view/states/tool";
+import {
+  isDrawClippingAtom,
+  toolAtom,
+  toolMachineAtom,
+} from "../../../../prototypes/view/states/tool";
 import { useReEarthEvent } from "../../../reearth/hooks";
 import { useSketch } from "../../../reearth/hooks/useSketch";
 import { SketchFeature } from "../../../reearth/types";
@@ -115,6 +119,8 @@ export const LayerTilesetDrawClippingField: FC<LayerTilesetDrawClippingFieldProp
   const toolType = useAtomValue(toolAtom);
   const send = useSetAtom(toolMachineAtom);
 
+  const setIsDrawClipping = useSetAtom(isDrawClippingAtom);
+
   const isDrawing = useRef(false);
   const { handleSetType, handleSetColor, handleDisableShadow, handleEnableRelativeHeight } =
     useSketch();
@@ -127,16 +133,15 @@ export const LayerTilesetDrawClippingField: FC<LayerTilesetDrawClippingFieldProp
       }
       GroupedParameterItemRef.current?.closePopover();
       isDrawing.current = true;
+      setIsDrawClipping(true);
 
       // Need to delay the option set since settings could be changed with type change.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          handleDisableShadow(true);
-          handleEnableRelativeHeight(true);
-          handleSetColor("#00BEBE11");
-          handleSetType(type);
-        });
-      });
+      setTimeout(() => {
+        handleDisableShadow(true);
+        handleEnableRelativeHeight(true);
+        handleSetColor("#00BEBE11");
+        handleSetType(type);
+      }, 100);
     },
     [
       toolType,
@@ -145,6 +150,7 @@ export const LayerTilesetDrawClippingField: FC<LayerTilesetDrawClippingFieldProp
       handleSetColor,
       handleDisableShadow,
       handleEnableRelativeHeight,
+      setIsDrawClipping,
     ],
   );
 
@@ -169,6 +175,7 @@ export const LayerTilesetDrawClippingField: FC<LayerTilesetDrawClippingFieldProp
 
   const handleSketchFeatureCreated = useCallback(
     (e: { feature?: SketchFeature }) => {
+      setIsDrawClipping(false);
       if (isDrawing.current) {
         isDrawing.current = false;
         if (!e.feature?.geometry.coordinates || e.feature?.geometry.type !== "Polygon") return;
@@ -186,7 +193,7 @@ export const LayerTilesetDrawClippingField: FC<LayerTilesetDrawClippingFieldProp
         handleSetType(undefined);
       }
     },
-    [component, setComponent, handleSetType],
+    [component, setComponent, handleSetType, setIsDrawClipping],
   );
 
   useReEarthEvent("sketchfeaturecreated", handleSketchFeatureCreated);

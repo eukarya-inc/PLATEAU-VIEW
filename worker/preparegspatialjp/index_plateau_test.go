@@ -2,29 +2,36 @@ package preparegspatialjp
 
 import (
 	"archive/zip"
-	"testing"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/afero/zipfs"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestGeneratePlateauIndexItem(t *testing.T) {
+func Example_generatePlateauIndexItem() {
 	zipPath := ""
+	featureTypes := []string{"bldg"}
 
 	if zipPath == "" {
-		t.Skip("zipPath is empty")
+		return
 	}
+
 	seed := &IndexSeed{}
 	name := "name"
 	size := uint64(1024 * 1024 * 1024) // 1GB
 	zr, err := zip.OpenReader(zipPath)
-	assert.NoError(t, err)
+	if err != nil {
+		panic(err)
+	}
+
 	f := afero.NewIOFS(zipfs.New(&zr.Reader))
 
-	res, err := generatePlateauIndexItem(seed, name, size, f)
-	assert.NoError(t, err)
+	res, err := generatePlateauIndexItem(seed, name, size, f, featureTypes)
+	if err != nil {
+		panic(err)
+	}
 
 	text := renderIndexItem(res, 0)
-	t.Log(text)
+	println(text)
+
+	// Output:
 }

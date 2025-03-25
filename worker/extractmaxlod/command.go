@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
@@ -69,7 +71,7 @@ func Run(conf Config) error {
 }
 
 func processCity(ctx context.Context, conf Config, cms *cms.CMS, city *City, tmpDir string) error {
-	if city.References == nil || len(city.References) == 0 {
+	if len(city.References) == 0 {
 		log.Infofc(ctx, "city is skipped: references is nil")
 		return nil
 	}
@@ -77,13 +79,7 @@ func processCity(ctx context.Context, conf Config, cms *cms.CMS, city *City, tmp
 	failed := []string{}
 	for _, ft := range featureTypes {
 		if len(conf.FeatureTypes) > 0 {
-			found := false
-			for _, t := range conf.FeatureTypes {
-				if t == ft {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(conf.FeatureTypes, ft)
 			if !found {
 				continue
 			}
@@ -186,9 +182,6 @@ func processFeatureType(ctx context.Context, conf Config, c *cms.CMS, ft, ref, t
 			log.Infofc(ctx, "upload was skipped")
 		}
 
-		if !conf.Clean {
-			return workerutil.SkipDelete
-		}
 		return nil
 	})
 

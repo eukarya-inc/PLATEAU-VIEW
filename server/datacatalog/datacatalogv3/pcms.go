@@ -2,6 +2,7 @@ package datacatalogv3
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 
@@ -37,12 +38,12 @@ func toSimpleSpec(s plateaucms.PlateauSpec) plateauapi.PlateauSpecSimple {
 func getFeatureTypes(ctx context.Context, pcms plateaucms.FeatureTypeStore) (ft FeatureTypes, _ error) {
 	res, err := pcms.PlateauFeatureTypes(ctx)
 	if err != nil {
-		return FeatureTypes{}, err
+		return FeatureTypes{}, fmt.Errorf("failed to get feature types: %w", err)
 	}
 
 	res2, err := pcms.DatasetTypes(ctx)
 	if err != nil {
-		return FeatureTypes{}, err
+		return FeatureTypes{}, fmt.Errorf("failed to get dataset types: %w", err)
 	}
 
 	sort.SliceStable(res, func(i, j int) bool {

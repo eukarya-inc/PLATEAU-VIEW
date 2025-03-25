@@ -269,9 +269,9 @@ func TestHandler_LastModified(t *testing.T) {
 
 func newHandler() *CMS {
 	return &CMS{
-		cmsbase:            testCMSHost,
-		cmsMetadataProject: tokenProject,
-		cmsMain:            lo.Must(cms.New(testCMSHost, testCMSToken)),
+		cmsbase:       testCMSHost,
+		cmsSysProject: tokenProject,
+		cmsMain:       lo.Must(cms.New(testCMSHost, testCMSToken)),
 	}
 }
 

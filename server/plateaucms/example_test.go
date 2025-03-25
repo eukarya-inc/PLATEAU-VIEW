@@ -10,23 +10,23 @@ import (
 
 const enableExample = false
 
-func initCMS() *CMS {
-	if !enableExample {
-		return nil
+func ExampleCMS_AllMetadata() {
+	cms := initCMS()
+	if cms == nil {
+		return
 	}
 
-	_ = godotenv.Load("../.env")
-	cmsBaseURL := os.Getenv("REEARTH_PLATEAUVIEW_CMS_BASEURL")
-	cmsMainToken := os.Getenv("REEARTH_PLATEAUVIEW_CMS_TOKEN")
-	if cmsBaseURL == "" || cmsMainToken == "" {
-		return nil
+	ctx := context.Background()
+	res, err := cms.AllMetadata(ctx, false)
+	if err != nil {
+		panic(err)
 	}
 
-	c, _ := New(Config{
-		CMSBaseURL:   cmsBaseURL,
-		CMSMainToken: cmsMainToken,
-	})
-	return c
+	for _, r := range res {
+		fmt.Printf("%#v\n", r)
+	}
+
+	// Output:
 }
 
 func ExampleCMS_PlateauFeatureTypes() {
@@ -46,4 +46,23 @@ func ExampleCMS_PlateauFeatureTypes() {
 	}
 
 	// Output:
+}
+
+func initCMS() *CMS {
+	if !enableExample {
+		return nil
+	}
+
+	_ = godotenv.Load("../.env")
+	cmsBaseURL := os.Getenv("REEARTH_PLATEAUVIEW_CMS_BASEURL")
+	cmsMainToken := os.Getenv("REEARTH_PLATEAUVIEW_CMS_TOKEN")
+	if cmsBaseURL == "" || cmsMainToken == "" {
+		return nil
+	}
+
+	c, _ := New(Config{
+		CMSBaseURL:   cmsBaseURL,
+		CMSMainToken: cmsMainToken,
+	})
+	return c
 }

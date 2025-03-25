@@ -63,6 +63,11 @@ const yml = {
                 title: "データセット属性用URL",
               },
               {
+                id: "cityGMLURL",
+                type: "string",
+                title: "CityGMLサーバーバックエンドURL",
+              },
+              {
                 id: "geoURL",
                 type: "string",
                 title: "GeoサーバーバックエンドURL",
