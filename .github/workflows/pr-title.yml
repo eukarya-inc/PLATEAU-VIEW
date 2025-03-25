@@ -43,8 +43,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: changed files for plugin
-        id: plugin
-        uses: tj-actions/changed-files@v36
+        id: plugin/
+        uses: step-security/changed-files@v45
         with:
           files: |
             plugin

@@ -34,58 +34,58 @@ jobs:
           fetch-depth: 0
       - name: changed files for extension
         id: extension
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           files: |
-            extension
+            extension/
             .github/workflows/ci-extension.yml
             .github/workflows/ci-extension-version-update.yml
             .github/workflows/deploy-extension-dev.yml
             .github/workflows/deploy-extension-prod.yml
       - name: changed files for server
         id: server
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           files: |
-            server
+            server/
             .github/workflows/ci-server.yml
             .github/workflows/build-server.yml
             .github/workflows/deploy-server-dev.yml
             .github/workflows/deploy-server-prod.yml
       - name: changed files for tools
         id: tools
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           files: |
-            tools
+            tools/
             .github/workflows/ci-tools.yml
       - name: changed files for geo
         id: geo
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           files: |
-            geo
+            geo/
             .github/workflows/ci-geo.yml
             .github/workflows/build-geo.yml
             .github/workflows/deploy-geo-dev.yml
             .github/workflows/deploy-geo-prod.yml
       - name: changed files for tiles
         id: tiles
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           files: |
-            tiles
+            tiles/
             .github/workflows/ci-tiles.yml
             .github/workflows/build-tiles.yml
             .github/workflows/deploy-tiles-dev.yml
             .github/workflows/deploy-tiles-prod.yml
       - name: changed files for worker
         id: worker
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@v45
         with:
           since_last_remote_commit: true
           files: |
-            worker
+            worker/
             .github/workflows/ci-worker.yml
             .github/workflows/build-worker.yml
             .github/workflows/deploy-worker-dev.yml
