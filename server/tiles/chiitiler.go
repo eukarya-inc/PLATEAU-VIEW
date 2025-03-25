@@ -3,6 +3,7 @@ package tiles
 import (
 	_ "embed"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -39,6 +40,27 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 	x := c.Param("x")
 	y := c.Param("y")
 
+	// get cache
+	if h.chiitilerCacheBucket != nil {
+		obj := h.chiitilerCacheBucket.Object(getKey(style, z, x, y))
+		r, err := obj.NewReader(ctx)
+		if err != nil {
+			log.Errorfc(ctx, "tiles: failed to get cache: %v", err)
+		} else {
+			defer r.Close()
+		}
+
+		if r != nil {
+			log.Debugfc(ctx, "tiles: cache hit: %s", obj.ObjectName())
+			if h.conf.CacheControl != "" {
+				c.Response().Header().Set("Cache-Control", h.conf.CacheControl)
+			} else {
+				c.Response().Header().Set("Cache-Control", r.Attrs.CacheControl)
+			}
+			return c.Stream(http.StatusOK, r.Attrs.ContentType, r)
+		}
+	}
+
 	styleURL := *h.host
 	styleURL.Path = fmt.Sprintf("/tiles/styles/%s", style)
 	u := *h.chiitilerURL
@@ -62,7 +84,18 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 	}
 
 	defer resp.Body.Close()
-	return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
+
+	var body io.Reader = resp.Body
+	// save cache
+	if resp.StatusCode == http.StatusOK && h.chiitilerCacheBucket != nil {
+		obj := h.chiitilerCacheBucket.Object(getKey(style, z, x, y))
+		log.Debugfc(ctx, "tiles: cache save: %s", obj.ObjectName())
+		w := obj.NewWriter(ctx)
+		defer w.Close()
+		body = io.TeeReader(resp.Body, w)
+	}
+
+	return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 }
 
 func styleHandler(c echo.Context) error {
@@ -73,4 +106,8 @@ func styleHandler(c echo.Context) error {
 	}
 
 	return c.Blob(http.StatusOK, "application/json", s)
+}
+
+func getKey(style, z, x, y string) string {
+	return fmt.Sprintf("%s/%s/%s/%s", style, z, x, y)
 }

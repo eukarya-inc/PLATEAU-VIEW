@@ -94,7 +94,9 @@ type Config struct {
 	CityGML_PackerTimeout              uint     `pp:",omitempty"`
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
+	Tiles_Cache_Control                string   `pp:",omitempty"`
 	Chiitiler_URL                      string   `pp:",omitempty"`
+	Chiitiler_Bucket                   string   `pp:",omitempty"`
 }
 
 func NewConfig() (*Config, error) {
@@ -218,9 +220,11 @@ func (c *Config) DataCatalog() datacatalog.Config {
 
 func (c *Config) Tiles() tiles.Config {
 	return tiles.Config{
-		CMS:          c.plateauCMS(),
-		Host:         c.Host,
-		ChiitilerURL: c.Chiitiler_URL,
+		CMS:                  c.plateauCMS(),
+		Host:                 c.Host,
+		CacheControl:         c.Tiles_Cache_Control,
+		ChiitilerURL:         c.Chiitiler_URL,
+		ChiitilerCacheBucket: c.Chiitiler_Bucket,
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
@@ -19,23 +20,25 @@ import (
 const modelKey = "tiles"
 
 type Config struct {
-	CMS          plateaucms.Config
-	CacheControl string
-	Host         string
-	ChiitilerURL string
+	CMS                  plateaucms.Config
+	CacheControl         string
+	Host                 string
+	ChiitilerURL         string
+	ChiitilerCacheBucket string
 }
 
 type Handler struct {
-	pcms         *plateaucms.CMS
-	http         *http.Client
-	lock         sync.RWMutex
-	host         *url.URL
-	chiitilerURL *url.URL
-	tiles        Tiles
-	conf         Config
+	pcms                 *plateaucms.CMS
+	http                 *http.Client
+	lock                 sync.RWMutex
+	host                 *url.URL
+	chiitilerURL         *url.URL
+	tiles                Tiles
+	conf                 Config
+	chiitilerCacheBucket *storage.BucketHandle
 }
 
-func New(conf Config) (*Handler, error) {
+func New(ctx context.Context, conf Config) (*Handler, error) {
 	pcms, err := plateaucms.New(conf.CMS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create plateau cms: %w", err)
@@ -57,11 +60,22 @@ func New(conf Config) (*Handler, error) {
 		}
 	}
 
+	var bucket *storage.BucketHandle
+	if conf.ChiitilerCacheBucket != "" {
+		client, err := storage.NewClient(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get chiitiler bucket: %w", err)
+		}
+
+		bucket = client.Bucket(conf.ChiitilerCacheBucket)
+	}
+
 	return &Handler{
-		pcms:         pcms,
-		conf:         conf,
-		host:         host,
-		chiitilerURL: chiitilerURL,
+		pcms:                 pcms,
+		conf:                 conf,
+		host:                 host,
+		chiitilerURL:         chiitilerURL,
+		chiitilerCacheBucket: bucket,
 		http: &http.Client{
 			Timeout: 10 * time.Second,
 		},
