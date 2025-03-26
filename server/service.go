@@ -182,12 +182,13 @@ func Tiles(conf *Config) (*Service, error) {
 	return &Service{
 		Name: "tiles",
 		Echo: func(g *echo.Group) error {
-			h, err := tiles.New(conf.Tiles())
+			ctx := context.Background()
+			h, err := tiles.New(ctx, conf.Tiles())
 			if err != nil {
 				return err
 			}
 
-			h.Route(g.Group(""))
+			h.Route(g)
 			h.Init(context.Background())
 			return nil
 		},

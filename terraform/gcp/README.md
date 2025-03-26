@@ -170,6 +170,7 @@ terraform output <確認したいOutput>
 | `plateauview_cms_webhook_secret` | 下記「CMS インテグレーション設定」で使用                                                                                |
 | `plateauview_cms_webhook_url`    | 下記「CMS インテグレーション設定」で使用                                                                                |
 | `plateauview_editor_url`         | PLATEAU Editor の URL                                                                                                   |
+| `plateauview_flow_token`         | PLATEAU Flow のトリガー用シークレット                                                                                       |
 | `plateauview_flow_url`           | PLATEAU Flow の URL                                                                                                     |
 | `plateauview_geo_url`            | タイルなどを変換・処理するサーバーの URL                                                                                |
 | `plateauview_sdk_token`          | PLATEAU SDK 用のトークン。SDK の UI で設定する（詳しくはマニュアルを参照）                                              |

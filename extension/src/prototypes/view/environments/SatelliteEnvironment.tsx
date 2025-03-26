@@ -36,7 +36,7 @@ export const SatelliteEnvironment: FC<SceneProps> = ({ tileLabels, ...props }) =
       },
       {
         id: "tokyo_2",
-        tile_url: "https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png",
+        tile_url: "https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2024/{z}/{x}/{y}.png",
         tile_type: "url",
       },
     ],

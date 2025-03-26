@@ -1,10 +1,11 @@
-import { useMediaQuery, useTheme } from "@mui/material";
-import { useAtom, useAtomValue } from "jotai";
-import { type FC } from "react";
+import { IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useCallback, type FC } from "react";
 
+import ARModal from "../../../shared/view/ui-container/ARModal";
 import ShareModal from "../../../shared/view/ui-container/ShareModal";
-import { AppBar, AppIconButton, PaperPlaneTilt, Space } from "../../ui-components";
-import { hideAppOverlayAtom, showShareModalAtom } from "../states/app";
+import { AppBar, AppIconButton, ARIcon, PaperPlaneTilt, Space } from "../../ui-components";
+import { hideAppOverlayAtom, showARModalAtom, showShareModalAtom } from "../states/app";
 
 import { CameraButtons } from "./CameraButtons";
 import { DateControlButton } from "./DateControlButton";
@@ -19,16 +20,16 @@ type Props = {
   arURL?: string;
 };
 
-export const AppHeader: FC<Props> = () => {
+export const AppHeader: FC<Props> = ({ arURL }) => {
   const hidden = useAtomValue(hideAppOverlayAtom);
   const [showShareModal, setShowShareModal] = useAtom(showShareModalAtom);
-  // const setShowARModel = useSetAtom(showARModalAtom);
+  const setShowARModel = useSetAtom(showARModalAtom);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("mobile"));
 
-  // const handleARButtonClick = useCallback(() => {
-  //   setShowARModel(true);
-  // }, [setShowARModel]);
+  const handleARButtonClick = useCallback(() => {
+    setShowARModel(true);
+  }, [setShowARModel]);
 
   if (hidden) {
     return null;
@@ -51,12 +52,12 @@ export const AppHeader: FC<Props> = () => {
       <AppIconButton title="シェア" onClick={() => setShowShareModal(true)}>
         <PaperPlaneTilt />
       </AppIconButton>
-      {/* {isMobile && (
+      {isMobile && (
         <IconButton onClick={handleARButtonClick}>
           <ARIcon />
         </IconButton>
       )}
-      <ARModal arURL={arURL} /> */}
+      <ARModal arURL={arURL} />
       {showShareModal && (
         <ShareModal showShareModal={showShareModal} setShowShareModal={setShowShareModal} />
       )}

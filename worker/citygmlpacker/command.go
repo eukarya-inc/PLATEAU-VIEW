@@ -1,6 +1,7 @@
 package citygmlpacker
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -18,15 +19,33 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-func Run(conf Config) (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
-	defer cancel()
+const defaultTimeout = 10 * time.Minute
 
-	startedAt := time.Now().Format(time.RFC3339Nano)
+func Run(conf Config) (err error) {
+	if conf.Timeout <= 0 {
+		conf.Timeout = defaultTimeout
+	}
+
+	log.Printf("timeout: %s", conf.Timeout)
+	ctx := context.Background()
 
 	destURL, err := url.Parse(conf.Dest)
 	if err != nil {
 		return fmt.Errorf("invalid destination bucket(%s): %w", conf.Dest, err)
+	}
+	if destURL.Scheme != "gs" {
+		return fmt.Errorf("invalid destination bucket(%s): must be gs://", conf.Dest)
+	}
+
+	var sourceURL *url.URL
+	if conf.Source != "" {
+		sourceURL, err = url.Parse(conf.Source)
+		if err != nil {
+			return fmt.Errorf("invalid source bucket(%s): %w", conf.Source, err)
+		}
+		if sourceURL.Scheme != "gs" {
+			return fmt.Errorf("invalid source bucket(%s): must be gs://", conf.Source)
+		}
 	}
 
 	gcs, err := storage.NewClient(ctx)
@@ -34,7 +53,16 @@ func Run(conf Config) (err error) {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 
+	urls, err := resolveURLs(ctx, gcs, conf.URLs, sourceURL)
+	if err != nil {
+		return fmt.Errorf("resolve URLs: %w", err)
+	}
+
+	log.Printf("resolved urls:\n%s", strings.Join(urls, "\n"))
+
 	obj := gcs.Bucket(destURL.Host).Object(path.Join(strings.TrimPrefix(destURL.Path, "/")))
+
+	startedAt := time.Now().Format(time.RFC3339Nano)
 
 	defer func() {
 		if err == nil {
@@ -81,6 +109,8 @@ func Run(conf Config) (err error) {
 	w.ObjectAttrs.Metadata = completedMetadata
 	defer w.Close()
 
+	ctx, cancel := context.WithTimeout(ctx, conf.Timeout)
+	defer cancel()
 	p := NewPacker(w, nil)
 
 	var finished bool
@@ -115,7 +145,7 @@ func Run(conf Config) (err error) {
 		}
 	}()
 
-	if err := p.Pack(ctx, conf.Domain, conf.URLs); err != nil {
+	if err := p.Pack(ctx, conf.Domain, urls); err != nil {
 		return fmt.Errorf("pack: %w", err)
 	}
 	finishedMu.Lock()
@@ -125,4 +155,32 @@ func Run(conf Config) (err error) {
 	}
 	finished = true
 	return nil
+}
+
+func resolveURLs(ctx context.Context, gcs *storage.Client, urls []string, source *url.URL) ([]string, error) {
+	if source == nil {
+		return urls, nil
+	}
+
+	obj := gcs.Bucket(source.Host).Object(path.Join(strings.TrimPrefix(source.Path, "/")))
+	r, err := obj.NewReader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open source file: %w", err)
+	}
+
+	defer r.Close()
+
+	var resolved []string
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		txt := sc.Text()
+		if txt == "" {
+			continue
+		}
+		resolved = append(resolved, txt)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("read source file: %w", err)
+	}
+	return resolved, nil
 }

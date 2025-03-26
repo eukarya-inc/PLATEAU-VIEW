@@ -1,5 +1,6 @@
 name: ⭐️ Deploy PLATEAU Extension dev
 on:
+  workflow_call:
   workflow_dispatch:
   repository_dispatch:
     types: [deploy-extension-dev]

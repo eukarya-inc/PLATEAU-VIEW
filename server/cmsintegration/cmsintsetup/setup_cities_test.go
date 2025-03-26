@@ -1,4 +1,4 @@
-package cmsintegrationv3
+package cmsintsetup
 
 import (
 	"context"

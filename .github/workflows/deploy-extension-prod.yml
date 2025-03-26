@@ -1,5 +1,6 @@
 name: ⭐️ Deploy PLATEAU Extension production
 on:
+  workflow_call:
   workflow_dispatch:
 env:
   GCS_DEST: gs://plateau-prod-reearth-static-bucket

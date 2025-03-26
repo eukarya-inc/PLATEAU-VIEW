@@ -8,6 +8,7 @@ import (
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintflow"
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintmaxlod"
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintrelated"
+	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/dataconv"
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/geospatialjpv3"
 	"github.com/labstack/echo/v4"
@@ -24,6 +25,11 @@ func Handler(conf Config, g *echo.Group) error {
 
 	// v3
 	if err := cmsintegrationv3.Handler(conf, g); err != nil {
+		return err
+	}
+
+	// setup
+	if err := cmsintsetup.Handler(setupConfig(conf), g); err != nil {
 		return err
 	}
 
@@ -180,5 +186,14 @@ func flowConfig(conf Config) cmsintflow.Config {
 		FlowBaseURL:      conf.FlowBaseURL,
 		FlowToken:        conf.FlowToken,
 		Secret:           conf.Secret,
+	}
+}
+
+func setupConfig(conf Config) cmsintsetup.Config {
+	return cmsintsetup.Config{
+		Token:            conf.APIToken,
+		CMSURL:           conf.CMSBaseURL,
+		CMSToken:         conf.CMSToken,
+		CMSSystemProject: conf.CMSSystemProject,
 	}
 }

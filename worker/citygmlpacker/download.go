@@ -38,6 +38,7 @@ func (d *Download) CloseWithError(err error) error {
 
 func (d *Download) Download(client *http.Client) bool {
 	bw := bufio.NewWriterSize(d.pw, 2*1024*1024)
+
 	resp, err := client.Do(d.req)
 	if err != nil {
 		_ = d.CloseWithError(err)
@@ -65,11 +66,12 @@ func (d *Download) Download(client *http.Client) bool {
 	return true
 }
 
-func (d *Download) WriteTo(w io.Writer) error {
-	if _, err := io.Copy(w, d.pr); err != nil {
-		return fmt.Errorf("copy: %w", err)
+func (d *Download) WriteTo(w io.Writer) (int64, error) {
+	written, err := io.Copy(w, d.pr)
+	if err != nil {
+		return written, fmt.Errorf("copy: %w", err)
 	}
-	return nil
+	return written, nil
 }
 
 func DownloadsFromUrls(ctx context.Context, urls []string, base *url.URL) ([]*Download, error) {
