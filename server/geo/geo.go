@@ -73,9 +73,14 @@ func (b Bounds2) QBounds() quadtree.Bounds {
 	}
 }
 
-func (b Bounds2) IsIntersect(b2 Bounds2) bool {
+func (b Bounds2) Intersects(b2 Bounds2) bool {
 	return b.Min.X <= b2.Max.X && b.Max.X >= b2.Min.X &&
 		b.Min.Y <= b2.Max.Y && b.Max.Y >= b2.Min.Y
+}
+
+func (b Bounds2) Overlaps(b2 Bounds2) bool {
+	return b.Min.X < b2.Max.X && b.Max.X > b2.Min.X &&
+		b.Min.Y < b2.Max.Y && b.Max.Y > b2.Min.Y
 }
 
 func (b Bounds2) In(p Point2) bool {
