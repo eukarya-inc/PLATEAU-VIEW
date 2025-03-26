@@ -2,10 +2,12 @@ package tiles
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"cloud.google.com/go/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
 )
@@ -45,13 +47,14 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 		obj := h.chiitilerCacheBucket.Object(getKey(style, z, x, y))
 		r, err := obj.NewReader(ctx)
 		if err != nil {
-			log.Errorfc(ctx, "tiles: failed to get cache: %v", err)
+			if !errors.Is(err, storage.ErrObjectNotExist) {
+				log.Errorfc(ctx, "tiles: failed to get cache: %v", err)
+			}
 		} else {
 			defer r.Close()
 		}
 
 		if r != nil {
-			log.Debugfc(ctx, "tiles: cache hit: %s", obj.ObjectName())
 			if h.conf.CacheControl != "" {
 				c.Response().Header().Set("Cache-Control", h.conf.CacheControl)
 			} else {
