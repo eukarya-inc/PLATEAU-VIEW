@@ -19,7 +19,7 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-const defaultTimeout = 10 * time.Minute
+const defaultTimeout = 15 * time.Minute
 
 func Run(conf Config) (err error) {
 	if conf.Timeout <= 0 {
@@ -27,7 +27,7 @@ func Run(conf Config) (err error) {
 	}
 
 	log.Printf("timeout: %s", conf.Timeout)
-	ctx := context.Background()
+	bgctx := context.Background()
 
 	destURL, err := url.Parse(conf.Dest)
 	if err != nil {
@@ -48,12 +48,12 @@ func Run(conf Config) (err error) {
 		}
 	}
 
-	gcs, err := storage.NewClient(ctx)
+	gcs, err := storage.NewClient(bgctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 
-	urls, err := resolveURLs(ctx, gcs, conf.URLs, sourceURL)
+	urls, err := resolveURLs(bgctx, gcs, conf.URLs, sourceURL)
 	if err != nil {
 		return fmt.Errorf("resolve URLs: %w", err)
 	}
@@ -70,7 +70,8 @@ func Run(conf Config) (err error) {
 		}
 		metadata := citygml.Status(PackStatusFailed)
 		metadata["startedAt"] = startedAt
-		_, uErr := obj.Update(ctx, storage.ObjectAttrsToUpdate{
+		// Use background context for metadata update to avoid timeout issues
+		_, uErr := obj.Update(bgctx, storage.ObjectAttrsToUpdate{
 			Metadata: metadata,
 		})
 		if uErr != nil {
@@ -78,7 +79,7 @@ func Run(conf Config) (err error) {
 		}
 	}()
 
-	attrs, err := obj.Attrs(ctx)
+	attrs, err := obj.Attrs(bgctx)
 	if err != nil {
 		return fmt.Errorf("get metadata: %v", err)
 	}
@@ -91,7 +92,7 @@ func Run(conf Config) (err error) {
 	metadata["startedAt"] = startedAt
 	{
 		_, err = obj.If(storage.Conditions{GenerationMatch: attrs.Generation, MetagenerationMatch: attrs.Metageneration}).
-			Update(ctx, storage.ObjectAttrsToUpdate{Metadata: metadata})
+			Update(bgctx, storage.ObjectAttrsToUpdate{Metadata: metadata})
 
 		if err != nil {
 			var gErr *googleapi.Error
@@ -103,13 +104,13 @@ func Run(conf Config) (err error) {
 		}
 	}
 
-	w := obj.NewWriter(ctx)
+	w := obj.NewWriter(bgctx)
 	completedMetadata := status(PackStatusSucceeded)
 	completedMetadata["startedAt"] = startedAt
 	w.ObjectAttrs.Metadata = completedMetadata
 	defer w.Close()
 
-	ctx, cancel := context.WithTimeout(ctx, conf.Timeout)
+	ctx, cancel := context.WithTimeout(bgctx, conf.Timeout)
 	defer cancel()
 	p := NewPacker(w, nil)
 
