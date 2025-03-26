@@ -32,7 +32,7 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 		if len(bounds) > maxBounds {
 			return nil, nil, fmt.Errorf("too many bounds")
 		}
-		filter = overlapFilter(bounds)
+		filter = intersectFilter(bounds)
 	case "mm":
 		var levels [7]int
 		for m := range strings.SplitSeq(cond, ",") {
@@ -70,7 +70,7 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 		if len(bounds) > maxBounds {
 			return nil, nil, fmt.Errorf("too many bounds: %d", len(bounds))
 		}
-		filter = overlapFilter(bounds)
+		filter = intersectFilter(bounds)
 	case "r":
 		b, err := parseBounds(cond)
 		if err != nil {
@@ -171,13 +171,6 @@ func intersectFilter(bounds []geo.Bounds2) cityGMLFileFilterFunc {
 	}
 }
 
-func overlapFilter(bounds []geo.Bounds2) cityGMLFileFilterFunc {
-	return func(f CityGMLFile) bool {
-		m, _ := jisx0410.Parse(f.MeshCode)
-		return slices.ContainsFunc(bounds, m.Bounds.Overlaps)
-	}
-}
-
 func levelFilter(level int, bounds []geo.Bounds2) cityGMLFileFilterFunc {
 	return func(f CityGMLFile) bool {
 		m, _ := jisx0410.Parse(f.MeshCode)
@@ -187,6 +180,6 @@ func levelFilter(level int, bounds []geo.Bounds2) cityGMLFileFilterFunc {
 		if level == 3 && m.Level < 3 {
 			return false
 		}
-		return slices.ContainsFunc(bounds, m.Bounds.Overlaps)
+		return slices.ContainsFunc(bounds, m.Bounds.Intersects)
 	}
 }
