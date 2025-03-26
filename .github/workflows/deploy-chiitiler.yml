@@ -43,12 +43,12 @@ jobs:
       - name: Pull docker images
         run: docker pull $CHIITILER_IMAGE
       - name: Push docker images to dev
-        if: ${{ inputs.environment }} == 'dev'
+        if: ${{ inputs.environment == 'dev' }}
         run: |
           docker tag $CHIITILER_IMAGE $CHIITILER_IMAGE_DEV
           docker push $CHIITILER_IMAGE_DEV
       - name: Push docker images to prod
-        if: ${{ inputs.environment }} == 'prod'
+        if: ${{ inputs.environment == 'prod' }}
         run: |
           docker tag $CHIITILER_IMAGE $CHIITILER_IMAGE_PROD
           docker push $CHIITILER_IMAGE_PROD
