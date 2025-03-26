@@ -57,3 +57,4 @@ jobs:
         with:
           service: chiitiler
           image: ${{ inputs.environment == 'prod' && env.CHIITILER_IMAGE_PROD || env.CHIITILER_IMAGE_DEV }}
+          region: asia-northeast1
