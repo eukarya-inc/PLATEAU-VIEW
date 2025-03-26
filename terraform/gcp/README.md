@@ -150,9 +150,11 @@ plateauview_cms_url = "*"
 plateauview_cms_webhook_secret = <sensitive>
 plateauview_cms_webhook_url = "*"
 plateauview_editor_url = "*"
+plateauview_flow_token = "*"
 plateauview_flow_url = "*"
 plateauview_geo_url = "*"
 plateauview_sdk_token = <sensitive>
+plateauview_setup_token = "*"
 plateauview_sidebar_token = <sensitive>
 plateauview_sidecar_url = "*"
 plateauview_tiles_url = "*"
@@ -174,6 +176,7 @@ terraform output <確認したいOutput>
 | `plateauview_flow_url`           | PLATEAU Flow の URL                                                                                                     |
 | `plateauview_geo_url`            | タイルなどを変換・処理するサーバーの URL                                                                                |
 | `plateauview_sdk_token`          | PLATEAU SDK 用のトークン。SDK の UI で設定する（詳しくはマニュアルを参照）                                              |
+| `plateauview_setup_token`        | PLATEAU CMS セットアップ用のトークン              |
 | `plateauview_sidebar_token`      | ビューワのサイドバー用の API トークン。エディタ上でサイドバーウィジェットの設定から設定する（詳しくはマニュアルを参照） |
 | `plateauview_sidecar_url`        | サイドカーサーバーの URL。エディタ上でサイドバーウィジェットの設定から設定する（詳しくはマニュアルを参照）              |
 | `plateauview_tiles_url`          | タイル配信サーバーの URL                                                                                                |
