@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { stringify } from "yaml";
 
-import pkg from "./package.json" assert { type: "json" };
+import pkg from "./package.json" with { type: "json" };
 
 const yml = {
   id: "plateau-view-3",

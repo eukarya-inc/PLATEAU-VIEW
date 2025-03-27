@@ -9,6 +9,7 @@ import {
 import { LayerVisibilityEvent, ReEarthV1 } from "../../shared/reearth/types";
 import { ReEarthV2 } from "../../shared/reearth/types/reearthPluginAPIv2";
 import { isReEarthAPIv2 } from "../../shared/reearth/utils/reearth";
+import { useStaticApiUrl } from "../../shared/states/environmentVariables";
 import { makeComponentAtomWrapper } from "../../shared/view-layers/component";
 import { colorMapFlare, ColorMap, createColorMapFromType } from "../color-maps";
 import {
@@ -158,12 +159,14 @@ export function createHeatmapLayer(
 
 const Subdivision: FC<
   Omit<HeatmapLayerModel, "getUrl" | "codes"> & {
+    baseUrl: string;
     url: string;
     bound: MeshBounds;
     onLoad?: (data: ParseCSVResult, url: string) => void;
   }
 > = memo(
   ({
+    baseUrl,
     hiddenAtom,
     colorSchemeAtom,
     url,
@@ -189,9 +192,7 @@ const Subdivision: FC<
         if (layerIdCurrent === e.layerId) {
           const fetchData = async () => {
             try {
-              const response = await fetch(`${import.meta.env.PLATEAU_ORIGIN}${url}`).then(r =>
-                r.text(),
-              );
+              const response = await fetch(`${baseUrl}/${url}`).then(r => r.text());
               if (isCancelled || !response) return;
               const parsedData = await parseCSVAsync(response, parserOptions);
               if (isCancelled) return;
@@ -222,7 +223,7 @@ const Subdivision: FC<
           };
         }
       }
-    }, [layerIdCurrent, url, parserOptions]);
+    }, [layerIdCurrent, url, baseUrl, parserOptions]);
 
     const [meshImageData, setMeshImageData] = useState<MeshImageData>();
     useEffect(() => {
@@ -297,6 +298,7 @@ export const HeatmapLayer: FC<LayerProps<typeof HEATMAP_LAYER>> = ({ getUrl, cod
   const setColorRange = useSetAtom(colorScheme.colorRangeAtom);
   const setValueRange = useSetAtom(colorScheme.valueRangeAtom);
   const setContourSpacing = useSetAtom(props.contourSpacingAtom);
+  const [baseUrl] = useStaticApiUrl();
 
   const handleLoad = useCallback(
     (data: ParseCSVResult) => {
@@ -327,6 +329,7 @@ export const HeatmapLayer: FC<LayerProps<typeof HEATMAP_LAYER>> = ({ getUrl, cod
           additionalProps != null && (
             <Subdivision
               key={additionalProps.url}
+              baseUrl={baseUrl}
               {...props}
               bound={additionalProps.bounds}
               {...additionalProps}

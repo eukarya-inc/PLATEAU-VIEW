@@ -12,6 +12,12 @@ export const useProjectId = () => useAtom(projectId);
 const geoApiUrl = atom<string | undefined>(undefined);
 export const useGeoApiUrl = () => useAtom(geoApiUrl);
 
+const staticApiUrl = atom<string>(
+  // For backward compatibility
+  "https://static.reearth.plateau.reearth.io/extension",
+);
+export const useStaticApiUrl = () => useAtom(staticApiUrl);
+
 const cityGMLApiUrl = atom<string | undefined>(undefined);
 export const useCityGMLApiUrl = () => useAtom(cityGMLApiUrl);
 

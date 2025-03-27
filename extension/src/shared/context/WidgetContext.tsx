@@ -36,6 +36,7 @@ import {
   useFinishTime,
   useDatasetAttributesURL,
   useCityGMLApiUrl,
+  useStaticApiUrl,
 } from "../states/environmentVariables";
 
 type Props = {
@@ -45,6 +46,7 @@ type Props = {
   cityGMLUrl?: string;
   gsiTileURL?: string;
   plateauUrl?: string;
+  staticUrl?: string;
   projectId?: string;
   plateauToken?: string;
   catalogUrl?: string;
@@ -75,6 +77,7 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   cityGMLUrl,
   gsiTileURL,
   plateauUrl,
+  staticUrl,
   projectId,
   plateauToken,
   catalogUrl,
@@ -112,6 +115,13 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
       setPlateauApiUrl(plateauUrl);
     }
   }, [plateauUrl, plateauApiUrlState, setPlateauApiUrl]);
+
+  const [staticApiUrlState, setStaticApiUrl] = useStaticApiUrl();
+  useEffect(() => {
+    if (staticUrl) {
+      setStaticApiUrl(staticUrl);
+    }
+  }, [staticUrl, staticApiUrlState, setStaticApiUrl]);
 
   const [projectIdState, setProjectIdState] = useProjectId();
   useEffect(() => {

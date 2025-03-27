@@ -6,7 +6,7 @@
   "license": "APACHE-2.0",
   "scripts": {
     "dev": "yarn build:config && concurrently 'NODE_ENV=development vite build --watch' 'vite preview --port 5001 --strict-port'",
-    "build:config": "node --loader ts-node/esm ./reearth-yml.ts",
+    "build:config": "node ./reearth-yml.js",
     "build": "tsc && yarn build:config && vite build",
     "lint": "eslint . --ext ts,tsx --fix",
     "test": "vitest",
@@ -120,5 +120,6 @@
   },
   "resolutions": {
     "jackspeak": "2.1.1"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }
