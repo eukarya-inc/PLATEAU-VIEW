@@ -58,7 +58,6 @@ func ParseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 			return nil, nil, fmt.Errorf("bounds for different levels: %v", levels)
 		}
 	case "s":
-		var bounds []geo.Bounds2
 		for s := range strings.SplitSeq(cond, ",") {
 			b3, err := spatialid.Bounds(s)
 			if err != nil {
