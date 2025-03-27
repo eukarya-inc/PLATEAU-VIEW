@@ -31,10 +31,13 @@ jobs:
       - name: Download extension artifact
         continue-on-error: true
         run: |
-          CID=$(docker create "$IMAGE" /) && \
-          docker cp "$CID":/dist . && \
-          docker rm "$CID" && \
-          shopt -s dotglob && mv dist/* . && rmdir dist
+          docker pull "$EXTENSION_IMAGE"
+          CID=$(docker create "$EXTENSION_IMAGE" /)
+          docker cp "$CID":/dist .
+          docker rm "$CID"
+          shopt -s dotglob
+          mv dist/* .
+          rmdir dist
       - name: Build docker image
         uses: docker/build-push-action@v3
         id: docker
