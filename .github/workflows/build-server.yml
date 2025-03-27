@@ -1,19 +1,17 @@
 name: build-server
 on:
   workflow_call:
-    inputs:
-      local:
-        required: true
-        type: boolean
     outputs:
       image:
         value: ${{ jobs.docker.outputs.image }}
+
 jobs:
   docker:
     name: Build and push Docker image
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-api:latest
+      EXTENSION_IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-extension:latest
     outputs:
       image: ${{ env.IMAGE_NAME }}@sha256:${{ steps.docker.outputs.digest }}
     permissions:
@@ -30,24 +28,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download extension artifact
-        uses: dawidd6/action-download-artifact@v6
-        if: ${{ inputs.local != 'true' }}
-        with:
-          workflow_conclusion: ""
-          branch: main
-          name: extension
-          path: server
-          check_artifacts: true
-          search_artifacts: true
-      - name: Download extension artifact from the previous job
-        uses: actions/download-artifact@v4
-        if: ${{ inputs.local == 'true' }}
-        with:
-          name: extension
-          path: server
-
+        continue-on-error: true
+        run: |
+          CID=$(docker create "$IMAGE" /) && \
+          docker cp "$CID":/dist . && \
+          docker rm "$CID" && \
+          shopt -s dotglob && mv dist/* . && rmdir dist
       - name: Build docker image
         uses: docker/build-push-action@v3
         id: docker

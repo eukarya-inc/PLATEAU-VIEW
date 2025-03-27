@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 env:
   GCS_DEST: gs://plateau-prod-reearth-static-bucket
+  IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-extension:latest
   # used by build
   PLATEAU_DEFAULT_GOOGLE_STREETVIEW_TOKEN: ${{ secrets.PLATEAU_DEFAULT_GOOGLE_STREETVIEW_TOKEN }}
   # used by build
@@ -51,3 +52,5 @@ jobs:
         with:
           name: plateauview-extension
           path: extension/plateauview-extension.tar.gz
+      - name: Save to Docker image
+        run: tar -cf - dist | docker import - "$IMAGE" && docker push "$IMAGE"
