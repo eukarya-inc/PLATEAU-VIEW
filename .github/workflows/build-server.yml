@@ -1,3 +1,4 @@
+name: build-server
 on:
   workflow_call:
     inputs:

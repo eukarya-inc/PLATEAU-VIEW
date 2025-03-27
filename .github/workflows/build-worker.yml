@@ -1,3 +1,4 @@
+name: build-worker
 on:
   workflow_call:
     outputs:
