@@ -45,7 +45,7 @@ jobs:
     permissions:
       id-token: write
       packages: write
-    if: ${{ github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
+    if: ${{ inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -75,7 +75,7 @@ jobs:
 
   deploy_web:
     runs-on: ubuntu-latest
-    if: github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
       id-token: write
@@ -109,7 +109,7 @@ jobs:
 
   deploy_subscriber:
     runs-on: ubuntu-latest
-    if: github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
       id-token: write
@@ -143,7 +143,7 @@ jobs:
 
   deploy_websocket:
     runs-on: ubuntu-latest
-    if: github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
       id-token: write
@@ -177,7 +177,7 @@ jobs:
 
   deploy_worker:
     runs-on: ubuntu-latest
-    if: github.event.inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
       id-token: write

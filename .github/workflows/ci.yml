@@ -97,34 +97,34 @@ jobs:
     needs:
       - prepare
       # - ci-extension-version-update
-    if: needs.prepare.outputs.extension == 'true' || github.event.inputs.action_type == 'extension'
+    if: needs.prepare.outputs.extension == 'true' || inputs.action_type == 'extension'
     uses: ./.github/workflows/ci-extension.yml
 
   ci-tools:
     needs: prepare
-    if: needs.prepare.outputs.tools == 'true' || github.event.inputs.action_type == 'tools'
+    if: needs.prepare.outputs.tools == 'true' || inputs.action_type == 'tools'
     uses: ./.github/workflows/ci-tools.yml
     with:
       release_tools: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
   ci-geo:
     needs: prepare
-    if: needs.prepare.outputs.geo == 'true' || github.event.inputs.action_type == 'geo'
+    if: needs.prepare.outputs.geo == 'true' || inputs.action_type == 'geo'
     uses: ./.github/workflows/ci-geo.yml
 
   ci-server:
     needs: prepare
-    if: needs.prepare.outputs.server == 'true' || github.event.inputs.action_type == 'server'
+    if: needs.prepare.outputs.server == 'true' || inputs.action_type == 'server'
     uses: ./.github/workflows/ci-server.yml
 
   ci-tiles:
     needs: prepare
-    if: needs.prepare.outputs.tiles == 'true' || github.event.inputs.action_type == 'tiles'
+    if: needs.prepare.outputs.tiles == 'true' || inputs.action_type == 'tiles'
     uses: ./.github/workflows/ci-tiles.yml
 
   ci-worker:
     needs: prepare
-    if: ${{ needs.prepare.outputs.worker == 'true' || github.event.inputs.action_type == 'worker' }}
+    if: ${{ needs.prepare.outputs.worker == 'true' || inputs.action_type == 'worker' }}
     uses: ./.github/workflows/ci-worker.yml
 
   ci:

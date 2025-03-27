@@ -24,6 +24,11 @@ jobs:
         working-directory: extension
     steps:
       - uses: actions/checkout@v3
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: google-github-actions/auth@v2
         with:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

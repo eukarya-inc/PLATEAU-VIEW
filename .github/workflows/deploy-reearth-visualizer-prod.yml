@@ -25,7 +25,7 @@ jobs:
       contents: read
       id-token: write
       packages: read
-    if: ${{ !github.event.inputs.web_run_id && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
+    if: ${{ !inputs.web_run_id && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
