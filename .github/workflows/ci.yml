@@ -169,7 +169,6 @@ jobs:
     needs:
       - prepare
       - ci-server
-      - ci-extension
     if: ${{ !failure() && needs.ci-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-server.yml
 
