@@ -22,7 +22,8 @@ type urlReader struct {
 	URL    string
 	client *http.Client
 
-	etagCache map[string]string
+	skipCodeListFetch bool
+	etagCache         map[string]string
 }
 
 func (r *urlReader) Open(ctx context.Context) (io.Reader, func() error, error) {
@@ -66,6 +67,9 @@ func (r *urlReader) Open(ctx context.Context) (io.Reader, func() error, error) {
 }
 
 func (r *urlReader) Resolver() CodeResolver {
+	if r.skipCodeListFetch {
+		return nil
+	}
 	return &fetchCodeResolver{
 		client: r.client,
 		url:    r.URL,
