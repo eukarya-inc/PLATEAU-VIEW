@@ -75,11 +75,11 @@ func (r *urlReader) Resolver() CodeResolver {
 func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) ([]map[string]any, error) {
 	var filter lod1SolidFilter
 	for _, sid := range spatialIDs {
-		b, err := spatialid.Bounds(sid)
+		v, err := spatialid.Parse(sid)
 		if err != nil {
 			return nil, err
 		}
-		filter.Bounds = append(filter.Bounds, b)
+		filter.Bounds = append(filter.Bounds, v.Bounds())
 	}
 
 	if len(filter.Bounds) == 0 {
