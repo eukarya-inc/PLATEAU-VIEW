@@ -6,6 +6,7 @@ import (
 
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
 	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/log"
@@ -147,7 +148,7 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 			return nil
 		}
 
-		log.Debugfc(ctx, "geospatialjpv3 webhook: %s", ppp.Sprint(cityItem))
+		log.Debugfc(ctx, "geospatialjpv3 webhook: %s", pp.Sprint(cityItem))
 
 		if b := getChangedBool(w, prepareFieldKey); b != nil && *b {
 			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes); err != nil {

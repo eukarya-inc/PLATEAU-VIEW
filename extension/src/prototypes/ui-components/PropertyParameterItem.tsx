@@ -209,6 +209,20 @@ const PropertyNameCell = styled(TableCell)<{
   }),
 }));
 
+const Tag = styled("div")(({ theme }) => ({
+  display: "inline-block",
+  padding: theme.spacing(0, 1),
+  margin: theme.spacing(0.5),
+  borderRadius: theme.shape.borderRadius,
+  border: `1px solid ${theme.palette.divider}`,
+  backgroundColor: alpha(theme.palette.common.black, 0.08),
+}));
+
+const VerticalTableRow = styled(TableRow)({
+  display: "flex",
+  flexDirection: "column",
+});
+
 const Property: FC<{
   property: PropertySet;
   level?: number;
@@ -240,7 +254,37 @@ const Property: FC<{
     [values, attrVal, isPrimitive],
   );
 
-  return isPrimitive ? (
+  return featureType === "tags" ? (
+    values.length === 1 ? (
+      <TableRow style={{ wordBreak: "break-all" }}>
+        <PropertyNameCell width="40%" level={level}>
+          {makePropertyName(actualName, name, version, attrVal)}
+        </PropertyNameCell>
+        <TableCell width="60%" align="right">
+          {values.map((value, index) => (
+            <Tag key={index}>
+              <Typography variant={"body2"} noWrap>
+                {value as string}
+              </Typography>
+            </Tag>
+          ))}
+        </TableCell>
+      </TableRow>
+    ) : (
+      <VerticalTableRow>
+        <PropertyNameCell width="100%" level={level}>
+          {makePropertyName(actualName, name, version, attrVal)}
+        </PropertyNameCell>
+        <TableCell width="100%">
+          {values.map((value, index) => (
+            <Tag key={index}>
+              <Typography variant={"body2"}>{value as string}</Typography>
+            </Tag>
+          ))}
+        </TableCell>
+      </VerticalTableRow>
+    )
+  ) : isPrimitive ? (
     <TableRow style={{ wordBreak: "break-all" }}>
       <PropertyNameCell variant="head" width="50%" level={level}>
         {makePropertyName(actualName, name, version, attrVal)}

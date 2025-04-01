@@ -13,9 +13,11 @@ import {
 import { readyAtom } from "../../../prototypes/view/states/app";
 import {
   HEATMAP_LAYER,
+  MESH_CODE_LAYER,
   MY_DATA_LAYER,
   PEDESTRIAN_LAYER,
   SKETCH_LAYER,
+  SPATIAL_ID_LAYER,
   STORY_LAYER,
 } from "../../../prototypes/view-layers";
 import { useDatasetsByIds } from "../../graphql";
@@ -230,6 +232,23 @@ export const InitialLayers: FC = () => {
               id: l.id,
               title: l.title,
               type: SKETCH_LAYER,
+              features: l.features,
+              hidden: l.hidden,
+            };
+          case "spatialId":
+            return {
+              id: l.id,
+              title: l.title,
+              type: SPATIAL_ID_LAYER,
+              features: l.features,
+              hidden: l.hidden,
+            };
+          case "meshCode":
+            return {
+              id: l.id,
+              title: l.title,
+              type: MESH_CODE_LAYER,
+              meshCodeLevel: l.meshCodeLevel,
               features: l.features,
               hidden: l.hidden,
             };

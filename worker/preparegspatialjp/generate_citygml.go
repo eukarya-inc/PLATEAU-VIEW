@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
 	"github.com/reearth/reearthx/log"
 )
 
@@ -50,11 +51,9 @@ func mergeCityGML(ctx context.Context, c MergeContext) (string, error) {
 	tmpDir := c.TmpDir
 	cityItem := c.CityItem
 	allFeatureItems := c.AllFeatureItems
-	uc := c.UC
 
 	// create a zip file
-	rootName := fmt.Sprintf("%s_%s_city_%d_citygml_%d_op", cityItem.CityCode, cityItem.CityNameEn, cityItem.YearInt(), uc)
-
+	rootName := c.FileName("citygml", "")
 	zipFileName := rootName + ".zip"
 	zipFilePath := filepath.Join(tmpDir, zipFileName)
 	f, err := os.Create(zipFilePath)
@@ -190,7 +189,7 @@ func (z *CityGMLZipWriter) Write(ctx context.Context, src *zip.Reader, ty, prefi
 // base: base directory added to new path
 func cityGMLZipPath(ty, prefix, base string) func(string) (string, error) {
 	return func(rawPath string) (string, error) {
-		p := normalizeZipFilePath(rawPath)
+		p := workerutil.NormalizeZipFilePath(rawPath)
 		if p == "" {
 			return "", nil
 		}
@@ -223,9 +222,10 @@ func cityGMLZipPath(ty, prefix, base string) func(string) (string, error) {
 				paths[0] = ty
 			}
 
-			if paths[0] != ty {
-				return "", fmt.Errorf("unexpected path: %s", rawPath)
-			}
+			// squr zip file includes tran directory also, so we don't need to check the first path
+			// if paths[0] != ty {
+			// 	return "", fmt.Errorf("unexpected path: %s", rawPath)
+			// }
 		}
 
 		if base != "" {

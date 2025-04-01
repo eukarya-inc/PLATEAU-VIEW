@@ -7,17 +7,9 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"github.com/ricochet2200/go-disk-usage/du"
 )
-
-var ppp *pp.PrettyPrinter
-
-func init() {
-	ppp = pp.New()
-	ppp.SetColoringEnabled(false)
-}
 
 type StringOrNumber struct {
 	Value string

@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"google.golang.org/api/cloudbuild/v1"
 )
@@ -33,7 +34,7 @@ func prepareOnCloudBuild(ctx context.Context, conf prepareOnCloudBuildConfig) er
 		conf.CloudBuildDiskSizeGb = defaultDiskSizeGb
 	}
 
-	log.Debugfc(ctx, "geospatialjp webhook: prepare (cloud build): %s", ppp.Sprint(conf))
+	log.Debugfc(ctx, "geospatialjp webhook: prepare (cloud build): %s", pp.Sprint(conf))
 
 	return runCloudBuild(ctx, CloudBuildConfig{
 		Image: conf.CloudBuildImage,

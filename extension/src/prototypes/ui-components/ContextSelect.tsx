@@ -10,7 +10,15 @@ import {
   type SelectChangeEvent,
   type SelectProps,
 } from "@mui/material";
-import { forwardRef, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { mergeRefs } from "react-merge-refs";
 import invariant from "tiny-invariant";
 
@@ -31,7 +39,6 @@ const StyledSelect = styled(Select)(({ theme }) => ({
     right: 4,
   },
 })) as unknown as typeof Select; // For generics
-
 const Badge = styled("div")(({ theme }) => ({
   ...theme.typography.caption,
   display: "flex",
@@ -47,28 +54,27 @@ const Badge = styled("div")(({ theme }) => ({
   fontWeight: 700,
   lineHeight: 1,
 }));
-
 const StyledAddIcon = styled(AddIcon)({
   fontSize: 16,
 });
-
 export interface ContextSelectProps extends SelectProps<string[]> {
   label: ReactNode;
+  autoClose?: boolean;
 }
-
 export const ContextSelect = forwardRef<HTMLButtonElement, ContextSelectProps>(
-  ({ label, children, onChange, ...props }, forwardedRef) => {
+  ({ label, autoClose = true, children, onChange, ...props }, forwardedRef) => {
     const [open, setOpen] = useState(false);
-
+    const [measured, setMeasured] = useState(false);
     const handleChange = useCallback(
       (event: SelectChangeEvent<string[]>, value: ReactNode) => {
         invariant(Array.isArray(event.target.value));
         onChange?.(event, value);
-        setOpen(false);
+        if (autoClose) {
+          setOpen(false);
+        }
       },
-      [onChange],
+      [autoClose, onChange],
     );
-
     const renderValue = useCallback(
       (value: string[]) =>
         value.length === 0 ? (
@@ -77,19 +83,21 @@ export const ContextSelect = forwardRef<HTMLButtonElement, ContextSelectProps>(
             <Typography variant="body2">{label}</Typography>
           </Stack>
         ) : (
-          <Stack direction="row" spacing={0.75}>
+          <Stack direction="row" spacing={0.75} alignItems="center">
             <Badge>{value.length}</Badge>
             <Typography variant="body2" color="primary">
               {label}
             </Typography>
           </Stack>
         ),
-      [label],
+      [label]
     );
-
-    // WORKAROUND: https://github.com/mui/material-ui/issues/25578#issuecomment-1104779355
     const ref = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLUListElement>(null);
+    const [menuStyle, setMenuStyle] = useState<{ top: number; left: number }>({
+      top: 0,
+      left: 0,
+    });
     useEffect(() => {
       const handler = (event: MouseEvent): void => {
         if (!(event.target instanceof Node)) {
@@ -97,6 +105,7 @@ export const ContextSelect = forwardRef<HTMLButtonElement, ContextSelectProps>(
         }
         if (ref.current?.contains(event.target) === true) {
           setOpen(true);
+          setMeasured(false);
         } else if (
           menuRef.current?.contains(event.target) !== true &&
           menuRef.current?.parentElement !== event.target
@@ -109,7 +118,44 @@ export const ContextSelect = forwardRef<HTMLButtonElement, ContextSelectProps>(
         window.removeEventListener("mouseup", handler);
       };
     }, []);
-
+    const menuProps = useMemo(
+      () => ({
+        ...props.MenuProps,
+        anchorReference: "anchorPosition" as const,
+        anchorPosition: menuStyle,
+        transformOrigin: {
+          vertical: "top" as const,
+          horizontal: "left" as const,
+        },
+        sx: {
+          ...props.MenuProps?.sx,
+          [`& .${menuClasses.paper}`]: {
+            maxWidth: 700,
+            position: "fixed",
+            opacity: measured ? 1 : 0,
+            transition: "opacity 0.2s ease-in-out",
+          },
+        },
+        MenuListProps: {
+          ...props.MenuProps?.MenuListProps,
+          ref: menuRef,
+        },
+        TransitionProps: {
+          onEnter: (node: HTMLElement) => {
+            if (ref.current && node) {
+              const rect = ref.current.getBoundingClientRect();
+              const width = node.getBoundingClientRect().width;
+              setMenuStyle({
+                top: rect.bottom,
+                left: (rect.right - rect.left) / 2 + rect.left - width / 2,
+              });
+              setMeasured(true);
+            }
+          },
+        },
+      }),
+      [menuStyle, props.MenuProps, measured]
+    );
     return (
       <StyledSelect
         ref={mergeRefs([ref, forwardedRef])}
@@ -121,21 +167,10 @@ export const ContextSelect = forwardRef<HTMLButtonElement, ContextSelectProps>(
         renderValue={renderValue}
         {...props}
         onChange={handleChange}
-        MenuProps={{
-          ...props.MenuProps,
-          sx: {
-            ...props.MenuProps?.sx,
-            [`& .${menuClasses.paper}`]: {
-              maxWidth: 700,
-            },
-          },
-          MenuListProps: {
-            ...props.MenuProps?.MenuListProps,
-            ref: menuRef,
-          },
-        }}>
+        MenuProps={menuProps}
+      >
         {children}
       </StyledSelect>
     );
-  },
+  }
 );

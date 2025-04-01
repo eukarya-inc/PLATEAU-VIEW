@@ -94,6 +94,9 @@ export const SearchAutocompletePanel: FC<SearchAutocompletePanelProps> = ({
   const handleFocus = useCallback(() => {
     setFocused(true);
   }, []);
+  const handleBlur = useCallback(() => {
+    setFocused(false);
+  }, []);
 
   const [inputValue, setInputValue] = useState("");
   const handleInputChange: NonNullable<SearchAutocompleteProps["onInputChange"]> = useCallback(
@@ -198,6 +201,7 @@ export const SearchAutocompletePanel: FC<SearchAutocompletePanelProps> = ({
           filters={filters}
           maxHeight={maxMainHeight}
           onFocus={handleFocus}
+          onDeepBlur={handleBlur}
           onChange={handleChange}
           onInputChange={handleInputChange}
           endAdornment={

@@ -3,6 +3,7 @@ package datacatalogv3
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"slices"
 	"time"
 
@@ -61,6 +62,11 @@ type CityItem struct {
 	PRCS           cmsintegrationcommon.PRCS `json:"prcs,omitempty" cms:"prcs,select"`
 	OpenDataURL    string                    `json:"open_data_url,omitempty" cms:"open_data_url,text"`
 	SubCityCode    string                    `json:"city_code_sub,omitempty" cms:"city_code_sub,text"`
+	CodeLists      *cms.PublicAsset          `json:"codelists,omitempty" cms:"codelists,asset"`
+	Schemas        *cms.PublicAsset          `json:"schemas,omitempty" cms:"schemas,asset"`
+	Metadata       *cms.PublicAsset          `json:"metadata,omitempty" cms:"metadata,asset"`
+	Specification  *cms.PublicAsset          `json:"specification,omitempty" cms:"specification,asset"`
+	Misc           *cms.PublicAsset          `json:"misc,omitempty" cms:"misc,asset"`
 	// meatadata
 	PlateauDataStatus   *cms.Tag        `json:"plateau_data_status,omitempty" cms:"plateau_data_status,select,metadata"`
 	RelatedDataStatus   *cms.Tag        `json:"related_data_status,omitempty" cms:"related_data_status,select,metadata"`
@@ -149,6 +155,27 @@ func (i *CityItem) IsPublicOrBeta() bool {
 		}
 	}
 	return false
+}
+
+func (i *CityItem) MetadataZipURLs() []string {
+	if i == nil {
+		return nil
+	}
+
+	files := []*cms.PublicAsset{
+		i.CodeLists,
+		i.Schemas,
+		i.Metadata,
+		i.Specification,
+		i.Misc,
+	}
+
+	return lo.FilterMap(files, func(a *cms.PublicAsset, _ int) (string, bool) {
+		if a == nil || path.Ext(a.URL) != ".zip" {
+			return "", false
+		}
+		return a.URL, true
+	})
 }
 
 type PlateauFeatureItem struct {

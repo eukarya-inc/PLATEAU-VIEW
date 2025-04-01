@@ -18,6 +18,7 @@ type Config struct {
 	WorkerRegion       string `json:"workerRegion"`
 	WorkerProject      string `json:"workerProject"`
 	DataCatalogAPIURL  string `json:"dataCatalogApiUrl"`
+	PackerTimeout      uint   `json:"packerTimeout"`
 }
 
 var httpClient = &http.Client{
@@ -53,6 +54,9 @@ func Echo(conf Config, g *echo.Group) error {
 	g.GET("/attributes", attributeHandler(p.conf.Domain))
 	g.GET("/features", featureHandler(p.conf.Domain))
 	g.GET("/spatialid_attributes", spatialIDAttributesHandler(dc))
+
+	// ジオイド高取得API
+	g.GET("/geoid_height", GeoidHanlder)
 
 	return nil
 }
@@ -110,7 +114,7 @@ func attributeHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		var resolver codeResolver
+		var resolver CodeResolver
 		if !skipCodeListFetch {
 			resolver = &fetchCodeResolver{
 				client: httpClient,
@@ -136,6 +140,7 @@ func spatialIDAttributesHandler(dc *dataCatalogAPI) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		sids := strings.Split(c.QueryParam("sid"), ",")
 		types := strings.Split(c.QueryParam("type"), ",")
+		skipCodeListFetch := c.QueryParam("skip_code_list_fetch") != ""
 		if len(sids) == 0 || (len(sids) == 1 && sids[0] == "") {
 			return c.JSON(http.StatusBadRequest, map[string]any{
 				"error": "sid parameter is required",
@@ -185,7 +190,7 @@ func spatialIDAttributesHandler(dc *dataCatalogAPI) echo.HandlerFunc {
 		rs := make([]Reader, 0, len(urls))
 		etagCache := make(map[string]string)
 		for _, u := range urls {
-			rs = append(rs, &urlReader{URL: u, client: httpClient, etagCache: etagCache})
+			rs = append(rs, &urlReader{URL: u, client: httpClient, etagCache: etagCache, skipCodeListFetch: skipCodeListFetch})
 		}
 
 		attributes, err := SpatialIDAttributes(ctx, rs, sids)

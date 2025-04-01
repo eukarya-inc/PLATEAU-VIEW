@@ -1,9 +1,9 @@
 name: ⭐️ Deploy PLATEAU Worker production
 on:
-  workflow_dispatch:
   workflow_call:
+  workflow_dispatch:
 env:
-  IMAGE: ghcr.io/eukarya-inc/plateau-view-3.0/plateauview-api-worker:latest
+  IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-api-worker:latest
   IMAGE_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/plateauview-api-worker:latest
   IMAGE_HUB: eukarya/plateauview-api-worker:latest
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
 jobs:
   deploy_worker:
     runs-on: ubuntu-latest
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0'
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: prod
     permissions:
       contents: read

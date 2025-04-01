@@ -9,6 +9,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
 )
@@ -38,7 +39,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		return fmt.Errorf("failed to get seed: %w", err)
 	}
 
-	log.Debugfc(ctx, "geospatialjpv3: seed: %s", ppp.Sprint(seed))
+	log.Debugfc(ctx, "geospatialjpv3: seed: %s", pp.Sprint(seed))
 	if !seed.Valid() {
 		return fmt.Errorf("アップロード可能なアイテムがありません。")
 	}
@@ -50,7 +51,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		return fmt.Errorf("G空間情報センターでパッケージの検索・作成に失敗しました: %w", err)
 	}
 
-	log.Debugfc(ctx, "geospatialjpv3: pkg: %s", ppp.Sprint(pkg))
+	log.Debugfc(ctx, "geospatialjpv3: pkg: %s", pp.Sprint(pkg))
 	resources := []ckan.Resource{}
 
 	if seed.Index != "" {
@@ -119,20 +120,20 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 	}
 
 	if seed.Generics != nil {
-		log.Debugfc(ctx, "geospatialjpv3: generics: %s", ppp.Sprint(seed.Generics))
+		log.Debugfc(ctx, "geospatialjpv3: generics: %s", pp.Sprint(seed.Generics))
 		for _, g := range seed.Generics {
-			if g.Name == "" || g.Asset == nil {
-				return fmt.Errorf("その他データセットのアセットURLを正しく取得できませんでした。アセットが存在していません。: %v", g)
+			if g.Asset == nil || g.Asset.URL == "" {
+				continue
 			}
 
 			url := g.Asset.URL
-			if url == "" {
-				return fmt.Errorf("その他データセットのアセットURLを正しく取得できませんでした。アセットが存在していません。: %v", g)
+			if g.Name == "" {
+				return fmt.Errorf("その他データセットの名前は必須です。: %#v", g)
 			}
 
 			size := g.Asset.TotalSize
 			if size == 0 {
-				return fmt.Errorf("その他データセットのアセットサイズを正しく取得できませんでした。: %v", g)
+				return fmt.Errorf("その他データセットのアセットサイズを正しく取得できませんでした。: %#v", g)
 			}
 
 			r, err := h.createOrUpdateResource(ctx, pkg, ResourceInfo{
@@ -147,7 +148,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		}
 	}
 
-	if len(resources) > 0 && shouldReorder(pkg, seed.V) {
+	if len(resources) > 0 {
 		log.Debugfc(ctx, "geospatialjpv3: reorder: %v", resources)
 		resourceIDs := lo.Map(resources, func(r ckan.Resource, _ int) string {
 			return r.ID
@@ -178,17 +179,6 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 
 func (h *handler) packageURL(pkg *ckan.Package) string {
 	return fmt.Sprintf("%s/dataset/%s", strings.TrimSuffix(h.ckanBase, "/"), pkg.Name)
-}
-
-func shouldReorder(pkg *ckan.Package, currentVersion int) bool {
-	for _, res := range pkg.Resources {
-		// if there is already a resource with a higher version, we should not reorder
-		v := extractVersionFromResourceName(res.Name)
-		if v != nil && *v > currentVersion {
-			return false
-		}
-	}
-	return true
 }
 
 var reResourceVersion = regexp.MustCompile(`(?:\(|（)v(\d+)(?:\)|）)$`)

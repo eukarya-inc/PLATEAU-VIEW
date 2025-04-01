@@ -26,17 +26,8 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		}
 
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
-		var err error
 
-		if modelName == cmsintegrationcommon.RelatedModel {
-			err = handleRelatedDataset(ctx, s, w)
-		} else {
-			err = sendRequestToFME(ctx, s, &conf, w)
-			if err == nil {
-				err = handleMaxLOD(ctx, s, w)
-			}
-		}
-
+		err := sendRequestToFME(ctx, s, &conf, w)
 		if err != nil {
 			log.Errorfc(ctx, "failed to process event: %v", err)
 		}

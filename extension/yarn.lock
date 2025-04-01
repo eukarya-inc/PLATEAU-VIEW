@@ -10187,6 +10187,11 @@ jest-worker@^29.6.2:
     merge-stream "^2.0.0"
     supports-color "^8.0.0"
 
+jismesh-js@0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/jismesh-js/-/jismesh-js-0.2.0.tgz#1d6e4b3df78cb5aa8c35305f2b5228bb66fb42d7"
+  integrity sha512-Cdsekn6BFKROPasiEonIR+1dynOFerSstWnM4V6YhWV1XXWPgbN2HZ1Y/u5AQvzXIp75UO0cbUpofo9SYcKJlg==
+
 jiti@^1.17.1, jiti@^1.18.2:
   version "1.20.0"
   resolved "https://registry.yarnpkg.com/jiti/-/jiti-1.20.0.tgz#2d823b5852ee8963585c8dd8b7992ffc1ae83b42"

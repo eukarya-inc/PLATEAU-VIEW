@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 	"github.com/vincent-petithory/dataurl"
@@ -64,10 +65,10 @@ func getSeed(ctx context.Context, c cms.Interface, cityItem *CityItem, org strin
 	var indexItem CMSIndexItem
 	rawIndexItem.Unmarshal(&indexItem)
 
-	log.Debugfc(ctx, "geospatialjpv3: rawDataItem: %s", ppp.Sprint(rawDataItem))
-	log.Debugfc(ctx, "geospatialjpv3: rawIndexItem: %s", ppp.Sprint(rawIndexItem))
-	log.Debugfc(ctx, "geospatialjpv3: dataItem: %s", ppp.Sprint(dataItem))
-	log.Debugfc(ctx, "geospatialjpv3: indexItem: %s", ppp.Sprint(indexItem))
+	log.Debugfc(ctx, "geospatialjpv3: rawDataItem: %s", pp.Sprint(rawDataItem))
+	log.Debugfc(ctx, "geospatialjpv3: rawIndexItem: %s", pp.Sprint(rawIndexItem))
+	log.Debugfc(ctx, "geospatialjpv3: dataItem: %s", pp.Sprint(dataItem))
+	log.Debugfc(ctx, "geospatialjpv3: indexItem: %s", pp.Sprint(indexItem))
 
 	if indexItem.Thumbnail != nil && indexItem.Thumbnail.URL != "" {
 		seed.ThumbnailURL, err = fetchAndGetDataURL(indexItem.Thumbnail.URL)

@@ -1,6 +1,8 @@
 export const HEATMAP_LAYER = "HEATMAP_LAYER";
 export const PEDESTRIAN_LAYER = "PEDESTRIAN_LAYER";
 export const SKETCH_LAYER = "SKETCH_LAYER";
+export const SPATIAL_ID_LAYER = "SPATIAL_ID_LAYER";
+export const MESH_CODE_LAYER = "MESH_CODE_LAYER";
 export const MY_DATA_LAYER = "MY_DATA_LAYER";
 export const STORY_LAYER = "STORY_LAYER";
 

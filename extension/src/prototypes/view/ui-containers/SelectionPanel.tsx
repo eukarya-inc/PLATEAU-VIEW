@@ -3,7 +3,9 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { type ResizeCallback } from "re-resizable";
 import { useCallback, type FC } from "react";
 
+import { MESH_CODE_OBJECT } from "../../../shared/meshCode";
 import { GENERAL_FEATURE, TILESET_FEATURE } from "../../../shared/reearth/layers";
+import { SPATIAL_ID_OBJECT } from "../../../shared/spatialId";
 import { findRootLayerAtom } from "../../../shared/states/rootLayer";
 import {
   GeneralFeatureContent,
@@ -18,8 +20,10 @@ import { ColorSchemeContent } from "../selection/ColorSchemeContent";
 import { CustomLegendSchemeContent } from "../selection/CustomLegendSchemeContent";
 import { ImageSchemeContent } from "../selection/ImageSchemeContent";
 import { LayerContent } from "../selection/LayerContent";
+import { MeshCodeObjectContent } from "../selection/MeshCodeObjectContent";
 import { PedestrianLayerContent } from "../selection/PedestrianLayerContent";
 import { SketchObjectContent } from "../selection/SketchObjectContent";
+import { SpatialIdObjectContent } from "../selection/SpatialIdObjectContent";
 import { StoryLayerContent } from "../selection/StoryLayerContent";
 import { TileFeatureContent } from "../selection/TileFeatureContent";
 import { inspectorWidthAtom, pedestrianInspectorWidthAtom, viewportWidthAtom } from "../states/app";
@@ -94,6 +98,12 @@ export const SelectionPanel: FC = () => {
             break;
           case SKETCH_OBJECT:
             content = <SketchObjectContent values={selectionGroup.values} />;
+            break;
+          case SPATIAL_ID_OBJECT:
+            content = <SpatialIdObjectContent values={selectionGroup.values} />;
+            break;
+          case MESH_CODE_OBJECT:
+            content = <MeshCodeObjectContent values={selectionGroup.values} />;
             break;
         }
         break;

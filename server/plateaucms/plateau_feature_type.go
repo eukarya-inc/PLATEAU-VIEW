@@ -96,6 +96,15 @@ func (f PlateauFeatureType) FlowConvTriggerID(v int) string {
 
 type PlateauFeatureTypeList []PlateauFeatureType
 
+func (f PlateauFeatureTypeList) GetByCode(code string) (PlateauFeatureType, bool) {
+	for _, ft := range f {
+		if ft.Code == code {
+			return ft, true
+		}
+	}
+	return PlateauFeatureType{}, false
+}
+
 func (f PlateauFeatureTypeList) Codes() []string {
 	codes := make([]string, 0, len(f))
 	for _, ft := range f {

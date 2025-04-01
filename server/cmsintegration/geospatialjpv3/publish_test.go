@@ -61,28 +61,6 @@ func TestPublish(t *testing.T) {
 	}
 }
 
-func TestShouldReorder(t *testing.T) {
-	pkg := &ckan.Package{
-		Resources: []ckan.Resource{
-			{
-				Name: "Resource 1 (v1)",
-			},
-			{
-				Name: "Resource 2 (v2)",
-			},
-			{
-				Name: "Resource 3 (v3)",
-			},
-		},
-	}
-
-	result := shouldReorder(pkg, 4)
-	assert.True(t, result)
-
-	result = shouldReorder(pkg, 2)
-	assert.False(t, result)
-}
-
 func TestExtractVersionFromResourceName(t *testing.T) {
 	name := "Resource 1（v1）"
 	version := extractVersionFromResourceName(name)

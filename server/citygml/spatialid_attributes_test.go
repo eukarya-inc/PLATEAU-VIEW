@@ -124,7 +124,7 @@ func (r *testReader) Open(_ context.Context) (io.Reader, func() error, error) {
 	return r.r, noop, nil
 }
 
-func (r *testReader) Resolver() codeResolver {
+func (r *testReader) Resolver() CodeResolver {
 	return &testCodeResolver{}
 }
 

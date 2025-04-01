@@ -1147,6 +1147,10 @@ type CityGMLDataset implements Node {
   """
   featureTypes: [String!]!
   """
+  CityGMLのメタデータを含むzipファイルURLのリスト。
+  """
+  metadataZipUrls: [String!]!
+  """
   管理者用
   """
   admin: Any

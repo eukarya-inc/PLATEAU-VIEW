@@ -15,14 +15,15 @@ import (
 
 type Reader interface {
 	Open(ctx context.Context) (io.Reader, func() error, error)
-	Resolver() codeResolver
+	Resolver() CodeResolver
 }
 
 type urlReader struct {
 	URL    string
 	client *http.Client
 
-	etagCache map[string]string
+	skipCodeListFetch bool
+	etagCache         map[string]string
 }
 
 func (r *urlReader) Open(ctx context.Context) (io.Reader, func() error, error) {
@@ -65,7 +66,10 @@ func (r *urlReader) Open(ctx context.Context) (io.Reader, func() error, error) {
 	return resp.Body, resp.Body.Close, nil
 }
 
-func (r *urlReader) Resolver() codeResolver {
+func (r *urlReader) Resolver() CodeResolver {
+	if r.skipCodeListFetch {
+		return nil
+	}
 	return &fetchCodeResolver{
 		client: r.client,
 		url:    r.URL,
@@ -75,11 +79,11 @@ func (r *urlReader) Resolver() codeResolver {
 func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) ([]map[string]any, error) {
 	var filter lod1SolidFilter
 	for _, sid := range spatialIDs {
-		b, err := spatialid.Bounds(sid)
+		v, err := spatialid.Parse(sid)
 		if err != nil {
 			return nil, err
 		}
-		filter.Bounds = append(filter.Bounds, b)
+		filter.Bounds = append(filter.Bounds, v.Bounds())
 	}
 
 	if len(filter.Bounds) == 0 {

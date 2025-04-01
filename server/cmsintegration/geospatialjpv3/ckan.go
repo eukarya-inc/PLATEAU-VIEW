@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
 )
@@ -21,7 +22,7 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 	if pkg == nil {
 		newpkg := seed.ToNewPackage()
 		log.Infofc(ctx, "geospartialjp: package %s not found so new package will be created", pkgName)
-		log.Debugfc(ctx, "geospartialjp: package create: %s", ppp.Sprint(newpkg))
+		log.Debugfc(ctx, "geospartialjp: package create: %s", pp.Sprint(newpkg))
 
 		pkg2, err := s.ckan.CreatePackage(ctx, newpkg)
 		if err != nil {
@@ -33,7 +34,7 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 	// update
 	newpkg := seed.ToPackage()
 	newpkg.ID = pkg.ID
-	log.Debugfc(ctx, "geospartialjp: package update: %s", ppp.Sprint(newpkg))
+	log.Debugfc(ctx, "geospartialjp: package update: %s", pp.Sprint(newpkg))
 
 	pkg2, err := s.ckan.PatchPackage(ctx, newpkg)
 	if err != nil {

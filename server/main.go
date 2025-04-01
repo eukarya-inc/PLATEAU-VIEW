@@ -13,6 +13,7 @@ import (
 	"github.com/eukarya-inc/reearth-plateauview/server/putil"
 	"github.com/eukarya-inc/reearth-plateauview/server/tool"
 	"github.com/go-playground/validator/v10"
+	"github.com/k0kubun/pp/v3"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	cms "github.com/reearth/reearth-cms-api/go"
@@ -23,6 +24,10 @@ import (
 	"github.com/samber/lo"
 	"golang.org/x/net/http2"
 )
+
+func init() {
+	pp.ColoringEnabled = false
+}
 
 func main() {
 	conf := lo.Must(NewConfig())
@@ -65,8 +70,6 @@ func main2(conf *Config) {
 	e.GET("/ping", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, "pong")
 	}, putil.NoCacheMiddleware)
-
-	e.GET("/proxy/*", proxyHandlerFunc, ACAOHeaderOverwriteMiddleware)
 
 	services := lo.Must(Services(conf))
 	serviceNames := lo.Map(services, func(s *Service, _ int) string { return s.Name })

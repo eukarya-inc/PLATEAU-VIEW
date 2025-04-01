@@ -19,6 +19,8 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
+const citygmlPackerImageDefault = "ghcr.io/eukarya-inc/plateau-view/plateauview-api-worker:latest"
+
 var noColorPP *pp.PrettyPrinter
 
 func init() {
@@ -89,8 +91,12 @@ type Config struct {
 	CityGML_CityGMLPackerImage         string   `pp:",omitempty"`
 	CityGML_WorkerRegion               string   `pp:",omitempty"`
 	CityGML_WorkerProject              string   `pp:",omitempty"`
+	CityGML_PackerTimeout              uint     `pp:",omitempty"`
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
+	Tiles_Cache_Control                string   `pp:",omitempty"`
+	Chiitiler_URL                      string   `pp:",omitempty"`
+	Chiitiler_Bucket                   string   `pp:",omitempty"`
 }
 
 func NewConfig() (*Config, error) {
@@ -148,12 +154,11 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		APIToken:                          c.Sidebar_Token,
 		GeospatialjpBuildType:             c.Geospatialjp_BuildType,
 		GeospatialjpCloudRunJobsJobName:   c.Geospatialjp_JobName,
-		GeospatialjpCloudBuildImage:       c.Geospatialjp_CloudBuildImage,
 		GeospatialjpCloudBuildMachineType: c.Geospatialjp_CloudBuildMachineType,
 		GeospatialjpCloudBuildProject:     cloudBuildProject,
 		GeospatialjpCloudBuildRegion:      cloudBuildRegion,
 		GeospatialjpCloudBuildDiskSizeGb:  c.Geospatialjp_CloudBuildDiskSizeGb,
-		TaskImage:                         c.CMSINT_TaskImage,
+		TaskImage:                         c.Geospatialjp_CloudBuildImage, // TODO: change env var name
 		GCPProject:                        cloudBuildProject,
 		GCPRegion:                         cloudBuildRegion,
 		FlowBaseURL:                       c.Flow_BaseURL,
@@ -215,7 +220,11 @@ func (c *Config) DataCatalog() datacatalog.Config {
 
 func (c *Config) Tiles() tiles.Config {
 	return tiles.Config{
-		CMS: c.plateauCMS(),
+		CMS:                  c.plateauCMS(),
+		Host:                 c.Host,
+		CacheControl:         c.Tiles_Cache_Control,
+		ChiitilerURL:         c.Chiitiler_URL,
+		ChiitilerCacheBucket: c.Chiitiler_Bucket,
 	}
 }
 
@@ -241,7 +250,7 @@ func (c *Config) CityGML() citygml.Config {
 	}
 	citygmlPackerImage := c.CityGML_CityGMLPackerImage
 	if citygmlPackerImage == "" {
-		citygmlPackerImage = "ghcr.io/eukarya-inc/plateau-view-3.0/plateauview-api-worker:latest"
+		citygmlPackerImage = citygmlPackerImageDefault
 	}
 	return citygml.Config{
 		Domain:             c.CityGML_Domain,
@@ -250,5 +259,6 @@ func (c *Config) CityGML() citygml.Config {
 		WorkerRegion:       workRegion,
 		WorkerProject:      workProject,
 		DataCatalogAPIURL:  c.LocalURL("/datacatalog"),
+		PackerTimeout:      c.CityGML_PackerTimeout,
 	}
 }

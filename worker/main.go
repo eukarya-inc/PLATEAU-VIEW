@@ -8,8 +8,13 @@ import (
 	"github.com/eukarya-inc/reearth-plateauview/worker/citygmlpacker"
 	"github.com/eukarya-inc/reearth-plateauview/worker/extractmaxlod"
 	"github.com/eukarya-inc/reearth-plateauview/worker/preparegspatialjp"
+	"github.com/k0kubun/pp/v3"
 	"github.com/samber/lo"
 )
+
+func init() {
+	pp.ColoringEnabled = false
+}
 
 func main() {
 	config := lo.Must(NewConfig())
@@ -86,15 +91,20 @@ func extractMaxLOD(conf *Config) {
 	}
 }
 
-func cityGMLPacker(conf *Config) {
+func cityGMLPacker(*Config) {
 	var config citygmlpacker.Config
 	flag := flag.NewFlagSet("citygml-packer", flag.ExitOnError)
 	flag.StringVar(&config.Dest, "dest", "", "destination url (gs://...)")
+	flag.StringVar(&config.Source, "source", "", "source url (gs://...)")
 	flag.StringVar(&config.Domain, "domain", "", "allowed domain")
+	flag.DurationVar(&config.Timeout, "timeout", 0, "timeout")
 	if err := flag.Parse(os.Args[2:]); err != nil {
 		panic(err)
 	}
-	config.URLs = flag.Args()
+	config.URLs = lo.FlatMap(flag.Args(), func(s string, _ int) []string {
+		return strings.Split(s, ",")
+	})
+
 	if err := citygmlpacker.Run(config); err != nil {
 		panic(err)
 	}

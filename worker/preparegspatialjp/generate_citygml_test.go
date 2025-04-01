@@ -55,9 +55,9 @@ func TestRenameCityGMLZip(t *testing.T) {
 			expected: "bldg/file.txt",
 		},
 		{
-			ty:            "bldg",
-			path:          "file.gml",
-			expectedError: true,
+			ty:       "bldg",
+			path:     "file.gml",
+			expected: "file.gml",
 		},
 	}
 

@@ -1,7 +1,7 @@
 ARG TAG=release
 ARG VERSION
 
-FROM golang:1.22-alpine AS build
+FROM golang:1.24-alpine AS build
 
 RUN apk add --update --no-cache git ca-certificates build-base fuse
 # RUN CGO_ENABLED=0 go install github.com/googlecloudplatform/gcsfuse@v1.4.1

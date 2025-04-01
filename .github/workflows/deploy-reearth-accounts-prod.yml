@@ -1,10 +1,10 @@
 name: 👥 Deploy Re:Earth Accounts prod
 on:
+  workflow_call:
   workflow_dispatch:
 env:
-  IMAGE_NAME_GHCR_REEARTH: ghcr.io/eukarya-inc/reearth/reearth-accounts-api:latest
-  IMAGE_NAME_GHCR_PLATEAU: ghcr.io/eukarya-inc/plateau-view-3.0/reearth-accounts-api:latest
-  IMAGE_NAME_GCP_PLATEAU: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-accounts-api:latest
+  IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-accounts-api:latest
+  IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/reearth-accounts-api:latest
 concurrency:
   group: ${{ github.workflow }}
 jobs:
@@ -14,7 +14,7 @@ jobs:
     permissions:
       id-token: write
       packages: write
-    if: ${{ github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW-3.0' }}
+    if: ${{ github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
@@ -33,18 +33,18 @@ jobs:
         run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
 
       - name: Pull docker image from GitHub Container Registry
-        run: docker pull $IMAGE_NAME_GHCR_REEARTH
+        run: docker pull $IMAGE_NAME_GHCR
 
-      - name: Tag docker images for GitHub Container Registry and Google Cloud
-        run: docker tag $IMAGE_NAME_GHCR_REEARTH $IMAGE_NAME_GHCR_PLATEAU && docker tag $IMAGE_NAME_GHCR_REEARTH $IMAGE_NAME_GCP_PLATEAU
+      - name: Tag docker images for Google Cloud
+        run: docker tag $IMAGE_NAME_GHCR $IMAGE_NAME_GCP
 
-      - name: Push docker images to GitHub Container Registry and Google Cloud
-        run: docker push $IMAGE_NAME_GHCR_PLATEAU && docker push $IMAGE_NAME_GCP_PLATEAU
+      - name: Push docker images to Google Cloud
+        run: docker push $IMAGE_NAME_GCP
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy reearth-accounts-api \
-            --image $IMAGE_NAME_GCP_PLATEAU \
+            --image $IMAGE_NAME_GCP \
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet

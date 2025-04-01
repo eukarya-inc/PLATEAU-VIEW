@@ -3,6 +3,7 @@ package preparegspatialjp
 import (
 	"context"
 	"fmt"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -34,6 +35,8 @@ type CityItem struct {
 	Spec              string            `json:"spec,omitempty" cms:"spec,select"`
 	Misc              string            `json:"misc,omitempty" cms:"misc,asset"`
 	Year              string            `json:"year,omitempty" cms:"year,select"`
+	Provider          string            `json:"provider,omitempty" cms:"provider,select"`
+	UpdateCount       int               `json:"updateCount,omitempty" cms:"update_count,number"`
 	RelatedDataset    string            `json:"related,omitempty" cms:"related,reference"`
 	References        map[string]string `json:"references,omitempty" cms:"-"`
 	GeospatialjpIndex string            `json:"geospatialjp-index,omitempty" cms:"geospatialjp-index,reference"`
@@ -86,6 +89,48 @@ func (c *CityItem) SpecVersionMajorInt() int {
 		return i
 	}
 	return 0
+}
+
+func (c *CityItem) GetProvider() string {
+	if c.Provider != "" {
+		return c.Provider
+	}
+
+	u := c.CodeLists
+	if u != "" {
+		fileName := strings.TrimSuffix(path.Base(u), path.Ext(u))
+		if fileName != "" {
+			parts := strings.Split(fileName, "_")
+			if len(parts) > 2 {
+				return parts[2]
+			}
+		}
+	}
+
+	return "city" // default
+}
+
+var reUpdateCount = regexp.MustCompile(`_(\d+)_op_`)
+
+func (c *CityItem) GetUpdateCount() int {
+	if c.UpdateCount > 0 {
+		return c.UpdateCount
+	}
+
+	u := c.CodeLists
+	if m := reUpdateCount.FindStringSubmatch(u); len(m) > 1 {
+		if i, err := strconv.Atoi(m[1]); err == nil {
+			return i
+		}
+	}
+	return 0
+}
+
+func (c *CityItem) FileName(ty, suffix string) string {
+	if suffix != "" && !strings.HasPrefix(suffix, "_") && !strings.HasPrefix(suffix, ".") {
+		suffix = "_" + suffix
+	}
+	return fmt.Sprintf("%s_%s_%s_%d_%s_%d_op%s", c.CityCode, c.CityNameEn, c.GetProvider(), c.YearInt(), ty, c.GetUpdateCount(), suffix)
 }
 
 type GspatialjpDataItem struct {
@@ -217,17 +262,6 @@ func YearInt(y string) (year int) {
 
 func SpecVersion(version string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(version, "第"), "版")
-}
-
-var reUpdateCount = regexp.MustCompile(`_(\d+)_op_`)
-
-func GetUpdateCount(u string) int {
-	if m := reUpdateCount.FindStringSubmatch(u); len(m) > 1 {
-		if i, err := strconv.Atoi(m[1]); err == nil {
-			return i
-		}
-	}
-	return 0
 }
 
 func FetchAllCities(ctx context.Context, conf *MultipleConfig) ([]string, error) {

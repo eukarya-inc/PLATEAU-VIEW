@@ -24,7 +24,6 @@ type Config struct {
 	// geospatial.jp v3
 	GeospatialjpBuildType             string
 	GeospatialjpCloudRunJobsJobName   string
-	GeospatialjpCloudBuildImage       string
 	GeospatialjpCloudBuildMachineType string
 	GeospatialjpCloudBuildProject     string
 	GeospatialjpCloudBuildRegion      string

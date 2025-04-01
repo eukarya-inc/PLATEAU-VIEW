@@ -9,6 +9,10 @@ import (
 
 func RunCloudBuild(ctx context.Context, task Task, conf Config) error {
 	if task.Image == "" {
+		task.Image = conf.Task.Image
+	}
+
+	if task.Image == "" {
 		return ErrImageEmpty
 	}
 

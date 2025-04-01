@@ -2,6 +2,7 @@ package cmsintegrationcommon
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -57,6 +58,7 @@ type CityItem struct {
 	Metadata          *cms.PublicAsset  `json:"metadata,omitempty" cms:"metadata,asset"`
 	Specification     *cms.PublicAsset  `json:"specification,omitempty" cms:"specification,asset"`
 	ObjectLists       *cms.PublicAsset  `json:"objectLists,omitempty" cms:"objectLists,asset"`
+	Misc              *cms.PublicAsset  `json:"misc,omitempty" cms:"misc,asset"`
 	References        map[string]string `json:"references,omitempty" cms:"-"`
 	RelatedDataset    string            `json:"related_dataset,omitempty" cms:"related_dataset,reference"`
 	GeospatialjpIndex string            `json:"geospatialjp-index,omitempty" cms:"geospatialjp-index,reference"`
@@ -152,6 +154,24 @@ func (i *CityItem) ConvSettings() *ConvSettings {
 		CodeLists:   codeLists,
 		ObjectLists: objectLists,
 	}
+}
+
+func (i *CityItem) MetadataZipURLs() []string {
+	if i == nil {
+		return nil
+	}
+
+	files := []string{
+		i.CodeLists.URL,
+		i.Schemas.URL,
+		i.Metadata.URL,
+		i.Specification.URL,
+		i.Misc.URL,
+	}
+
+	return lo.Filter(files, func(s string, _ int) bool {
+		return path.Ext(s) == ".zip"
+	})
 }
 
 type FeatureItem struct {

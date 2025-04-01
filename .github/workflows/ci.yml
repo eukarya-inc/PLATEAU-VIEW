@@ -34,62 +34,57 @@ jobs:
           fetch-depth: 0
       - name: changed files for extension
         id: extension
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
-            extension
+            extension/**
             .github/workflows/ci-extension.yml
             .github/workflows/ci-extension-version-update.yml
-            .github/workflows/deploy-extension-dev.yml
-            .github/workflows/deploy-extension-prod.yml
+            .github/workflows/deploy-extension-*.yml
       - name: changed files for server
         id: server
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
-            server
+            server/**
             .github/workflows/ci-server.yml
             .github/workflows/build-server.yml
-            .github/workflows/deploy-server-dev.yml
-            .github/workflows/deploy-server-prod.yml
+            .github/workflows/deploy-server-*.yml
       - name: changed files for tools
         id: tools
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
-            tools
+            tools/**
             .github/workflows/ci-tools.yml
       - name: changed files for geo
         id: geo
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
-            geo
+            geo/**
             .github/workflows/ci-geo.yml
             .github/workflows/build-geo.yml
-            .github/workflows/deploy-geo-dev.yml
-            .github/workflows/deploy-geo-prod.yml
+            .github/workflows/deploy-geo-*.yml
       - name: changed files for tiles
         id: tiles
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           files: |
-            tiles
+            tiles/**
             .github/workflows/ci-tiles.yml
             .github/workflows/build-tiles.yml
-            .github/workflows/deploy-tiles-dev.yml
-            .github/workflows/deploy-tiles-prod.yml
+            .github/workflows/deploy-tiles-*.yml
       - name: changed files for worker
         id: worker
-        uses: tj-actions/changed-files@v36
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
         with:
           since_last_remote_commit: true
           files: |
-            worker
+            worker/**
             .github/workflows/ci-worker.yml
             .github/workflows/build-worker.yml
-            .github/workflows/deploy-worker-dev.yml
-            .github/workflows/deploy-worker-prod.yml
+            .github/workflows/deploy-worker-*.yml
 
   # ci-extension-version-update:
   #   needs: prepare
@@ -102,34 +97,34 @@ jobs:
     needs:
       - prepare
       # - ci-extension-version-update
-    if: needs.prepare.outputs.extension == 'true' || github.event.inputs.action_type == 'extension'
+    if: needs.prepare.outputs.extension == 'true' || inputs.action_type == 'extension'
     uses: ./.github/workflows/ci-extension.yml
 
   ci-tools:
     needs: prepare
-    if: needs.prepare.outputs.tools == 'true' || github.event.inputs.action_type == 'tools'
+    if: needs.prepare.outputs.tools == 'true' || inputs.action_type == 'tools'
     uses: ./.github/workflows/ci-tools.yml
     with:
       release_tools: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
   ci-geo:
     needs: prepare
-    if: needs.prepare.outputs.geo == 'true' || github.event.inputs.action_type == 'geo'
+    if: needs.prepare.outputs.geo == 'true' || inputs.action_type == 'geo'
     uses: ./.github/workflows/ci-geo.yml
 
   ci-server:
     needs: prepare
-    if: needs.prepare.outputs.server == 'true' || github.event.inputs.action_type == 'server'
+    if: needs.prepare.outputs.server == 'true' || inputs.action_type == 'server'
     uses: ./.github/workflows/ci-server.yml
 
   ci-tiles:
     needs: prepare
-    if: needs.prepare.outputs.tiles == 'true' || github.event.inputs.action_type == 'tiles'
+    if: needs.prepare.outputs.tiles == 'true' || inputs.action_type == 'tiles'
     uses: ./.github/workflows/ci-tiles.yml
 
   ci-worker:
     needs: prepare
-    if: ${{ needs.prepare.outputs.worker == 'true' || github.event.inputs.action_type == 'worker' }}
+    if: ${{ needs.prepare.outputs.worker == 'true' || inputs.action_type == 'worker' }}
     uses: ./.github/workflows/ci-worker.yml
 
   ci:
@@ -173,12 +168,10 @@ jobs:
   build-server:
     needs:
       - prepare
-      - ci-server
       - ci-extension
+      - ci-server
     if: ${{ !failure() && needs.ci-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-server.yml
-    with:
-      local: ${{ needs.ci-extension.result == 'success' }}
 
   deploy-server-dev:
     needs: build-server

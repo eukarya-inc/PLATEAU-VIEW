@@ -22,13 +22,6 @@ import (
 const plateauSpecMinMajorVersionObjectListsNeeded = 4
 const flowTestModel = "flow"
 
-var ppp *pp.PrettyPrinter
-
-func init() {
-	ppp = pp.New()
-	ppp.SetColoringEnabled(false)
-}
-
 var generateID = func() string {
 	return strings.ToLower(ulid.Make().String())
 }
@@ -111,8 +104,8 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	}
 
 	log.Debugfc(ctx, "itemID=%s featureType=%s", mainItem.ID, featureTypeCode)
-	log.Debugfc(ctx, "raw item: %s", ppp.Sprint(mainItem))
-	log.Debugfc(ctx, "item: %s", ppp.Sprint(item))
+	log.Debugfc(ctx, "raw item: %s", pp.Sprint(mainItem))
+	log.Debugfc(ctx, "item: %s", pp.Sprint(item))
 
 	// update convertion status
 	err = s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning)
@@ -191,12 +184,13 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 }
 
 func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeResult) error {
+	ctx = log.WithPrefixMessage(ctx, "receiveResultFromFME: ")
 	id := f.ParseID(conf.Secret)
 	if id.ItemID == "" {
 		return fmt.Errorf("invalid id: %s", f.ID)
 	}
 
-	log.Infofc(ctx, "receiveResultFromFME: itemID=%s featureType=%s type=%s", id.ItemID, id.FeatureType, id.Type)
+	log.Infofc(ctx, "itemID=%s featureType=%s type=%s", id.ItemID, id.FeatureType, id.Type)
 
 	logmsg := f.Message
 	if f.LogURL != "" {
@@ -388,9 +382,9 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		QCResult:         qcResult,
 	}).CMSItem()
 
-	log.Debugfc(ctx, "update item: %s", ppp.Sprint(newitem))
+	log.Debugfc(ctx, "update item: %s", pp.Sprint(newitem))
 
-	_, err = s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
+	newitem2, err := s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
 	if err != nil {
 		j1, _ := json.Marshal(newitem.Fields)
 		j2, _ := json.Marshal(newitem.MetadataFields)
@@ -398,6 +392,8 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		log.Errorfc(ctx, "failed to update item: %v", err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}
+
+	log.Debugfc(ctx, "updated item: %s", pp.Sprint(newitem2))
 
 	// comment to the item
 	err = s.CMS.CommentToItem(ctx, id.ItemID, fmt.Sprintf("%sが完了しました。%s", fmeRequestType(id.Type).Title(), logmsg))

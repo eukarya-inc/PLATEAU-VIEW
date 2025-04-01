@@ -29,6 +29,9 @@ import {
 } from "react";
 import invariant from "tiny-invariant";
 
+import useMeshCode from "../../shared/meshCode/useMeshCode";
+import { SearchOptionAreaButton } from "../../shared/ui-components/SearchOptionAreaButton";
+
 import { EntityTitleButton } from "./EntityTitleButton";
 import { AddressIcon, BuildingIcon, DatasetIcon, HistoryIcon } from "./icons";
 import { SearchField } from "./SearchField";
@@ -102,6 +105,7 @@ export interface SearchOption {
   id?: string;
   name: string;
   index?: string;
+  bbox?: [number, number, number, number];
   displayName?: string | { primary: string; secondary?: string };
 }
 
@@ -130,18 +134,6 @@ function renderGroup(params: AutocompleteRenderGroupParams): ReactNode {
     </ListSubheader>,
     params.children,
   ];
-}
-
-function renderOption(props: HTMLAttributes<HTMLLIElement>, option: SearchOption): ReactNode {
-  return (
-    // @ts-expect-error TODO
-    <EntityTitleButton
-      title={option.displayName ?? option.name}
-      // @ts-expect-error TODO
-      iconComponent={iconComponents[option.type]}
-      {...props}
-    />
-  );
 }
 
 function renderTags(
@@ -176,6 +168,7 @@ export type SearchAutocompleteProps = Omit<AutocompleteProps, "renderInput"> & {
   maxHeight?: number;
   filters?: string[];
   isResizing?: MutableRefObject<boolean>;
+  onDeepBlur?: () => void;
   children?: ReactNode;
 };
 
@@ -195,6 +188,7 @@ export const SearchAutocomplete = forwardRef<HTMLInputElement, SearchAutocomplet
       onInputChange,
       onFocus,
       onBlur,
+      onDeepBlur,
       ...props
     },
     ref,
@@ -234,6 +228,41 @@ export const SearchAutocomplete = forwardRef<HTMLInputElement, SearchAutocomplet
         />
       ),
       [inputRef, placeholder, endAdornment, focused],
+    );
+
+    const { handleCreate: handleCreateMeshCodeFeature } = useMeshCode({ meshCodeType: "3x" });
+
+    const handleCreateMeshCodeLayer = useCallback(
+      (location: { lat: number; lng: number }) => {
+        setFocused(false);
+        onDeepBlur?.();
+        if (isMutableRefObject(inputRef)) {
+          inputRef.current?.blur();
+        }
+        handleCreateMeshCodeFeature({ location, forceCreateNewLayer: true });
+      },
+      [inputRef, onDeepBlur, handleCreateMeshCodeFeature],
+    );
+
+    const renderOption = useCallback(
+      (props: HTMLAttributes<HTMLLIElement>, option: SearchOption) => {
+        return option.type === "area" ? (
+          <SearchOptionAreaButton
+            props={props}
+            option={option}
+            onCreateMeshCodeLayer={handleCreateMeshCodeLayer}
+          />
+        ) : (
+          // @ts-expect-error TODO
+          <EntityTitleButton
+            title={option.displayName ?? option.name}
+            // @ts-expect-error TODO
+            iconComponent={iconComponents[option.type]}
+            {...props}
+          />
+        );
+      },
+      [handleCreateMeshCodeLayer],
     );
 
     const [value, setValue] = useState<Array<string | SearchOption>>([]);
@@ -319,3 +348,9 @@ export const SearchAutocomplete = forwardRef<HTMLInputElement, SearchAutocomplet
     );
   },
 );
+
+function isMutableRefObject(
+  ref: ForwardedRef<HTMLInputElement> | undefined,
+): ref is MutableRefObject<HTMLInputElement | null> {
+  return (ref as MutableRefObject<HTMLInputElement | null>).current !== undefined;
+}
