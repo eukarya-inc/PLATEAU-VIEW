@@ -1,4 +1,4 @@
-name: E2E CMS Web dev
+name: E2E CMS Web
 on:
   workflow_call:
     inputs:
