@@ -1,8 +1,5 @@
 name: E2E CMS Web dev
 on:
-  push:
-    branches:
-      - ci/cms-web-e2e
   workflow_call:
     inputs:
       api_url:
@@ -20,8 +17,8 @@ jobs:
   call-workflow:
     uses: reearth/reearth-cms/.github/workflows/e2e_web.yml@main
     with:
-      api_url: ${{ inputs.api_url || vars.REEARTH_PLATEAU_CMS_DEV_API_URL }}
-      base_url: ${{ inputs.base_url || vars.REEARTH_PLATEAU_CMS_DEV_BASE_URL }}
+      api_url: ${{ inputs.api_url }}
+      base_url: ${{ inputs.base_url }}
       branch: release
     secrets:
       REEARTH_WEB_E2E_USERNAME: ${{ secrets.REEARTH_E2E_USERNAME }}
