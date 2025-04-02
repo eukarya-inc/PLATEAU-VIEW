@@ -6,6 +6,7 @@ on:
         description: 'Update which products?'
         type: choice
         options:
+          - no-update
           - visualizer
           - cms
           - flow
