@@ -41,7 +41,6 @@ jobs:
           curl -LO https://github.com/eukarya-inc/PLATEAU-VIEW/archive/refs/heads/plateau.zip
           unzip plateau.zip
           mv PLATEAU-VIEW-plateau plateau-old
-          rmdir PLATEAU-VIEW-plateau
           rm plateau.zip
       - name: Extract Re:Earth Visualizer zip
         if: ${{ inputs.update == 'visualizer' || inputs.update == 'all' }}
