@@ -90,7 +90,7 @@ jobs:
         run: |
           gcloud run deploy reearth-cms-api \
             --image $CMS_IMAGE_NAME_GCP \
-            --region $GCP_REGION \
+            --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet
           gcloud run deploy reearth-cms-worker \
