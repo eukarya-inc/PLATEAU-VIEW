@@ -33,6 +33,11 @@ type CityGMLFile struct {
 	MeshCode string `json:"code"`
 	MaxLOD   int    `json:"maxLod"`
 	URL      string `json:"url"`
+	LOD0     *bool  `json:"lod0,omitempty"`
+	LOD1     *bool  `json:"lod1,omitempty"`
+	LOD2     *bool  `json:"lod2,omitempty"`
+	LOD3     *bool  `json:"lod3,omitempty"`
+	LOD4     *bool  `json:"lod4,omitempty"`
 }
 
 type CityGMLFeatureType struct {
@@ -152,13 +157,18 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 			continue // skip header
 		}
 
-		// base,code,type,maxLod(,path)
+		// base,code,type,maxLod,path,lod0,lod1,lod2,lod3,lod4
 		base := record[0]
 		meshCode := record[1]
 		featureType := record[2]
 		maxlod, _ := strconv.Atoi(record[3])
 		citygmlURL := ""
 		gmlPath := record[4]
+		lod0 := parseBool(record[5])
+		lod1 := parseBool(record[6])
+		lod2 := parseBool(record[7])
+		lod3 := parseBool(record[8])
+		lod4 := parseBool(record[9])
 
 		if len(record) > 4 && gmlURLs == nil {
 			citygmlURL = citygmlItemURLFrom(base, gmlPath, featureType)
@@ -183,6 +193,11 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 			MeshCode: meshCode,
 			MaxLOD:   maxlod,
 			URL:      citygmlURL,
+			LOD0:     lod0,
+			LOD1:     lod1,
+			LOD2:     lod2,
+			LOD3:     lod3,
+			LOD4:     lod4,
 		}
 
 		if _, ok := res[featureType]; !ok {
@@ -237,4 +252,17 @@ func isNumeric(r rune) bool {
 
 func nameWithoutExt(name string) string {
 	return strings.TrimSuffix(name, path.Ext(name))
+}
+
+func parseBool(s string) *bool {
+	if s == "" {
+		return nil
+	}
+
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return nil
+	}
+
+	return &b
 }

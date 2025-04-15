@@ -257,6 +257,21 @@ paths:
                             type: string
                             format: uri
                             description: The URL to access this specific CityGML file.
+                          lod0:
+                            type: boolean
+                            description: Indicates if LOD0 is available for this file.
+                          lod1:
+                            type: boolean
+                            description: Indicates if LOD1 is available for this file.
+                          lod2:
+                            type: boolean
+                            description: Indicates if LOD2 is available for this file.
+                          lod3:
+                            type: boolean
+                            description: Indicates if LOD3 is available for this file.
+                          lod4:
+                            type: boolean
+                            description: Indicates if LOD4 is available for this file.
                         required:
                           - code
                           - maxLod
