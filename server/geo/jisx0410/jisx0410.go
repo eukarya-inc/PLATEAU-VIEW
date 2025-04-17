@@ -59,7 +59,7 @@ func init() {
 	for i := range digits {
 		digits[i] = 11
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		digits['0'+i] = uint8(i)
 	}
 }
@@ -67,6 +67,70 @@ func init() {
 type MeshCode struct {
 	Level  int
 	Bounds geo.Bounds2
+}
+
+func (m MeshCode) IsValid() bool {
+	return isValidLevel(m.Level) && m.Bounds != geo.Bounds2{}
+}
+
+func (m MeshCode) String() string {
+	lat := m.Bounds.Max.Y // 上側緯度
+	lon := m.Bounds.Min.X // 左側経度
+
+	// 緯度経度（秒単位）に変換
+	latSec := int(lat * degree)
+	lonSec := int(lon * degree)
+
+	// 第1次メッシュ
+	p1 := latSec / 2400 // 緯度 1度ごと
+	p2 := lonSec / 3600 // 経度 1度ごと
+	code := fmt.Sprintf("%02d%02d", p1, p2)
+
+	if m.Level == 1 {
+		return code
+	}
+
+	// 第2次メッシュ
+	latRem1 := latSec % 2400
+	lonRem1 := lonSec % 3600
+	p3 := latRem1 / 300 // 第2次: 緯度方向8分割
+	p4 := lonRem1 / 450 // 第2次: 経度方向8分割
+	code += fmt.Sprintf("%d%d", p3, p4)
+
+	if m.Level == 2 {
+		return code
+	}
+
+	// 第3次メッシュ
+	latRem2 := latRem1 % 300
+	lonRem2 := lonRem1 % 450
+	p5 := latRem2 / 30 // 第3次: 緯度方向10分割
+	p6 := lonRem2 / 45 // 第3次: 経度方向10分割
+	code += fmt.Sprintf("%d%d", p5, p6)
+
+	if m.Level == 3 {
+		return code
+	}
+
+	// 以下は第3次より細かいメッシュ（500m, 250m, 125m）
+	latRem3 := latRem2 % 30
+	lonRem3 := lonRem2 % 45
+
+	switch m.Level {
+	case 9: // 500m: 第3次を2x2分割
+		p7 := (latRem3/15)*2 + (lonRem3 / 22)
+		code += fmt.Sprintf("%d", p7)
+	case 10: // 250m: 4x4
+		p7 := float64(latRem3) / 7.5
+		p8 := float64(lonRem3) / 11.25
+		code += fmt.Sprintf("%d", int(p7)*4+int(p8))
+	case 11: // 125m: 8x8
+		p7 := float64(latRem3) / 3.75
+		p8 := float64(lonRem3) / 5.625
+		code += fmt.Sprintf("%d", int(p7)*8+int(p8))
+	}
+
+	return code
 }
 
 // Parse converts JIS X 0410 Square Grid Code to MeshCode and returns them.
@@ -239,6 +303,92 @@ func Parse(s string) (MeshCode, error) {
 	}, nil
 }
 
+// TODO: fix this
+func Find(lon, lat float64, level int) MeshCode {
+	if !isValidLevel(level) {
+		return MeshCode{}
+	}
+
+	latSec := int(lat * 3600)
+	lonSec := int(lon * 3600)
+
+	// 第1次
+	p1 := latSec / 2400
+	p2 := lonSec / 3600
+	minLat := float64(p1*2400) / 3600
+	minLon := float64(p2*3600) / 3600
+	h := 40.0 / 60
+	w := 1.0
+
+	if level == 1 {
+		return MeshCode{Level: 1, Bounds: geo.Bounds2{Min: geo.Point2{X: minLon, Y: minLat}, Max: geo.Point2{X: minLon + w, Y: minLat + h}}}
+	}
+
+	// 第2次
+	latRem := latSec % 2400
+	lonRem := lonSec % 3600
+	p3 := latRem / 300
+	p4 := lonRem / 450
+	minLat += float64(p3*300) / 3600
+	minLon += float64(p4*450) / 3600
+	h = 5.0 / 60
+	w = 7.5 / 60
+
+	if level == 2 {
+		return MeshCode{Level: 2, Bounds: geo.Bounds2{Min: geo.Point2{X: minLon, Y: minLat}, Max: geo.Point2{X: minLon + w, Y: minLat + h}}}
+	}
+
+	// 第3次
+	latRem = latRem % 300
+	lonRem = lonRem % 450
+	p5 := latRem / 30
+	p6 := lonRem / 45
+	minLat += float64(p5*30) / 3600
+	minLon += float64(p6*45) / 3600
+	h = 30.0 / 3600
+	w = 45.0 / 3600
+
+	return MeshCode{
+		Level: level,
+		Bounds: geo.Bounds2{
+			Min: geo.Point2{X: minLon, Y: minLat},
+			Max: geo.Point2{X: minLon + w, Y: minLat + h},
+		},
+	}
+}
+
+func FindAll(minLon, minLat, maxLon, maxLat float64, level int) []MeshCode {
+	stepLon := lv1w
+	stepLat := lv1h
+
+	switch level {
+	case 2:
+		stepLon = lv2w
+		stepLat = lv2h
+	case 3:
+		stepLon = lv3w
+		stepLat = lv3h
+	case 9:
+		stepLon = lv3w2
+		stepLat = lv3h2
+	case 10:
+		stepLon = lv3wq
+		stepLat = lv3hq
+	case 11:
+		stepLon = lv3we
+		stepLat = lv3he
+	}
+
+	codes := []MeshCode{}
+	for lat := maxLat; lat >= minLat; lat -= stepLat {
+		for lon := minLon; lon <= maxLon; lon += stepLon {
+			code := Find(lon, lat, level)
+			codes = append(codes, code)
+		}
+	}
+	return dedupe(codes)
+}
+
 func over(x uint8, c ...uint8) int {
 	for i := range c {
 		if c[i] > x {
@@ -250,4 +400,21 @@ func over(x uint8, c ...uint8) int {
 
 func invalidChar(s string, idx int) error {
 	return fmt.Errorf("invalid char(idx=%d): %c", idx, s[idx])
+}
+
+func dedupe(codes []MeshCode) []MeshCode {
+	seen := make(map[string]bool)
+	result := []MeshCode{}
+	for _, code := range codes {
+		key := code.String()
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, code)
+		}
+	}
+	return result
+}
+
+func isValidLevel(level int) bool {
+	return level >= 1 && level <= 3
 }

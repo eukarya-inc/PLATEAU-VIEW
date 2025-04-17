@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/eukarya-inc/jpareacode"
 	"github.com/eukarya-inc/jpareacode/jpareacodepref"
+	"github.com/eukarya-inc/reearth-plateauview/server/geo/jisx0410mvt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	geojson "github.com/paulmach/go.geojson"
@@ -46,6 +49,7 @@ func (h *Handler) Route(g *echo.Group) *Handler {
 	g.Use(middleware.CORS(), middleware.Gzip())
 	g.GET("/plateaugovs.geojson", h.GetGeoJSON)
 	g.GET("/geocoding", h.FindCodeFromLngLat)
+	g.GET("/japanmesh/:l/:z/:x/:y", h.JapanMeshMVT)
 	// g.GET("/update", h.Update, errorLogger)
 	return h
 }
@@ -257,4 +261,48 @@ func (h *Handler) FindCodeFromLngLat(c echo.Context) error {
 		"wardCode": lo.EmptyableToPtr(jpareacode.FormatCityCode(city.WardCode)),
 		"code":     jpareacode.FormatCityCode(city.Code()),
 	})
+}
+
+func (h *Handler) JapanMeshMVT(c echo.Context) error {
+	l, z, x, y := c.Param("l"), c.Param("z"), c.Param("x"), c.Param("y")
+	yExt := path.Ext(y)
+	if yExt != "" && yExt != ".mvt" && yExt != ".pbf" {
+		return c.JSON(http.StatusNotFound, "not found")
+	}
+
+	y = strings.TrimSuffix(y, yExt)
+	if l == "" || z == "" || x == "" || y == "" {
+		return c.JSON(http.StatusNotFound, "not found")
+	}
+
+	lInt, err := strconv.Atoi(l)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid level")
+	}
+	zInt, err := strconv.Atoi(z)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid z")
+	}
+	xInt, err := strconv.Atoi(x)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid x")
+	}
+	yInt, err := strconv.Atoi(y)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "invalid y")
+	}
+
+	mvt, err := jisx0410mvt.RenderMVTTile(zInt, xInt, yInt, lInt, "japanmesh")
+
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, "failed to render MVT tile")
+	}
+
+	if mvt == nil {
+		return c.JSON(http.StatusNotFound, "not found")
+	}
+
+	// headers := c.Response().Header()
+	// headers.Set(echo.HeaderCacheControl, "public, max-age=21600")
+	return c.Blob(http.StatusOK, "application/vnd.mapbox-vector-tile", mvt)
 }

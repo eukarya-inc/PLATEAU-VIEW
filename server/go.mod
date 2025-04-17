@@ -105,6 +105,7 @@ require (
 	github.com/sosodev/duration v1.2.0 // indirect
 	github.com/tdewolff/minify/v2 v2.20.10 // indirect
 	github.com/tdewolff/parse/v2 v2.7.7 // indirect
+	github.com/tidwall/mvt v0.1.3 // indirect
 	github.com/uber/jaeger-client-go v2.30.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/urfave/cli/v2 v2.27.1 // indirect
