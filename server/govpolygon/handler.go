@@ -266,7 +266,7 @@ func (h *Handler) FindCodeFromLngLat(c echo.Context) error {
 func (h *Handler) JapanMeshMVT(c echo.Context) error {
 	l, z, x, y := c.Param("l"), c.Param("z"), c.Param("x"), c.Param("y")
 	yExt := path.Ext(y)
-	if yExt != "" && yExt != ".mvt" && yExt != ".pbf" {
+	if yExt != ".mvt" && yExt != ".pbf" {
 		return c.JSON(http.StatusNotFound, "not found")
 	}
 
