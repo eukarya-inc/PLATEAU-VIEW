@@ -26,7 +26,7 @@ const (
 	PackStatusSucceeded = "succeeded"
 
 	timeoutSignedURL = 10 * time.Minute
-	urlsCountLimit   = 100
+	urlsCountLimit   = 5
 )
 
 type packer struct {

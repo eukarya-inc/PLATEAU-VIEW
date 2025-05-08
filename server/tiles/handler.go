@@ -17,6 +17,7 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
+const defaultTimeout = 30 * time.Second
 const modelKey = "tiles"
 
 type Config struct {
@@ -77,7 +78,7 @@ func New(ctx context.Context, conf Config) (*Handler, error) {
 		chiitilerURL:         chiitilerURL,
 		chiitilerCacheBucket: bucket,
 		http: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: defaultTimeout,
 		},
 	}, nil
 }
