@@ -34,7 +34,7 @@ func prepareOnCloudBuild(ctx context.Context, conf prepareOnCloudBuildConfig) er
 		conf.CloudBuildDiskSizeGb = defaultDiskSizeGb
 	}
 
-	log.Debugfc(ctx, "geospatialjp webhook: prepare (cloud build): %s", pp.Sprint(conf))
+	log.Debugfc(ctx, "prepare (cloud build): %s", pp.Sprint(conf))
 
 	return runCloudBuild(ctx, CloudBuildConfig{
 		Image: conf.CloudBuildImage,

@@ -174,7 +174,7 @@ func (g *GspatialjpDataItem) ShouldMergeRelated() bool {
 }
 
 func (g *GspatialjpDataItem) ShouldMergeMaxLOD() bool {
-	return g.MergeCityGMLStatus == nil || g.MergeMaxLODStatus.Name != running
+	return g.MergeMaxLODStatus == nil || g.MergeMaxLODStatus.Name != running
 }
 
 func GspatialjpDataItemFrom(item *cms.Item) (i *GspatialjpDataItem) {
