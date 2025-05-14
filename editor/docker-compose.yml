@@ -1,19 +1,5 @@
 version: "3"
 services:
-  reearth:
-    image: reearth/reearth-visualizer:latest
-    environment:
-      REEARTH_DB: mongodb://reearth-mongo
-    ports:
-      - 8080:8080
-    # env_file:
-    #  - ./.env
-    links:
-      - reearth-mongo
-    depends_on:
-      - reearth-mongo
-    volumes:
-      - ./data:/reearth/data
   reearth-mongo:
     image: mongo:7
     ports:

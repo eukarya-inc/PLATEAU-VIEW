@@ -1,7 +1,7 @@
 {
   "name": "@reearth/visualizer",
   "version": "1.0.0-beta.3.4",
-  "repository": "https://github.com/reearth/reearth-visualizer.git",
+  "repository": "https://github.com/eukarya-inc/PLATEAU-VIEW.git",
   "author": "Re:Earth contributors <community@reearth.io>",
   "license": "Apache-2.0",
   "type": "module",
