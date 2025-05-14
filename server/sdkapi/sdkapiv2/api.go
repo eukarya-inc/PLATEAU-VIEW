@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/putil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	cms "github.com/reearth/reearth-cms-api/go"

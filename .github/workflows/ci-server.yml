@@ -27,4 +27,4 @@ jobs:
           cache-dependency-path: server/go.sum
       - name: test
         working-directory: server
-        run: go test ./... -v -race -tags draco
+        run: go test ./... -v -race

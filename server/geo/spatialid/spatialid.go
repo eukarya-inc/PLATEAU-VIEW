@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/geo"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
 )
 
 // Voxel represents a tile with zoom level (z), floor (f), x-coordinate (x),

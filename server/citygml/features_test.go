@@ -97,7 +97,7 @@ func TestFeaturesHandler(t *testing.T) {
 	assert.NoError(t, featureHandler("")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json; charset=UTF-8", rec.Header().Get(echo.HeaderContentType))
+	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))
 
 	var j map[string]any
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &j))

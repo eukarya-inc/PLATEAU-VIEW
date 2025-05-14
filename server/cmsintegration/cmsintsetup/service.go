@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	cms "github.com/reearth/reearth-cms-api/go"
 )
 

@@ -10,8 +10,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/putil"
-	"github.com/eukarya-inc/reearth-plateauview/server/tool"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/tool"
 	"github.com/go-playground/validator/v10"
 	"github.com/k0kubun/pp/v3"
 	"github.com/labstack/echo/v4"

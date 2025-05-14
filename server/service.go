@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
-	"github.com/eukarya-inc/reearth-plateauview/server/govpolygon"
-	"github.com/eukarya-inc/reearth-plateauview/server/openapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/opinion"
-	"github.com/eukarya-inc/reearth-plateauview/server/proxy"
-	"github.com/eukarya-inc/reearth-plateauview/server/putil"
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/searchindex"
-	"github.com/eukarya-inc/reearth-plateauview/server/sidebar"
-	"github.com/eukarya-inc/reearth-plateauview/server/tiles"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/openapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/proxy"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/util"
@@ -33,7 +32,6 @@ var services = [](func(*Config) (*Service, error)){
 	OpenAPI,
 	CMSIntegration,
 	SDKAPI,
-	SearchIndex,
 	Opinion,
 	Sidebar,
 	DataCatalog,
@@ -93,23 +91,6 @@ func CMSIntegration(conf *Config) (*Service, error) {
 		Echo: func(g *echo.Group) error {
 			return cmsintegration.Handler(c, g)
 		},
-		Webhook: w,
-	}, nil
-}
-
-func SearchIndex(conf *Config) (*Service, error) {
-	c := conf.SearchIndex()
-	if c.CMSBase == "" || c.CMSToken == "" || c.CMSStorageProject == "" {
-		return nil, nil
-	}
-
-	w, err := searchindex.WebhookHandler(c)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Service{
-		Name:    "searchindex",
 		Webhook: w,
 	}, nil
 }

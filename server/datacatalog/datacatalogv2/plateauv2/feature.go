@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogcommon"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
 )

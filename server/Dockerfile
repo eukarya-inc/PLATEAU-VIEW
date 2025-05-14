@@ -1,7 +1,7 @@
-ARG TAG=release,draco
+ARG TAG=release
 ARG VERSION
 
-FROM golang:1.24-bullseye AS build
+FROM golang:1.24-bookworm AS build
 
 WORKDIR /app
 
@@ -15,14 +15,14 @@ COPY . /app/
 RUN --mount=type=cache,target=/go/pkg/mod \
     go build -tags "${TAG}" "-ldflags=-X main.version=${VERSION} -s -w -buildid=" -trimpath
 
-FROM debian:bullseye
+FROM scratch
 
-RUN apt-get update && apt-get install -y ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-COPY --from=build /app/server /app/reearth-plateauview
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /etc/mime.types /etc/mime.types
+COPY --from=build /app/server /app/plateauview
 COPY govpolygon/govpolygondata/ /app/govpolygondata/
 COPY PlateauView3.js* reearth.yml* /app/
 
 WORKDIR /app
 
-CMD [ "/app/reearth-plateauview" ]
+CMD [ "/app/plateauview" ]

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/geo"
-	"github.com/eukarya-inc/reearth-plateauview/server/geo/spatialid"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo/spatialid"
 
 	"github.com/orisano/gosax/xmlb"
 )

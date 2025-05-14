@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	"github.com/reearth/reearthx/log"
 )
 

@@ -1,7 +1,7 @@
 package sidebar
 
 import (
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 type Config struct {

@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 func FetchAttrList(ctx context.Context, pcms *plateaucms.CMS, h *http.Client, majorVersion int) (io.ReadCloser, error) {

@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/JamesLMilner/quadtree-go"
-	"github.com/eukarya-inc/reearth-plateauview/server/geo"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
 )
 
 type dataCatalogAPI struct {

@@ -1,7 +1,7 @@
 package datacatalogv2adapter
 
 import (
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2/plateauv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2/plateauv2"
 	cms "github.com/reearth/reearth-cms-api/go"
 )
 

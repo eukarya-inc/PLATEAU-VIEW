@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/JamesLMilner/quadtree-go"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/geocoding"
-	"github.com/eukarya-inc/reearth-plateauview/server/geo"
-	"github.com/eukarya-inc/reearth-plateauview/server/geo/jisx0410"
-	"github.com/eukarya-inc/reearth-plateauview/server/geo/spatialid"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/geocoding"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo/jisx0410"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo/spatialid"
 	"github.com/reearth/reearthx/rerror"
 )
 

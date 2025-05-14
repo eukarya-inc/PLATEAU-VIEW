@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"

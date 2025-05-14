@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
-	"github.com/eukarya-inc/reearth-plateauview/server/putil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/reearth/reearthx/log"

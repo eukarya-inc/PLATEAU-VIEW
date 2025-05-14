@@ -3,7 +3,7 @@ package cmsintegrationv2
 import (
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/stretchr/testify/assert"
 )

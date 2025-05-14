@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
-	"github.com/eukarya-inc/reearth-plateauview/server/opinion"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/searchindex"
-	"github.com/eukarya-inc/reearth-plateauview/server/sidebar"
-	"github.com/eukarya-inc/reearth-plateauview/server/tiles"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/joho/godotenv"
 	"github.com/k0kubun/pp/v3"
 	"github.com/kelseyhightower/envconfig"
@@ -38,7 +37,6 @@ type Config struct {
 	Debug                              bool     `pp:",omitempty"`
 	Origin                             []string `pp:",omitempty"`
 	Secret                             string   `pp:",omitempty"`
-	Delegate_URL                       string   `pp:",omitempty"`
 	CMS_Webhook_Secret                 string   `pp:",omitempty"`
 	CMS_BaseURL                        string   `pp:",omitempty"`
 	CMS_Token                          string   `pp:",omitempty"`
@@ -75,7 +73,6 @@ type Config struct {
 	Geospatialjp_CloudBuildRegion      string   `pp:",omitempty"`
 	Geospatialjp_CloudBuildDiskSizeGb  int64    `pp:",omitempty"`
 	DataConv_Disable                   bool     `pp:",omitempty"`
-	Indexer_Delegate                   bool     `pp:",omitempty"`
 	DataCatalog_DisableCache           bool     `pp:",omitempty"`
 	DataCatalog_CacheUpdateKey         string   `pp:",omitempty"`
 	DataCatalog_PlaygroundEndpoint     string   `pp:",omitempty"`
@@ -163,19 +160,6 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		GCPRegion:                         cloudBuildRegion,
 		FlowBaseURL:                       c.Flow_BaseURL,
 		FlowToken:                         c.Flow_Token,
-	}
-}
-
-func (c *Config) SearchIndex() searchindex.Config {
-	return searchindex.Config{
-		CMSBase:           c.CMS_BaseURL,
-		CMSToken:          c.CMS_Token,
-		CMSStorageProject: c.CMS_SystemProject,
-		Delegate:          c.Indexer_Delegate,
-		DelegateURL:       c.Delegate_URL,
-		Debug:             c.Debug,
-		// CMSModel: c.CMS_Model,
-		// CMSStorageModel:   c.CMS_IndexerStorageModel,
 	}
 }
 

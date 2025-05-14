@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsmock"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsmock"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/stretchr/testify/assert"
 )

@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/worker/citygmlpacker"
-	"github.com/eukarya-inc/reearth-plateauview/worker/extractmaxlod"
-	"github.com/eukarya-inc/reearth-plateauview/worker/preparegspatialjp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/citygmlpacker"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/extractmaxlod"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/preparegspatialjp"
 	"github.com/k0kubun/pp/v3"
 	"github.com/samber/lo"
 )

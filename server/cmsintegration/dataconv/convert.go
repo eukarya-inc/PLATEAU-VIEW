@@ -16,16 +16,16 @@ import (
 )
 
 const (
-	wallHeight          = 100
-	wallImageName       = "yellow_gradient.png"
-	billboardImageDir   = "billboard_image"
-	billboardPaddingH   = 8.0
-	billboardPaddingV   = 4.0
-	billboradFontSize   = 36.0
-	billboardRadius     = 15.0
-	billboardLineWidth  = 1.0
-	billboardLineHeight = 50.0
-	billboardScale      = 1.0
+	wallHeight                  = 100
+	wallImageName               = "yellow_gradient.png"
+	billboardImageDir           = "billboard_image"
+	billboardPaddingH   float64 = 8.0
+	billboardPaddingV   float64 = 4.0
+	billboradFontSize   float64 = 36.0
+	billboardRadius     float64 = 15.0
+	billboardLineWidth  float64 = 1.0
+	billboardLineHeight float64 = 50.0
+	billboardScale      float64 = 1.0
 )
 
 var (
@@ -112,21 +112,21 @@ func GenerateLandmarkImage(name string) ([]byte, error) {
 	face := billboardFontFamily.Face(billboradFontSize, billboardTextColor, billboardFontStyle, canvas.FontNormal)
 	text := canvas.NewTextLine(face, name, canvas.Left)
 	textBounds := text.Bounds()
-	text2 := canvas.NewTextBox(face, name, textBounds.W+billboardPaddingH*2, textBounds.H+billboardPaddingV*2, canvas.Center, canvas.Middle, 0, 0)
+	text2 := canvas.NewTextBox(face, name, textBounds.W()+billboardPaddingH*2, textBounds.H()+billboardPaddingV*2, canvas.Center, canvas.Middle, 0, 0)
 
-	w := textBounds.W + billboardPaddingH*2
-	h := textBounds.H + billboardPaddingV*2 + billboardLineHeight
+	w := textBounds.W() + billboardPaddingH*2
+	h := textBounds.H() + billboardPaddingV*2 + billboardLineHeight
 	c := canvas.New(w, h)
 	ctx := canvas.NewContext(c)
 	ctx.SetCoordSystem(canvas.CartesianIV)
 
 	ctx.SetStrokeWidth(0)
 	ctx.SetFillColor(billboardBgColor)
-	ctx.DrawPath(0, 0, canvas.RoundedRectangle(w, textBounds.H+billboardPaddingV*2, billboardRadius))
+	ctx.DrawPath(0, 0, canvas.RoundedRectangle(w, textBounds.H()+billboardPaddingV*2, billboardRadius))
 
 	ctx.SetStrokeWidth(billboardLineWidth)
 	ctx.SetStrokeColor(billboardBgColor)
-	ctx.DrawPath(w/2, textBounds.H+billboardPaddingV*2, canvas.Line(0, h-textBounds.H+billboardPaddingV*2))
+	ctx.DrawPath(w/2, textBounds.H()+billboardPaddingV*2, canvas.Line(0, h-textBounds.H()+billboardPaddingV*2))
 
 	ctx.DrawText(0, 0, text2)
 

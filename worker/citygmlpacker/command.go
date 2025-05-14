@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/reearth/reearthx/log"
 	"google.golang.org/api/googleapi"
 )

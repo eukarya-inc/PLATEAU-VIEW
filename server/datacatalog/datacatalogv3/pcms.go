@@ -6,8 +6,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 func getPlateauSpecs(ctx context.Context, pcms plateaucms.SpecStore, maxYear int) ([]plateauapi.PlateauSpecSimple, error) {

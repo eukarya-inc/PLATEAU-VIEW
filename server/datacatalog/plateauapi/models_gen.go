@@ -3,6 +3,7 @@
 package plateauapi
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -78,7 +79,7 @@ type Dataset interface {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	GetAr() bool
 	// 管理者用
-	GetAdmin() interface{}
+	GetAdmin() any
 }
 
 // データセットのアイテム。
@@ -259,7 +260,7 @@ type CityGMLDataset struct {
 	// CityGMLのメタデータを含むzipファイルURLのリスト。
 	MetadataZipUrls []string `json:"metadataZipUrls"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (CityGMLDataset) IsNode() {}
@@ -348,7 +349,7 @@ type GenericDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (GenericDataset) IsDataset()     {}
@@ -433,7 +434,7 @@ func (this GenericDataset) GetItems() []DatasetItem {
 func (this GenericDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this GenericDataset) GetAdmin() interface{} { return this.Admin }
+func (this GenericDataset) GetAdmin() any { return this.Admin }
 
 func (GenericDataset) IsNode() {}
 
@@ -588,7 +589,7 @@ type PlateauDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 	// データセットが準拠するPLATEAU都市モデルの仕様のマイナーバージョンへのID。
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// データセットが準拠するPLATEAU都市モデルの仕様。
@@ -679,7 +680,7 @@ func (this PlateauDataset) GetItems() []DatasetItem {
 func (this PlateauDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this PlateauDataset) GetAdmin() interface{} { return this.Admin }
+func (this PlateauDataset) GetAdmin() any { return this.Admin }
 
 func (PlateauDataset) IsNode() {}
 
@@ -962,7 +963,7 @@ type RelatedDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (RelatedDataset) IsDataset()     {}
@@ -1047,7 +1048,7 @@ func (this RelatedDataset) GetItems() []DatasetItem {
 func (this RelatedDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this RelatedDataset) GetAdmin() interface{} { return this.Admin }
+func (this RelatedDataset) GetAdmin() any { return this.Admin }
 
 func (RelatedDataset) IsNode() {}
 
@@ -1274,7 +1275,7 @@ func (e AreaType) String() string {
 	return string(e)
 }
 
-func (e *AreaType) UnmarshalGQL(v interface{}) error {
+func (e *AreaType) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1289,6 +1290,20 @@ func (e *AreaType) UnmarshalGQL(v interface{}) error {
 
 func (e AreaType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AreaType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AreaType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // データセットのフォーマット。
@@ -1342,7 +1357,7 @@ func (e DatasetFormat) String() string {
 	return string(e)
 }
 
-func (e *DatasetFormat) UnmarshalGQL(v interface{}) error {
+func (e *DatasetFormat) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1357,6 +1372,20 @@ func (e *DatasetFormat) UnmarshalGQL(v interface{}) error {
 
 func (e DatasetFormat) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DatasetFormat) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DatasetFormat) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // データセットの種類のカテゴリ。
@@ -1389,7 +1418,7 @@ func (e DatasetTypeCategory) String() string {
 	return string(e)
 }
 
-func (e *DatasetTypeCategory) UnmarshalGQL(v interface{}) error {
+func (e *DatasetTypeCategory) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1404,6 +1433,20 @@ func (e *DatasetTypeCategory) UnmarshalGQL(v interface{}) error {
 
 func (e DatasetTypeCategory) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DatasetTypeCategory) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DatasetTypeCategory) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 浸水想定区域モデルにおける浸水規模。
@@ -1433,7 +1476,7 @@ func (e FloodingScale) String() string {
 	return string(e)
 }
 
-func (e *FloodingScale) UnmarshalGQL(v interface{}) error {
+func (e *FloodingScale) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1448,6 +1491,20 @@ func (e *FloodingScale) UnmarshalGQL(v interface{}) error {
 
 func (e FloodingScale) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FloodingScale) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FloodingScale) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 河川の管理区間
@@ -1477,7 +1534,7 @@ func (e RiverAdmin) String() string {
 	return string(e)
 }
 
-func (e *RiverAdmin) UnmarshalGQL(v interface{}) error {
+func (e *RiverAdmin) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1492,6 +1549,20 @@ func (e *RiverAdmin) UnmarshalGQL(v interface{}) error {
 
 func (e RiverAdmin) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RiverAdmin) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RiverAdmin) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 建築物モデルのテクスチャの種類。
@@ -1521,7 +1592,7 @@ func (e Texture) String() string {
 	return string(e)
 }
 
-func (e *Texture) UnmarshalGQL(v interface{}) error {
+func (e *Texture) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1536,4 +1607,18 @@ func (e *Texture) UnmarshalGQL(v interface{}) error {
 
 func (e Texture) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Texture) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Texture) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

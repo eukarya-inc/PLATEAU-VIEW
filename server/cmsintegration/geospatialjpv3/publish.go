@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"

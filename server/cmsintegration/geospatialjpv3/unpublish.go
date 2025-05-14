@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
 )

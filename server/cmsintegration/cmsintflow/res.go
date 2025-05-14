@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
-	"golang.org/x/exp/maps"
 )
 
 func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res FlowResult) error {
@@ -180,8 +181,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 }
 
 func getFeatureItemData(assets map[string][]string, items []cmsintegrationcommon.FeatureItemDatum) (res []cmsintegrationcommon.FeatureItemDatum) {
-	keys := maps.Keys(assets)
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(assets))
 
 	for _, k := range keys {
 		assets := assets[k]

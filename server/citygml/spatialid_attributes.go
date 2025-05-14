@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/geo/spatialid"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo/spatialid"
 	"github.com/klauspost/compress/gzip"
 	"github.com/orisano/gosax/xmlb"
 	"github.com/reearth/reearthx/log"

@@ -1,8 +1,8 @@
 package sdkapi
 
 import (
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv2"
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
 	"github.com/labstack/echo/v4"
 )
 

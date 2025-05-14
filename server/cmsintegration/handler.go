@@ -1,16 +1,16 @@
 package cmsintegration
 
 import (
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationv2"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationv2/geospatialjpv2"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintflow"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintmaxlod"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintrelated"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/dataconv"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/geospatialjpv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv2/geospatialjpv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintflow"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintmaxlod"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintrelated"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/dataconv"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/geospatialjpv3"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 )
