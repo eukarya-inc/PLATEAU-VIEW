@@ -13,7 +13,7 @@ RUN --mount=type=bind,source=go.mod,target=go.mod \
 COPY . /app/
 
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go build -tags "${TAG}" "-ldflags=-X main.version=${VERSION} -s -w -buildid=" -trimpath
+    CGO_ENABLED=0 go build -tags "${TAG}" "-ldflags=-X main.version=${VERSION} -s -w -buildid=" -trimpath
 
 FROM scratch
 
