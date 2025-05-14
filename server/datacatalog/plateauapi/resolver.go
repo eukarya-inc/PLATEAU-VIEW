@@ -45,7 +45,7 @@ type Resolver struct {
 type Option func(*handler.Server)
 
 func NewService(repo Repo, opts ...Option) *handler.Server {
-	srv := handler.NewDefaultServer(NewSchema(repo))
+	srv := handler.New(NewSchema(repo))
 	for _, opt := range opts {
 		opt(srv)
 	}

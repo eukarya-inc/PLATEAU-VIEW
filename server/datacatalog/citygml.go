@@ -157,6 +157,11 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 			continue // skip header
 		}
 
+		if len(record) < 10 {
+			// expand record with empty values
+			record = append(record, make([]string, 10-len(record))...)
+		}
+
 		// base,code,type,maxLod,path,lod0,lod1,lod2,lod3,lod4
 		base := record[0]
 		meshCode := record[1]

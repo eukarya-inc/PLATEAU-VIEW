@@ -16,6 +16,7 @@ import (
 	"github.com/k0kubun/pp/v3"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	glog "github.com/labstack/gommon/log"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/appx"
@@ -59,7 +60,10 @@ func main2(conf *Config) {
 	e.HTTPErrorHandler = errorHandler(e.DefaultHTTPErrorHandler)
 	e.Validator = &customValidator{validator: validator.New()}
 	e.Use(
-		middleware.Recover(),
+		middleware.RecoverWithConfig(middleware.RecoverConfig{
+			LogLevel: glog.ERROR,
+		}),
+		middleware.RequestID(),
 		echo.WrapMiddleware(appx.RequestIDMiddleware()),
 		logger.AccessLogger(),
 		middleware.CORSWithConfig(middleware.CORSConfig{
