@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM scratch
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/mime.types /etc/mime.types
 COPY --from=build /app/server /app/plateauview
 COPY govpolygon/govpolygondata/ /app/govpolygondata/
