@@ -1,0 +1,72 @@
+type Asset implements Node {
+  id: ID!
+  createdAt: DateTime!
+  teamId: ID!
+  name: String!
+  size: FileSize!
+  url: String!
+  contentType: String!
+  team: Team
+  coreSupport: Boolean!
+}
+
+enum AssetSortField {
+  DATE
+  SIZE
+  NAME
+}
+
+# InputType
+
+input CreateAssetInput {
+  teamId: ID!
+  coreSupport: Boolean!
+  file: Upload!
+}
+
+input RemoveAssetInput {
+  assetId: ID!
+}
+
+input AssetSort {
+  field: AssetSortField!
+  direction: SortDirection!
+}
+
+# Payload
+
+type CreateAssetPayload {
+  asset: Asset!
+}
+
+type RemoveAssetPayload {
+  assetId: ID!
+}
+
+# Connection
+
+type AssetConnection {
+  edges: [AssetEdge!]!
+  nodes: [Asset]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type AssetEdge {
+  cursor: Cursor!
+  node: Asset
+}
+
+extend type Query {
+  assets(
+    teamId: ID!
+    pagination: Pagination
+    keyword: String
+    sort: AssetSort
+  ): AssetConnection!
+}
+
+extend type Mutation {
+  createAsset(input: CreateAssetInput!): CreateAssetPayload
+  removeAsset(input: RemoveAssetInput!): RemoveAssetPayload
+}

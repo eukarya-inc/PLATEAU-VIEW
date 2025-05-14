@@ -1,0 +1,29 @@
+version: "3"
+services:
+  reearth:
+    image: reearth/reearth-visualizer:latest
+    environment:
+      REEARTH_DB: mongodb://reearth-mongo
+    ports:
+      - 8080:8080
+    # env_file:
+    #  - ./.env
+    links:
+      - reearth-mongo
+    depends_on:
+      - reearth-mongo
+    volumes:
+      - ./data:/reearth/data
+  reearth-mongo:
+    image: mongo:7
+    ports:
+      - 27017:27017
+    volumes:
+      - ./mongo:/data/db
+  gcs:
+    image: fsouza/fake-gcs-server:1.52.1
+    ports:
+      - 4443:4443
+    volumes:
+      - ${PWD}/tmp/gcs:/storage
+    command: -scheme http
