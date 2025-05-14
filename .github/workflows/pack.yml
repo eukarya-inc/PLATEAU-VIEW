@@ -42,16 +42,6 @@ jobs:
           unzip plateau.zip
           mv PLATEAU-VIEW-plateau plateau-old
           rm plateau.zip
-      - name: Extract Re:Earth Visualizer zip
-        if: ${{ inputs.update == 'visualizer' || inputs.update == 'all' }}
-        run: |
-          curl -LO https://github.com/reearth/reearth-visualizer/archive/refs/heads/main.zip
-          unzip main.zip
-          mv reearth-visualizer-main plateau/editor
-          rm main.zip
-      - name: Extract previous Re:Earth Visualizer zip
-        if: ${{ inputs.update != 'visualizer' && inputs.update != 'all' }}
-        run: mv plateau-old/editor plateau/editor
       - name: Extract Re:Earth CMS zip
         if: ${{ inputs.update == 'cms' || inputs.update == 'all' }}
         run: |
