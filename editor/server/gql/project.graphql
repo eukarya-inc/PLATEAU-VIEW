@@ -1,0 +1,162 @@
+type Project implements Node {
+  id: ID!
+  isArchived: Boolean!
+  isBasicAuthActive: Boolean!
+  basicAuthUsername: String!
+  basicAuthPassword: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  publishedAt: DateTime
+  name: String!
+  description: String!
+  alias: String!
+  publicTitle: String!
+  publicDescription: String!
+  publicImage: String!
+  publicNoIndex: Boolean!
+  imageUrl: URL
+  teamId: ID!
+  visualizer: Visualizer!
+  publishmentStatus: PublishmentStatus!
+  team: Team
+  scene: Scene
+  coreSupport: Boolean!
+  enableGa: Boolean!
+  trackingId: String!
+  starred: Boolean!
+  isDeleted: Boolean!
+}
+
+type ProjectAliasAvailability {
+  alias: String!
+  available: Boolean!
+}
+
+enum Visualizer {
+  CESIUM
+}
+
+enum PublishmentStatus {
+  PUBLIC
+  LIMITED
+  PRIVATE
+}
+
+enum ProjectSortField {
+  CREATEDAT
+  UPDATEDAT
+  NAME
+}
+
+# InputType
+
+input CreateProjectInput {
+  teamId: ID!
+  visualizer: Visualizer!
+  name: String
+  description: String
+  imageUrl: URL
+  alias: String
+  archived: Boolean
+  coreSupport: Boolean
+}
+
+input UpdateProjectInput {
+  projectId: ID!
+  name: String
+  description: String
+  archived: Boolean
+  isBasicAuthActive: Boolean
+  basicAuthUsername: String
+  basicAuthPassword: String
+  alias: String
+  imageUrl: URL
+  publicTitle: String
+  publicDescription: String
+  publicImage: String
+  publicNoIndex: Boolean
+  deleteImageUrl: Boolean
+  deletePublicImage: Boolean
+  enableGa: Boolean
+  trackingId: String
+  sceneId: ID
+  starred: Boolean
+  deleted: Boolean
+}
+
+input PublishProjectInput {
+  projectId: ID!
+  alias: String
+  status: PublishmentStatus!
+}
+
+input DeleteProjectInput {
+  projectId: ID!
+}
+
+input ProjectSort {
+  field: ProjectSortField!
+  direction: SortDirection!
+}
+
+input ExportProjectInput {
+  projectId: ID!
+}
+
+input ImportProjectInput {
+  teamId: ID!
+  file: Upload!
+}
+
+# Payload
+
+type ProjectPayload {
+  project: Project!
+}
+
+type DeleteProjectPayload {
+  projectId: ID!
+}
+
+type ExportProjectPayload {
+  projectDataPath: String!
+}
+
+type ImportProjectPayload {
+  projectData: JSON!
+}
+
+# Connection
+
+type ProjectConnection {
+  edges: [ProjectEdge!]!
+  nodes: [Project]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ProjectEdge {
+  cursor: Cursor!
+  node: Project
+}
+
+extend type Query {
+  projects(
+    teamId: ID!
+    pagination: Pagination
+    keyword: String
+    sort: ProjectSort
+  ): ProjectConnection! # not included deleted projects
+  checkProjectAlias(alias: String!): ProjectAliasAvailability!
+  starredProjects(teamId: ID!): ProjectConnection!
+  deletedProjects(teamId: ID!): ProjectConnection!
+}
+
+extend type Mutation {
+  createProject(input: CreateProjectInput!): ProjectPayload
+  updateProject(input: UpdateProjectInput!): ProjectPayload
+  publishProject(input: PublishProjectInput!): ProjectPayload
+  deleteProject(input: DeleteProjectInput!): DeleteProjectPayload
+  exportProject(input: ExportProjectInput!): ExportProjectPayload
+  importProject(input: ImportProjectInput!): ImportProjectPayload
+}

@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "noImplicitReturns": true,
+    "noImplicitAny": true,
+    "pretty": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "ESNext",
+    "baseUrl": ".",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@reearth/e2e/*": ["e2e/*"],
+      "@reearth/*": ["src/*"],
+      "@reearth-widget-ui/*": ["src/beta/lib/reearth-widget-ui/*"]
+    },
+    "plugins": [
+      {
+        "name": "typescript-styled-plugin"
+      }
+    ]
+  },
+  "exclude": ["src/beta/lib/unsafeBuiltinPlugins", "dist"],
+  "include": ["src", "e2e", "eslint.config.mjs"],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
+}
