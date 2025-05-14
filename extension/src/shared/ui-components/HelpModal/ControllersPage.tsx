@@ -94,8 +94,8 @@ export const ControllersPage: FC = () => {
           <Title>歩行者視点</Title>
         </LineWrapper>
         <LinkWrapper>
-          <Link disabled>
-            詳しいを見る <ArrowRightIcon />
+          <Link href="https://www.mlit.go.jp/plateau/learning/tpc02-1/#p2_3_2" target="_blank">
+            詳しい操作方法を見る <ArrowRightIcon />
           </Link>
         </LinkWrapper>
       </ItemWrapper>
@@ -108,8 +108,8 @@ export const ControllersPage: FC = () => {
           <Title>作図</Title>
         </LineWrapper>
         <LinkWrapper>
-          <Link disabled>
-            詳しいを見る <ArrowRightIcon />
+          <Link href="https://www.mlit.go.jp/plateau/learning/tpc02-2/#p2_7_3" target="_blank">
+            詳しい操作方法を見る <ArrowRightIcon />
           </Link>
         </LinkWrapper>
       </ItemWrapper>

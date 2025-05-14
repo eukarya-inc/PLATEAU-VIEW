@@ -6,10 +6,12 @@ import {
   ClockIcon,
   HandIcon,
   MapIcon,
+  MeshLevel2Icon,
   PedestrianIcon,
   PointerArrowIcon,
   SettingsIcon,
   SketchRectangleIcon,
+  SpatialIdIcon,
 } from "../../../prototypes/ui-components";
 
 import helpUIOverview from "./assets/help-ui-overview.webp";
@@ -48,13 +50,13 @@ export const UserInterfacePage: FC = () => {
               <ButtonLegend>
                 <HandIcon />
               </ButtonLegend>
-              <LegendText>移動モード</LegendText>
+              <LegendText>移動</LegendText>
             </Legend>
             <Legend gap={1} minWidth={70}>
               <ButtonLegend>
                 <PointerArrowIcon />
               </ButtonLegend>
-              <LegendText>選択モード</LegendText>
+              <LegendText>選択</LegendText>
             </Legend>
             <Legend gap={1} minWidth={70}>
               <ButtonLegend>
@@ -67,6 +69,18 @@ export const UserInterfacePage: FC = () => {
                 <SketchRectangleIcon />
               </ButtonLegend>
               <LegendText>作図</LegendText>
+            </Legend>
+            <Legend gap={1} minWidth={70}>
+              <ButtonLegend>
+                <SpatialIdIcon />
+              </ButtonLegend>
+              <LegendText>空間ID</LegendText>
+            </Legend>
+            <Legend gap={1} minWidth={70}>
+              <ButtonLegend>
+                <MeshLevel2Icon />
+              </ButtonLegend>
+              <LegendText>メッシュ</LegendText>
             </Legend>
           </LegendLine>
         ),

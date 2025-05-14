@@ -119,7 +119,7 @@ export const ToolButtons: FC = () => {
       </AppToggleButtonSlider>
       <AppToggleButtonSelect
         value="meshCode"
-        title="Mesh"
+        title="メッシュ"
         shortcutKey="M"
         items={meshCodeItems}
         selectedValue={meshCodeType}
