@@ -1,0 +1,13 @@
+viz: Visualizer
+map: Map
+mantle: mantle
+engine: Engine
+cesium: Cesium
+feature: Feature
+
+viz -> map: use
+engine -> map: inject
+engine -> mantle: use
+engine -> cesium: use
+cesium -> feature: use
+map -> mantle: use
