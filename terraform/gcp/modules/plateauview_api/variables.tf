@@ -27,6 +27,12 @@ variable "fme_token" {
   sensitive   = true
 }
 
+variable "flow_base_url" {
+  type        = string
+  description = "Plateau flowのAPIURL"
+  sensitive   = true
+}
+
 variable "gcp_project_id" {
   type        = string
   description = "GCPプロジェクトのID"

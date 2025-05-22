@@ -116,6 +116,16 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
         name  = "REEARTH_PLATEAUVIEW_OPINION_FROM"
         value = var.plateauview.option_from
       }
+
+      env {
+        name  = "REEARTH_PLATEAUVIEW_FLOW_TOKEN"
+        value = random_password.plateauview_env["REEARTH_PLATEUVIEW_FLOW_TOKEN"].result
+      }
+
+      env {
+        name  = "REEARTH_PLATEAUVIEW_FLOW_BASEURL"
+        value = var.flow_base_url
+      }
     }
 
     scaling {
