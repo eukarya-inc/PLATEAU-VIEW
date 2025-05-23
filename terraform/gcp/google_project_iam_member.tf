@@ -36,6 +36,7 @@ resource "google_project_iam_member" "cms_api" {
   for_each = toset([
     "roles/cloudbuild.workerPoolUser",
     "roles/logging.logWriter",
+    "roles/iam.serviceAccountUser"
   ])
   project = data.google_project.project.project_id
   member  = "serviceAccount:${google_service_account.cms_api.email}"
@@ -61,6 +62,8 @@ resource "google_project_iam_member" "cms_worker" {
 resource "google_project_iam_member" "cms_cloudbuild" {
   for_each = toset([
     "roles/logging.logWriter",
+    "roles/pubsub.publisher",
+    "roles/storage.objectCreator"
   ])
 
   project = data.google_project.project.project_id

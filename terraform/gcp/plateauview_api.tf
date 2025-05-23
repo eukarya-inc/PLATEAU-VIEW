@@ -9,6 +9,7 @@ module "plateauview_api" {
   gcp_project_id        = data.google_project.project.project_id
   gcp_region            = var.gcp_region
   plateauview           = var.plateauview
+  flow_base_url         = "https://${local.flow_api_domain}"
   prefix                = var.prefix
   sendgrid_api_key      = var.sendgrid_api_key
   service_account_email = google_service_account.plateauview_api.email
