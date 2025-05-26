@@ -96,14 +96,17 @@ export const MyDataLayerContainer: FC<MyDataContainerProps> = ({
   const theme = useTheme();
 
   const defaultAppearance = useMemo(
-    () => ({
-      ...DEFAULT_MYDATA_APPEARANCES,
-      polyline: {
-        ...DEFAULT_MYDATA_APPEARANCES.polyline,
-        // KML with clampToGround causes an error, so disable it: https://github.com/CesiumGS/cesium/issues/9555
-        clampToGround: format === "kml" ? false : true,
-      },
-    }),
+    () =>
+      format === "kml"
+        ? {
+            polyline: {
+              // KML with clampToGround causes an error, so force it to be disabled: https://github.com/CesiumGS/cesium/issues/9555
+              clampToGround: false,
+            },
+          }
+        : {
+            ...DEFAULT_MYDATA_APPEARANCES,
+          },
     [format],
   );
 
