@@ -72,7 +72,7 @@ jobs:
           commit_user_name: "${{ steps.app-token.outputs.app-slug }}[bot]"
           commit_user_email: "${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           push_options: '--force'
-          file_pattern: 'dist/** .yarnrc.yml yarn.lock'
+          file_pattern: 'dist/**'
 
   build-image-server:
     runs-on: ubuntu-latest
