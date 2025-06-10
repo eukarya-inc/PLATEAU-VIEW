@@ -10,6 +10,7 @@ on:
         required: true
         type: choice
         options:
+          - editor
           - extension
           - geo
           - server
@@ -85,6 +86,37 @@ jobs:
             .github/workflows/ci-worker.yml
             .github/workflows/build-worker.yml
             .github/workflows/deploy-worker-*.yml
+      - name: changed files for editor - core
+        id: editor-core
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            editor/core/**
+            .github/workflows/ci-editor.yml
+            .github/workflows/build-editor.yml
+            .github/workflows/deploy-editor-*.yml
+      - name: changed files for editor - server
+        id: editor-server
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            editor/server/**
+            .github/workflows/ci-editor.yml
+            .github/workflows/build-editor.yml
+            .github/workflows/deploy-editor-*.yml
+      - name: changed files for editor - web
+        id: editor-web
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            editor/web/**
+            .github/workflows/ci-editor.yml
+            .github/workflows/build-editor.yml
+            .github/workflows/deploy-editor-*.yml
+
 
   # ci-extension-version-update:
   #   needs: prepare
@@ -92,6 +124,27 @@ jobs:
   #   uses: ./.github/workflows/ci-extension-version-update.yml
   #   with:
   #     commit-sha: ${{ github.sha }}
+
+  ci-editor-core:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.editor-core == 'true' || inputs.action_type == 'editor' }}
+    uses: ./.github/workflows/ci-editor.yml
+    with:
+      core: 'true'
+
+  ci-editor-server:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.editor-server == 'true' || inputs.action_type == 'editor' }}
+    uses: ./.github/workflows/ci-editor.yml
+    with:
+      server: 'true'
+
+  ci-editor-web:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.editor-web == 'true' || inputs.action_type == 'editor' }}
+    uses: ./.github/workflows/ci-editor.yml
+    with:
+      web: 'true'
 
   ci-extension:
     needs:
@@ -212,3 +265,48 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           event-type: deploy-worker-dev
+
+  build-editor-core:
+    needs:
+      - prepare
+      - ci-editor-core
+    if: ${{ !failure() && needs.ci-editor-core.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-editor.yml
+    with:
+      core: 'true'
+
+  build-editor-server:
+    needs:
+      - prepare
+      - ci-editor-server
+    if: ${{ !failure() && needs.ci-editor-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-editor.yml
+    with:
+      server: 'true'
+
+  deploy-editor-server-dev:
+    needs: build-editor-server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-editor-server-dev
+
+  build-editor-web:
+    needs:
+      - prepare
+      - ci-editor-web
+    if: ${{ !failure() && needs.ci-editor-web.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-editor.yml
+    with:
+      web: 'true'
+
+  deploy-editor-web-dev:
+    needs: build-editor-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-editor-web-dev

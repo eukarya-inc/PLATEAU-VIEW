@@ -1,0 +1,153 @@
+name: ci-editor
+on:
+  workflow_call:
+    inputs:
+      core:
+        description: 'Run core tests'
+        required: true
+        default: 'false'
+        type: string
+      lint:
+        description: 'Run linter'
+        required: true
+        default: 'true'
+        type: string
+      server:
+        description: 'Run server tests'
+        required: true
+        default: 'false'
+        type: string
+      web:
+        description: 'Run web tests'
+        required: true
+        default: 'false'
+        type: string
+
+jobs:
+  ci-editor-core-test:
+    if: ${{ inputs.core == 'true' }}
+    defaults:
+      run:
+        working-directory: 'editor/core'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "path=$(yarn cache dir)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v3
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.path }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Run install
+        run: yarn install --frozen-lockfile
+      - name: Run lint
+        run: yarn lint
+      - name: Run test
+        run: yarn test
+
+  ci-editor-server-lint:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.lint == 'true' && inputs.server == 'true' }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+      - name: Fetch base branch
+        run: git fetch origin main
+      - name: set up
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: 'editor/server/go.mod'
+          cache: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
+          args: --new-from-rev=origin/main --timeout=10m
+          working-directory: editor/server
+      - name: Run go generate
+        run: |
+          make generate
+        working-directory: editor/server
+      - name: Check for changes in generated files
+        run: |
+          git diff --exit-code
+
+  ci-editor-server-test:
+    if: ${{ inputs.server == 'true' }}
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:5-focal
+        ports:
+          - 27017:27017
+    steps:
+      - name: Start Fake GCS Server
+        run: |
+          docker run -d --name fake-gcs-server \
+            -p 4443:4443 \
+            -v /tmp/gcs:/storage \
+            fsouza/fake-gcs-server:1.52.1 \
+            -scheme http
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: set up
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: 'editor/server/go.mod'
+          cache-dependency-path: 'editor/server/go.sum'
+      - name: test
+        run: go test ./... -v -race -coverprofile=coverage.txt -covermode=atomic -timeout 10m
+        env:
+          REEARTH_DB: mongodb://localhost
+        working-directory: editor/server
+
+  validate-nginx-config:
+    if: ${{ inputs.web == 'true' }}
+    uses: reearth/actions/.github/workflows/validate-nginx-config.yml@b63f7da8796f4514712947e1a4902994be29e3d9
+    with:
+      template_directory: docker
+      template_values: '{"PORT": 8080, "REAL_IP_HEADER": "X-Forwarded-For"}'
+      working_directory: 'editor/web'
+
+  ci-editor-web:
+    if: ${{ inputs.web == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 'editor/web'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: lts/*
+      - name: Install Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.3.1 --activate
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Install
+        run: yarn install
+      - name: type
+        run: yarn run type
+      - name: eslint
+        run: yarn run lint
+      - name: Check translations
+        run: yarn run i18n --fail-on-update
