@@ -46,17 +46,8 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.9.1 --activate
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "path=$(yarn cache dir)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v3
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.path }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
       - name: Run install
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable --immutable-cache
       - name: Run build
         run: yarn build
       - name: Push build results
