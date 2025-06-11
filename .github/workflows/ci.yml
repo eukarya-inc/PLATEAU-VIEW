@@ -22,6 +22,9 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
+      editor-core: ${{ steps.editor-core.outputs.any_changed }}
+      editor-server: ${{ steps.editor-server.outputs.any_changed }}
+      editor-web: ${{ steps.editor-web.outputs.any_changed }}
       extension: ${{ steps.extension.outputs.any_changed }}
       geo: ${{ steps.geo.outputs.any_changed }}
       server: ${{ steps.server.outputs.any_changed }}
