@@ -6,8 +6,6 @@ ARG GITHUB_SHA
 ENV NODE_OPTIONS=$NODE_OPTIONS
 ENV GITHUB_SHA=$GITHUB_SHA
 
-COPY ../core ../core
-
 RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=cache,target=/root/.npm,sharing=locked \
     corepack enable
