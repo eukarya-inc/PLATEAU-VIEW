@@ -4,22 +4,18 @@ on:
     inputs:
       core:
         description: 'Run core tests'
-        required: true
         default: 'false'
         type: string
       lint:
         description: 'Run linter'
-        required: true
         default: 'true'
         type: string
       server:
         description: 'Run server tests'
-        required: true
         default: 'false'
         type: string
       web:
         description: 'Run web tests'
-        required: true
         default: 'false'
         type: string
 

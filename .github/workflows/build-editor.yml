@@ -4,17 +4,14 @@ on:
     inputs:
       core:
         description: 'Run core build'
-        required: true
         default: 'false'
         type: string
       server:
         description: 'Run server build'
-        required: true
         default: 'false'
         type: string
       web:
         description: 'Run web build'
-        required: true
         default: 'false'
         type: string
 
