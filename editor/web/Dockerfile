@@ -8,17 +8,14 @@ ENV GITHUB_SHA=$GITHUB_SHA
 
 WORKDIR /app
 
-# Create a directory for the core package.
-RUN mkdir -p /core
-
 RUN --mount=type=bind,source=web/package.json,target=package.json \
     --mount=type=cache,target=/root/.npm,sharing=locked \
     corepack enable
 
 RUN --mount=type=bind,source=web/.yarnrc.yml,target=.yarnrc.yml \
     --mount=type=bind,source=web/package.json,target=package.json \
-    --mount=type=bind,source=core/dist,target=/core/dist \
     --mount=type=bind,source=web/yarn.lock,target=yarn.lock \
+    --mount=type=bind,source=core/dist,target=/core/dist \
     --mount=type=cache,target=/root/.yarn,sharing=locked \
     yarn install --frozen-lockfile
 
