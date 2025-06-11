@@ -130,7 +130,8 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         id: build-push-image
         with:
-          context: ./editor/web
+          context: ./editor
+          file: ./web/Dockerfile
           platforms: linux/amd64
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
