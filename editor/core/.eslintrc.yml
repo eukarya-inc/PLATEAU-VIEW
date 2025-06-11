@@ -1,0 +1,21 @@
+extends:
+  - reearth
+rules:
+  no-restricted-imports:
+    - error
+    - paths:
+        - name: lodash
+          message: Use lodash-es instead.
+  import/order:
+    - warn
+    - pathGroups:
+        - pattern: "@reearth/**"
+          group: external
+          position: after
+      pathGroupsExcludedImportTypes: ["builtin"]
+      newlines-between: always
+      alphabetize:
+        order: asc
+        caseInsensitive: true
+  "@typescript-eslint/no-explicit-any":
+    - warn
