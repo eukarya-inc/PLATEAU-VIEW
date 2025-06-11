@@ -277,6 +277,7 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       core: 'true'
+    secrets: inherit
 
   build-editor-server:
     needs:
@@ -286,6 +287,7 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       server: 'true'
+    secrets: inherit
 
   deploy-editor-server-dev:
     needs: build-editor-server
@@ -304,6 +306,7 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       web: 'true'
+    secrets: inherit
 
   deploy-editor-web-dev:
     needs: build-editor-web

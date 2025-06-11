@@ -12,6 +12,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 
 RUN --mount=type=bind,source=.yarnrc.yml,target=.yarnrc.yml \
     --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=../core/dist,target=../core/dist \
     --mount=type=bind,source=yarn.lock,target=yarn.lock \
     --mount=type=cache,target=/root/.yarn,sharing=locked \
     yarn install --frozen-lockfile
@@ -26,6 +27,7 @@ RUN --mount=type=bind,source=.yarnrc.yml,target=.yarnrc.yml \
     --mount=type=bind,source=tailwind.config.js,target=tailwind.config.js \
     --mount=type=bind,source=postcss.config.js,target=postcss.config.js \
     --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=../core/dist,target=../core/dist \
     --mount=type=cache,target=/root/.yarn,sharing=locked \
     yarn build
 
