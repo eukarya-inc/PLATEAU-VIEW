@@ -131,7 +131,7 @@ jobs:
         id: build-push-image
         with:
           context: ./editor
-          file: ./web/Dockerfile
+          file: ./editor/web/Dockerfile
           platforms: linux/amd64
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
