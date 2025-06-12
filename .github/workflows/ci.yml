@@ -273,7 +273,7 @@ jobs:
     needs:
       - prepare
       - ci-editor-core
-    if: ${{ !failure() && needs.ci-editor-core.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    if: ${{ !failure() && needs.ci-editor-core.result == 'success' && needs.prepare.outputs.build == 'false' }}
     uses: ./.github/workflows/build-editor.yml
     with:
       core: 'true'
