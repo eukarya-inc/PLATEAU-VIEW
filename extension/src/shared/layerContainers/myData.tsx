@@ -26,6 +26,9 @@ type MyDataContainerProps = Omit<GeneralProps, "appearances" | "appendData"> & {
   cameraAtom?: PrimitiveAtom<CameraPosition | undefined>;
 };
 
+// These datasets should use their own styles.
+const DATASETS_USING_OWN_STYLE = ["kml", "czml"];
+
 export const MyDataLayerContainer: FC<MyDataContainerProps> = ({
   id,
   onLoad,
@@ -97,7 +100,7 @@ export const MyDataLayerContainer: FC<MyDataContainerProps> = ({
 
   const defaultAppearance = useMemo(
     () =>
-      format === "kml"
+      DATASETS_USING_OWN_STYLE.includes(format)
         ? {
             polyline: {
               // KML with clampToGround causes an error, so force it to be disabled: https://github.com/CesiumGS/cesium/issues/9555
