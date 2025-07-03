@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/worker/citygmlpacker"
 	"github.com/eukarya-inc/PLATEAU-VIEW/worker/extractmaxlod"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/worker/preparegspatialjp"
 	"github.com/k0kubun/pp/v3"
 	"github.com/samber/lo"
@@ -26,6 +29,8 @@ func main() {
 		extractMaxLOD(config)
 	case "citygml-packer":
 		cityGMLPacker(config)
+	case "lodstat":
+		lodStat(config)
 	}
 }
 
@@ -106,6 +111,25 @@ func cityGMLPacker(*Config) {
 	})
 
 	if err := citygmlpacker.Run(config); err != nil {
+		panic(err)
+	}
+}
+
+func lodStat(c *Config) {
+	var config lodstat.Config
+	config.CMSURL = c.CMS_URL
+	config.CMSToken = c.CMS_Token
+
+	flag := flag.NewFlagSet("lodstat", flag.ExitOnError)
+	flag.StringVar(&config.SrcURL, "src", "", "src")
+	flag.StringVar(&config.ProjectID, "project", "", "project")
+	flag.StringVar(&config.ItemID, "item", "", "item")
+	flag.StringVar(&config.Feature, "feature", "", "feature")
+	flag.IntVar(&config.Parallelism, "p", runtime.GOMAXPROCS(0), "parallelism")
+	if err := flag.Parse(os.Args[2:]); err != nil {
+		panic(err)
+	}
+	if err := lodstat.Run(context.Background(), config); err != nil {
 		panic(err)
 	}
 }
