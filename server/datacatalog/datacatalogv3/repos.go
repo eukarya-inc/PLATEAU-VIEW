@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -102,7 +103,7 @@ func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUp
 	log.Debugfc(ctx, "datacatalogv3: updated repo %s: %.2fs", project, time.Since(t).Seconds())
 
 	if r.debug {
-		dumpRepo(ctx, repo, c, project)
+		dumpRepo(ctx, repo, c, warning, project)
 	}
 
 	return &plateauapi.ReposUpdateResult{
@@ -123,21 +124,48 @@ func (r *Repos) setCMS(project string, year int, plateau bool, cms cms.Interface
 	r.cms.Store(project, c)
 }
 
-func dumpRepo(ctx context.Context, _ *plateauapi.InMemoryRepo, c *plateauapi.InMemoryRepoContext, project string) {
-	f, err := os.Create(fmt.Sprintf("repo_%s.json", project))
+func dumpRepo(ctx context.Context, _ *plateauapi.InMemoryRepo, c *plateauapi.InMemoryRepoContext, warning []string, project string) {
+	const basedir = "cache"
+
+	var f *os.File
+	var wf *os.File
+	defer func() {
+		if f != nil {
+			_ = f.Close()
+		}
+		if wf != nil {
+			_ = wf.Close()
+		}
+	}()
+
+	var err error
+
+	f, err = os.Create(filepath.Join(basedir, fmt.Sprintf("repo_%s.json", project)))
 	if err != nil {
 		log.Errorfc(ctx, "datacatalogv3: failed to create repo_%s.json: %v", project, err)
 		return
 	}
 
-	defer func() {
-		_ = f.Close()
-	}()
+	if len(warning) > 0 {
+		wf, err = os.Create(filepath.Join(basedir, fmt.Sprintf("repo_%s_warnings.txt", project)))
+		if err != nil {
+			log.Errorfc(ctx, "datacatalogv3: failed to create repo_%s_warnings.txt: %v", project, err)
+			return
+		}
+	}
 
 	d := json.NewEncoder(f)
 	d.SetIndent("", "  ")
 	if err := d.Encode(c); err != nil {
 		log.Errorfc(ctx, "datacatalogv3: failed to write repo_%s.json: %v", project, err)
+	}
+
+	if wf != nil {
+		for _, w := range warning {
+			if _, err := wf.WriteString(w + "\n"); err != nil {
+				log.Errorfc(ctx, "datacatalogv3: failed to write repo_%s_warnings.txt: %v", project, err)
+			}
+		}
 	}
 
 	log.Debugfc(ctx, "datacatalogv3: wrote repo_%s.json", project)
