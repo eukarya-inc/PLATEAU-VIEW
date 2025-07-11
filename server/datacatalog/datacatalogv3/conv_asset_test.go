@@ -444,6 +444,51 @@ func TestParseAssetName(t *testing.T) {
 			},
 		},
 		{
+			name: "bldg with interior",
+			args: "26100_kyoto-shi_city_2023_citygml_1_op_bldg_3dtiles_lod2_interior",
+			want: &AssetName{
+				CityCode:    "26100",
+				CityName:    "kyoto-shi",
+				Provider:    "city",
+				Year:        2023,
+				Format:      "citygml",
+				UpdateCount: 1,
+				Ex: AssetNameEx{
+					Normal: &AssetNameExNormal{
+						Type:     "bldg",
+						Format:   "3dtiles",
+						LOD:      2,
+						Interior: true,
+					},
+					Ex: "bldg_3dtiles_lod2_interior",
+				},
+			},
+		},
+		{
+			name: "bldg with interior and no_texture",
+			args: "26100_kyoto-shi_city_2023_citygml_1_op_bldg_3dtiles_26103_sakyo-ku_lod2_interior_no_texture",
+			want: &AssetName{
+				CityCode:    "26100",
+				CityName:    "kyoto-shi",
+				Provider:    "city",
+				Year:        2023,
+				Format:      "citygml",
+				UpdateCount: 1,
+				Ex: AssetNameEx{
+					Normal: &AssetNameExNormal{
+						Type:      "bldg",
+						Format:    "3dtiles",
+						WardCode:  "26103",
+						WardName:  "sakyo-ku",
+						LOD:       2,
+						Interior:  true,
+						NoTexture: true,
+					},
+					Ex: "bldg_3dtiles_26103_sakyo-ku_lod2_interior_no_texture",
+				},
+			},
+		},
+		{
 			name: "invalid",
 			args: "aaaaa",
 			want: nil,
