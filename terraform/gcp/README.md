@@ -81,6 +81,10 @@ terraform {
 # 初回一回のみ
 $ terraform init
 
+# ホスティングを行う前に、以下の API を有効化してください。
+$ terraform apply --target google_project_service.project
+# 実行の承認を求められるので、 `yes` を入力してください（以降の `terraform apply` の実行でも同様にしてください）。
+
 # APIの有効化
 $ terraform import google_storage_bucket.terraform <バケット名>
 ```
@@ -105,17 +109,7 @@ $ terraform import google_storage_bucket.terraform <バケット名>
 
 これまで構築してきた Google Cloud、MongoDB および Auth0 などの情報を`terraform.tfvars`に設定します。
 
-### 3.7 Google Cloud API の有効化
-
-ホスティングを行う前に、以下の API を有効化してください。
-
-```console
-$ terraform apply --target google_project_service.project
-```
-
-実行の承認を求められるので、 `yes` を入力してください（以降の `terraform apply` の実行でも同様にしてください）。
-
-### 3.8 Cloud DNS マネージドゾーンの作成およびドメイン解決の委譲
+### 3.7 Cloud DNS マネージドゾーンの作成およびドメイン解決の委譲
 
 以下のコマンドで Cloud DNS マネージドゾーンを作成します。
 
@@ -133,7 +127,7 @@ gcloud dns record-sets list --zone <マネージドゾーン名> --format='value
 出力された`NS`レコードを、ドメインのレジストラで、ドメインのネームサーバーとして設定してください。
 設定方法は各レジストラによって異なりますので、レジストラのドキュメントを参照してください。
 
-### 3.9 Terraform の実行
+### 3.8 Terraform の実行
 
 再度、すべてのリソースを作成するために以下のコマンドを実行します。
 
@@ -181,7 +175,7 @@ terraform output <確認したいOutput>
 | `plateauview_sidecar_url`        | サイドカーサーバーの URL。エディタ上でサイドバーウィジェットの設定から設定する（詳しくはマニュアルを参照）              |
 | `plateauview_tiles_url`          | タイル配信サーバーの URL                                                                                                |
 
-### 3.10 DNS・ロードバランサ・証明書のデプロイ完了の確認
+### 3.9 DNS・ロードバランサ・証明書のデプロイ完了の確認
 
 実際に`curl`コマンドなどでリクエストを送って、デプロイが完了していることを確認します。
 
@@ -189,7 +183,7 @@ terraform output <確認したいOutput>
 curl https://api.${DOMAIN}/ping
 ```
 
-### 3.11 Auth0 ユーザー作成
+### 3.10 Auth0 ユーザー作成
 
 先ほど作成した Auth0 テナントにユーザーを作成します。
 その後に、届くメールでメールアドレスを認証するか、メールアドレス認証のステータスをアカウント詳細画面から`Verified`にすることを忘れないでください。
