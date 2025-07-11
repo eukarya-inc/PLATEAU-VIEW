@@ -87,13 +87,18 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
         value = var.plateauview.cms_system_project
       }
 
-      env {
-        name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHEGCPARCENT"
-        value = var.plateauview.datacatalog_cache_percent
+      dynamic "env" {
+        for_each = var.plateauview.datacatalog_cache_percent != 0 ? [""] : []
+        content {
+          name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHEGCPARCENT"
+          value = var.plateauview.datacatalog_cache_percent
+        }
       }
 
-      env {
-        name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHESIZE"
+      dynamic "env" {
+        for_each = var.plateauview.datacatalog_cache_size != "" ? [""] : []
+        content {
+          name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHESIZE"
         value = var.plateauview.datacatalog_cache_size
       }
 
