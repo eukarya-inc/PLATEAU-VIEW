@@ -420,7 +420,9 @@ func loadCache[T any](cachePath, key string) (t T, _ error) {
 		return t, fmt.Errorf("failed to open cache file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	var v T
 	if err = json.NewDecoder(f).Decode(&v); err != nil {
@@ -438,7 +440,9 @@ func saveCache(cachePath, key string, content any) error {
 		return fmt.Errorf("failed to create cache file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	if err = json.NewEncoder(f).Encode(content); err != nil {
 		return fmt.Errorf("failed to encode cache content: %w", err)
