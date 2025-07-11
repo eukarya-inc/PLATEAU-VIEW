@@ -6,7 +6,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv2/geospatialjpv2"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv3"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintflow"
-	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintmaxlod"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintlodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintrelated"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/dataconv"
@@ -75,7 +75,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		return nil, err
 	}
 
-	hmaxlod, err := cmsintmaxlod.WebhookHandler(maxlodConfig(conf))
+	hmaxlod, err := cmsintlodstat.WebhookHandler(maxlodConfig(conf))
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 	}), nil
 }
 
-func maxlodConfig(conf Config) cmsintmaxlod.Config {
-	return cmsintmaxlod.Config{
+func maxlodConfig(conf Config) cmsintlodstat.Config {
+	return cmsintlodstat.Config{
 		CMSBaseURL:       conf.CMSBaseURL,
 		CMSToken:         conf.CMSToken,
 		CMSSystemProject: conf.CMSSystemProject,

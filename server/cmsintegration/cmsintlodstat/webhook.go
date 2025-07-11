@@ -1,4 +1,4 @@
-package cmsintmaxlod
+package cmsintlodstat
 
 import (
 	"net/http"
