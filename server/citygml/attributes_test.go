@@ -32,6 +32,23 @@ var expected = []map[string]any{
 			},
 		},
 		"gml:id": "bldg_53e2a9a9-d512-408f-8250-eae30b7523d6",
+		"_bbox": map[string]any{
+			"min": map[string]any{
+				"lng": 138.34934122825845,
+				"lat": 34.90269767870549,
+				"alt": 41.50933,
+			},
+			"max": map[string]any{
+				"lng": 138.34950922380963,
+				"lat": 34.90286222767453,
+				"alt": 54.99001,
+			},
+			"center": map[string]any{
+				"lng": 138.34942522603404,
+				"lat": 34.90277995319001,
+				"alt": 48.249669999999995,
+			},
+		},
 		"uro:buildingDataQualityAttribute": []any{map[string]any{
 			"uro:srcScale_code":       []any{"1"},
 			"uro:lod1HeightType_code": "2",
@@ -158,6 +175,23 @@ func TestAttributesHandler(t *testing.T) {
 				},
 			},
 			"gml:id": "bldg_53e2a9a9-d512-408f-8250-eae30b7523d6",
+			"_bbox": map[string]any{
+				"min": map[string]any{
+					"lng": 138.34934122825845,
+					"lat": 34.90269767870549,
+					"alt": 41.50933,
+				},
+				"max": map[string]any{
+					"lng": 138.34950922380963,
+					"lat": 34.90286222767453,
+					"alt": 54.99001,
+				},
+				"center": map[string]any{
+					"lng": 138.34942522603404,
+					"lat": 34.90277995319001,
+					"alt": 48.249669999999995,
+				},
+			},
 			"uro:buildingDataQualityAttribute": []any{map[string]any{
 				"uro:srcScale":            []any{"地図情報レベル2500"},
 				"uro:srcScale_code":       []any{"1"},

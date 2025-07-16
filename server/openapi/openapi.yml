@@ -493,7 +493,68 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/error"
+                type: array
+                items:
+                  type: object
+                  description: 地物の属性情報
+                  additionalProperties: true
+                  properties:
+                    gml:id:
+                      type: string
+                      description: 地物のID
+                    _type:
+                      type: string
+                      description: 地物の型
+                    _bbox:
+                      type: object
+                      description: ジオメトリのバウンディングボックス（lod1Solid）
+                      properties:
+                        min:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最小経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最小緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最小高度（m・標高）
+                        max:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最大経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最大緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最大高度（m・標高）
+                        center:
+                          type: object
+                          description: バウンディングボックスの中心座標
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 中心経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 中心緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 中心高度（m・標高）
         "400":
           description: 無効なリクエスト
           content:

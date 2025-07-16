@@ -11,7 +11,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unsafe"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
 	"github.com/orisano/gosax/xmlb"
 )
 
@@ -553,14 +555,42 @@ func Attributes(r io.Reader, gmlID []string, resolver CodeResolver) ([]map[strin
 		if slices.Contains(gmlID, id) {
 			tag := tagName(el.Name)
 			th := toTagHandler(tag, schemaDefs, resolver)
-			h, err := newFeatureAttributeHandler(fs.ns, id, tag, th)
+			fah, err := newFeatureAttributeHandler(fs.ns, id, tag, th)
 			if err != nil {
 				return nil, err
 			}
-			if _, err := processFeature(dec, h); err != nil {
+			
+			// Create a handler to extract LOD1 solid bounding box
+			bboxHandler := &lod1SolidBBoxExtractor{
+				Next: fah,
+			}
+			
+			if _, err := processFeature(dec, bboxHandler); err != nil {
 				return nil, err
 			}
-			attributes = append(attributes, h.Val)
+			
+			// Add bounding box if found
+			if bboxHandler.boundingBox != nil {
+				fah.Val["_bbox"] = map[string]any{
+					"min": map[string]float64{
+						"lng": bboxHandler.boundingBox.Min.X,
+						"lat": bboxHandler.boundingBox.Min.Y,
+						"alt": bboxHandler.boundingBox.Min.Z,
+					},
+					"max": map[string]float64{
+						"lng": bboxHandler.boundingBox.Max.X,
+						"lat": bboxHandler.boundingBox.Max.Y,
+						"alt": bboxHandler.boundingBox.Max.Z,
+					},
+					"center": map[string]float64{
+						"lng": (bboxHandler.boundingBox.Min.X + bboxHandler.boundingBox.Max.X) / 2,
+						"lat": (bboxHandler.boundingBox.Min.Y + bboxHandler.boundingBox.Max.Y) / 2,
+						"alt": (bboxHandler.boundingBox.Min.Z + bboxHandler.boundingBox.Max.Z) / 2,
+					},
+				}
+			}
+			
+			attributes = append(attributes, fah.Val)
 			if len(attributes) == len(gmlID) {
 				return attributes, nil
 			}
@@ -643,6 +673,59 @@ var genAttrTypes = map[string]string{
 	"uriAttribute":        "uri",
 	"measureAttribute":    "measure",
 	"genericAttributeSet": "attributeSet",
+}
+
+type lod1SolidBBoxExtractor struct {
+	Next        attrHandler
+	boundingBox *geo.Bounds3
+	faces       []geo.Polygon3
+	points      []geo.Point3
+}
+
+func (h *lod1SolidBBoxExtractor) HandleAttr(dec *xmlb.Decoder, el xml.StartElement) error {
+	if el.Name.Local == "lod1Solid" {
+		if h.points != nil {
+			h.points = h.points[:0]
+		}
+		if h.faces != nil {
+			h.faces = h.faces[:0]
+		}
+		s := &tagScanner{
+			dec: dec,
+			tag: "gml:posList",
+		}
+		for s.Scan() {
+			tok, err := dec.Peek()
+			if err != nil {
+				return err
+			}
+			if tok.Type() != xmlb.CharData {
+				return fmt.Errorf("invalid posList")
+			}
+			cd, err := tok.CharData()
+			if err != nil {
+				return err
+			}
+			begin := len(h.points)
+			h.points, err = parsePosList(h.points, unsafe.String(&cd[0], len(cd)))
+			if err != nil {
+				return fmt.Errorf("parse posList: %w", err)
+			}
+			h.faces = append(h.faces, h.points[begin:])
+		}
+		if err := s.Err(); err != nil {
+			return err
+		}
+		// Store the bounding box of the LOD1 solid
+		if len(h.faces) > 0 {
+			po := geo.Polyhedron(h.faces)
+			bounds := po.Bounds()
+			h.boundingBox = &bounds
+		}
+		return nil
+	} else {
+		return h.Next.HandleAttr(dec, el)
+	}
 }
 
 func parseCodeMap(r io.Reader) (map[string]string, error) {
