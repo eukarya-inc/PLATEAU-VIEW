@@ -14,7 +14,6 @@ on:
           - extension
           - geo
           - server
-          - tiles
           - tools
           - worker
 
@@ -28,7 +27,6 @@ jobs:
       extension: ${{ steps.extension.outputs.any_changed }}
       geo: ${{ steps.geo.outputs.any_changed }}
       server: ${{ steps.server.outputs.any_changed }}
-      tiles: ${{ steps.tiles.outputs.any_changed }}
       tools: ${{ steps.tools.outputs.any_changed }}
       worker: ${{ steps.worker.outputs.any_changed }}
       build: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name == 'main' }}
@@ -70,15 +68,6 @@ jobs:
             .github/workflows/ci-geo.yml
             .github/workflows/build-geo.yml
             .github/workflows/deploy-geo-*.yml
-      - name: changed files for tiles
-        id: tiles
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
-        with:
-          files: |
-            tiles/**
-            .github/workflows/ci-tiles.yml
-            .github/workflows/build-tiles.yml
-            .github/workflows/deploy-tiles-*.yml
       - name: changed files for worker
         id: worker
         uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
@@ -173,11 +162,6 @@ jobs:
     if: needs.prepare.outputs.server == 'true' || inputs.action_type == 'server'
     uses: ./.github/workflows/ci-server.yml
 
-  ci-tiles:
-    needs: prepare
-    if: needs.prepare.outputs.tiles == 'true' || inputs.action_type == 'tiles'
-    uses: ./.github/workflows/ci-tiles.yml
-
   ci-worker:
     needs: prepare
     if: ${{ needs.prepare.outputs.worker == 'true' || inputs.action_type == 'worker' }}
@@ -189,7 +173,6 @@ jobs:
       - ci-extension
       - ci-geo
       - ci-server
-      - ci-tiles
       - ci-tools
       - ci-worker
     if: '!failure()'
@@ -238,21 +221,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           event-type: deploy-server-dev
-
-  build-tiles:
-    needs: [prepare, ci-tiles]
-    if: ${{ success() && needs.prepare.outputs.build == 'true' }}
-    uses: ./.github/workflows/build-tiles.yml
-
-  deploy-tiles-dev:
-    needs: build-tiles
-    if: ${{ always() && needs.build-tiles.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          event-type: deploy-tiles-dev
 
   build-worker:
     needs: [prepare, ci-worker]
