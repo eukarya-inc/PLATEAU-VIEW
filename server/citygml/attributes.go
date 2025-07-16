@@ -590,8 +590,8 @@ func newFeatureAttributeHandler(ns map[string]string, id string, tag string, h t
 		ns: ns,
 		oh: oh,
 		Val: map[string]any{
-			"gml:id":       id,
-			"feature_type": tag,
+			"gml:id": id,
+			"_type":  tag,
 		},
 	}, nil
 }

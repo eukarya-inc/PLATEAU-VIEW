@@ -30,7 +30,7 @@ func TestSpatialIDAttributes(t *testing.T) {
 		{
 			"bldg:measuredHeight":     15.4,
 			"bldg:measuredHeight_uom": "m",
-			"feature_type":            "bldg:Building",
+			"_type": "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",
@@ -39,6 +39,23 @@ func TestSpatialIDAttributes(t *testing.T) {
 				},
 			},
 			"gml:id": "bldg_2eb12f7a-c5d9-4145-9609-a6a0f5824368",
+			"_bbox": map[string]any{
+				"min": map[string]any{
+					"lng": 138.34941922666175,
+					"lat": 34.9026603967814,
+					"alt": 38.82643,
+				},
+				"max": map[string]any{
+					"lng": 138.34960968015335,
+					"lat": 34.90280751204957,
+					"alt": 51.21006,
+				},
+				"center": map[string]any{
+					"lng": 138.34951445340755,
+					"lat": 34.90273395441548,
+					"alt": 45.018245,
+				},
+			},
 			"uro:buildingDataQualityAttribute": []any{map[string]any{
 				"uro:srcScale":            []any{"地図情報レベル2500"},
 				"uro:srcScale_code":       []any{"1"},
@@ -67,7 +84,7 @@ func TestSpatialIDAttributes(t *testing.T) {
 		{
 			"bldg:measuredHeight":     14.3,
 			"bldg:measuredHeight_uom": "m",
-			"feature_type":            "bldg:Building",
+			"_type": "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",
@@ -76,6 +93,23 @@ func TestSpatialIDAttributes(t *testing.T) {
 				},
 			},
 			"gml:id": "bldg_53e2a9a9-d512-408f-8250-eae30b7523d6",
+			"_bbox": map[string]any{
+				"min": map[string]any{
+					"lng": 138.34934122825845,
+					"lat": 34.90269767870549,
+					"alt": 41.50933,
+				},
+				"max": map[string]any{
+					"lng": 138.34950922380963,
+					"lat": 34.90286222767453,
+					"alt": 54.99001,
+				},
+				"center": map[string]any{
+					"lng": 138.34942522603404,
+					"lat": 34.90277995319001,
+					"alt": 48.249669999999995,
+				},
+			},
 			"uro:buildingDataQualityAttribute": []any{map[string]any{
 				"uro:srcScale":            []any{"地図情報レベル2500"},
 				"uro:srcScale_code":       []any{"1"},
