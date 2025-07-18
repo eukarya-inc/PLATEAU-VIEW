@@ -118,11 +118,32 @@ func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, war
 		return
 	}
 
+	// Check if any asset is interior
+	isInterior := false
+	for _, asset := range seed.Assets {
+		if asset != nil && asset.Ex.Normal != nil && asset.Ex.Normal.Interior {
+			isInterior = true
+			break
+		}
+	}
+
+	// Modify name and subname for interior datasets
+	datasetName := seed.DatasetType.Name
+	subname := seed.Subname
+	subcode := seed.Subcode
+	if isInterior {
+		if subname != "" {
+			subname = subname + "（屋内）"
+		} else {
+			datasetName = datasetName + "（屋内）"
+		}
+	}
+
 	res = &plateauapi.PlateauDataset{
 		ID:                 id,
-		Name:               standardItemName(seed.DatasetType.Name, seed.Subname, seed.TargetArea.GetName()),
-		Subname:            lo.EmptyableToPtr(seed.Subname),
-		Subcode:            lo.EmptyableToPtr(seed.Subcode),
+		Name:               standardItemName(datasetName, subname, seed.TargetArea.GetName()),
+		Subname:            lo.EmptyableToPtr(subname),
+		Subcode:            lo.EmptyableToPtr(subcode),
 		Suborder:           seed.Suborder,
 		Description:        lo.EmptyableToPtr(seed.Desc),
 		Year:               seed.Area.CityItem.YearInt(),
