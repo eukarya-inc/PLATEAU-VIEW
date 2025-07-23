@@ -23,6 +23,8 @@ func AllParentAreaCodes(a Area) []AreaCode {
 		return []AreaCode{a2.PrefectureCode}
 	case Ward:
 		return []AreaCode{a2.PrefectureCode, a2.CityCode}
+	case *GlobalArea:
+		return nil // GlobalArea has no parent
 	}
 	return nil
 }
@@ -41,6 +43,8 @@ func ParentAreaCode(a Area) AreaCode {
 		return a2.PrefectureCode
 	case Ward:
 		return a2.CityCode
+	case *GlobalArea:
+		return "" // GlobalArea has no parent
 	}
 	return ""
 }

@@ -539,6 +539,73 @@ func (GenericDatasetType) IsNode() {}
 
 // オブジェクトのID
 
+// 全球（グローバル）エリア。特定の地域に属さない全球データを扱うための特殊なエリア。
+type GlobalArea struct {
+	ID ID `json:"id"`
+	// 地域の種類
+	Type AreaType `json:"type"`
+	// 地域コード。"global" という固定値。
+	Code AreaCode `json:"code"`
+	// 地域名。"全球" という固定値。
+	Name string `json:"name"`
+	// 全球データセット（DatasetInput内のareasCodeの指定は無視されます）。
+	Datasets []Dataset `json:"datasets"`
+	// 地域の親となる地域のID。GlobalAreaの場合は常にnull。
+	ParentID *ID `json:"parentId,omitempty"`
+	// 地域の親となる地域。GlobalAreaの場合は常にnull。
+	Parent Area `json:"parent,omitempty"`
+	// 地域に属する子地域。GlobalAreaの場合は常に空配列。
+	Children []Area `json:"children"`
+}
+
+func (GlobalArea) IsArea()        {}
+func (this GlobalArea) GetID() ID { return this.ID }
+
+// 地域の種類
+func (this GlobalArea) GetType() AreaType { return this.Type }
+
+// 地域コード。行政コードや市区町村コードとも呼ばれます。
+// 都道府県の場合は二桁の数字から成る文字列です。
+// 市区町村の場合は、先頭に都道府県コードを含む5桁の数字から成る文字列です。
+func (this GlobalArea) GetCode() AreaCode { return this.Code }
+
+// 地域名
+func (this GlobalArea) GetName() string { return this.Name }
+
+// 地域に属するデータセット（DatasetInput内のareasCodeの指定は無視されます）。
+func (this GlobalArea) GetDatasets() []Dataset {
+	if this.Datasets == nil {
+		return nil
+	}
+	interfaceSlice := make([]Dataset, 0, len(this.Datasets))
+	for _, concrete := range this.Datasets {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
+// 地域の親となる地域のID。市区町村の親は都道府県です。政令指定都市の区の親は市です。
+func (this GlobalArea) GetParentID() *ID { return this.ParentID }
+
+// 地域の親となる地域。
+func (this GlobalArea) GetParent() Area { return this.Parent }
+
+// 地域に属する子地域。
+func (this GlobalArea) GetChildren() []Area {
+	if this.Children == nil {
+		return nil
+	}
+	interfaceSlice := make([]Area, 0, len(this.Children))
+	for _, concrete := range this.Children {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
+func (GlobalArea) IsNode() {}
+
+// オブジェクトのID
+
 // PLATEAU都市モデルの通常のデータセット。例えば、地物型が建築物モデル（bldg）などのデータセットです。
 type PlateauDataset struct {
 	ID ID `json:"id"`
@@ -1255,17 +1322,20 @@ const (
 	AreaTypeCity AreaType = "CITY"
 	// 区（政令指定都市のみ）
 	AreaTypeWard AreaType = "WARD"
+	// 全球（グローバル）
+	AreaTypeGlobal AreaType = "GLOBAL"
 )
 
 var AllAreaType = []AreaType{
 	AreaTypePrefecture,
 	AreaTypeCity,
 	AreaTypeWard,
+	AreaTypeGlobal,
 }
 
 func (e AreaType) IsValid() bool {
 	switch e {
-	case AreaTypePrefecture, AreaTypeCity, AreaTypeWard:
+	case AreaTypePrefecture, AreaTypeCity, AreaTypeWard, AreaTypeGlobal:
 		return true
 	}
 	return false

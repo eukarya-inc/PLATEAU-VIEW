@@ -186,3 +186,11 @@ models:
         resolver: true
       plateauSpecMinor:
         resolver: true
+  GlobalArea:
+    fields:
+      datasets:
+        resolver: true
+      parent:
+        resolver: true
+      children:
+        resolver: true

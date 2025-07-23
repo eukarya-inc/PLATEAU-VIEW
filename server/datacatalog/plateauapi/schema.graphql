@@ -71,6 +71,10 @@ enum AreaType {
   区（政令指定都市のみ）
   """
   WARD
+  """
+  全球（グローバル）
+  """
+  GLOBAL
 }
 
 """
@@ -230,6 +234,41 @@ type Ward implements Area & Node {
   parent: City!
   """
   地域に属する子地域。
+  """
+  children: [Area!]!
+}
+
+"""
+全球（グローバル）エリア。特定の地域に属さない全球データを扱うための特殊なエリア。
+"""
+type GlobalArea implements Area & Node {
+  id: ID!
+  """
+  地域の種類
+  """
+  type: AreaType!
+  """
+  地域コード。"global" という固定値。
+  """
+  code: AreaCode!
+  """
+  地域名。"全球" という固定値。
+  """
+  name: String!
+  """
+  全球データセット（DatasetInput内のareasCodeの指定は無視されます）。
+  """
+  datasets(input: DatasetsInput): [Dataset!]!
+  """
+  地域の親となる地域のID。GlobalAreaの場合は常にnull。
+  """
+  parentId: ID
+  """
+  地域の親となる地域。GlobalAreaの場合は常にnull。
+  """
+  parent: Area
+  """
+  地域に属する子地域。GlobalAreaの場合は常に空配列。
   """
   children: [Area!]!
 }
