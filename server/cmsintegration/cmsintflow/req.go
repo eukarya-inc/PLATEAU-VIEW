@@ -85,8 +85,11 @@ func sendRequestToFlow(
 	cityItem := cmsintegrationcommon.CityItemFrom(cityItemRaw, featureTypeCodes)
 	log.Debugfc(ctx, "city item: %s", pp.Sprint(cityItem))
 
-	// specv
-	specv := cityItem.SpecMajorVersionInt()
+	// specv - prioritize item spec over city spec
+	specv := item.SpecMajorVersionInt()
+	if specv == 0 {
+		specv = cityItem.SpecMajorVersionInt()
+	}
 	if specv == 0 {
 		_ = s.Fail(ctx, mainItem.ID, ty, "仕様書バージョンを指定してください。")
 		return fmt.Errorf("failed to get specv: specv=%d", specv)
@@ -96,10 +99,11 @@ func sendRequestToFlow(
 	var qc bool
 	log.Debugfc(ctx, "status: ty=%s, overrideReqType=%s, specv=%d", ty, overrideReqType, specv)
 	var triggerID string
-	if ty == cmsintegrationcommon.ReqTypeQC {
+	switch ty {
+	case cmsintegrationcommon.ReqTypeQC:
 		triggerID = featureType.FlowQCTriggerID(specv)
 		qc = true
-	} else if ty == cmsintegrationcommon.ReqTypeConv {
+	case cmsintegrationcommon.ReqTypeConv:
 		triggerID = featureType.FlowConvTriggerID(specv)
 	}
 	if triggerID == "" {

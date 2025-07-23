@@ -146,8 +146,12 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		objectListsAssetURL = cityItem.ObjectLists.URL
 	}
 
-	// get FME URL
-	fme := s.GetFME(s.GetFMEURL(ctx, cityItem.SpecMajorVersionInt()))
+	// get FME URL - prioritize item spec over city spec
+	specVersion := item.SpecMajorVersionInt()
+	if specVersion == 0 {
+		specVersion = cityItem.SpecMajorVersionInt()
+	}
+	fme := s.GetFME(s.GetFMEURL(ctx, specVersion))
 	if fme == nil {
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "FMEのURLが設定されていません。")
 		return fmt.Errorf("fme url is not set")
