@@ -123,6 +123,15 @@ export class ToolbarPage extends BasePage {
   }
 
   /**
+   * 任意のモーダルが開いているか確認（メニュー以外）
+   */
+  async isModalOpen() {
+    const modals = this.page.locator('.MuiModal-root:not(.MuiMenu-root)');
+    const count = await modals.count();
+    return count > 0;
+  }
+
+  /**
    * 歩行者視点ボタンをクリック
    */
   async clickStreetViewButton() {

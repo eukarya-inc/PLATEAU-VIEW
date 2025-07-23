@@ -3,7 +3,7 @@ import { Page, Locator } from '@playwright/test';
 const DEFAULT_URL = 'https://plateauview.mlit.go.jp';
 
 export class BasePage {
-  protected page: Page;
+  page: Page;  // publicにしてテストから直接アクセス可能にする
   protected browserName: string;
 
   // 共通セレクター

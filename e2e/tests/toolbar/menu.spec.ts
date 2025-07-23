@@ -1,22 +1,38 @@
 import { test, expect } from '@playwright/test';
 import { MenuPage } from '../../pages';
 
-// 各テストを並列実行（独立）
-test.describe.configure({ mode: 'parallel' });
+// シリアル実行にして、各テストでページを使い回す
+test.describe.configure({ mode: 'serial' });
 
-test.describe('Toolbar - メニュー', () => {
+test.describe('Toolbar - メニュー @toolbar', () => {
   let menuPage: MenuPage;
 
-  test.beforeEach(async ({ page, browserName }) => {
+  test.beforeAll(async ({ browser, browserName }) => {
+    // ブラウザコンテキストとページを作成
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
     // Page Objectを初期化
     menuPage = new MenuPage(page, browserName);
 
-    // ページに遷移して初期化を待つ
+    // ページに遷移して初期化を待つ（1回だけ）
     await menuPage.goto();
     await menuPage.waitForPageReady();
   });
 
-  test('001: ロゴクリック', async ({ page }) => {
+
+  test.beforeEach(async () => {
+    // 各テスト前にメニューが閉じていることを確認
+    if (await menuPage.isMenuOpen()) {
+      await menuPage.closeMenu();
+    }
+    // モーダルが開いている場合は閉じる
+    if (await menuPage.isMyDataModalOpen() || await menuPage.isModalOpen()) {
+      await menuPage.closeModal();
+    }
+  });
+
+  test('ロゴクリックするとメニューを開くことができる', async () => {
     // メニューを開く
     await menuPage.openMenu();
 
@@ -31,14 +47,14 @@ test.describe('Toolbar - メニュー', () => {
     expect(menuItems['3D都市モデルダウンロード']).toBe(true);
 
     // UIを隠すアイテムも確認
-    await expect(page.getByRole('menuitem', { name: 'UIを隠す' })).toBeVisible();
+    await expect(menuPage.page.getByRole('menuitem', { name: 'UIを隠す' })).toBeVisible();
 
     // メニューを閉じる
     await menuPage.closeMenu();
     await expect(await menuPage.isMenuOpen()).toBe(false);
   });
 
-  test('002: Myデータ', async ({ page }) => {
+  test('Myデータを開くことができる', async () => {
     // Myデータを開く
     await menuPage.openMyData();
 
@@ -46,21 +62,21 @@ test.describe('Toolbar - メニュー', () => {
     await expect(await menuPage.isMyDataModalOpen()).toBe(true);
 
     // Myデータダイアログのタイトルを確認
-    await expect(page.getByText('Myデータ', { exact: true })).toBeVisible();
+    await expect(menuPage.page.getByText('Myデータ', { exact: true })).toBeVisible();
 
     // タブが表示されることを確認
-    await expect(page.getByRole('tab', { name: 'ローカルのデータから追加' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Webから追加' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'ローカルのデータから追加' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'Webから追加' })).toBeVisible();
 
     // ファイルアップロードエリアが表示されることを確認
-    await expect(page.getByText('ここをクリックしてファイルを選択するか')).toBeVisible();
+    await expect(menuPage.page.getByText('ここをクリックしてファイルを選択するか')).toBeVisible();
 
     // ダイアログを閉じる
     await menuPage.closeModal();
     await expect(await menuPage.isMyDataModalOpen()).toBe(false);
   });
 
-  test('003: ヘルプ', async ({ page }) => {
+  test('ヘルプを開くことができる', async () => {
     // メニューを開く
     await menuPage.openMenu();
 
@@ -71,24 +87,24 @@ test.describe('Toolbar - メニュー', () => {
     await menuPage.clickMenuItem('ヘルプ');
 
     // ヘルプモーダルが表示されることを確認
-    const helpModal = page.locator('.MuiModal-root').last();
+    const helpModal = menuPage.page.locator('.MuiModal-root').last();
     await expect(helpModal).toBeVisible();
 
     // ヘルプダイアログのタイトルを確認（モーダル内のタイトルのみを探す）
     await expect(helpModal.getByText('ヘルプ', { exact: true })).toBeVisible();
 
     // ヘルプダイアログのタブが表示されることを確認
-    await expect(page.getByRole('tab', { name: 'UIを理解する' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'マップ操作' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'レイヤー' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'インスペクター' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'UIを理解する' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'マップ操作' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'レイヤー' })).toBeVisible();
+    await expect(menuPage.page.getByRole('tab', { name: 'インスペクター' })).toBeVisible();
 
     // ダイアログを閉じる
     await menuPage.closeModal();
     await expect(helpModal).not.toBeVisible();
   });
 
-  test('004: フィードバック', async () => {
+  test('フィードバックを開くことができる', async () => {
     // メニューを開く
     await menuPage.openMenu();
 
