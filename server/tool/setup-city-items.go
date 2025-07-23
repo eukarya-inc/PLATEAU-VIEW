@@ -49,14 +49,14 @@ func setupCityItems(conf *Config, args []string) error {
 		return errors.New("CMS base URL, CMS token, project, and file are required")
 	}
 
-	pp.Printf("args: %v\n", inp)
+	_, _ = pp.Printf("args: %v\n", inp)
 
 	f, err := os.Open(file)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	inp.DataBody = f
 	err = cmsintsetup.SetupCityItems(

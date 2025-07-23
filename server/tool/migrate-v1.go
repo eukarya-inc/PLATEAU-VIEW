@@ -162,7 +162,7 @@ func downloadAndAddToZip(zw *zip.Writer, url, filePath string) error {
 		return fmt.Errorf("failed to request: %w", err)
 	}
 
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to request: %s", res.Status)

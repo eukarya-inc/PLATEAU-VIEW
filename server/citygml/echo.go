@@ -106,7 +106,9 @@ func attributeHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		if resp.StatusCode != http.StatusOK {
 			return c.JSON(http.StatusBadRequest, map[string]any{
 				"url":   citygmlURL,
@@ -253,7 +255,9 @@ func featureHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		if resp.StatusCode != http.StatusOK {
 			return c.JSON(http.StatusBadRequest, map[string]any{
 				"url":   citygmlURL,

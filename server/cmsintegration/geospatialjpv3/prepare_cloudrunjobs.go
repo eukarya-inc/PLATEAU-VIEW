@@ -24,7 +24,7 @@ func prepareWithCloudRunJobs(ctx context.Context, itemID, projectID, jobName str
 		log.Debugfc(ctx, "geospatialjp webhook: failed to create run client: %v", err)
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	overrides := runpb.RunJobRequest_Overrides{
 		ContainerOverrides: []*runpb.RunJobRequest_Overrides_ContainerOverride{

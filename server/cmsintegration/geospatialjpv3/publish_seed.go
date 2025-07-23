@@ -51,12 +51,12 @@ func getSeed(ctx context.Context, c cms.Interface, cityItem *CityItem, org strin
 
 	rawDataItem, err := c.GetItem(ctx, cityItem.GeospatialjpData, true)
 	if err != nil {
-		return seed, fmt.Errorf("G空間センター用データアイテムが取得できません: %w", err)
+		return seed, fmt.Errorf("%s: %w", errMsgDataItemNotFound, err)
 	}
 
 	rawIndexItem, err := c.GetItem(ctx, cityItem.GeospatialjpIndex, true)
 	if err != nil {
-		return seed, fmt.Errorf("G空間センター用目録アイテムが取得できません: %w", err)
+		return seed, fmt.Errorf("%s: %w", errMsgIndexItemNotFound, err)
 	}
 
 	var dataItem CMSDataItem

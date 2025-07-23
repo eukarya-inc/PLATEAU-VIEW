@@ -81,7 +81,9 @@ func attrsHandler(pcms *plateaucms.CMS) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusNotFound, "not found")
 		}
 
-		defer body.Close()
+		defer func() {
+			_ = body.Close()
+		}()
 		return c.Stream(http.StatusOK, "text/csv", body)
 	}
 }

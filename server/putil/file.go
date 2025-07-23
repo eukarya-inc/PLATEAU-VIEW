@@ -24,7 +24,7 @@ func DeliverFile(g *echo.Group, path, contentType string) bool {
 			return rerror.ErrNotFound
 		}
 
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		return c.Stream(200, contentType, f)
 	}, middleware.CORS(), middleware.Gzip())
 

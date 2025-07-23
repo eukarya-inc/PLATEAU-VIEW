@@ -18,7 +18,7 @@ func RunCloudRunJobs(ctx context.Context, task Task, conf Config) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	overrides := runpb.RunJobRequest_Overrides{
 		ContainerOverrides: []*runpb.RunJobRequest_Overrides_ContainerOverride{

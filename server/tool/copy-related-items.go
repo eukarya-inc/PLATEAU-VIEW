@@ -49,7 +49,7 @@ func copyRelatedItems(conf *Config, args []string) error {
 		return errors.New("CMS base URL, CMS token, fromProject, and toProject are required")
 	}
 
-	pp.Printf("args: %v\n", opts)
+	_, _ = pp.Printf("args: %v\n", opts)
 
 	err := cmsintsetup.CopyRelatedDatasetItems(
 		context.Background(),

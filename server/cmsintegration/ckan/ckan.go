@@ -339,7 +339,7 @@ func (c *Ckan) UploadResource(ctx context.Context, resource Resource, filename s
 	if _, err = fw.Write(data); err != nil {
 		return res.Result, fmt.Errorf("failed to upload a resource: %w", err)
 	}
-	mw.Close()
+	_ = mw.Close()
 
 	var act string
 	if resource.ID == "" {

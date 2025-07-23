@@ -23,7 +23,7 @@ var expected = []map[string]any{
 	{
 		"bldg:measuredHeight":     14.3,
 		"bldg:measuredHeight_uom": "m",
-		"_type": "bldg:Building",
+		"_type":                   "bldg:Building",
 		"gen:genericAttribute": []any{
 			map[string]any{
 				"name":  "風致地区",
@@ -72,7 +72,11 @@ var expected = []map[string]any{
 func TestAttributes(t *testing.T) {
 	citygml, err := os.Open("testdata/" + testdata)
 	require.NoError(t, err)
-	defer citygml.Close()
+	defer func() {
+		if err := citygml.Close(); err != nil {
+			t.Logf("failed to close citygml: %v", err)
+		}
+	}()
 
 	attrs, err := Attributes(citygml, ids, nil)
 	require.NoError(t, err)
@@ -166,7 +170,7 @@ func TestAttributesHandler(t *testing.T) {
 		{
 			"bldg:measuredHeight":     14.3,
 			"bldg:measuredHeight_uom": "m",
-			"_type": "bldg:Building",
+			"_type":                   "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",

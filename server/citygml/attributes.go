@@ -528,7 +528,9 @@ func (r *fetchCodeResolver) Resolve(codeSpace, code string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("status code: %d", resp.StatusCode)
 	}
@@ -559,16 +561,16 @@ func Attributes(r io.Reader, gmlID []string, resolver CodeResolver) ([]map[strin
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// Create a handler to extract LOD1 solid bounding box
 			bboxHandler := &lod1SolidBBoxExtractor{
 				Next: fah,
 			}
-			
+
 			if _, err := processFeature(dec, bboxHandler); err != nil {
 				return nil, err
 			}
-			
+
 			// Add bounding box if found
 			if bboxHandler.boundingBox != nil {
 				fah.Val["_bbox"] = map[string]any{
@@ -589,7 +591,7 @@ func Attributes(r io.Reader, gmlID []string, resolver CodeResolver) ([]map[strin
 					},
 				}
 			}
-			
+
 			attributes = append(attributes, fah.Val)
 			if len(attributes) == len(gmlID) {
 				return attributes, nil

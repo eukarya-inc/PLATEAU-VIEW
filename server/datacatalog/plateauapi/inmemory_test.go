@@ -120,6 +120,7 @@ func TestInMemoryRepo_Areas(t *testing.T) {
 				&City{Code: "03101", Name: "花巻市", PrefectureCode: "03"},
 				&Ward{Code: "01101", Name: "中央区", CityCode: "01100", PrefectureCode: "01"},
 				&Ward{Code: "01102", Name: "北区", CityCode: "01100", PrefectureCode: "01"},
+				NewGlobalArea(),
 			},
 		},
 		{

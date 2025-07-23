@@ -58,10 +58,10 @@ func TestPlateauDataset_ToDatasets_Interior(t *testing.T) {
 			},
 		},
 		Spec: &plateauapi.PlateauSpecMinor{
-			ID:            plateauapi.NewID("3.2", plateauapi.TypePlateauSpec),
-			MajorVersion:  3,
-			Year:          2023,
-			Version:       "3.2",
+			ID:           plateauapi.NewID("3.2", plateauapi.TypePlateauSpec),
+			MajorVersion: 3,
+			Year:         2023,
+			Version:      "3.2",
 		},
 		DatasetType: &plateauapi.PlateauDatasetType{
 			ID:   plateauapi.NewID("bldg", plateauapi.TypeDatasetType),

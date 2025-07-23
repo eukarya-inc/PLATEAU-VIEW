@@ -39,7 +39,7 @@ func TestFetcher(t *testing.T) {
 	if currentAPI != "" {
 		// save the current result
 		res2 := lo.Must(http.Get(currentAPI))
-		defer res2.Body.Close()
+		defer func() { _ = res2.Body.Close() }()
 		var r []DataCatalogItem
 		lo.Must0(json.NewDecoder(res2.Body).Decode(&r))
 		if save {

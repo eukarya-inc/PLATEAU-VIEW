@@ -340,11 +340,11 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 // filterDatasetTypesWithoutDatasets filters out DatasetTypes that have no corresponding Datasets
 func filterDatasetTypesWithoutDatasets(datasetTypes plateauapi.DatasetTypes, datasets plateauapi.Datasets) (filtered plateauapi.DatasetTypes, warning []string) {
 	filtered = make(plateauapi.DatasetTypes)
-	
+
 	for category, types := range datasetTypes {
 		var filteredTypes []plateauapi.DatasetType
 		categoryDatasets := datasets[category]
-		
+
 		for _, dt := range types {
 			// Check if there are any datasets for this dataset type
 			hasDataset := false
@@ -354,18 +354,18 @@ func filterDatasetTypesWithoutDatasets(datasetTypes plateauapi.DatasetTypes, dat
 					break
 				}
 			}
-			
+
 			if hasDataset {
 				filteredTypes = append(filteredTypes, dt)
 			} else {
 				warning = append(warning, fmt.Sprintf("dataset type %s (%s) has no datasets, filtering out", dt.GetCode(), dt.GetName()))
 			}
 		}
-		
+
 		if len(filteredTypes) > 0 {
 			filtered[category] = filteredTypes
 		}
 	}
-	
+
 	return
 }

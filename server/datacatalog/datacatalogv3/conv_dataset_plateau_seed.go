@@ -41,7 +41,7 @@ type plateauDatasetSeed struct {
 
 func (seed plateauDatasetSeed) GetID() string {
 	id := standardItemID(seed.DatasetType.Code, seed.TargetArea.GetCode(), seed.Subcode)
-	
+
 	// Check if any asset is interior
 	isInterior := false
 	for _, asset := range seed.Assets {
@@ -50,12 +50,12 @@ func (seed plateauDatasetSeed) GetID() string {
 			break
 		}
 	}
-	
+
 	// Add "_interior" suffix for interior datasets
 	if isInterior {
 		id = id + "_interior"
 	}
-	
+
 	return id
 }
 
@@ -137,7 +137,7 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 	for _, seed := range seeds {
 		seed := seed
 		key := seed.Subcode
-		
+
 		first := m[key]
 		if key == "" || first == nil {
 			m[key] = &seed
@@ -153,11 +153,11 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 	finalRes := make([]plateauDatasetSeed, 0, len(res)*2)
 	for _, seedPtr := range res {
 		seed := *seedPtr
-		
+
 		// Separate assets into interior and non-interior
 		var interiorAssets []lo.Tuple2[string, *AssetName]
 		var regularAssets []lo.Tuple2[string, *AssetName]
-		
+
 		for i, asset := range seed.Assets {
 			if asset != nil && asset.Ex.Normal != nil && asset.Ex.Normal.Interior {
 				interiorAssets = append(interiorAssets, lo.Tuple2[string, *AssetName]{A: seed.AssetURLs[i], B: asset})
@@ -165,7 +165,7 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 				regularAssets = append(regularAssets, lo.Tuple2[string, *AssetName]{A: seed.AssetURLs[i], B: asset})
 			}
 		}
-		
+
 		// Add regular dataset if there are regular assets
 		if len(regularAssets) > 0 {
 			regularSeed := seed
@@ -173,7 +173,7 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 			regularSeed.Assets = lo.Map(regularAssets, func(t lo.Tuple2[string, *AssetName], _ int) *AssetName { return t.B })
 			finalRes = append(finalRes, regularSeed)
 		}
-		
+
 		// Add interior dataset if there are interior assets
 		if len(interiorAssets) > 0 {
 			interiorSeed := seed

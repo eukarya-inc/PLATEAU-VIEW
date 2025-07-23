@@ -51,7 +51,7 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 				log.Errorfc(ctx, "tiles: failed to get cache: %v", err)
 			}
 		} else {
-			defer r.Close()
+			defer func() { _ = r.Close() }()
 		}
 
 		if r != nil {
@@ -86,7 +86,7 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var body io.Reader = resp.Body
 	// save cache
@@ -94,7 +94,7 @@ func (h *Handler) chiitilerHandler(c echo.Context) error {
 		obj := h.chiitilerCacheBucket.Object(getKey(style, z, x, y))
 		log.Debugfc(ctx, "tiles: cache save: %s", obj.ObjectName())
 		w := obj.NewWriter(ctx)
-		defer w.Close()
+		defer func() { _ = w.Close() }()
 		body = io.TeeReader(resp.Body, w)
 	}
 

@@ -30,7 +30,7 @@ func TestSpatialIDAttributes(t *testing.T) {
 		{
 			"bldg:measuredHeight":     15.4,
 			"bldg:measuredHeight_uom": "m",
-			"_type": "bldg:Building",
+			"_type":                   "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",
@@ -84,7 +84,7 @@ func TestSpatialIDAttributes(t *testing.T) {
 		{
 			"bldg:measuredHeight":     14.3,
 			"bldg:measuredHeight_uom": "m",
-			"_type": "bldg:Building",
+			"_type":                   "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",
@@ -173,7 +173,9 @@ func (r *testCodeResolver) Resolve(codeSpace, code string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 
 		cm, err := parseCodeMap(f)
 		if err != nil {

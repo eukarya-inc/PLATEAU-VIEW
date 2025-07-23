@@ -24,12 +24,14 @@ const (
 )
 
 func (t fmeRequestType) Title() string {
-	if t == fmeTypeConv {
+	switch t {
+	case fmeTypeConv:
 		return "変換"
-	} else if t == fmeTypeQC {
+	case fmeTypeQC:
 		return "品質検査"
+	default:
+		return "品質検査・変換"
 	}
-	return "品質検査・変換"
 }
 
 var ErrInvalidFMEID = errors.New("invalid fme id")

@@ -96,12 +96,8 @@ func mockFMEServer(t *testing.T, host, token string, r ConversionRequest, result
 		}
 
 		q := req.URL.Query()
-		invalid := false
-
-		if q.Get("opt_servicemode") != "async" ||
-			resultURL != q.Get("resultUrl") {
-			invalid = true
-		}
+		invalid := q.Get("opt_servicemode") != "async" ||
+			resultURL != q.Get("resultUrl")
 
 		q.Del("opt_servicemode")
 		q.Del("resultUrl")

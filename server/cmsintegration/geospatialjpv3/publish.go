@@ -48,7 +48,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 
 	pkg, pkgCreated, err := h.createOrUpdatePackage(ctx, pkgSeed)
 	if err != nil {
-		return fmt.Errorf("G空間情報センターでパッケージの検索・作成に失敗しました: %w", err)
+		return fmt.Errorf("%s: %w", errMsgPackageSearchCreateFailed, err)
 	}
 
 	log.Debugfc(ctx, "geospatialjpv3: pkg: %s", pp.Sprint(pkg))
@@ -75,7 +75,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: "データ整備範囲の標準地域メッシュ（２次メッシュ、３次メッシュ）のメッシュとメッシュ番号を示したPDFファイルです。",
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（索引図）: %w", err)
+			return fmt.Errorf("%s: %w", errMsgResourceCreateIndexFailed, err)
 		}
 		resources = append(resources, r)
 	}
@@ -88,7 +88,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.CityGMLDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（CityGML）: %w", err)
+			return fmt.Errorf("%s: %w", errMsgResourceCreateCityGMLFailed, err)
 		}
 		resources = append(resources, r)
 	}
@@ -101,7 +101,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.PlateauDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（3D Tiles,MVT）: %w", err)
+			return fmt.Errorf("%s: %w", errMsgResourceCreate3DTilesFailed, err)
 		}
 		resources = append(resources, r)
 	}
@@ -114,7 +114,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.RelatedDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（関連データセット）: %w", err)
+			return fmt.Errorf("%s: %w", errMsgResourceCreateRelatedFailed, err)
 		}
 		resources = append(resources, r)
 	}
@@ -142,7 +142,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 				Description: replaceSize(g.Desc, uint64(size)),
 			})
 			if err != nil {
-				return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（その他データセット）: %w", err)
+				return fmt.Errorf("%s: %w", errMsgResourceCreateOtherFailed, err)
 			}
 			resources = append(resources, r)
 		}
@@ -155,7 +155,7 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		})
 
 		if err := h.reorderResources(ctx, pkg.ID, resourceIDs); err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの並び替えに失敗しました（リソースの登録・更新自体は既に完了しています）: %w", err)
+			return fmt.Errorf("%s: %w", errMsgResourceReorderPartialSuccess, err)
 		}
 	}
 

@@ -601,11 +601,12 @@ func (r ReqType) Title() string {
 }
 
 func (t ReqType) CMSStatus(s ConvertionStatus) (qc ConvertionStatus, conv ConvertionStatus) {
-	if t == ReqTypeConv {
+	switch t {
+	case ReqTypeConv:
 		conv = s
-	} else if t == ReqTypeQC {
+	case ReqTypeQC:
 		qc = s
-	} else {
+	default:
 		qc = s
 		conv = s
 	}

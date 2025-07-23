@@ -20,7 +20,7 @@ func RunCloudBatch(ctx context.Context, task Task, conf Config) error {
 	if err != nil {
 		return fmt.Errorf("NewClient: %w", err)
 	}
-	defer batchClient.Close()
+	defer func() { _ = batchClient.Close() }()
 
 	container := &batchpb.Runnable_Container{
 		ImageUri: task.Image,

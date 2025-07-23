@@ -144,7 +144,7 @@ func parseTile(s string) (Voxel, error) {
 func parseTileHash(s string) (Voxel, error) {
 	var f, y, x int
 	for _, c := range s {
-		if !('1' <= c && c <= '9') {
+		if c < '1' || c > '9' {
 			return Voxel{}, fmt.Errorf("invalid character '%c'", c)
 		}
 		v := c - '1'

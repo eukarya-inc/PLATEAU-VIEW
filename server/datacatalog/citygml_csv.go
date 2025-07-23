@@ -52,7 +52,9 @@ func fetchCSV(ctx context.Context, url, prefix string) (records [][]string, _ er
 		return nil, fmt.Errorf("failed to request: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
