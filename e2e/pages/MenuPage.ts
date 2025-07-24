@@ -125,7 +125,7 @@ export class MenuPage extends ToolbarPage {
    * Myデータのタブを切り替える
    */
   async switchMyDataTab(tabName: 'アップロードファイル' | 'ストレージ') {
-    await this.clickByRole('tab', tabName);
+    await this.page.getByRole('tab', { name: tabName }).click();
   }
 
   /**

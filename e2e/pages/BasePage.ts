@@ -23,46 +23,6 @@ export class BasePage {
   }
 
   /**
-   * Chromium用のクリック処理
-   * 並列実行時のChromiumの問題を回避するため
-   */
-  async clickElement(selector: string) {
-    if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-      await this.page.evaluate((sel) => {
-        const element = document.querySelector(sel) as HTMLElement;
-        if (element) element.click();
-      }, selector);
-    } else {
-      await this.page.locator(selector).click();
-    }
-  }
-
-  /**
-   * ロールベースの要素をクリック
-   */
-  async clickByRole(role: 'button' | 'menuitem' | 'link' | 'tab', name: string) {
-    // ChromiumとFirefoxではJavaScriptクリックを使用
-    if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-      let selector = '';
-      if (role === 'button') {
-        selector = this.selectors.button(name);
-      } else if (role === 'menuitem') {
-        // メニューアイテムの場合は、そのまま名前で検索
-        // data-name属性の変換は各ページクラスで行う
-        selector = this.selectors.menuItem(name);
-      } else if (role === 'tab') {
-        selector = this.selectors.tab(name);
-      }
-      if (selector) {
-        await this.clickElement(selector);
-      }
-    } else {
-      await this.page.getByRole(role, { name }).click();
-    }
-  }
-
-
-  /**
    * ページへ遷移
    */
   async goto() {
@@ -97,32 +57,17 @@ export class BasePage {
   }
 
   /**
-   * 検索バーをクリック（ブラウザ対応）
+   * 検索バーをクリック
    */
   async clickSearchInput() {
-    await this.clickElement(this.selectors.searchInput);
+    await this.page.locator(this.selectors.searchInput).click();
   }
 
   /**
-   * 検索バーをクリア（ブラウザ対応）
+   * 検索バーをクリア
    */
   async clearSearchInput() {
-    if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-      // JavaScriptで強制的にクリア
-      await this.page.evaluate((selector) => {
-        const element = document.querySelector(selector) as HTMLInputElement;
-        if (element) {
-          element.focus();
-          element.select();
-          document.execCommand('delete');
-          // 念のため直接値をクリア
-          element.value = '';
-          element.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }, this.selectors.searchInput);
-    } else {
-      const searchInput = this.page.locator(this.selectors.searchInput);
-      await searchInput.clear();
-    }
+    const searchInput = this.page.locator(this.selectors.searchInput);
+    await searchInput.clear();
   }
 }

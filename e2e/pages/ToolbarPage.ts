@@ -51,7 +51,7 @@ export class ToolbarPage extends BasePage {
    * メニューボタンをクリック
    */
   async clickMenuButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.menuButton);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.menuButton }).click();
   }
 
   /**
@@ -69,22 +69,12 @@ export class ToolbarPage extends BasePage {
   async clickMenuItem(itemName: string) {
     // 3D都市モデルダウンロードは特別処理（data-name属性なし）
     if (itemName === '3D都市モデルダウンロード') {
-      // aタグでrole="menuitem"
-      if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-        await this.clickElement(`a[role="menuitem"]:has-text("${itemName}")`);
-      } else {
-        await this.page.locator(`a[role="menuitem"]:has-text("${itemName}")`).click();
-      }
+      await this.page.locator(`a[role="menuitem"]:has-text("${itemName}")`).click();
       return;
     }
     
-    // data-name属性を使ってクリック
-    const dataName = this.dataNameMapping[itemName] || itemName;
-    if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-      await this.clickElement(this.selectors.menuItem(dataName));
-    } else {
-      await this.page.getByRole('menuitem', { name: itemName }).click();
-    }
+    // 通常のメニューアイテム
+    await this.page.getByRole('menuitem', { name: itemName }).click();
   }
 
   /**
@@ -102,7 +92,7 @@ export class ToolbarPage extends BasePage {
    * モーダルを閉じる
    */
   async closeModal() {
-    await this.clickByRole('button', 'close');
+    await this.page.getByRole('button', { name: 'close' }).click();
   }
 
   /**
@@ -135,86 +125,86 @@ export class ToolbarPage extends BasePage {
    * 歩行者視点ボタンをクリック
    */
   async clickStreetViewButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.streetView);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.streetView }).click();
   }
 
   /**
    * 作図ボタンをクリック
    */
   async clickDrawingButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.drawing);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.drawing }).click();
   }
 
   /**
    * グラフィック設定ボタンをクリック
    */
   async clickGraphicsButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.graphics);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.graphics }).click();
   }
 
   /**
    * グラフィック設定を選択
    */
   async selectGraphicsQuality(quality: '低' | '中' | '高' | '最高') {
-    await this.clickElement(this.toolbarSelectors.graphics.quality(quality));
+    await this.page.locator(this.toolbarSelectors.graphics.quality(quality)).click();
   }
 
   /**
    * 日時設定ボタンをクリック
    */
   async clickDateTimeButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.dateTime);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.dateTime }).click();
   }
 
   /**
    * 地図設定ボタンをクリック
    */
   async clickMapButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.map);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.map }).click();
   }
 
   /**
    * ストーリーボタンをクリック
    */
   async clickStoryButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.story);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.story }).click();
   }
 
   /**
    * シェアボタンをクリック
    */
   async clickShareButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.share);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.share }).click();
   }
 
   /**
    * ショートカット表示ボタンをクリック
    */
   async clickShortcutButton() {
-    await this.clickByRole('button', this.toolbarSelectors.buttons.shortcut);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.shortcut }).click();
   }
 
   /**
    * ナビゲーションコントロール
    */
   async clickCurrentLocation() {
-    await this.clickByRole('button', this.toolbarSelectors.navigation.currentLocation);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.currentLocation }).click();
   }
 
   async clickAutoRotate() {
-    await this.clickByRole('button', this.toolbarSelectors.navigation.autoRotate);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.autoRotate }).click();
   }
 
   async clickZoomIn() {
-    await this.clickByRole('button', this.toolbarSelectors.navigation.zoomIn);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.zoomIn }).click();
   }
 
   async clickZoomOut() {
-    await this.clickByRole('button', this.toolbarSelectors.navigation.zoomOut);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.zoomOut }).click();
   }
 
   async clickCompass() {
-    await this.clickByRole('button', this.toolbarSelectors.navigation.compass);
+    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.compass }).click();
   }
 
   /**

@@ -37,20 +37,16 @@ npm run report
 スモークテストは、アプリケーションの基本的な機能が正常に動作することを確認する軽量なテストセットです。
 
 ```bash
-# すべてのスモークテストを実行
+# すべてのスモークテストを実行（WebKitのみ - 高速）
 npm run test:smoke
 
-# 重要度の高いスモークテストのみ実行（Chromiumのみ）
-npm run test:smoke:critical
-
-# Chromiumでのみスモークテストを実行
-npm run test:smoke:chromium
+# すべてのブラウザでスモークテストを実行
+npm run test:smoke:all
 ```
 
 ### タグの種類
 
 - `@smoke` - スモークテストとして実行されるテスト
-- `@critical` - 最も重要な基本機能のテスト
 - `@toolbar` - ツールバー関連のテスト
 - `@menu` - メニュー関連のテスト
 - `@search` - 検索機能のテスト
@@ -79,5 +75,5 @@ npm test -- --grep-invert @slow
 Playwrightのコードジェネレータを使用してテストコードを生成できます：
 
 ```bash
-yarn codegen https://plateauview.mlit.go.jp
+npx playwright codegen https://plateauview.mlit.go.jp
 ```

@@ -235,8 +235,8 @@ await expect(helpModal.getByText('ヘルプ', { exact: true })).toBeVisible();
 
 ```typescript
 test.describe('基本機能 @smoke', () => {
-  test('重要なテスト @critical', async () => {
-    // CI/CDで最優先で実行されるテスト
+  test('スモークテスト @smoke', async () => {
+    // CI/CDで優先的に実行されるテスト
   });
 });
 ```
