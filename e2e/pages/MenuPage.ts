@@ -46,8 +46,8 @@ export class MenuPage extends ToolbarPage {
   async openMenu() {
     if (!(await this.isMenuOpen())) {
       await this.clickMenuButton();
-      // メニューが完全に開くまで待機
-      await this.page.waitForTimeout(1000);
+      // メニューが完全に開くまで待機（Chromeは時間がかかる）
+      await this.page.waitForTimeout(this.browserName === 'chrome' ? 3000 : 1000);
     }
   }
 

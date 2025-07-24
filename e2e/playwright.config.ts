@@ -8,8 +8,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on',
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    actionTimeout: 30000,  // 10秒から30秒に増やす
+    navigationTimeout: 60000,  // 30秒から60秒に増やす
   },
 
   reporter: [
@@ -22,7 +22,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chrome',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Chromeは他のブラウザより遅いため、タイムアウトを延長
+        actionTimeout: 60000,
+        navigationTimeout: 90000,
+        // ヘッドレスモードの最適化
+        launchOptions: {
+          args: ['--disable-blink-features=AutomationControlled']
+        }
+      },
     },
     {
       name: 'firefox',

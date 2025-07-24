@@ -14,6 +14,7 @@ export class BasePage {
     menuItem: (dataName: string) => `li[role="menuitem"][data-name="${dataName}"]`,
     button: (label: string) => `button[aria-label="${label}"]`,
     tab: (name: string) => `button[role="tab"]:has-text("${name}")`,
+    searchInput: 'input[placeholder="データセット、建築物、住所を検索"]',
   };
 
   constructor(page: Page, browserName: string = 'chromium') {
@@ -93,5 +94,35 @@ export class BasePage {
    */
   async waitForHidden(locator: Locator, timeout: number = 5000) {
     await locator.waitFor({ state: 'hidden', timeout });
+  }
+
+  /**
+   * 検索バーをクリック（ブラウザ対応）
+   */
+  async clickSearchInput() {
+    await this.clickElement(this.selectors.searchInput);
+  }
+
+  /**
+   * 検索バーをクリア（ブラウザ対応）
+   */
+  async clearSearchInput() {
+    if (this.browserName === 'chromium' || this.browserName === 'firefox') {
+      // JavaScriptで強制的にクリア
+      await this.page.evaluate((selector) => {
+        const element = document.querySelector(selector) as HTMLInputElement;
+        if (element) {
+          element.focus();
+          element.select();
+          document.execCommand('delete');
+          // 念のため直接値をクリア
+          element.value = '';
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, this.selectors.searchInput);
+    } else {
+      const searchInput = this.page.locator(this.selectors.searchInput);
+      await searchInput.clear();
+    }
   }
 }

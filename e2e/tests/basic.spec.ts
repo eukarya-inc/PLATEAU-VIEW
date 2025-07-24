@@ -55,13 +55,14 @@ test.describe('スモークテスト @smoke', () => {
     const searchInput = basePage.page.getByPlaceholder('データセット、建築物、住所を検索');
     await expect(searchInput).toBeVisible();
 
-    // 検索バーに入力できる
-    await searchInput.click();
+    // 検索バーに入力できる（Chromium対応のクリック処理を使用）
+    await basePage.clickSearchInput();
     await searchInput.fill('東京');
     await expect(searchInput).toHaveValue('東京');
 
-    // 検索バーをクリア
-    await searchInput.clear();
+    // 検索バーをクリア（Chromium対応のクリア処理を使用）
+    await basePage.clearSearchInput();
+    await expect(searchInput).toHaveValue('');
   });
 
   test('ナビゲーションコントロールが表示される @smoke @navigation', async () => {
