@@ -1,6 +1,6 @@
 import { Page, Locator } from '@playwright/test';
 
-const DEFAULT_URL = 'https://plateauview.mlit.go.jp';
+export const DEFAULT_URL = 'https://plateauview.mlit.go.jp';
 
 export class BasePage {
   page: Page;  // publicにしてテストから直接アクセス可能にする

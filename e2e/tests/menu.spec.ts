@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { MenuPage } from '../../pages';
+import { MenuPage } from '../pages';
+import { init } from '../utils';
 
 // シリアル実行にして、各テストでページを使い回す
 test.describe.configure({ mode: 'serial' });
@@ -7,10 +8,9 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Toolbar - メニュー @toolbar', () => {
   let menuPage: MenuPage;
 
-  test.beforeAll(async ({ browser, browserName }) => {
-    // ブラウザコンテキストとページを作成
-    const context = await browser.newContext();
-    const page = await context.newPage();
+  test.beforeAll(async ({ browser, browserName }, testInfo) => {
+    // ヘルパー関数を使用してコンテキストとページを作成
+    const { page } = await init(browser, testInfo);
 
     // Page Objectを初期化
     menuPage = new MenuPage(page, browserName);

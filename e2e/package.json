@@ -9,8 +9,8 @@
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:install": "playwright install",
-    "test:smoke": "playwright test --grep @smoke --project=chromium",
-    "test:smoke:critical": "playwright test --grep @critical --project=chromium",
+    "test:smoke": "playwright test --grep @smoke --project=webkit",
+    "test:smoke:all": "playwright test --grep @smoke",
     "codegen": "playwright codegen",
     "report": "playwright show-report"
   },

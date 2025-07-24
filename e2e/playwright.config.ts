@@ -1,12 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests',
-  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 4,
-  reporter: 'list',
   use: {
     baseURL: 'https://plateauview.mlit.go.jp',
     trace: 'on-first-retry',
@@ -16,11 +12,16 @@ export default defineConfig({
     navigationTimeout: 30000,
   },
 
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }]
+  ],
+
   timeout: 60000,
 
   projects: [
     {
-      name: 'chromium',
+      name: 'chrome',
       use: { ...devices['Desktop Chrome'] },
     },
     {
