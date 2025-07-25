@@ -1,6 +1,10 @@
+import { Locator, expect, Page, Browser } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class ToolbarPage extends BasePage {
+  // ツールモード関連のLocator
+  readonly selectButton: Locator;
+  readonly moveButton: Locator;
   // data-name属性のマッピング
   public dataNameMapping: { [key: string]: string } = {
     'Myデータ': 'my-data',
@@ -10,53 +14,86 @@ export class ToolbarPage extends BasePage {
     // '3D都市モデルダウンロード'はdata-name属性を持たない
   };
 
-  // ツールバー関連のセレクター
-  protected toolbarSelectors = {
-    buttons: {
-      menuButton: 'メインメニュー',
-      streetView: '歩行者視点',
-      drawing: '作図',
-      graphics: 'グラフィック設定',
-      dateTime: '日時',
-      map: '地図',
-      story: 'ストーリー',
-      share: 'シェア',
-      shortcut: 'ショートカット表示',
-    },
-    navigation: {
-      currentLocation: '現在位置',
-      autoRotate: '自動回転',
-      zoomIn: '拡大',
-      zoomOut: '縮小',
-      compass: 'コンパス',
-    },
-    graphics: {
-      quality: (value: string) => `[data-value="${value}"]`,
-    },
-    modals: {
-      menu: '.MuiModal-root.MuiMenu-root',
-      dialog: '.MuiModal-root.MuiDialog-root',
-      myData: '.MuiModal-root:has-text("Myデータ")',
-      help: '.MuiModal-root:has-text("ヘルプ")',
-      feedback: '.MuiModal-root:has-text("フィードバック")',
-    },
+  // ツールバーボタン名の定数
+  protected readonly buttonNames = {
+    menuButton: 'メインメニュー',
+    streetView: '歩行者視点',
+    drawing: '作図',
+    graphics: 'グラフィック設定',
+    dateTime: '日時',
+    map: '地図',
+    story: 'ストーリー',
+    share: 'シェア',
+    shortcut: 'ショートカット表示',
   };
 
+  // ナビゲーションボタン名の定数
+  protected readonly navigationNames = {
+    currentLocation: '現在位置',
+    autoRotate: '自動回転',
+    zoomIn: '拡大',
+    zoomOut: '縮小',
+    compass: 'コンパス',
+  };
+
+  constructor(page: Page, browser: Browser) {
+    super(page, browser);
+    
+    // ツールモードボタンの初期化
+    this.selectButton = page.getByRole('button', { name: '選択' });
+    this.moveButton = page.getByRole('button', { name: '移動' });
+  }
+
+  // 動的Locatorを返すメソッド
+  getMenu(): Locator {
+    return this.page.locator('.MuiModal-root.MuiMenu-root');
+  }
+
+  getDialog(): Locator {
+    return this.page.locator('.MuiModal-root.MuiDialog-root');
+  }
+
+  getMyDataModal(): Locator {
+    return this.page.locator('.MuiModal-root').filter({ hasText: 'Myデータ' });
+  }
+
+  getHelpModal(): Locator {
+    return this.page.locator('.MuiModal-root').filter({ hasText: 'ヘルプ' });
+  }
+
+  getFeedbackModal(): Locator {
+    return this.page.locator('.MuiModal-root').filter({ hasText: 'フィードバック' });
+  }
+
+
+  /**
+   * 選択モードに切り替える
+   */
+  async switchToSelectMode() {
+    await this.selectButton.click();
+    await expect(this.selectButton).toHaveAttribute('aria-pressed', 'true');
+  }
+
+  /**
+   * 移動モードに切り替える
+   */
+  async switchToMoveMode() {
+    await this.moveButton.click();
+    await expect(this.moveButton).toHaveAttribute('aria-pressed', 'true');
+  }
 
   /**
    * メニューボタンをクリック
    */
   async clickMenuButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.menuButton }).click();
+    await this.menuButton.click();
   }
 
   /**
    * メニューが開いているか確認
    */
   async isMenuOpen() {
-    // MuiMenu-rootクラスを持つモーダルを探す
-    const menu = this.page.locator('.MuiModal-root.MuiMenu-root');
-    return await menu.isVisible();
+    return await this.getMenu().isVisible();
   }
 
   /**
@@ -65,7 +102,7 @@ export class ToolbarPage extends BasePage {
   async clickMenuItem(itemName: string) {
     // 3D都市モデルダウンロードは特別処理（data-name属性なし）
     if (itemName === '3D都市モデルダウンロード') {
-      await this.page.locator(`a[role="menuitem"]:has-text("${itemName}")`).click();
+      await this.page.getByRole('menuitem', { name: itemName }).click();
       return;
     }
     
@@ -77,10 +114,7 @@ export class ToolbarPage extends BasePage {
    * Myデータモーダルが開いているか確認
    */
   async isMyDataModalOpen() {
-    // Myデータモーダルを特定する
-    // MuiMenu-rootクラスを持たない、Myデータテキストを含むモーダルを探す
-    const modal = this.page.locator('.MuiModal-root:not(.MuiMenu-root)').filter({ hasText: 'Myデータ' });
-    const count = await modal.count();
+    const count = await this.getMyDataModal().count();
     return count > 0;
   }
 
@@ -88,7 +122,7 @@ export class ToolbarPage extends BasePage {
    * モーダルを閉じる
    */
   async closeModal() {
-    await this.page.getByRole('button', { name: 'close' }).click();
+    await this.closeButton.click();
   }
 
   /**
@@ -104,7 +138,7 @@ export class ToolbarPage extends BasePage {
    * フィードバックモーダルが開いているか確認
    */
   async isFeedbackModalOpen() {
-    const modal = this.page.locator(this.toolbarSelectors.modals.feedback);
+    const modal = this.getFeedbackModal();
     return await modal.isVisible();
   }
 
@@ -121,99 +155,99 @@ export class ToolbarPage extends BasePage {
    * 歩行者視点ボタンをクリック
    */
   async clickStreetViewButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.streetView }).click();
+    await this.button(this.buttonNames.streetView).click();
   }
 
   /**
    * 作図ボタンをクリック
    */
   async clickDrawingButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.drawing }).click();
+    await this.button(this.buttonNames.drawing).click();
   }
 
   /**
    * グラフィック設定ボタンをクリック
    */
   async clickGraphicsButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.graphics }).click();
+    await this.button(this.buttonNames.graphics).click();
   }
 
   /**
    * グラフィック設定を選択
    */
   async selectGraphicsQuality(quality: '低' | '中' | '高' | '最高') {
-    await this.page.locator(this.toolbarSelectors.graphics.quality(quality)).click();
+    await this.page.locator(`[data-value="${quality}"]`).click();
   }
 
   /**
    * 日時設定ボタンをクリック
    */
   async clickDateTimeButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.dateTime }).click();
+    await this.button(this.buttonNames.dateTime).click();
   }
 
   /**
    * 地図設定ボタンをクリック
    */
   async clickMapButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.map }).click();
+    await this.button(this.buttonNames.map).click();
   }
 
   /**
    * ストーリーボタンをクリック
    */
   async clickStoryButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.story }).click();
+    await this.button(this.buttonNames.story).click();
   }
 
   /**
    * シェアボタンをクリック
    */
   async clickShareButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.share }).click();
+    await this.button(this.buttonNames.share).click();
   }
 
   /**
    * ショートカット表示ボタンをクリック
    */
   async clickShortcutButton() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.buttons.shortcut }).click();
+    await this.button(this.buttonNames.shortcut).click();
   }
 
   /**
    * ナビゲーションコントロール
    */
   async clickCurrentLocation() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.currentLocation }).click();
+    await this.button(this.navigationNames.currentLocation).click();
   }
 
   async clickAutoRotate() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.autoRotate }).click();
+    await this.button(this.navigationNames.autoRotate).click();
   }
 
   async clickZoomIn() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.zoomIn }).click();
+    await this.button(this.navigationNames.zoomIn).click();
   }
 
   async clickZoomOut() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.zoomOut }).click();
+    await this.button(this.navigationNames.zoomOut).click();
   }
 
   async clickCompass() {
-    await this.page.getByRole('button', { name: this.toolbarSelectors.navigation.compass }).click();
+    await this.button(this.navigationNames.compass).click();
   }
 
   /**
    * ツールバーボタンの要素を取得
    */
-  getToolbarButton(buttonName: keyof typeof this.toolbarSelectors.buttons) {
-    return this.page.getByRole('button', { name: this.toolbarSelectors.buttons[buttonName] });
+  getToolbarButton(buttonName: keyof typeof this.buttonNames) {
+    return this.button(this.buttonNames[buttonName]);
   }
 
   /**
    * ナビゲーションボタンの要素を取得
    */
-  getNavigationButton(buttonName: keyof typeof this.toolbarSelectors.navigation) {
-    return this.page.getByRole('button', { name: this.toolbarSelectors.navigation[buttonName] });
+  getNavigationButton(buttonName: keyof typeof this.navigationNames) {
+    return this.button(this.navigationNames[buttonName]);
   }
 }

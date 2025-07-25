@@ -3,25 +3,39 @@ import { Page, Locator, Browser } from '@playwright/test';
 export const DEFAULT_URL = 'https://plateauview.mlit.go.jp';
 
 export class BasePage {
-  page: Page;  // publicにしてテストから直接アクセス可能にする
-  protected browser: Browser;
-  protected browserName: string;
+  readonly page: Page;
+  protected readonly browser: Browser;
+  protected readonly browserName: string;
 
-  // 共通セレクター
-  protected selectors = {
-    menuButton: 'button[aria-label="メインメニュー"]',
-    modalRoot: '.MuiModal-root',
-    closeButton: 'button[aria-label="close"]',
-    menuItem: (dataName: string) => `li[role="menuitem"][data-name="${dataName}"]`,
-    button: (label: string) => `button[aria-label="${label}"]`,
-    tab: (name: string) => `button[role="tab"]:has-text("${name}")`,
-    searchInput: 'input[placeholder="データセット、建築物、住所を検索"]',
-  };
+  // 共通Locator
+  readonly menuButton: Locator;
+  readonly modalRoot: Locator;
+  readonly closeButton: Locator;
+  readonly searchInput: Locator;
 
   constructor(page: Page, browser: Browser) {
     this.page = page;
     this.browser = browser;
     this.browserName = browser.browserType().name();
+
+    // Locatorの初期化
+    this.menuButton = page.getByRole('button', { name: 'メインメニュー' });
+    this.modalRoot = page.locator('.MuiModal-root');
+    this.closeButton = page.getByRole('button', { name: 'close' });
+    this.searchInput = page.getByPlaceholder('データセット、建築物、住所を検索');
+  }
+
+  // 動的Locatorを返すメソッド
+  menuItem(dataName: string): Locator {
+    return this.page.locator(`li[role="menuitem"][data-name="${dataName}"]`);
+  }
+
+  button(label: string): Locator {
+    return this.page.getByRole('button', { name: label });
+  }
+
+  tab(name: string): Locator {
+    return this.page.getByRole('tab', { name });
   }
 
   /**
@@ -38,7 +52,7 @@ export class BasePage {
     await this.page.waitForLoadState('domcontentloaded');
 
     // メインメニューボタンが表示されるまで待機
-    await this.page.waitForSelector(this.selectors.menuButton, {
+    await this.menuButton.waitFor({
       state: 'visible',
       timeout: 30000
     });
@@ -62,14 +76,13 @@ export class BasePage {
    * 検索バーをクリック
    */
   async clickSearchInput() {
-    await this.page.locator(this.selectors.searchInput).click();
+    await this.searchInput.click();
   }
 
   /**
    * 検索バーをクリア
    */
   async clearSearchInput() {
-    const searchInput = this.page.locator(this.selectors.searchInput);
-    await searchInput.clear();
+    await this.searchInput.clear();
   }
 }

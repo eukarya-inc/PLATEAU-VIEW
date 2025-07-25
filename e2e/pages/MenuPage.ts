@@ -145,7 +145,7 @@ export class MenuPage extends ToolbarPage {
     
     // 通常のメニューアイテム
     const dataName = this.dataNameMapping[itemName] || itemName;
-    const menuItem = this.page.locator(this.selectors.menuItem(dataName));
+    const menuItem = this.menuItem(dataName);
     return await menuItem.isVisible();
   }
 

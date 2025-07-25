@@ -1,23 +1,27 @@
 import { test, expect, type Page } from '@playwright/test';
 import { init, waitFor, waitForCesiumStable } from '../utils';
-import { AttributesPage } from '../pages';
+import { ToolbarPage, CanvasPage, AttributesPage } from '../pages';
 
 test.describe.configure({ mode: 'serial' });
 
 test.describe('建築物の属性表示 @smoke', () => {
   let page: Page;
+  let toolbarPage: ToolbarPage;
+  let canvasPage: CanvasPage;
   let attributesPage: AttributesPage;
 
   test.beforeAll(async ({ browser }, testInfo) => {
     const result = await init(browser, testInfo);
     page = result.page;
+    toolbarPage = new ToolbarPage(page, browser);
+    canvasPage = new CanvasPage(page, browser);
     attributesPage = new AttributesPage(page, browser);
 
     // PLATEAU VIEWを開く
-    await attributesPage.goto();
+    await toolbarPage.goto();
 
     // ページの準備を待つ
-    await attributesPage.waitForPageReady();
+    await toolbarPage.waitForPageReady();
 
     // Cesiumが安定するまで待機（建築物の表示完了を含む）
     await waitForCesiumStable(page, testInfo);
@@ -25,13 +29,10 @@ test.describe('建築物の属性表示 @smoke', () => {
 
   test('選択モードで建築物をクリックすると属性が表示される', async () => {
     // 選択モードに切り替える
-    await attributesPage.switchToSelectMode();
+    await toolbarPage.switchToSelectMode();
 
-    // 建築物をクリック
-    await attributesPage.clickBuilding();
-
-    // UIの反応を待つ
-    await waitFor(page, 1000);
+    // 建築物をクリック（画面中央より少し下）
+    await canvasPage.clickAt(0.5, 0.6);
 
     // 属性パネルが表示されることを確認
     await attributesPage.waitForAttributePanel();
@@ -54,13 +55,10 @@ test.describe('建築物の属性表示 @smoke', () => {
 
   test('移動モードでは建築物クリックしても属性が表示されない', async () => {
     // 移動モードに切り替える
-    await attributesPage.switchToMoveMode();
+    await toolbarPage.switchToMoveMode();
 
-    // 建築物をクリック
-    await attributesPage.clickBuilding();
-
-    // UIの反応を待つ
-    await waitFor(page, 1000);
+    // 建築物をクリック（画面中央より少し下）
+    await canvasPage.clickAt(0.5, 0.6);
 
     // 属性パネルが表示されないことを確認
     await attributesPage.waitForAttributePanelToHide();

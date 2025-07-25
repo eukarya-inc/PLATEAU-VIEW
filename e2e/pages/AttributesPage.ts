@@ -1,54 +1,25 @@
-import { expect } from '@playwright/test';
+import { expect, Locator, Page, Browser } from '@playwright/test';
 import { BasePage } from './BasePage';
 
+/**
+ * 属性パネルの操作を担当するページオブジェクト
+ */
 export class AttributesPage extends BasePage {
-  // 属性ページ固有のセレクター定義
-  private attributeSelectors = {
-    selectButton: 'button[aria-label="選択"]',
-    moveButton: 'button[aria-label="移動"]',
-    canvas: 'canvas',
-    attributePanel: 'ul',
-    closeButton: 'button[aria-label="閉じる"]',
-  };
+  private readonly attributePanelCloseButton: Locator;
 
-  /**
-   * 選択モードに切り替える
-   */
-  async switchToSelectMode() {
-    const selectButton = this.page.getByRole('button', { name: '選択' });
-    await selectButton.click();
-    await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
-  }
-
-  /**
-   * 移動モードに切り替える
-   */
-  async switchToMoveMode() {
-    const moveButton = this.page.getByRole('button', { name: '移動' });
-    await moveButton.click();
-    await expect(moveButton).toHaveAttribute('aria-pressed', 'true');
-  }
-
-  /**
-   * 3Dビューの建築物をクリック
-   * @param position - クリック位置の調整（0.5 = 中央、0.6 = 少し下）
-   */
-  async clickBuilding(position: number = 0.6) {
-    const canvas = this.page.locator(this.attributeSelectors.canvas).first();
-    const box = await canvas.boundingBox();
-    if (!box) {
-      throw new Error('Canvas bounding box is not available');
-    }
-
-    await this.page.mouse.click(box.x + box.width / 2, box.y + box.height * position);
+  constructor(page: Page, browser: Browser) {
+    super(page, browser);
+    
+    // Locatorの初期化
+    this.attributePanelCloseButton = page.getByRole('button', { name: '閉じる' });
   }
 
   /**
    * 属性パネルを取得
    */
-  getAttributePanel() {
-    return this.page.locator(this.attributeSelectors.attributePanel).filter({ 
-      has: this.page.locator(this.attributeSelectors.closeButton) 
+  getAttributePanel(): Locator {
+    return this.page.locator('ul').filter({ 
+      has: this.attributePanelCloseButton
     });
   }
 
@@ -84,8 +55,7 @@ export class AttributesPage extends BasePage {
    */
   async closeAttributePanel() {
     const panel = this.getAttributePanel();
-    const closeButton = panel.locator(this.attributeSelectors.closeButton);
-    await closeButton.click();
+    await panel.getByRole('button', { name: '閉じる' }).click();
   }
 
   /**

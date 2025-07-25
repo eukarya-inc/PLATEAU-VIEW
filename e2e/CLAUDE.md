@@ -19,6 +19,9 @@ npm test -- --ui
 
 # デバッグモード
 npm test -- --debug
+
+# 型チェック
+npm run type-check
 ```
 
 ## 開発フロー
@@ -58,7 +61,7 @@ Page Object Modelパターンを使用して実装。
 複数のテストで同じページを共有することで、初期化コストを削減できます。
 
 ```typescript
-import { init } from '../../utils';
+import { init, waitForCesiumStable } from '../../utils';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -69,12 +72,24 @@ test.describe('テストスイート', () => {
     // ヘルパー関数でページを初期化（動画記録も自動設定）
     const { page: newPage } = await init(browser, testInfo);
     page = newPage;
+
+    // Cesiumが安定するまで待機（3Dコンテンツのロード完了）
+    await waitForCesiumStable(page, testInfo);
   });
 
   test.beforeEach(async () => {
     // 各テスト前に状態をリセット
   });
 });
+```
+
+### Cesiumの安定待機
+
+3Dコンテンツが完全にロードされるまで待機する関数を使用：
+
+```typescript
+// テスト名が自動的にログに含まれる
+await waitForCesiumStable(page, testInfo);
 ```
 
 ### パフォーマンスデータ
@@ -113,49 +128,116 @@ Playwrightの既知の問題により、`beforeAll`では動画設定が自動�
 | Firefox | 2-11秒 | 約30-50秒 | バランスの良いテスト |
 | Chromium | 13-37秒 | 約60-180秒 | 詳細な互換性確認 |
 
-### Chromium/Firefoxのクリック問題
+## Page Object Model (POM)
 
-並列実行時にクリック操作がタイムアウトする問題があります。
+pages ディレクトリ内にPOMを定義することで、テストコードの可読性が向上します。
 
-**解決策**: JavaScriptクリックを使用（BasePageに実装済み）
+### Page Object設計の考え方
+
+#### 単一ページアプリケーションにおけるPage Object
+
+PLATEAU VIEWのような単一ページアプリケーションでは、Page Objectは「ページ」ではなく「UI領域」や「機能領域」を表現します。これは従来の複数ページアプリケーションとは異なるアプローチです。
+
+#### 責任範囲の決定原則
+
+Page Objectの責任範囲を決める際の思考プロセス：
+
+1. **視覚的境界より論理的境界を重視**
+   - UIコンポーネントの見た目の配置ではなく、機能的な関連性で分割
+   - 例：選択/移動ボタンは属性パネルと連動するが、ツールバーの機能として扱う
+
+2. **ユーザーの認知モデルに従う**
+   - ユーザーが「ツールバー」「メニュー」「3Dビュー」として認識する単位でPage Objectを作成
+   - 実装の都合ではなく、ユーザー視点での機能分類を優先
+
+3. **操作の起点で責任を割り当てる**
+   - 「どこから操作が始まるか」を基準に責任を決定
+   - 結果が別の領域に表示されても、操作の起点となるPage Objectが責任を持つ
+
+#### 抽象度の設計
+
+1. **具体的すぎるメソッドを避ける**
+   - `clickBuilding()` → `clickAt(x, y)`
+   - テストが意図を明示的に表現できるレベルの抽象度を保つ
+
+2. **コンテキストをPage Objectに埋め込まない**
+   - Page Objectはツールを提供し、使い方はテストが決める
+   - 「建築物をクリックする」という知識はテスト側に置く
+
+3. **待機処理は適切な場所に**
+   - UI要素の表示待機はPage Object内で完結
+   - ビジネスロジックの待機（データロード等）はテスト側で明示
+
+### 実装例（Playwright公式ベストプラクティスに準拠）
 
 ```typescript
-async clickElement(selector: string) {
-  if (this.browserName === 'chromium' || this.browserName === 'firefox') {
-    await this.page.evaluate((sel) => {
-      const element = document.querySelector(sel) as HTMLElement;
-      if (element) element.click();
-    }, selector);
-  } else {
-    await this.page.locator(selector).click();
+// BasePage.ts - Locatorオブジェクトを使用
+export class BasePage {
+  readonly page: Page;
+
+  // Locatorプロパティとして定義
+  readonly menuButton: Locator;
+  readonly searchInput: Locator;
+
+  constructor(page: Page, browser: Browser) {
+    this.page = page;
+    this.browser = browser;
+
+    // Locatorの初期化
+    this.menuButton = page.getByRole('button', { name: 'メインメニュー' });
+    this.searchInput = page.getByPlaceholder('データセット、建築物、住所を検索');
+  }
+
+  // 動的Locatorを返すメソッド
+  button(label: string): Locator {
+    return this.page.getByRole('button', { name: label });
+  }
+}
+
+// AttributesPage.ts - 継承して使用
+export class AttributesPage extends BasePage {
+  readonly selectButton: Locator;
+  readonly canvas: Locator;
+
+  constructor(page: Page, browser: Browser) {
+    super(page, browser);
+
+    // ページ固有のLocator
+    this.selectButton = page.getByRole('button', { name: '選択' });
+    this.canvas = page.locator('canvas').first();
+  }
+
+  async switchToSelectMode() {
+    await this.selectButton.click();
+    await expect(this.selectButton).toHaveAttribute('aria-pressed', 'true');
   }
 }
 ```
 
-## Page Object Model
-
-### 基本構造
-
-```
-pages/
-├── BasePage.ts      # 共通機能（クリック処理、待機処理）
-├── ToolbarPage.ts   # ツールバー関連の共通機能
-├── MenuPage.ts      # メニュー固有の機能
-└── index.ts         # エクスポート
-```
-
-### 実装例
+### Page Object初期化と使用例
 
 ```typescript
-// MenuPage.ts
-export class MenuPage extends ToolbarPage {
-  async openMenu() {
-    if (!(await this.isMenuOpen())) {
-      await this.clickMenuButton();
-      await this.page.waitForTimeout(1000);
-    }
-  }
-}
+// テストファイル内
+test.beforeAll(async ({ browser }, testInfo) => {
+  const { page } = await init(browser, testInfo);
+
+  // 各UI領域に対応するPage Objectを初期化
+  const toolbarPage = new ToolbarPage(page, browser);
+  const canvasPage = new CanvasPage(page, browser);
+  const attributesPage = new AttributesPage(page, browser);
+});
+
+// 使用例：建築物の属性表示テスト
+test('選択モードで建築物をクリックすると属性が表示される', async () => {
+  // ツールバーで選択モードに切り替え
+  await toolbarPage.switchToSelectMode();
+
+  // 3Dビューで建築物をクリック（座標を直接指定）
+  await canvasPage.clickAt(0.5, 0.6);
+
+  // 属性パネルの表示を確認
+  await attributesPage.waitForAttributePanel();
+});
 ```
 
 ## セレクターのベストプラクティス
@@ -170,7 +252,7 @@ const menu = page.locator('.MuiModal-root.MuiMenu-root');
 const modal = page.locator('.MuiModal-root:not(.MuiMenu-root)');
 ```
 
-### data-name属性の活用
+### data-testidやdata-name属性の活用
 
 ```typescript
 // PLATEAU VIEWのメニューアイテム
@@ -194,12 +276,10 @@ await page.waitForSelector('button[aria-label="メインメニュー"]', {
 
 ### 動画記録
 
-```typescript
-// playwright.config.ts
-use: {
-  video: 'retain-on-failure',  // 失敗時のみ保存
-  // video: 'on',              // 常に保存（デバッグ時）
-}
+環境変数 `VIDEO_MODE=true` で録画
+
+```bash
+VIDEO_MODE=true npm test
 ```
 
 ### スクリーンショット
