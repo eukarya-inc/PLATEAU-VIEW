@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BasePage, DEFAULT_URL } from '../pages/BasePage';
+import { BasePage } from '../pages/BasePage';
 import { MenuPage } from '../pages';
 import { init } from '../utils';
 
@@ -10,13 +10,13 @@ test.describe('スモークテスト @smoke', () => {
   let basePage: BasePage;
   let menuPage: MenuPage;
 
-  test.beforeAll(async ({ browser, browserName }, testInfo) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
     // ヘルパー関数を使用してコンテキストとページを作成
     const { page } = await init(browser, testInfo);
 
     // Page Objectを初期化
-    basePage = new BasePage(page, browserName);
-    menuPage = new MenuPage(page, browserName);
+    basePage = new BasePage(page, browser);
+    menuPage = new MenuPage(page, browser);
 
     // ページに遷移して初期化を待つ（1回だけ）
     await basePage.goto();

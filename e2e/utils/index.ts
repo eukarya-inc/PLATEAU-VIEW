@@ -29,7 +29,7 @@ export async function init(
   // Playwrightのデフォルトディレクトリ構造を再現
   // 例: test-results/basic-スモークテスト-webkit/
   const context = await browser.newContext({
-    recordVideo: (videoConfig && (videoConfig === 'on' || typeof videoConfig === 'object' && videoConfig.mode === 'on')) ? {
+    recordVideo: (videoConfig && (videoConfig === 'on' || videoConfig === 'retain-on-failure' || typeof videoConfig === 'object' && videoConfig.mode === 'on')) ? {
       dir: `./test-results/${testFileName}-${suiteTitle}-${projectName}`
     } : undefined
   });
@@ -42,3 +42,22 @@ export async function init(
 }
 
 export { waitFor, waitForCesiumStable } from './wait';
+
+/**
+ * テスト情報から現在のテスト名を取得するヘルパー関数
+ * @param testInfo - Playwrightのテスト情報
+ * @returns フォーマットされたテスト名
+ */
+export function getTestName(testInfo: TestInfo): string {
+  // titlePath: [ファイルパス, describe名, test名...]
+  const suiteName = testInfo.titlePath[1]?.replace(/@\w+\s*/g, '').trim();
+  const testName = testInfo.titlePath[2];
+  
+  if (testName) {
+    // 個別のtest内で呼ばれた場合
+    return `${suiteName} > ${testName}`;
+  } else {
+    // beforeAll/beforeEach内で呼ばれた場合
+    return suiteName || '不明なテスト';
+  }
+}

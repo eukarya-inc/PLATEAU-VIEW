@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { Page, TestInfo } from '@playwright/test';
 
 /**
  * GPUなし環境での待機時間を調整するヘルパー関数
@@ -22,6 +22,7 @@ export async function waitFor(page: Page, milliseconds: number): Promise<void> {
  * スクリーンショットを定期的に取得し、画面が安定したら完了とみなす
  *
  * @param page - Playwrightのページオブジェクト
+ * @param testInfo - TestInfoオブジェクト
  * @param interval - スクリーンショット取得間隔（ミリ秒）
  * @param stableCount - 画面が安定したと判断する連続回数
  * @param maxWaitTime - 最大待機時間（ミリ秒）
@@ -29,20 +30,26 @@ export async function waitFor(page: Page, milliseconds: number): Promise<void> {
  */
 export async function waitForCesiumStable(
   page: Page,
+  testInfo: TestInfo,
   interval: number = process.env.CI ? 5000 : 2000,
   stableCount: number = 3,
-  maxWaitTime: number = 120000 // 2分
+  maxWaitTime: number = 120000
 ): Promise<Buffer> {
+  // テスト名を取得
+  const suiteName = testInfo.titlePath[1]?.replace(/@\w+\s*/g, '').trim();
+  const individualTestName = testInfo.titlePath[2];
+  const testName = individualTestName ? `${suiteName} > ${individualTestName}` : suiteName || '不明なテスト';
   const startTime = Date.now();
   let previousScreenshot: Buffer | null = null;
   let noChangeCount = 0;
+  const logPrefix = testName ? `[${testName}] ` : '';
 
-  console.log(`Waiting for Cesium to stabilize (interval: ${interval}ms, stable count: ${stableCount})`);
+  console.log(`${logPrefix}Waiting for Cesium to stabilize (interval: ${interval}ms, stable count: ${stableCount})`);
 
   while (true) {
     // タイムアウトチェック
     if (Date.now() - startTime > maxWaitTime) {
-      console.warn(`Cesium stabilization timed out after ${maxWaitTime}ms`);
+      console.warn(`${logPrefix}Cesium stabilization timed out after ${maxWaitTime}ms`);
       break;
     }
 
@@ -54,16 +61,16 @@ export async function waitForCesiumStable(
       // 前回のスクリーンショットと比較
       if (Buffer.compare(previousScreenshot, screenshot) === 0) {
         noChangeCount++;
-        console.log(`Screen unchanged (${noChangeCount}/${stableCount})`);
+        console.log(`${logPrefix}Screen unchanged (${noChangeCount}/${stableCount})`);
 
         if (noChangeCount >= stableCount) {
-          console.log('Cesium is stable!');
+          console.log(`${logPrefix}Cesium is stable!`);
           return screenshot;
         }
       } else {
         // 変化があった場合はカウントをリセット
         noChangeCount = 0;
-        console.log('Screen changed, resetting count');
+        console.log(`${logPrefix}Screen changed, resetting count`);
       }
     }
 

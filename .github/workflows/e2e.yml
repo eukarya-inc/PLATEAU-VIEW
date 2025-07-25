@@ -16,6 +16,11 @@ on:
         required: false
         default: 'https://plateauview.mlit.go.jp'
         type: string
+      record-video:
+        description: 'Record video for all tests (demo mode)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   e2e:
@@ -70,12 +75,15 @@ jobs:
         env:
           BASE_URL: ${{ inputs.base-url }}
           SLOW_LOAD: 3
+          RECORD_VIDEO: ${{ inputs.record-video }}
         run: |
           if [ "${{ inputs.type }}" = "smoke" ]; then
             echo "Running smoke tests with WebKit only (SLOW_LOAD=3 for non-GPU environment)"
+            echo "Video recording: ${{ inputs.record-video && 'all tests' || 'on failure only' }}"
             npm run test:smoke
           else
             echo "Running full tests with all browsers (SLOW_LOAD=3 for non-GPU environment)"
+            echo "Video recording: ${{ inputs.record-video && 'all tests' || 'on failure only' }}"
             npm test
           fi
 

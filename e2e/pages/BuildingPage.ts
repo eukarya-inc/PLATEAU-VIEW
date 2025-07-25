@@ -1,10 +1,6 @@
-import { Page } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class BuildingPage extends BasePage {
-  constructor(page: Page, browserName: string = 'chromium') {
-    super(page, browserName);
-  }
 
   /**
    * 選択モードに切り替える

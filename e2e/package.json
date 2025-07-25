@@ -12,10 +12,12 @@
     "test:smoke": "playwright test --grep @smoke --project=webkit",
     "test:smoke:all": "playwright test --grep @smoke",
     "codegen": "playwright codegen",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
-    "@types/node": "^20.0.0"
+    "@playwright/test": "^1.54.1",
+    "@types/node": "^24.1.0",
+    "typescript": "^5.8.3"
   }
 }

@@ -1,4 +1,3 @@
-import { Page, expect } from '@playwright/test';
 import { ToolbarPage } from './ToolbarPage';
 
 export class MenuPage extends ToolbarPage {
@@ -36,9 +35,6 @@ export class MenuPage extends ToolbarPage {
     },
   };
 
-  constructor(page: Page, browserName: string = 'chromium') {
-    super(page, browserName);
-  }
 
   /**
    * メニューを開く

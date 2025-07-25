@@ -8,12 +8,12 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Toolbar - メニュー @toolbar', () => {
   let menuPage: MenuPage;
 
-  test.beforeAll(async ({ browser, browserName }, testInfo) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
     // ヘルパー関数を使用してコンテキストとページを作成
     const { page } = await init(browser, testInfo);
 
     // Page Objectを初期化
-    menuPage = new MenuPage(page, browserName);
+    menuPage = new MenuPage(page, browser);
 
     // ページに遷移して初期化を待つ（1回だけ）
     await menuPage.goto();

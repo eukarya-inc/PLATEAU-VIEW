@@ -1,4 +1,4 @@
-import { Page, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class AttributesPage extends BasePage {
@@ -10,10 +10,6 @@ export class AttributesPage extends BasePage {
     attributePanel: 'ul',
     closeButton: 'button[aria-label="閉じる"]',
   };
-
-  constructor(page: Page, browserName: string = 'chromium') {
-    super(page, browserName);
-  }
 
   /**
    * 選択モードに切り替える

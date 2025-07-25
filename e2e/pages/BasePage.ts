@@ -1,9 +1,10 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, Browser } from '@playwright/test';
 
 export const DEFAULT_URL = 'https://plateauview.mlit.go.jp';
 
 export class BasePage {
   page: Page;  // publicにしてテストから直接アクセス可能にする
+  protected browser: Browser;
   protected browserName: string;
 
   // 共通セレクター
@@ -17,9 +18,10 @@ export class BasePage {
     searchInput: 'input[placeholder="データセット、建築物、住所を検索"]',
   };
 
-  constructor(page: Page, browserName: string = 'chromium') {
+  constructor(page: Page, browser: Browser) {
     this.page = page;
-    this.browserName = browserName;
+    this.browser = browser;
+    this.browserName = browser.browserType().name();
   }
 
   /**

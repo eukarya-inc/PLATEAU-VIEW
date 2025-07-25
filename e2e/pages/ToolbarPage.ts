@@ -1,4 +1,3 @@
-import { Page, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class ToolbarPage extends BasePage {
@@ -43,9 +42,6 @@ export class ToolbarPage extends BasePage {
     },
   };
 
-  constructor(page: Page, browserName: string = 'chromium') {
-    super(page, browserName);
-  }
 
   /**
    * メニューボタンをクリック

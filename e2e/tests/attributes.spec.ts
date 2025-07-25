@@ -11,7 +11,7 @@ test.describe('建築物の属性表示 @smoke', () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     const result = await init(browser, testInfo);
     page = result.page;
-    attributesPage = new AttributesPage(page, browser.browserType().name());
+    attributesPage = new AttributesPage(page, browser);
 
     // PLATEAU VIEWを開く
     await attributesPage.goto();
@@ -20,7 +20,7 @@ test.describe('建築物の属性表示 @smoke', () => {
     await attributesPage.waitForPageReady();
 
     // Cesiumが安定するまで待機（建築物の表示完了を含む）
-    await waitForCesiumStable(page);
+    await waitForCesiumStable(page, testInfo);
   });
 
   test('選択モードで建築物をクリックすると属性が表示される', async () => {
