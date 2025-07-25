@@ -41,5 +41,4 @@ export async function init(
   return { context, page };
 }
 
-// wait.tsの関数を再エクスポート
-export { waitFor } from './wait';
+export { waitFor, waitForCesiumStable } from './wait';
