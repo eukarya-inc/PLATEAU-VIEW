@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// GPUなし環境（GitHub Actions等）での待機時間倍率
+const SLOW_LOAD_MULTIPLIER = process.env.SLOW_LOAD ? parseInt(process.env.SLOW_LOAD, 10) : 1;
+
 export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -8,6 +11,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on',
+    // カスタムテストデータとして待機時間倍率を渡す
+    slowLoadMultiplier: SLOW_LOAD_MULTIPLIER,
   },
 
   reporter: process.env.CI

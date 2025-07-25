@@ -17,6 +17,7 @@ export async function init(
   testInfo: TestInfo
 ): Promise<{ context: BrowserContext; page: Page }> {
   const videoConfig = testInfo.project.use?.video;
+  const slowLoadMultiplier = testInfo.project.use?.slowLoadMultiplier || 1;
 
   // テストファイル名を取得（拡張子なし）
   const testFileName = testInfo.file.split('/').pop()?.replace('.spec.ts', '') || 'test';
@@ -33,6 +34,12 @@ export async function init(
     } : undefined
   });
 
+  // カスタムプロパティとして待機時間倍率を保存
+  (context as any).slowLoadMultiplier = slowLoadMultiplier;
+
   const page = await context.newPage();
   return { context, page };
 }
+
+// wait.tsの関数を再エクスポート
+export { waitFor } from './wait';

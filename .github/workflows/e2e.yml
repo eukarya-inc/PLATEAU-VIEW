@@ -50,12 +50,13 @@ jobs:
         working-directory: ./e2e
         env:
           BASE_URL: ${{ inputs.base-url }}
+          SLOW_LOAD: 3  # GitHub Actions環境では3倍の待機時間を使用
         run: |
           if [ "${{ inputs.type }}" = "smoke" ]; then
-            echo "Running smoke tests with WebKit only"
+            echo "Running smoke tests with WebKit only (SLOW_LOAD=3 for non-GPU environment)"
             npm run test:smoke
           else
-            echo "Running full tests with all browsers"
+            echo "Running full tests with all browsers (SLOW_LOAD=3 for non-GPU environment)"
             npm test
           fi
 
