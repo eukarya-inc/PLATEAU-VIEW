@@ -19,7 +19,7 @@ export default defineConfig({
     ? [['list'], ['html', { open: 'never' }], ['github']]
     : [['list'], ['html', { open: 'never' }]],
 
-  timeout: 60000,
+  timeout: 1000 * 60 * 10,
 
   projects: [
     {

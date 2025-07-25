@@ -1,4 +1,4 @@
-name: E2E test
+name: E2E VIEW
 
 on:
   workflow_dispatch:
@@ -37,6 +37,15 @@ jobs:
         working-directory: ./e2e
         run: npm ci
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ inputs.type }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright browsers
         working-directory: ./e2e
         run: |
@@ -45,12 +54,22 @@ jobs:
           else
             npx playwright install --with-deps
           fi
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright system dependencies
+        working-directory: ./e2e
+        run: |
+          if [ "${{ inputs.type }}" = "smoke" ]; then
+            npx playwright install-deps webkit
+          else
+            npx playwright install-deps
+          fi
 
       - name: Run E2E tests
         working-directory: ./e2e
         env:
           BASE_URL: ${{ inputs.base-url }}
-          SLOW_LOAD: 3  # GitHub Actions環境では3倍の待機時間を使用
+          SLOW_LOAD: 3
         run: |
           if [ "${{ inputs.type }}" = "smoke" ]; then
             echo "Running smoke tests with WebKit only (SLOW_LOAD=3 for non-GPU environment)"
