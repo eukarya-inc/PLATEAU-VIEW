@@ -36,6 +36,18 @@ resource "google_compute_url_map" "accounts" {
   }
 }
 
+resource "google_compute_url_map" "editor_http_redirect" {
+  project = data.google_project.project.project_id
+
+  name        = "editor-http-redirect"
+  description = "Url map for Editor HTTP Redirect"
+
+  default_url_redirect {
+    https_redirect = true
+    strip_query    = false
+  }
+}
+
 resource "google_compute_url_map" "plateau_cms" {
   project = data.google_project.project.project_id
 
@@ -84,6 +96,19 @@ resource "google_compute_url_map" "plateau_cms" {
     default_service = google_compute_backend_service.cms_worker.id
   }
 }
+
+resource "google_compute_url_map" "plateau_cms_http_redirect" {
+  project = data.google_project.project.project_id
+
+  name        = "plateau-cms-http-redirect"
+  description = "Url map for Plateau CMS HTTP Redirect"
+
+  default_url_redirect {
+    https_redirect = true
+    strip_query    = false
+  }
+}
+
 
 resource "google_compute_url_map" "editor" {
   project = data.google_project.project.project_id
@@ -278,5 +303,17 @@ resource "google_compute_url_map" "plateau_flow" {
   path_matcher {
     name            = "websocket"
     default_service = google_compute_backend_service.plateau_flow_websocket.id
+  }
+}
+
+resource "google_compute_url_map" "plateau_flow_http_redirect" {
+  project = data.google_project.project.project_id
+
+  name        = "plateau-flow-http-redirect"
+  description = "Url map for Plateau Flow HTTP Redirect"
+
+  default_url_redirect {
+    https_redirect = true
+    strip_query    = false
   }
 }
