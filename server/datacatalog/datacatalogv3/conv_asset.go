@@ -81,6 +81,7 @@ type AssetNameExNormal struct {
 	LODEx     int
 	NoTexture bool
 	NoLOD     bool
+	Interior  bool
 }
 
 func (ex AssetNameExNormal) DatasetItemKey() string {
@@ -168,7 +169,7 @@ func ParseAssetNameEx(name string) (ex AssetNameEx) {
 	return
 }
 
-var reAssetNameExNormal = regexp.MustCompile(`^([a-z]+)(?:_([A-Za-z0-9-_]+))?_(mvt|3dtiles|dm_geometric_attributes)(?:_(\d+)_([a-z0-9-]+))?(_lod\d\d?)?(_no_texture)?$`)
+var reAssetNameExNormal = regexp.MustCompile(`^([a-z]+)(?:_([A-Za-z0-9-_]+))?_(mvt|3dtiles|dm_geometric_attributes)(?:_(\d+)_([a-z0-9-]+))?(_lod\d\d?)?(_interior)?(_no_texture)?$`)
 
 func ParseAssetNameExNormal(name string) *AssetNameExNormal {
 	if name == "" {
@@ -209,7 +210,8 @@ func ParseAssetNameExNormal(name string) *AssetNameExNormal {
 		WardName:  m[5],
 		LOD:       lod,
 		LODEx:     lodex,
-		NoTexture: m[7] != "",
+		Interior:  m[7] != "",
+		NoTexture: m[8] != "",
 		NoLOD:     nolod,
 	}
 }

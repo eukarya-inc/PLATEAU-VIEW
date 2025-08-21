@@ -43,6 +43,7 @@ type ResolverRoot interface {
 	GenericDataset() GenericDatasetResolver
 	GenericDatasetItem() GenericDatasetItemResolver
 	GenericDatasetType() GenericDatasetTypeResolver
+	GlobalArea() GlobalAreaResolver
 	PlateauDataset() PlateauDatasetResolver
 	PlateauDatasetItem() PlateauDatasetItemResolver
 	PlateauDatasetType() PlateauDatasetTypeResolver
@@ -138,6 +139,17 @@ type ComplexityRoot struct {
 		ID       func(childComplexity int) int
 		Name     func(childComplexity int) int
 		Order    func(childComplexity int) int
+	}
+
+	GlobalArea struct {
+		Children func(childComplexity int) int
+		Code     func(childComplexity int) int
+		Datasets func(childComplexity int, input *DatasetsInput) int
+		ID       func(childComplexity int) int
+		Name     func(childComplexity int) int
+		Parent   func(childComplexity int) int
+		ParentID func(childComplexity int) int
+		Type     func(childComplexity int) int
 	}
 
 	PlateauDataset struct {
@@ -336,6 +348,12 @@ type GenericDatasetItemResolver interface {
 }
 type GenericDatasetTypeResolver interface {
 	Datasets(ctx context.Context, obj *GenericDatasetType, input *DatasetsInput) ([]*GenericDataset, error)
+}
+type GlobalAreaResolver interface {
+	Datasets(ctx context.Context, obj *GlobalArea, input *DatasetsInput) ([]Dataset, error)
+
+	Parent(ctx context.Context, obj *GlobalArea) (Area, error)
+	Children(ctx context.Context, obj *GlobalArea) ([]Area, error)
 }
 type PlateauDatasetResolver interface {
 	Prefecture(ctx context.Context, obj *PlateauDataset) (*Prefecture, error)
@@ -881,6 +899,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.GenericDatasetType.Order(childComplexity), true
+
+	case "GlobalArea.children":
+		if e.complexity.GlobalArea.Children == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Children(childComplexity), true
+
+	case "GlobalArea.code":
+		if e.complexity.GlobalArea.Code == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Code(childComplexity), true
+
+	case "GlobalArea.datasets":
+		if e.complexity.GlobalArea.Datasets == nil {
+			break
+		}
+
+		args, err := ec.field_GlobalArea_datasets_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.GlobalArea.Datasets(childComplexity, args["input"].(*DatasetsInput)), true
+
+	case "GlobalArea.id":
+		if e.complexity.GlobalArea.ID == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.ID(childComplexity), true
+
+	case "GlobalArea.name":
+		if e.complexity.GlobalArea.Name == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Name(childComplexity), true
+
+	case "GlobalArea.parent":
+		if e.complexity.GlobalArea.Parent == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Parent(childComplexity), true
+
+	case "GlobalArea.parentId":
+		if e.complexity.GlobalArea.ParentID == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.ParentID(childComplexity), true
+
+	case "GlobalArea.type":
+		if e.complexity.GlobalArea.Type == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Type(childComplexity), true
 
 	case "PlateauDataset.admin":
 		if e.complexity.PlateauDataset.Admin == nil {
@@ -2019,6 +2098,34 @@ func (ec *executionContext) field_GenericDatasetType_datasets_args(ctx context.C
 	return args, nil
 }
 func (ec *executionContext) field_GenericDatasetType_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_GlobalArea_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_GlobalArea_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_GlobalArea_datasets_argsInput(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (*DatasetsInput, error) {
@@ -5683,6 +5790,363 @@ func (ec *executionContext) fieldContext_GenericDatasetType_datasets(ctx context
 	if fc.Args, err = ec.field_GenericDatasetType_datasets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_id(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(ID)
+	fc.Result = res
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_type(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_type(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Type, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(AreaType)
+	fc.Result = res
+	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AreaType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_code(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_code(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Code, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(AreaCode)
+	fc.Result = res
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AreaCode does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_name(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_datasets(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_datasets(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]Dataset)
+	fc.Result = res
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_GlobalArea_datasets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_parentId(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_parentId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ParentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*ID)
+	fc.Result = res
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_parent(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_parent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Parent(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(Area)
+	fc.Result = res
+	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_children(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_children(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Children(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]Area)
+	fc.Result = res
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
 	}
 	return fc, nil
 }
@@ -14494,6 +14958,13 @@ func (ec *executionContext) _Area(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._Prefecture(ctx, sel, obj)
+	case GlobalArea:
+		return ec._GlobalArea(ctx, sel, &obj)
+	case *GlobalArea:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._GlobalArea(ctx, sel, obj)
 	case City:
 		return ec._City(ctx, sel, &obj)
 	case *City:
@@ -14656,6 +15127,13 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._PlateauDataset(ctx, sel, obj)
+	case GlobalArea:
+		return ec._GlobalArea(ctx, sel, &obj)
+	case *GlobalArea:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._GlobalArea(ctx, sel, obj)
 	case GenericDatasetType:
 		return ec._GenericDatasetType(ctx, sel, &obj)
 	case *GenericDatasetType:
@@ -15582,6 +16060,167 @@ func (ec *executionContext) _GenericDatasetType(ctx context.Context, sel ast.Sel
 					}
 				}()
 				res = ec._GenericDatasetType_datasets(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var globalAreaImplementors = []string{"GlobalArea", "Area", "Node"}
+
+func (ec *executionContext) _GlobalArea(ctx context.Context, sel ast.SelectionSet, obj *GlobalArea) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, globalAreaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("GlobalArea")
+		case "id":
+			out.Values[i] = ec._GlobalArea_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "type":
+			out.Values[i] = ec._GlobalArea_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "code":
+			out.Values[i] = ec._GlobalArea_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "name":
+			out.Values[i] = ec._GlobalArea_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "datasets":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_datasets(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "parentId":
+			out.Values[i] = ec._GlobalArea_parentId(ctx, field, obj)
+		case "parent":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_parent(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "children":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_children(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

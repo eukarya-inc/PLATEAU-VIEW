@@ -23,7 +23,7 @@ func Echo(conf Config, g *echo.Group) error {
 		return err
 	}
 
-	f, err := NewFetcher(conf.Config.CMSBaseURL)
+	f, err := NewFetcher(conf.CMSBaseURL)
 	if err != nil {
 		return err
 	}

@@ -188,6 +188,7 @@ type FeatureItem struct {
 	FeatureType string             `json:"featureType,omitempty" cms:"feature_type,select"`
 
 	// override city item's settings
+	Spec        string `json:"spec,omitempty" cms:"spec,select"`
 	PRCS        string `json:"prcs" cms:"prcs,text"`
 	Schemas     string `json:"schemas" cms:"schemas,asset"`
 	CodeLists   string `json:"codelists" cms:"code_lists,asset"`
@@ -228,6 +229,27 @@ func (f *FeatureItem) ConvSettings() *ConvSettings {
 		CodeLists:   f.CodeLists,
 		ObjectLists: f.ObjectLists,
 	}
+}
+
+func (f *FeatureItem) SpecMajorVersionInt() int {
+	if f == nil || f.Spec == "" {
+		return 0
+	}
+	s := strings.TrimPrefix(f.Spec, "v")
+	s = strings.TrimPrefix(s, "第")
+	s = strings.TrimSuffix(s, "版")
+
+	m, _, ok := strings.Cut(s, ".")
+	if !ok {
+		m = s
+	}
+
+	v, err := strconv.Atoi(m)
+	if err != nil {
+		return 0
+	}
+
+	return v
 }
 
 type ConvSettings struct {
@@ -579,11 +601,12 @@ func (r ReqType) Title() string {
 }
 
 func (t ReqType) CMSStatus(s ConvertionStatus) (qc ConvertionStatus, conv ConvertionStatus) {
-	if t == ReqTypeConv {
+	switch t {
+	case ReqTypeConv:
 		conv = s
-	} else if t == ReqTypeQC {
+	case ReqTypeQC:
 		qc = s
-	} else {
+	default:
 		qc = s
 		conv = s
 	}

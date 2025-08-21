@@ -369,3 +369,21 @@ func AdminFrom(a any) (admin Admin) {
 
 	return
 }
+
+var globalAreaCode = AreaCode("global")
+var globalAreaName = "全球"
+var globalAreaID = NewID("global", TypeGlobal)
+
+// NewGlobalArea creates a new GlobalArea instance
+func NewGlobalArea() *GlobalArea {
+	return &GlobalArea{
+		ID:       globalAreaID,
+		Type:     AreaTypeGlobal,
+		Code:     globalAreaCode,
+		Name:     globalAreaName,
+		ParentID: nil,
+		Parent:   nil,
+		Children: []Area{},
+		Datasets: []Dataset{},
+	}
+}

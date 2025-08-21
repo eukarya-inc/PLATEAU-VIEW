@@ -1,4 +1,4 @@
-package cmsintmaxlod
+package cmsintlodstat
 
 import (
 	"context"
@@ -44,13 +44,14 @@ func NewServices(c Config) (s *Services, _ error) {
 			Region:  c.GCPRegion,
 			Task: gcptaskrunner.Task{
 				Image: image,
+				Args:  []string{"lodstat"},
 			},
 			Env: map[string]string{
 				"REEARTH_CMS_URL":   c.CMSBaseURL,
 				"REEARTH_CMS_TOKEN": c.CMSToken,
 				"NO_COLOR":          "true",
 			},
-			DiskSizeGb: 1000,
+			DiskSizeGb: 50,
 			Timeout:    "86400s", // 1 day
 			QueueTtl:   "86400s", // 1 day
 		})

@@ -35,9 +35,8 @@ type Service struct {
 ## Development Commands
 
 ```bash
-# Build and run
-go build                    # Build the server binary
-go run main.go             # Run the server in development
+# Run the server
+go run .                    # Run the server in development
 go test ./...              # Run all tests
 go test -v ./path/...      # Run tests with verbose output
 
@@ -45,10 +44,56 @@ go test -v ./path/...      # Run tests with verbose output
 make gql                   # Generate GraphQL resolvers for plateauapi
 go generate ./...          # Run all code generation
 
+# Code formatting and linting
+go fmt ./...               # Format all Go code
+golangci-lint run ./...    # Run linting checks
+
 # Testing specific packages
 go test ./datacatalog/...  # Test datacatalog
 go test ./cmsintegration/... # Test CMS integration
 ```
+
+## Server Startup and Shutdown
+
+### Starting the Server
+
+```bash
+# Method 1: Run in foreground (recommended for development)
+go run .
+
+# Method 2: Run in background with logs
+go run . > server.log 2>&1 &
+
+# Method 3: Build binary (only needed for production)
+go build
+./server
+```
+
+### Stopping the Server
+
+```bash
+# Method 1: If running in foreground
+# Press Ctrl+C
+
+# Method 2: If running in background
+# Find the process
+lsof -i :8080
+# or
+ps aux | grep server
+
+# Kill the process
+kill <PID>
+
+# Method 3: Kill all processes on port 8080
+lsof -ti :8080 | xargs kill
+```
+
+### Important Notes
+
+- The server runs on port 8080 by default (configurable via PORT env var)
+- Check if old processes are running before starting: `lsof -i :8080`
+- If you get "address already in use" error, kill the existing process first
+- Server logs startup information including configuration and port
 
 ## Configuration
 
@@ -255,6 +300,32 @@ func handler(c echo.Context) error {
 - **reearth/reearthx**: Common utilities
 - **go-playground/validator**: Request validation
 - **joho/godotenv**: Environment file loading
+
+## Code Quality
+
+### Before Committing
+Always run these commands before committing code:
+```bash
+# Format code
+go fmt ./...
+
+# Run linting
+golangci-lint run ./...
+
+# Run tests
+go test ./...
+```
+
+### Linting
+The project uses `golangci-lint` with default settings. Common issues to watch for:
+- `errcheck`: Always handle errors, even for deferred Close() calls
+- `staticcheck`: Various Go best practices
+- Proper error messages (lowercase, no punctuation at end)
+
+### Code Formatting
+- Always use `go fmt` - it's the standard Go formatter
+- The project follows standard Go conventions
+- No manual formatting needed if you run `go fmt`
 
 ## Debugging Tips
 - Use `pp.Println()` for complex struct debugging

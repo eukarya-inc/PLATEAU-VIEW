@@ -156,10 +156,10 @@ type Service struct {
 func main() {
     // 設定の読み込み
     conf := config.Load()
-    
+
     // Echoサーバーの初期化
     e := echo.New()
-    
+
     // サービスの登録
     services := []service.Service{
         datacatalog.Service(conf),      // データカタログサービス
@@ -167,14 +167,14 @@ func main() {
         tiles.Service(conf),            // タイル配信サービス
         // ... その他のサービス
     }
-    
+
     // 各サービスの初期化
     for _, s := range services {
         if err := s.Init(e); err != nil {
             log.Fatal(err)
         }
     }
-    
+
     // サーバー起動
     e.Start(":" + conf.Port)
 }
@@ -210,16 +210,16 @@ type Config struct {
     // サーバー設定
     Port        string `env:"PORT" envDefault:"8080"`
     Environment string `env:"PLATEAU_ENV" envDefault:"development"`
-    
+
     // CMS設定
     CMSBaseURL   string `env:"CMS_BASE_URL"`
     CMSToken     string `env:"CMS_TOKEN"`
     CMSProjects  string `env:"CMS_PROJECTS"` // カンマ区切り
-    
+
     // キャッシュ設定
     CacheDir     string `env:"CACHE_DIR" envDefault:"./cache"`
     CacheEnabled bool   `env:"CACHE_ENABLED" envDefault:"true"`
-    
+
     // デバッグ設定
     Debug        bool   `env:"DEBUG" envDefault:"false"`
     DumpCache    bool   `env:"DUMP_CACHE" envDefault:"false"`
@@ -233,7 +233,7 @@ type Config struct {
 func (c *CMS) AllMetadata() ([]Metadata, error) {
     // 全プロジェクトのメタデータを取得
     var allMetadata []Metadata
-    
+
     for _, projectID := range c.projectIDs {
         // 各プロジェクトからメタデータ取得
         metadata, err := c.fetchProjectMetadata(projectID)
@@ -241,10 +241,10 @@ func (c *CMS) AllMetadata() ([]Metadata, error) {
             log.Printf("Failed to fetch metadata for project %s: %v", projectID, err)
             continue
         }
-        
+
         allMetadata = append(allMetadata, metadata)
     }
-    
+
     return allMetadata, nil
 }
 
@@ -302,7 +302,7 @@ func (r *Repos) Prepare(ctx context.Context, cms CMS) error {
     if err != nil {
         return fmt.Errorf("failed to get metadata: %w", err)
     }
-    
+
     // 各プロジェクトのリポジトリを初期化
     for _, m := range metadata {
         repo := &Repo{
@@ -310,16 +310,16 @@ func (r *Repos) Prepare(ctx context.Context, cms CMS) error {
             year:         m.Year,
             cache:        NewCache(m.ProjectAlias),
         }
-        
+
         // 初期データの読み込みまたはフェッチ
         if err := repo.Initialize(ctx, cms); err != nil {
             log.Printf("Failed to initialize repo %s: %v", m.ProjectAlias, err)
             continue
         }
-        
+
         r.repos[m.ProjectAlias] = repo
     }
-    
+
     return nil
 }
 ```
@@ -337,19 +337,19 @@ func (c *Cache) Initialize() error {
     if !c.enabled {
         return nil
     }
-    
+
     // ディスクキャッシュから既存データを読み込み
     if data, err := c.diskCache.Load(); err == nil {
         // メモリキャッシュに展開
         c.memoryCache.Set(data)
         log.Printf("Loaded cache from disk: %d items", len(data))
     }
-    
+
     // デバッグ用JSONダンプの準備
     if config.DumpCache {
         c.prepareDumpDirectory()
     }
-    
+
     return nil
 }
 ```
@@ -378,20 +378,20 @@ func (c *Cache) Initialize() error {
 func (r *Repo) InitializeWithRetry(ctx context.Context, cms CMS) error {
     maxRetries := 3
     backoff := time.Second
-    
+
     for i := 0; i < maxRetries; i++ {
         err := r.Initialize(ctx, cms)
         if err == nil {
             return nil
         }
-        
+
         if i < maxRetries-1 {
             log.Printf("Initialization failed (attempt %d/%d): %v", i+1, maxRetries, err)
             time.Sleep(backoff)
             backoff *= 2  // 指数バックオフ
         }
     }
-    
+
     return fmt.Errorf("initialization failed after %d attempts", maxRetries)
 }
 ```
@@ -450,11 +450,11 @@ func (c *CMSClient) buildRequest(endpoint string) (*http.Request, error) {
     if err != nil {
         return nil, err
     }
-    
+
     // 認証トークンの設定
     req.Header.Set("Authorization", "Bearer "+c.token)
     req.Header.Set("Content-Type", "application/json")
-    
+
     return req, nil
 }
 ```
@@ -525,12 +525,12 @@ func (c *CMSClient) GetAll(ctx context.Context) (*AllData, error) {
         Related:  []RelatedItem{},
         Generic:  []GenericItem{},
     }
-    
+
     // 並行取得で高速化
     var wg sync.WaitGroup
     var mu sync.Mutex
     errs := make(chan error, 4)
-    
+
     // City データの取得
     wg.Add(1)
     go func() {
@@ -544,20 +544,20 @@ func (c *CMSClient) GetAll(ctx context.Context) (*AllData, error) {
         allData.Cities = cities
         mu.Unlock()
     }()
-    
+
     // 同様にPlateau、Related、Genericも並行取得
     // ...
-    
+
     wg.Wait()
     close(errs)
-    
+
     // エラーチェック
     for err := range errs {
         if err != nil {
             return nil, err
         }
     }
-    
+
     return allData, nil
 }
 ```
@@ -570,61 +570,61 @@ func (c *CMSClient) fetchAllItems(modelID string, itemType interface{}) ([]inter
     var allItems []interface{}
     page := 1
     perPage := 100
-    
+
     for {
         // ページごとにデータ取得
         items, totalCount, err := c.fetchPage(modelID, page, perPage)
         if err != nil {
             return nil, fmt.Errorf("failed to fetch page %d: %w", page, err)
         }
-        
+
         allItems = append(allItems, items...)
-        
+
         // 次のページがあるかチェック
         if len(allItems) >= totalCount {
             break
         }
-        
+
         page++
-        
+
         // レートリミット対策
         time.Sleep(100 * time.Millisecond)
     }
-    
+
     return allItems, nil
 }
 
 func (c *CMSClient) fetchPage(modelID string, page, perPage int) ([]interface{}, int, error) {
     endpoint := fmt.Sprintf("models/%s/items?page=%d&perPage=%d", modelID, page, perPage)
-    
+
     req, err := c.buildRequest(endpoint)
     if err != nil {
         return nil, 0, err
     }
-    
+
     resp, err := c.httpClient.Do(req)
     if err != nil {
         return nil, 0, err
     }
     defer resp.Body.Close()
-    
+
     if resp.StatusCode != http.StatusOK {
         return nil, 0, fmt.Errorf("unexpected status: %d", resp.StatusCode)
     }
-    
+
     // レスポンスのパース
     var result struct {
         Items      []json.RawMessage `json:"items"`
         TotalCount int               `json:"totalCount"`
     }
-    
+
     if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
         return nil, 0, err
     }
-    
+
     // 型変換処理
     // ...
-    
+
     return items, result.TotalCount, nil
 }
 ```
@@ -647,17 +647,17 @@ func isRetryableError(err error) bool {
     if err == nil {
         return false
     }
-    
+
     // ネットワークエラー
     if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
         return true
     }
-    
+
     // HTTP 429 (Too Many Requests) や 503 (Service Unavailable)
     if httpErr, ok := err.(*HTTPError); ok {
         return httpErr.StatusCode == 429 || httpErr.StatusCode == 503
     }
-    
+
     return false
 }
 ```
@@ -717,7 +717,7 @@ for _, featureType := range all.FeatureTypes.Plateau {
     if featureType.MinYear > 0 && c.year < featureType.MinYear {
         continue
     }
-    
+
     featureItemsChan := lo.Async3(func() (string, []*PlateauFeatureItem, error) {
         res, err := c.GetPlateauItems(ctx, c.project, featureType.Code)
         return featureType.Code, res, err
@@ -731,7 +731,7 @@ for _, featureType := range all.FeatureTypes.Plateau {
 // キャッシュの読み込みと保存
 func loadCache[T any](cachePath, key string) (t T, _ error) {
     _ = os.MkdirAll(cachePath, 0755)
-    
+
     f, err := os.Open(filepath.Join(cachePath, key+".json"))
     if err != nil {
         if os.IsNotExist(err) {
@@ -740,28 +740,28 @@ func loadCache[T any](cachePath, key string) (t T, _ error) {
         return t, fmt.Errorf("failed to open cache file: %w", err)
     }
     defer f.Close()
-    
+
     var v T
     if err = json.NewDecoder(f).Decode(&v); err != nil {
         return
     }
-    
+
     return v, nil
 }
 
 func saveCache(cachePath, key string, content any) error {
     _ = os.MkdirAll(cachePath, 0755)
-    
+
     f, err := os.Create(filepath.Join(cachePath, key+".json"))
     if err != nil {
         return fmt.Errorf("failed to create cache file: %w", err)
     }
     defer f.Close()
-    
+
     if err = json.NewEncoder(f).Encode(content); err != nil {
         return fmt.Errorf("failed to encode cache content: %w", err)
     }
-    
+
     return nil
 }
 ```
@@ -796,7 +796,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
         warning = append(warning, "data is nil")
         return
     }
-    
+
     res = &plateauapi.InMemoryRepoContext{
         Name:     all.Name,
         Areas:    plateauapi.Areas{},
@@ -804,11 +804,11 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
     }
     res.PlateauSpecs = plateauapi.PlateauSpecsFrom(all.PlateauSpecs)
     res.DatasetTypes = all.FeatureTypes.ToDatasetTypes(res.PlateauSpecs)
-    
+
     ic := newInternalContext()
     ic.cmsinfo = all.CMSInfo
     ic.regYear = all.Year
-    
+
     // 変換処理の流れ
     // 1. 都道府県・市区町村の変換
     // 2. 区（Ward）の抽出
@@ -816,7 +816,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
     // 4. 関連データセットの変換
     // 5. 汎用データセットの変換
     // 6. CityGMLファイルの処理
-    
+
     return
 }
 ```
@@ -863,7 +863,7 @@ func (c *CityItem) ToPrefecture() *plateauapi.Prefecture {
     if c == nil || c.Prefecture == "" || c.CityCode == "" {
         return nil
     }
-    
+
     code := plateauapi.AreaCode(c.CityCode[:2])
     pref := plateauapi.NewPrefecture(code, c.Prefecture, nil)
     return &pref
@@ -876,12 +876,12 @@ func (c *CityItem) ToCity() *plateauapi.City {
     if c == nil || c.CityName == "" || c.CityCode == "" {
         return nil
     }
-    
+
     code := plateauapi.AreaCode(c.CityCode)
     if c.IsMerged() {
         code = plateauapi.AreaCode(c.SubCityCode)
     }
-    
+
     city := plateauapi.NewCity(
         code,
         c.CityName,
@@ -889,7 +889,7 @@ func (c *CityItem) ToCity() *plateauapi.City {
         plateauapi.AreaCode(c.CityCode[:2]), // parent prefecture
         c.Description(),
     )
-    
+
     return &city
 }
 ```
@@ -905,18 +905,18 @@ func getWards(items []*PlateauFeatureItem, ic *internalContext) (res []*plateaua
             warning = append(warning, fmt.Sprintf("plateau %s: city not found: %s", ds.ID, ds.City))
             continue
         }
-        
+
         wards := ds.toWards(area.Pref, area.City)
         res = append(res, wards...)
     }
-    
+
     return
 }
 
 // PlateauFeatureItemから区を抽出
 func (c *PlateauFeatureItem) toWards(pref *plateauapi.Prefecture, city *plateauapi.City) []*plateauapi.Ward {
     var wards []*plateauapi.Ward
-    
+
     for _, item := range c.Items {
         if item.WardCode != "" && item.WardName != "" {
             ward := plateauapi.NewWard(
@@ -929,7 +929,7 @@ func (c *PlateauFeatureItem) toWards(pref *plateauapi.Prefecture, city *plateaua
             wards = append(wards, &ward)
         }
     }
-    
+
     return wards
 }
 ```
@@ -951,13 +951,13 @@ func convertPlateau(
         warning = append(warning, fmt.Sprintf("unknown feature type: %s", featureType))
         return
     }
-    
+
     for _, item := range items {
         datasets, w := item.ToDatasets(dt, specs, fts[featureType], ic)
         warning = append(warning, w...)
         res = append(res, datasets...)
     }
-    
+
     return
 }
 ```
@@ -972,7 +972,7 @@ func convertRelated(
     dtmap := lo.SliceToMap(dts, func(dt plateauapi.DatasetType) (string, plateauapi.DatasetType) {
         return dt.GetCode(), dt
     })
-    
+
     for _, item := range items {
         for code, data := range item.Items {
             dt := dtmap[code]
@@ -980,14 +980,14 @@ func convertRelated(
                 warning = append(warning, fmt.Sprintf("related %s: unknown type: %s", item.ID, code))
                 continue
             }
-            
+
             dataset := data.ToDataset(dt, item, ic)
             if dataset != nil {
                 res = append(res, dataset)
             }
         }
     }
-    
+
     return
 }
 ```
@@ -1008,18 +1008,18 @@ func convertGeneric(
                 break
             }
         }
-        
+
         if dt == nil {
             warning = append(warning, fmt.Sprintf("generic %s: unknown type: %s", item.ID, item.Type))
             continue
         }
-        
+
         dataset := item.ToDataset(dt, ic)
         if dataset != nil {
             res = append(res, dataset)
         }
     }
-    
+
     return
 }
 ```
@@ -1060,14 +1060,14 @@ for _, cityItem := range all.City {
     if pref == nil || city == nil {
         continue
     }
-    
+
     ic.Add(cityItem, pref, city)
-    
+
     // 重複チェックして追加
     if res.Areas.FindByCodeAndType(pref.Code, plateauapi.AreaTypePrefecture) == nil {
         res.Areas.Append(plateauapi.AreaTypePrefecture, []plateauapi.Area{pref})
     }
-    
+
     if res.Areas.FindByCodeAndType(city.Code, plateauapi.AreaTypeCity) == nil {
         res.Areas.Append(plateauapi.AreaTypeCity, []plateauapi.Area{city})
     }
@@ -1078,7 +1078,7 @@ for _, ft := range res.DatasetTypes[plateauapi.DatasetTypeCategoryPlateau] {
     wards, w := getWards(all.Plateau[ft.GetCode()], ic)
     warning = append(warning, w...)
     ic.AddWards(wards)
-    res.Areas.Append(plateauapi.AreaTypeWard, 
+    res.Areas.Append(plateauapi.AreaTypeWard,
         lo.Map(wards, func(w *plateauapi.Ward, _ int) plateauapi.Area { return w }))
 }
 ```
@@ -1162,13 +1162,13 @@ type DatasetTypes map[DatasetTypeCategory][]DatasetType
 func areasForDatasetTypes(ds []Dataset) map[string]map[AreaCode]bool {
     // true -> 最詳細レベル, false -> 最詳細ではない
     res := make(map[string]map[AreaCode]bool)
-    
+
     for _, d := range ds {
         datasetTypeCode := d.GetTypeCode()
-        
+
         codes := areaCodesFrom(d)           // 関連するすべての地域コード
         code := mostDetailedAreaCodeFrom(d) // 最詳細レベルの地域コード
-        
+
         for _, c := range codes {
             mostDetailed := code != nil && c == *code
             if _, ok := res[datasetTypeCode]; !ok {
@@ -1179,7 +1179,7 @@ func areasForDatasetTypes(ds []Dataset) map[string]map[AreaCode]bool {
             }
         }
     }
-    
+
     return res
 }
 ```
@@ -1208,12 +1208,12 @@ func areasForDatasetTypes(ds []Dataset) map[string]map[AreaCode]bool {
 ```go
 func areasWithoutDataset(ds Datasets, areas Areas) map[ID]struct{} {
     res := make(map[ID]struct{})
-    
+
     for _, a := range areas.All() {
         if a == nil {
             continue
         }
-        
+
         found := false
         for _, d := range ds.All() {
             codes := areaCodesFrom(d)
@@ -1222,12 +1222,12 @@ func areasWithoutDataset(ds Datasets, areas Areas) map[ID]struct{} {
                 continue
             }
         }
-        
+
         if !found {
             res[a.GetID()] = struct{}{}
         }
     }
-    
+
     return res
 }
 ```
@@ -1300,12 +1300,12 @@ func (r *Repo) saveCache() error {
     if !r.cache || r.inmemoryContext == nil {
         return nil
     }
-    
+
     cv := repoCacheValue{
         InMemoryRepoContext: r.inmemoryContext,
         Warnings:            r.warnings,
     }
-    
+
     return r.saver.Save(cv)
 }
 ```
@@ -1447,7 +1447,7 @@ type RelatedDataset implements Dataset & Node {
   # ...
 }
 
-# 汎用データセット  
+# 汎用データセット
 type GenericDataset implements Dataset & Node {
   # ... Dataset fields
   # ...
@@ -1462,20 +1462,20 @@ type Query {
   # IDによる取得
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  
+
   # 地域の検索
   area(code: AreaCode!): Area
   areas(input: AreasInput): [Area!]!
-  
+
   # データセットタイプの検索
   datasetTypes(input: DatasetTypesInput): [DatasetType!]!
-  
+
   # データセットの検索
   datasets(input: DatasetsInput): [Dataset!]!
-  
+
   # PLATEAU仕様の取得
   plateauSpecs: [PlateauSpec!]!
-  
+
   # 対応年度の取得
   years: [Int!]!
 }
@@ -1494,7 +1494,7 @@ func (r *queryResolver) Areas(ctx context.Context, input *AreasInput) ([]Area, e
 func (c *InMemoryRepo) Areas(ctx context.Context, input *AreasInput) (res []Area, _ error) {
     inp := lo.FromPtr(input)
     types := c.getDatasetTypeCodes(inp.DatasetTypes, inp.Categories)
-    
+
     var codes []AreaCode
     if inp.DatasetTypes != nil {
         // areasForDataTypesインデックスを使用
@@ -1506,16 +1506,16 @@ func (c *InMemoryRepo) Areas(ctx context.Context, input *AreasInput) (res []Area
             }
         }
     }
-    
+
     res = c.ctx.Areas.Filter(func(a Area) bool {
         if !filterArea(a, inp, c.areasWithoutDataset) {
             return false
         }
-        
+
         if inp.DatasetTypes != nil && !lo.Contains(codes, a.GetCode()) {
             return false
         }
-        
+
         return true
     })
     return
@@ -1531,7 +1531,7 @@ func filterArea(a Area, input AreasInput, areasWithoutDataset map[ID]struct{}) b
             return false
         }
     }
-    
+
     // 親地域コードのフィルタリング
     if input.ParentCode != nil {
         parent := a.GetParent()
@@ -1554,14 +1554,14 @@ func filterArea(a Area, input AreasInput, areasWithoutDataset map[ID]struct{}) b
             }
         }
     }
-    
+
     // 空の地域の除外
     if !input.IncludeEmpty {
         if _, empty := areasWithoutDataset[a.GetID()]; empty {
             return false
         }
     }
-    
+
     // 検索文字列
     if len(input.SearchTokens) > 0 {
         name := a.GetName()
@@ -1571,7 +1571,7 @@ func filterArea(a Area, input AreasInput, areasWithoutDataset map[ID]struct{}) b
             }
         }
     }
-    
+
     return true
 }
 ```
@@ -1596,7 +1596,7 @@ func (r *cityResolver) Wards(ctx context.Context, obj *City) ([]*Ward, error) {
     if err != nil {
         return nil, err
     }
-    
+
     return lo.FilterMap(areas, func(a Area, _ int) (*Ward, bool) {
         if m, ok := a.(*Ward); ok {
             return m, ok
@@ -1655,9 +1655,9 @@ func (r *cityResolver) Datasets(ctx context.Context, obj *City, input *DatasetsI
 
 // includeParentsで親地域も含める
 {
-  areas(input: { 
+  areas(input: {
     datasetTypes: ["bldg"],
-    includeParents: true 
+    includeParents: true
   }) {
     code
     name
@@ -1779,7 +1779,7 @@ func (c *City) IsDesignatedCity() bool {
    ```go
    // 建築物の場合：区が最詳細
    "bldg" -> ["04101", "04102", ...] // 区コードのみ
-   
+
    // 都市計画の場合：市が最詳細
    "urf" -> ["04100", "04201", ...] // 市コードのみ
    ```
@@ -1808,22 +1808,22 @@ areasForDataTypesマップでの管理：
 // areasForDatasetTypes関数の動作
 func areasForDatasetTypes(ds []Dataset) map[string]map[AreaCode]bool {
     res := make(map[string]map[AreaCode]bool)
-    
+
     for _, d := range ds {
         datasetTypeCode := d.GetTypeCode() // "bldg", "urf", etc.
-        
+
         // データセットに関連する全地域コード
         codes := areaCodesFrom(d) // [県, 市, 区（あれば）]
-        
+
         // 最詳細レベルの地域コード
         code := mostDetailedAreaCodeFrom(d) // 区 or 市
-        
+
         for _, c := range codes {
             mostDetailed := code != nil && c == *code
             res[datasetTypeCode][c] = mostDetailed
         }
     }
-    
+
     return res
 }
 ```
@@ -1839,14 +1839,14 @@ func searchFromParent(parentCode string, datasetType string) {
         ParentCode: &parentCode,
         DatasetTypes: []string{datasetType},
     })
-    
+
     // 2. 間接的な子も含む（deep）
     areas := repo.Areas(ctx, &AreasInput{
         ParentCode: &parentCode,
         DatasetTypes: []string{datasetType},
         Deep: lo.ToPtr(true),
     })
-    
+
     // 3. データを持つ地域の親も含む（includeParents）
     areas := repo.Areas(ctx, &AreasInput{
         ParentCode: &parentCode,
@@ -1870,7 +1870,7 @@ func searchFromParent(parentCode string, datasetType string) {
        name
      }
    }
-   
+
    # ✅ 良い例：includeParentsまたはdeepを使用
    {
      areas(input: {
@@ -1933,9 +1933,175 @@ func searchFromParent(parentCode string, datasetType string) {
    }
    ```
 
-## 9. トラブルシューティング
+## 9. アセット管理とメタデータ自動抽出
 
-### 9.1 よくある問題
+### 9.1 アセット名規則
+
+#### アセット名からのメタデータ自動抽出
+PLATEAU VIEWシステムは、CMSにアップロードされたアセットのファイル名から自動的にメタデータを抽出します。この仕組みは`conv_asset.go`の`ParseAssetName`関数群で実装されています。
+
+#### 標準アセット名フォーマット
+```
+{市区町村コード}_{市区町村名}_{提供者}_{年度}_{フォーマット}_{更新回数}_op_{拡張情報}
+```
+
+例：
+- `13101_chiyoda-ku_pref_2023_citygml_2_op_bldg_3dtiles_13101_chiyoda-ku_lod2`
+- `13101_chiyoda-ku_pref_2023_citygml_2_op_bldg_3dtiles_13101_chiyoda-ku_lod2_no_texture`
+
+#### 拡張情報の正規表現パターン
+```go
+// conv_asset.go:172
+var reAssetNameExNormal = regexp.MustCompile(
+    `^([a-z]+)(?:_([A-Za-z0-9-_]+))?_(mvt|3dtiles|dm_geometric_attributes)` +
+    `(?:_(\d+)_([a-z0-9-]+))?(_lod\d\d?)?(_no_texture)?$`
+)
+```
+
+重要なサフィックス：
+- `_lod{数字}`: LOD（詳細度）を指定（例：`_lod1`, `_lod2`, `_lod31`）
+- `_no_texture`: テクスチャなしを示す
+
+### 9.2 メタデータ抽出の仕組み
+
+#### AssetNameEx構造体
+```go
+type AssetNameExNormal struct {
+    Type      string  // データタイプ（例："bldg"）
+    Name      string  // データ名
+    Format    string  // フォーマット（"3dtiles", "mvt"等）
+    WardCode  string  // 区コード
+    WardName  string  // 区名
+    LOD       int     // 詳細度
+    LODEx     int     // 詳細度の小数部分
+    NoTexture bool    // テクスチャなしフラグ
+    NoLOD     bool    // LOD情報なしフラグ
+}
+```
+
+#### テクスチャ判定ロジック
+```go
+// ParseAssetNameExNormal関数内（conv_asset.go:212）
+NoTexture: m[7] != "",  // _no_textureサフィックスの有無で判定
+```
+
+### 9.3 データセットアイテムID生成
+
+#### ID生成ルール
+データセットアイテムのIDは、親ID、LOD情報、テクスチャ情報を組み合わせて生成されます：
+
+```go
+// conv_dataset_plateau_seed.go:310-332
+func (i plateauDatasetItemSeed) GetID(parentID string) string {
+    ids := []string{parentID, i.ID}
+
+    // LOD情報の付加
+    if i.LOD != nil && !i.HideLOD {
+        lodex := ""
+        if i.LODEx != nil && *i.LODEx > 0 {
+            lodex = fmt.Sprintf("%d", *i.LODEx)
+        }
+        ids = append(ids, fmt.Sprintf("lod%d%s", *i.LOD, lodex))
+    }
+
+    // テクスチャ情報の付加
+    if !i.HideTexture && i.NoTexture != nil && *i.NoTexture {
+        ids = append(ids, "no_texture")
+    }
+
+    return strings.Join(ids, "_")
+}
+```
+
+#### ID重複の問題
+アセット名に`_no_texture`サフィックスがない場合、異なるアセットでも同じIDが生成される可能性があります：
+- テクスチャありLOD2: `di_13102_bldg_lod2`
+- テクスチャなしLOD2（誤）: `di_13102_bldg_lod2` （同じID！）
+- テクスチャなしLOD2（正）: `di_13102_bldg_lod2_no_texture`
+
+### 9.4 よくある問題と対処法
+
+#### テクスチャなしデータが表示されない
+**原因**: アセット名に`_no_texture`サフィックスが付いていない
+
+**確認方法**:
+```bash
+# アセットURLを確認
+curl -s "https://api.plateauview.mlit.go.jp/datacatalog/graphql" \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"query":"{datasets(input:{areaCodes:[\"13102\"]}){...on PlateauDataset{items{url}}}}"}'  | \
+  jq '.data.datasets[].items[].url' | grep -o '[^/]*\.json$'
+```
+
+**対処法**: CMSでアセットを再アップロードする際、ファイル名に`_no_texture`を含める
+
+#### 同じLODのアイテムが重複して表示される
+**原因**: 複数のアセットが同じIDを生成している
+
+**確認方法**:
+```bash
+# ID重複を検出
+jq '.datasets.PLATEAU[].items[] | select(.cityCode == "対象市区町村コード") | .id' \
+  cache/repo_plateau-2024.json | sort | uniq -d
+```
+
+#### アセット名パースエラー
+**症状**: warnings.txtに`invalid asset name`エラーが記録される
+
+**原因**: アセット名が期待される形式に従っていない
+
+**確認方法**:
+```bash
+grep "invalid asset name" cache/repo_plateau-2024_warnings.txt
+```
+
+### 9.5 デバッグのベストプラクティス
+
+#### 1. アセット名の検証スクリプト
+```bash
+#!/bin/bash
+# アセット名の形式を検証
+function validate_asset_name() {
+    local name=$1
+    if [[ $name =~ ^[0-9]{5}_[a-z-]+_[a-z]+_[0-9]{4}_citygml_[0-9]+_op_ ]]; then
+        echo "✓ 基本形式: OK"
+
+        # テクスチャなしの場合
+        if [[ $name =~ _lod[0-9]$ ]] || [[ $name =~ _lod[0-9]_no_texture$ ]]; then
+            echo "✓ LOD/テクスチャ形式: OK"
+        else
+            echo "✗ LOD/テクスチャ形式: NG"
+        fi
+    else
+        echo "✗ 基本形式: NG"
+    fi
+}
+```
+
+#### 2. キャッシュの整合性確認
+```bash
+# テクスチャ情報の整合性をチェック
+jq -r '.datasets.PLATEAU[] |
+  select(.typeCode == "bldg") |
+  .items[] |
+  "\(.url | split("/") | .[-1] | gsub("\\.json$"; ""))\t\(.texture)"' \
+  cache/repo_plateau-2024.json |
+  awk -F'\t' '
+    ($1 ~ /_no_texture$/ && $2 == "TEXTURE") ||
+    ($1 !~ /_no_texture$/ && $2 == "NONE")
+    { print "不整合: " $1 " -> " $2 }'
+```
+
+#### 3. warnings.txtの活用
+重要な警告パターン：
+- `invalid asset name`: アセット名の形式エラー
+- `invalid asset name year`: 年度の不一致
+- `unknown dic key`: 辞書キーが見つからない
+- `no assets for ward`: 区のアセットが見つからない
+
+## 10. トラブルシューティング
+
+### 10.1 よくある問題
 
 #### 空の結果が返される場合
 
@@ -1956,9 +2122,9 @@ func searchFromParent(parentCode string, datasetType string) {
      }
    }
    ```
-   
+
    対処法：`includeParents: true`または`deep: true`を追加
-   
+
 2. **データがまだ存在しない地域**
    - キャッシュファイルを確認して、該当地域のデータが存在するか確認
    - CMSでデータが公開されているか確認
@@ -1987,10 +2153,10 @@ func searchFromParent(parentCode string, datasetType string) {
    ```bash
    # キャッシュディレクトリの確認
    ls -la cache/
-   
+
    # キャッシュファイルのタイムスタンプ確認
    ls -la cache/repo_plateau-2024.json
-   
+
    # キャッシュを削除して再起動
    rm -rf cache/*
    ```
@@ -2027,7 +2193,7 @@ func searchFromParent(parentCode string, datasetType string) {
        }
      }
    }
-   
+
    # 良い例：必要な地域に絞る
    {
      datasets(input: {
@@ -2086,7 +2252,7 @@ grep "cms" server.log | grep -v "success"
 grep "graphql error" server.log
 ```
 
-### 9.3 問題の切り分け
+### 10.3 問題の切り分け
 
 #### CMS側の問題
 確認項目：
@@ -2135,200 +2301,3 @@ GraphQL Playgroundでのテスト：
   }
 }
 ```
-
-## 10. 開発ガイド
-
-### 10.1 新しいデータタイプの追加
-
-#### 手順
-1. **CMSモデルの定義**
-   ```go
-   // cms_model.goに追加
-   type NewDataItem struct {
-       ID       string `json:"id,omitempty" cms:"id"`
-       City     string `json:"city,omitempty" cms:"city,reference"`
-       Name     string `json:"name,omitempty" cms:"name,text"`
-       Data     string `json:"data,omitempty" cms:"data,asset"`
-       // ...
-   }
-   ```
-
-2. **変換関数の実装**
-   ```go
-   // conv_dataset_new.goを作成
-   func convertNewData(
-       items []*NewDataItem,
-       dt plateauapi.DatasetType,
-       ic *internalContext,
-   ) ([]plateauapi.Dataset, []string) {
-       // 変換ロジック
-   }
-   ```
-
-3. **GraphQLスキーマの更新**
-   ```graphql
-   type NewDatasetType implements DatasetType & Node {
-       id: ID!
-       code: String!
-       name: String!
-       # ...
-   }
-   ```
-
-4. **テストの追加**
-   ```go
-   func TestConvertNewData(t *testing.T) {
-       // テストケース
-   }
-   ```
-
-### 10.2 フィルタリング条件の拡張
-
-新しいフィルタ条件を追加する場合：
-
-1. **GraphQLスキーマの更新**
-   ```graphql
-   input AreasInput {
-       # 既存フィールド...
-       
-       # 新しいフィルタ条件
-       hasSpecificFeature: Boolean
-   }
-   ```
-
-2. **フィルタ関数の更新**
-   ```go
-   func filterArea(a Area, input AreasInput, ...) bool {
-       // 既存の条件...
-       
-       // 新しい条件
-       if input.HasSpecificFeature != nil && *input.HasSpecificFeature {
-           if !hasSpecificFeature(a) {
-               return false
-           }
-       }
-       
-       return true
-   }
-   ```
-
-### 10.3 パフォーマンスの最適化
-
-#### インデックスの追加
-```go
-// 新しいインデックスマップ
-type InMemoryRepo struct {
-    // 既存フィールド...
-    
-    // 新しいインデックス
-    areasByName map[string][]AreaCode
-}
-
-// インデックスの構築
-func buildAreasByNameIndex(areas Areas) map[string][]AreaCode {
-    // 実装
-}
-```
-
-#### クエリの最適化
-```go
-// バッチ処理の活用
-func (r *Repo) BatchGetNodes(ctx context.Context, ids []ID) ([]Node, error) {
-    // 一度に複数のノードを取得
-}
-```
-
-### 10.4 テストの書き方
-
-#### ユニットテスト
-```go
-func TestAreasQuery(t *testing.T) {
-    // テストデータの準備
-    repo := NewInMemoryRepo(&InMemoryRepoContext{
-        Areas: Areas{
-            AreaTypePrefecture: []Area{
-                NewPrefecture("04", "宮城県", nil),
-            },
-        },
-    })
-    
-    // クエリの実行
-    areas, err := repo.Areas(context.Background(), &AreasInput{
-        ParentCode: lo.ToPtr(AreaCode("04")),
-    })
-    
-    // 検証
-    assert.NoError(t, err)
-    assert.Len(t, areas, 1)
-}
-```
-
-#### 統合テスト
-```go
-func TestEndToEndDataFlow(t *testing.T) {
-    // CMSモックの準備
-    // データ取得・変換・API提供までの一連の流れをテスト
-}
-```
-
-## 付録
-
-### A. 用語集
-
-| 用語 | 説明 |
-|------|------|
-| PLATEAU | 国土交通省が推進する3D都市モデルプロジェクト |
-| CityGML | 都市の3Dモデルを記述するための国際標準フォーマット |
-| 3D Tiles | 大規模な3Dデータをウェブで効率的に配信するための形式 |
-| 政令指定都市 | 人口50万人以上で政令により指定された市（20市） |
-| 地域コード | 都道府県（2桁）・市区町村（5桁）を表す行政コード |
-| 最詳細レベル | データセットが実際に存在する最も詳細な地域階層 |
-| インメモリリポジトリ | 全データをメモリ上に保持する高速データストア |
-
-### B. 設定ファイルのリファレンス
-
-#### 環境変数
-```bash
-# サーバー設定
-PORT=8080
-PLATEAU_ENV=development
-
-# CMS設定
-CMS_BASE_URL=https://cms.example.com
-CMS_TOKEN=your-token-here
-CMS_PROJECTS=plateau-2023,plateau-2024
-
-# キャッシュ設定
-CACHE_DIR=./cache
-CACHE_ENABLED=true
-
-# デバッグ設定
-DEBUG=false
-DUMP_CACHE=true
-```
-
-### C. GraphQL APIリファレンス
-
-主要なクエリの一覧：
-- `node(id: ID!)`: IDによるオブジェクト取得
-- `nodes(ids: [ID!]!)`: 複数IDによる一括取得
-- `area(code: AreaCode!)`: 地域コードによる地域取得
-- `areas(input: AreasInput)`: 地域の検索
-- `datasets(input: DatasetsInput)`: データセットの検索
-- `datasetTypes(input: DatasetTypesInput)`: データセットタイプの検索
-- `plateauSpecs`: PLATEAU仕様の一覧
-- `years`: 対応年度の一覧
-
-### D. よくある質問（FAQ）
-
-**Q: 建築物データを持つ市を検索するには？**
-A: `includeParents: true`を使用してください。
-
-**Q: 特定の年度のデータのみを取得するには？**
-A: `DatasetsInput`の`year`フィールドを指定してください。
-
-**Q: データの更新頻度は？**
-A: Webhookによりリアルタイム更新されますが、キャッシュにより最大数分の遅延があります。
-
-**Q: 大量のデータを効率的に取得するには？**
-A: 必要なフィールドのみを指定し、地域コードで絞り込んでください。

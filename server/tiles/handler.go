@@ -164,7 +164,7 @@ func (h *Handler) streamTile(c echo.Context, base, z, x, y string) error {
 		return fmt.Errorf("failed to get tile: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Debugfc(c.Request().Context(), "tiles: failed to get tile (status code %d): %s", resp.StatusCode, url)

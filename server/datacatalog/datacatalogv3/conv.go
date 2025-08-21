@@ -116,6 +116,13 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		warning = append(warning, w...)
 	}
 
+	// Filter out DatasetTypes without any Datasets
+	{
+		var w []string
+		res.DatasetTypes, w = filterDatasetTypesWithoutDatasets(res.DatasetTypes, res.Datasets)
+		warning = append(warning, w...)
+	}
+
 	return
 }
 
@@ -324,6 +331,39 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 		warning = append(warning, w...)
 		if ds != nil {
 			res = append(res, ds...)
+		}
+	}
+
+	return
+}
+
+// filterDatasetTypesWithoutDatasets filters out DatasetTypes that have no corresponding Datasets
+func filterDatasetTypesWithoutDatasets(datasetTypes plateauapi.DatasetTypes, datasets plateauapi.Datasets) (filtered plateauapi.DatasetTypes, warning []string) {
+	filtered = make(plateauapi.DatasetTypes)
+
+	for category, types := range datasetTypes {
+		var filteredTypes []plateauapi.DatasetType
+		categoryDatasets := datasets[category]
+
+		for _, dt := range types {
+			// Check if there are any datasets for this dataset type
+			hasDataset := false
+			for _, ds := range categoryDatasets {
+				if ds.GetTypeID() == dt.GetID() {
+					hasDataset = true
+					break
+				}
+			}
+
+			if hasDataset {
+				filteredTypes = append(filteredTypes, dt)
+			} else {
+				warning = append(warning, fmt.Sprintf("dataset type %s (%s) has no datasets, filtering out", dt.GetCode(), dt.GetName()))
+			}
+		}
+
+		if len(filteredTypes) > 0 {
+			filtered[category] = filteredTypes
 		}
 	}
 

@@ -58,7 +58,7 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 		return FlowRequestResult{}, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	resb, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return FlowRequestResult{}, fmt.Errorf("failed to read response: %w", err)

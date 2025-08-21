@@ -59,6 +59,11 @@ func (c *InMemoryRepo) Node(ctx context.Context, id ID) (Node, error) {
 		if a := c.ctx.Areas.Area(id); a != nil {
 			return a, nil
 		}
+	case TypeGlobal:
+		// Return the singleton GlobalArea instance
+		if id == globalAreaID {
+			return NewGlobalArea(), nil
+		}
 	case TypeDatasetType:
 		if dt := c.ctx.DatasetTypes.DatasetType(id); dt != nil {
 			return dt, nil
@@ -105,6 +110,10 @@ func (c *InMemoryRepo) Nodes(ctx context.Context, ids []ID) ([]Node, error) {
 }
 
 func (c *InMemoryRepo) Area(ctx context.Context, code AreaCode) (Area, error) {
+	// Check if requesting global area
+	if code == globalAreaCode {
+		return NewGlobalArea(), nil
+	}
 	return c.ctx.Areas.Find(func(a Area) bool {
 		return a.GetCode() == code
 	}), nil
@@ -136,6 +145,21 @@ func (c *InMemoryRepo) Areas(ctx context.Context, input *AreasInput) (res []Area
 
 		return true
 	})
+
+	// Determine if GlobalArea should be included
+	shouldIncludeGlobal := (inp.AreaTypes != nil && lo.Contains(inp.AreaTypes, AreaTypeGlobal)) || // Explicitly requesting GLOBAL area type
+		(inp.DatasetTypes != nil && lo.Contains(inp.DatasetTypes, "global")) // Searching for global dataset types
+
+	// If no type filters specified, include GlobalArea if it passes general filters
+	if !shouldIncludeGlobal && len(inp.AreaTypes) == 0 && len(inp.DatasetTypes) == 0 {
+		global := NewGlobalArea()
+		shouldIncludeGlobal = filterArea(global, inp, nil)
+	}
+
+	if shouldIncludeGlobal {
+		res = append(res, NewGlobalArea())
+	}
+
 	return
 }
 

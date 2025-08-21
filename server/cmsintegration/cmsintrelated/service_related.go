@@ -206,9 +206,10 @@ func convRelatedType(ctx context.Context, project, target, assetID string, s *Se
 
 	// conv
 	var res any
-	if target == "border" {
+	switch target {
+	case "border":
 		res, err = dataconv.ConvertBorder(fc, id)
-	} else if target == "landmark" || target == "station" {
+	case "landmark", "station":
 		res, err = dataconv.ConvertLandmark(fc, id)
 	}
 

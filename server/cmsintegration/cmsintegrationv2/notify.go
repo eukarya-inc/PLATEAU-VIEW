@@ -148,9 +148,10 @@ func commentContent(f fmeResult) string {
 	}
 
 	var tt string
-	if f.Type == "qualityCheck" {
+	switch f.Type {
+	case "qualityCheck":
 		tt = "品質検査"
-	} else if f.Type == "conversion" {
+	case "conversion":
 		tt = "3D Tiles への変換"
 	}
 
@@ -169,10 +170,7 @@ func uploadAssets(ctx context.Context, c cms.Interface, pid string, f fmeResult)
 	res, unknown := f.GetResult()
 	queue := queueFromResult(res)
 
-	for {
-		if len(queue) == 0 {
-			break
-		}
+	for len(queue) > 0 {
 		e := queue[0]
 		queue = queue[1:]
 		if e.Retry > maxRetry {

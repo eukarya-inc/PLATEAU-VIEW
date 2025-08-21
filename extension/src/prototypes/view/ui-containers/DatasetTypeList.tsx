@@ -103,6 +103,7 @@ const PrefectureItem: FC<{
   const query = useAreas({
     parentCode: prefecture.code,
     datasetTypes: [datasetType],
+    includeParents: true,
   });
 
   // Handle the datasets belongs to this perfecture and type but no municipality

@@ -14,6 +14,7 @@ PLATEAU VIEW 4.0 は以下のシステムにより構成されます。
 ## フォルダ構成
 
 - [cms](cms): PLATEAU CMS
+- [e2e](e2e): PlaywrightによるPLATEAU VIEWの自動E2Eテスト用パッケージ
 - [editor](editor): PLATEAU Editor
 - [extension](extension): PLATEAU Editor の拡張機能
 - [flow](flow): PLATEAU Flow

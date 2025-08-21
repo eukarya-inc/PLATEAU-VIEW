@@ -142,7 +142,7 @@ func Sidebar(conf *Config) (*Service, error) {
 
 func DataCatalog(conf *Config) (*Service, error) {
 	c := conf.DataCatalog()
-	if c.Config.CMSBaseURL == "" {
+	if c.CMSBaseURL == "" {
 		return nil, nil
 	}
 	if c.PlaygroundEndpoint == "" {

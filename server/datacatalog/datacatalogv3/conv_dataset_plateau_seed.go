@@ -40,7 +40,23 @@ type plateauDatasetSeed struct {
 }
 
 func (seed plateauDatasetSeed) GetID() string {
-	return standardItemID(seed.DatasetType.Code, seed.TargetArea.GetCode(), seed.Subcode)
+	id := standardItemID(seed.DatasetType.Code, seed.TargetArea.GetCode(), seed.Subcode)
+
+	// Check if any asset is interior
+	isInterior := false
+	for _, asset := range seed.Assets {
+		if asset != nil && asset.Ex.Normal != nil && asset.Ex.Normal.Interior {
+			isInterior = true
+			break
+		}
+	}
+
+	// Add "_interior" suffix for interior datasets
+	if isInterior {
+		id = id + "_interior"
+	}
+
+	return id
 }
 
 func plateauDatasetSeedsFrom(i *PlateauFeatureItem, opts ToPlateauDatasetsOptions) (res []plateauDatasetSeed, warning []string) {
@@ -121,6 +137,7 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 	for _, seed := range seeds {
 		seed := seed
 		key := seed.Subcode
+
 		first := m[key]
 		if key == "" || first == nil {
 			m[key] = &seed
@@ -132,9 +149,44 @@ func mergeDatasetSeeds(seeds []plateauDatasetSeed) []plateauDatasetSeed {
 		first.Assets = append(first.Assets, seed.Assets...)
 	}
 
-	return lo.Map(res, func(s *plateauDatasetSeed, _ int) plateauDatasetSeed {
-		return *s
-	})
+	// After merging, separate interior and non-interior assets
+	finalRes := make([]plateauDatasetSeed, 0, len(res)*2)
+	for _, seedPtr := range res {
+		seed := *seedPtr
+
+		// Separate assets into interior and non-interior
+		var interiorAssets []lo.Tuple2[string, *AssetName]
+		var regularAssets []lo.Tuple2[string, *AssetName]
+
+		for i, asset := range seed.Assets {
+			if asset != nil && asset.Ex.Normal != nil && asset.Ex.Normal.Interior {
+				interiorAssets = append(interiorAssets, lo.Tuple2[string, *AssetName]{A: seed.AssetURLs[i], B: asset})
+			} else {
+				regularAssets = append(regularAssets, lo.Tuple2[string, *AssetName]{A: seed.AssetURLs[i], B: asset})
+			}
+		}
+
+		// Add regular dataset if there are regular assets
+		if len(regularAssets) > 0 {
+			regularSeed := seed
+			regularSeed.AssetURLs = lo.Map(regularAssets, func(t lo.Tuple2[string, *AssetName], _ int) string { return t.A })
+			regularSeed.Assets = lo.Map(regularAssets, func(t lo.Tuple2[string, *AssetName], _ int) *AssetName { return t.B })
+			finalRes = append(finalRes, regularSeed)
+		}
+
+		// Add interior dataset if there are interior assets
+		if len(interiorAssets) > 0 {
+			interiorSeed := seed
+			interiorSeed.AssetURLs = lo.Map(interiorAssets, func(t lo.Tuple2[string, *AssetName], _ int) string { return t.A })
+			interiorSeed.Assets = lo.Map(interiorAssets, func(t lo.Tuple2[string, *AssetName], _ int) *AssetName { return t.B })
+			if interiorSeed.Subcode != "" {
+				interiorSeed.Subcode = interiorSeed.Subcode + "_interior"
+			}
+			finalRes = append(finalRes, interiorSeed)
+		}
+	}
+
+	return finalRes
 }
 
 func plateauDatasetSeedFromItem(item PlateauFeatureItemDatum, dt *plateauapi.PlateauDatasetType, dic Dic, cityCode string) (res plateauDatasetSeed, warning []string) {

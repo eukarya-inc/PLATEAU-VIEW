@@ -213,7 +213,7 @@ func getAndParseSetupCSV(ctx context.Context, s *Services, url string, body io.R
 	if err != nil {
 		return nil, nil, err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	return parseSetupCSV(r)
 }

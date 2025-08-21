@@ -91,9 +91,10 @@ func getFeatureTypes(ctx context.Context, pcms plateaucms.FeatureTypeStore) (ft 
 			Code: r.Code,
 			Name: r.Name,
 		}
-		if r.Category == plateaucms.DatasetCategoryRelated {
+		switch r.Category {
+		case plateaucms.DatasetCategoryRelated:
 			ft.Related = append(ft.Related, f)
-		} else if r.Category == plateaucms.DatasetCategoryGeneric {
+		case plateaucms.DatasetCategoryGeneric:
 			ft.Generic = append(ft.Generic, f)
 		}
 	}

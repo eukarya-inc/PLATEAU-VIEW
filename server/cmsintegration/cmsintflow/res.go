@@ -167,13 +167,19 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 
 	log.Infofc(ctx, "success to receive result from flow: %s", id.Type)
 
-	// if the qc is success, trigger the conversion
+	// if the qc is success, trigger the conversion (unless conversion is skipped)
 	if id.Type == cmsintegrationcommon.ReqTypeQC && qcStatus == cmsintegrationcommon.ConvertionStatusSuccess {
-		log.Infofc(ctx, "trigger conv")
-		rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, cmsintegrationcommon.ReqTypeConv); err != nil {
-			log.Errorfc(ctx, "failed to trigger conv: %v", err)
-			return fmt.Errorf("failed to send request to flow: %w", err)
+		// Check if conversion should be skipped
+		_, skipConv := baseFeatureItem.IsQCAndConvSkipped()
+		if skipConv || !featureType.Conv {
+			log.Infofc(ctx, "skip conv after qc success because conversion is marked as skip or feature type doesn't support conversion")
+		} else {
+			log.Infofc(ctx, "trigger conv")
+			rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
+			if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, cmsintegrationcommon.ReqTypeConv); err != nil {
+				log.Errorfc(ctx, "failed to trigger conv: %v", err)
+				return fmt.Errorf("failed to send request to flow: %w", err)
+			}
 		}
 	}
 

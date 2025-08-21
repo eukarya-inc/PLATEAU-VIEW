@@ -78,8 +78,9 @@ type lod1SolidHandler struct {
 	Next   attrHandler
 	Filter lod1SolidFilter
 
-	faces  []geo.Polygon3
-	points []geo.Point3
+	faces       []geo.Polygon3
+	points      []geo.Point3
+	boundingBox *geo.Bounds3
 }
 
 func (h *lod1SolidHandler) HandleAttr(dec *xmlb.Decoder, el xml.StartElement) error {
@@ -118,6 +119,12 @@ func (h *lod1SolidHandler) HandleAttr(dec *xmlb.Decoder, el xml.StartElement) er
 		}
 		if !h.Filter.IsIntersect(h.faces) {
 			return errSkipFeature
+		}
+		// Store the bounding box of the LOD1 solid
+		if len(h.faces) > 0 {
+			po := geo.Polyhedron(h.faces)
+			bounds := po.Bounds()
+			h.boundingBox = &bounds
 		}
 		return nil
 	} else {

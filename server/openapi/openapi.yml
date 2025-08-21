@@ -205,7 +205,66 @@ paths:
           required: true
           schema:
             type: string
-          description: 地理的なエリアや都市の情報をフィルタリングするための条件。詳細はドキュメント参照。
+          description: |
+            地理的なエリアや都市の情報をフィルタリングするための条件。詳細は[ドキュメント](https://github.com/Project-PLATEAU/plateau-streaming-tutorial/blob/main/citygml/plateau-citygml.md)参照。
+
+            使用例: `m:533945`, `s:spatialID`, `r:135.5,35.0`, `g:locationName`
+
+            `:conditions`パラメータは以下の条件タイプに対応している。
+
+            1. **メッシュコード (`m`)**
+                - **概要**: カンマ区切りで複数のメッシュコードに基づいてエリアを指定。2次メッシュ（6桁）・3次メッシュ（8桁）・1/2メッシュ（9桁）・1/4メッシュ（10桁）に対応する。メッシュコードはハイフンで区切らず数値だけで表すこと。
+                - **形式**: `m:<メッシュコード>`
+                - **例**: `m:533944,533945`
+
+                    https://api.plateauview.mlit.go.jp/datacatalog/citygml/m:533935
+
+            2. **メッシュコード厳密検索 (`mm`)**
+                - **概要**: 1とほぼ同じだが、1と比べ、メッシュコードの桁数が完全に一致するCityGMLのみを取得する。2次メッシュの場合は2次メッシュのデータセットのみが、3次メッシュの場合は3次メッシュのCityGMLのみがヒットする。
+                - **形式**: `mm:<メッシュコード>`
+                - **例**: `mm:533944,533945`
+
+                    https://api.plateauview.mlit.go.jp/datacatalog/citygml/mm:533935
+
+            3. **空間ID (`s`)**
+                - **概要**: カンマ区切りで複数の空間IDを使用してエリアを指定。
+                - **形式**: `s:<空間ID>,<空間ID>,...`
+                    - 空間IDは、`z/x/y`、 `z/f/x/y`、 `/z/x/y` 、 `/z/f/x/y` 、およびタイルハッシュの表記に対応。
+                - **例**
+                    - https://api.plateauview.mlit.go.jp/datacatalog/citygml/s:18/1/232853/103220
+
+                    （ `z/f/x/y` ）
+
+            4. **座標範囲 (`r`)**
+                - **概要**: 座標範囲を指定してエリアを指定。
+                - **形式**:
+                    - 2要素（`lng`, `lat`）で中心点を指定する場合: `r:lng,lat`
+                    - 4要素（`lng1`, `lat1`, `lng2`, `lat2`）で範囲を指定する場合: `r:lng1,lat1,lng2,lat2`
+
+                        注意：`lng1` < `lng2`, `lat1` < `lat2` となるように指定する必要がある。
+
+                - **例**:
+                    - 中心点の指定: `r:139.7375,35.65833333333333`
+
+                        https://api.plateauview.mlit.go.jp/datacatalog/citygml/r:139.7385,35.65933333333333
+
+                    - 範囲の指定: `r:139.7375,35.65833333333333,139.74,35.66`
+
+                        https://api.plateauview.mlit.go.jp/datacatalog/citygml/r:139.7375,35.65833333333333,139.74,35.66
+
+            5. **ジオコーディング (`g`)**
+                - **概要**: ジオコーディングAPIを用いてエリアを指定する。
+                - **形式**: `g:<ロケーション名>`
+                - **例**: `g:千代田区`
+
+                    [https://api.plateauview.mlit.go.jp/datacatalog/citygml/g:千代田区](https://api.plateauview.mlit.go.jp/datacatalog/citygml/g:%E5%8D%83%E4%BB%A3%E7%94%B0%E5%8C%BA)
+
+            6. **自治体コード**
+                - **概要**: カンマ区切りで複数の自治体コードを指定する。
+                - **形式**: `cityId1,cityId2,...`
+                - **例**: `13999`
+
+                    https://api.plateauview.mlit.go.jp/datacatalog/citygml/13999
       responses:
         "200":
           description: 成功時のレスポンス
@@ -434,7 +493,68 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/error"
+                type: array
+                items:
+                  type: object
+                  description: 地物の属性情報
+                  additionalProperties: true
+                  properties:
+                    gml:id:
+                      type: string
+                      description: 地物のID
+                    _type:
+                      type: string
+                      description: 地物の型
+                    _bbox:
+                      type: object
+                      description: ジオメトリのバウンディングボックス（lod1Solid）
+                      properties:
+                        min:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最小経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最小緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最小高度（m・標高）
+                        max:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最大経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最大緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最大高度（m・標高）
+                        center:
+                          type: object
+                          description: バウンディングボックスの中心座標
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 中心経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 中心緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 中心高度（m・標高）
         "400":
           description: 無効なリクエスト
           content:
@@ -500,6 +620,71 @@ paths:
       responses:
         "200":
           description: 属性情報のJSON形式での返却
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  description: 地物の属性情報
+                  additionalProperties: true
+                  properties:
+                    gml:id:
+                      type: string
+                      description: 地物のID
+                    _type:
+                      type: string
+                      description: 地物の型
+                    _bbox:
+                      type: object
+                      description: ジオメトリのバウンディングボックス（lod1Solid）
+                      properties:
+                        min:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最小経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最小緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最小高度（メートル・標高）
+                        max:
+                          type: object
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 最大経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 最大緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 最大高度（メートル・標高）
+                        center:
+                          type: object
+                          description: バウンディングボックスの中心座標
+                          properties:
+                            lng:
+                              type: number
+                              format: double
+                              description: 中心経度
+                            lat:
+                              type: number
+                              format: double
+                              description: 中心緯度
+                            alt:
+                              type: number
+                              format: double
+                              description: 中心高度（メートル・標高）
         "400":
           description: 無効なリクエスト
           content:

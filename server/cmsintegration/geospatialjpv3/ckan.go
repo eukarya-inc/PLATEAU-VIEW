@@ -15,7 +15,7 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 	// find
 	pkg, pkgName, err := s.findPackage(ctx, seed.Name)
 	if err != nil {
-		return nil, false, fmt.Errorf("G空間情報センターからデータセットを検索できませんでした: %w", err)
+		return nil, false, fmt.Errorf("%s: %w", errMsgDatasetSearchFailed, err)
 	}
 
 	// create
@@ -26,7 +26,7 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 
 		pkg2, err := s.ckan.CreatePackage(ctx, newpkg)
 		if err != nil {
-			return nil, false, fmt.Errorf("G空間情報センターにデータセット %s を作成できませんでした: %w", pkgName, err)
+			return nil, false, fmt.Errorf("%s: %w", fmt.Sprintf(errMsgDatasetCreateFailed, pkgName), err)
 		}
 		return &pkg2, true, nil
 	}
@@ -38,7 +38,7 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 
 	pkg2, err := s.ckan.PatchPackage(ctx, newpkg)
 	if err != nil {
-		return nil, false, fmt.Errorf("G空間情報センターにデータセット %s を更新できませんでした: %w", pkgName, err)
+		return nil, false, fmt.Errorf("%s: %w", fmt.Sprintf(errMsgDatasetUpdateFailed, pkgName), err)
 	}
 	return &pkg2, false, nil
 }
@@ -85,7 +85,7 @@ func (s *handler) createOrUpdateResource(ctx context.Context, pkg *ckan.Package,
 	if res1 != nil {
 		res, err := s.ckan.PatchResource(ctx, resInfo.Into(pkg.ID, res1.ID))
 		if err != nil {
-			return res, fmt.Errorf("G空間情報センターのリソース %s を更新できませんでした: %w", resInfo.Name, err)
+			return res, fmt.Errorf("%s: %w", fmt.Sprintf(errMsgResourceUpdateFailed, resInfo.Name), err)
 		}
 
 		log.Infofc(ctx, "geospartialjpv3: resource %s updated", resInfo.Name)
@@ -94,7 +94,7 @@ func (s *handler) createOrUpdateResource(ctx context.Context, pkg *ckan.Package,
 
 	res2, err := s.ckan.CreateResource(ctx, resInfo.Into(pkg.ID, ""))
 	if err != nil {
-		return res2, fmt.Errorf("G空間情報センターにリソース %s を作成できませんでした: %w", resInfo.Name, err)
+		return res2, fmt.Errorf("%s: %w", fmt.Sprintf(errMsgResourceCreateFailed, resInfo.Name), err)
 	}
 
 	log.Infofc(ctx, "geospartialjpv3: resource %s created", resInfo.Name)
@@ -142,7 +142,7 @@ func (s *handler) reorderResources(ctx context.Context, pkg string, order []stri
 
 	err := s.ckan.ReorderResource(ctx, pkg, order)
 	if err != nil {
-		return fmt.Errorf("G空間情報センターにリソースの順序を変更できませんでした: %w", err)
+		return fmt.Errorf("%s: %w", errMsgResourceReorderFailed, err)
 	}
 
 	return nil

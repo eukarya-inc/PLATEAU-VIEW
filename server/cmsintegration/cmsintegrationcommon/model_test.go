@@ -263,6 +263,17 @@ func TestCityItem_SpecMajorVersionInt(t *testing.T) {
 	assert.Equal(t, 4, (&CityItem{Spec: "v4.2"}).SpecMajorVersionInt())
 }
 
+func TestFeatureItem_SpecMajorVersionInt(t *testing.T) {
+	assert.Equal(t, 0, (&FeatureItem{}).SpecMajorVersionInt())
+	assert.Equal(t, 0, (&FeatureItem{Spec: ""}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "第4版"}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "4版"}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "v4"}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "第4.2版"}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "4.2版"}).SpecMajorVersionInt())
+	assert.Equal(t, 4, (&FeatureItem{Spec: "v4.2"}).SpecMajorVersionInt())
+}
+
 func TestIsQCAndConvSkipped(t *testing.T) {
 	skipQC, skipConv := (&FeatureItem{}).IsQCAndConvSkipped()
 	assert.False(t, skipQC)

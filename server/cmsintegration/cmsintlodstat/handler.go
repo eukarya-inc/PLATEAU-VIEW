@@ -1,4 +1,4 @@
-package cmsintmaxlod
+package cmsintlodstat
 
 import (
 	"context"
@@ -64,19 +64,26 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return nil
 	}
 
+	assetURL := ""
+	if a, err := s.CMS.Asset(ctx, asset); err == nil {
+		assetURL = a.URL
+	} else {
+		log.Debugfc(ctx, "asset not found: %v", err)
+		return nil
+	}
+
 	log.Debugfc(ctx, "run")
 
 	if err := s.TaskRunner.Run(ctx, gcptaskrunner.Task{
 		Args: []string{
-			"extract-maxlod",
-			"--city=" + city,
-			"--project=" + w.ProjectID(),
-			"--ftypes=dem",
-			"--overwrite",
-			"--wetrun",
+			"lodstat",
+			"-src=" + assetURL,
+			"-project=" + w.ProjectID(),
+			"-item=" + mainItem.ID,
+			"-feature=" + ft.Code,
 		},
 	}, &gcptaskrunner.Config{
-		Tags: []string{"maxlod"},
+		Tags: []string{"lodstat"},
 	}); err != nil {
 		return fmt.Errorf("maxlod: failed to run task: %w", err)
 	}
