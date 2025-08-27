@@ -8,6 +8,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/openapi"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/proxy"
@@ -39,6 +40,7 @@ var services = [](func(*Config) (*Service, error)){
 	Tiles,
 	Embed,
 	CityGML,
+	MCP,
 }
 
 func Services(conf *Config) (srv []*Service, _ error) {
@@ -206,6 +208,16 @@ func CityGML(conf *Config) (*Service, error) {
 		Name: "citygml",
 		Echo: func(g *echo.Group) error {
 			return citygml.Echo(conf.CityGML(), g.Group("/citygml"))
+		},
+	}, nil
+}
+
+func MCP(conf *Config) (*Service, error) {
+	return &Service{
+		Name: "mcp",
+		Echo: func(g *echo.Group) error {
+			mcp.RegisterHTTPEndpoint(g.Group("/mcp"))
+			return nil
 		},
 	}, nil
 }
