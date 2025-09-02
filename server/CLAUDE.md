@@ -332,3 +332,15 @@ The project uses `golangci-lint` with default settings. Common issues to watch f
 - Check request IDs in logs for tracing
 - Enable Echo debug mode: `e.Debug = true`
 - Use `httputil.DumpRequest` for HTTP debugging
+
+## Documentation
+
+### Detailed Data Flow Documentation
+For comprehensive documentation about the PLATEAU VIEW data flow, architecture, and troubleshooting, see:
+- **[docs/plateau-view-data-flow.md](docs/plateau-view-data-flow.md)** - Complete guide covering:
+  - System architecture and data flow
+  - CMS integration and data conversion
+  - GraphQL API implementation
+  - Caching mechanisms
+  - Asset management and metadata extraction
+  - Comprehensive troubleshooting guide with real examples (Section 10)

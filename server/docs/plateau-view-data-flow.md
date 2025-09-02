@@ -1313,6 +1313,17 @@ func (r *Repo) saveCache() error {
 #### デバッグ出力（JSON、warnings.txt）
 開発時のデバッグ用にキャッシュデータをJSON形式で出力：
 
+**重要**: キャッシュファイルの生成には環境変数の設定が必要です：
+```bash
+# .envファイルまたは環境変数で設定
+REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true
+
+# または、起動時に直接指定
+REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true go run .
+```
+
+この設定により、以下のファイルが生成されます：
+
 ```go
 // デバッグ用のJSON出力（cache/repo_plateau-2024.json）
 {
@@ -1331,14 +1342,14 @@ func (r *Repo) saveCache() error {
     "years": [2023, 2024]
 }
 
-// 警告ログ（cache/warnings.txt）
+// 警告ログ（cache/repo_plateau-2024_warnings.txt）
 plateau xxx: city not found: yyy
 related zzz: unknown type: aaa
 ```
 
 キャッシュファイルの場所：
 - メインキャッシュ: `cache/repo_plateau-{year}.json`
-- 警告ログ: `cache/warnings.txt`
+- 警告ログ: `cache/repo_plateau-{year}_warnings.txt`
 - 個別データキャッシュ: `cache/cache-datacatalogv3-plateau-{year}/`
 
 ## 7. GraphQL API
@@ -2101,6 +2112,31 @@ jq -r '.datasets.PLATEAU[] |
 
 ## 10. トラブルシューティング
 
+### ⚠️ 重要：必ず最初にキャッシュを更新する
+
+調査を開始する前に、**必ずキャッシュを最新化**してください：
+
+```bash
+# 1. 既存のサーバープロセスを停止
+lsof -ti :8080 | xargs kill
+
+# 2. デバッグモードを有効にしてサーバーを再起動
+REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true go run .
+
+# または .envファイルに設定を追加
+echo "REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true" >> .env
+go run .
+
+# 3. キャッシュ更新の完了を確認（ログを確認）
+# "datacatalogv3: updated repo plateau-2024" を確認
+# "datacatalogv3: wrote repo_plateau-2024.json" を確認（デバッグモード時）
+```
+
+**重要**: 
+- キャッシュはサーバー起動時にのみ生成されます
+- **`REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true`がないとキャッシュファイルは生成されません**
+- 古いキャッシュで調査すると誤った結論に至る可能性があります
+
 ### 10.1 よくある問題
 
 #### 空の結果が返される場合
@@ -2157,8 +2193,9 @@ jq -r '.datasets.PLATEAU[] |
    # キャッシュファイルのタイムスタンプ確認
    ls -la cache/repo_plateau-2024.json
 
-   # キャッシュを削除して再起動
-   rm -rf cache/*
+   # サーバーを再起動してキャッシュを更新
+   lsof -ti :8080 | xargs kill
+   go run .
    ```
 
 2. **Webhookの設定ミス**
@@ -2213,7 +2250,25 @@ jq -r '.datasets.PLATEAU[] |
    - サーバーのメモリ使用量を確認
    - 必要に応じてメモリを増設
 
-### 9.2 デバッグ方法
+### 10.2 デバッグ方法
+
+#### 警告ログの活用（最重要）
+
+**warnings.txtファイルには、データ処理中の問題が記録されます**：
+
+```bash
+# 特定の都市の警告を確認
+grep -i "都市名\|都市コード" cache/repo_plateau-*_warnings.txt
+
+# 例：岡山市の問題を確認
+grep -i "岡山\|okayama\|33100" cache/repo_plateau-2024_warnings.txt
+```
+
+**よくある警告パターンと意味**：
+- `related {city_code}: ward not found` - 区の定義が見つからない（PLATEAUデータがない政令指定都市）
+- `related {city_code}: invalid city` - 都市が登録されていない
+- `plateau {id}: city not found` - 都市コードの不一致
+- `invalid asset name` - アセット名の形式エラー
 
 #### キャッシュファイルの確認
 ```bash
@@ -2252,7 +2307,30 @@ grep "cms" server.log | grep -v "success"
 grep "graphql error" server.log
 ```
 
-### 10.3 問題の切り分け
+### 10.3 区（Ward）関連の問題（政令指定都市）
+
+#### 背景知識
+- 区は**PLATEAUデータの辞書「admin」エントリ**から生成される
+- PLATEAUデータ（3D都市モデル）がない都市は区が定義されない
+- 関連データセット（避難施設、ランドマーク、鉄道駅）のファイル名に区コードが含まれる場合、区の定義が必要
+
+#### 診断方法
+```bash
+# 都市にPLATEAUデータがあるか確認
+jq '.datasets.PLATEAU[] | select(.city == "都市コード")' cache/repo_plateau-*.json
+
+# 都市に区の定義があるか確認
+jq '.areas.CITY[] | select(.code == "都市コード") | .wards' cache/repo_plateau-*.json
+```
+
+#### 解決方法
+1. **PLATEAUデータがない場合**: 関連データセットのファイル名を市レベルに統一
+   - 誤: `33100_okayama-shi_city_2024_33101_kita-ku_shelter.geojson`
+   - 正: `33100_okayama-shi_city_2024_shelter.geojson`
+
+2. **PLATEAUデータがある場合**: CMSで辞書「admin」エントリを追加
+
+### 10.4 問題の切り分け
 
 #### CMS側の問題
 確認項目：
