@@ -40,7 +40,7 @@ func (c *PlateauClient) ListChapters() ([]Chapter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch navigation: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -79,7 +79,7 @@ func (c *PlateauClient) ListSectionsByPath(path string) ([]Section, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch navigation from path %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code for path %s: %d", path, resp.StatusCode)
@@ -129,7 +129,7 @@ func (c *PlateauClient) GetContentByPath(path string) (*PlateauDocument, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch content from path %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code for path %s: %d", path, resp.StatusCode)

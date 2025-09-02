@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,17 +32,64 @@ func init() {
 }
 
 func main() {
-	conf := lo.Must(NewConfig())
-
-	if len(os.Args) > 1 && os.Args[1] != "" {
+	// コマンドライン引数の定義
+	var (
+		generateDatacatalog = flag.String("generate-datacatalog", "", "Generate datacatalog cache for specified project (e.g., plateau-2024) and exit")
+		outputToStdout     = flag.Bool("stdout", false, "Output JSON to stdout instead of file (use with --generate-datacatalog)")
+		help               = flag.Bool("help", false, "Show help message")
+	)
+	
+	// 既存のtoolコマンド用の処理を保持
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		conf := lo.Must(NewConfig())
 		tool.Main(&tool.Config{
 			CMS_BaseURL: conf.CMS_BaseURL,
 			CMS_Token:   conf.CMS_Token,
 		}, os.Args[1:])
 		return
 	}
+	
+	flag.Parse()
+	
+	if *help {
+		printHelp()
+		os.Exit(0)
+	}
+	
+	// 標準出力モードの場合は早めにログ出力先を変更
+	if *generateDatacatalog != "" && *outputToStdout {
+		log.SetOutput(os.Stderr)
+	}
+	
+	conf := lo.Must(NewConfig())
+	
+	// データカタログ生成モードの場合
+	if *generateDatacatalog != "" {
+		generator := NewDatacatalogGenerator(conf, *outputToStdout)
+		if err := generator.Generate(*generateDatacatalog); err != nil {
+			log.Fatalf("Failed to generate datacatalog: %v", err)
+		}
+		if !*outputToStdout {
+			log.Infof("Successfully generated datacatalog cache for %s", *generateDatacatalog)
+		}
+		os.Exit(0)
+	}
 
 	main2(conf)
+}
+
+func printHelp() {
+	fmt.Println("PLATEAU VIEW Server")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  plateauview                                      # Start server")
+	fmt.Println("  plateauview --generate-datacatalog plateau-2024  # Generate cache and exit")
+	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --stdout  # Output to stdout")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  --generate-datacatalog <project>  Generate datacatalog cache for specified project")
+	fmt.Println("  --stdout                         Output JSON to stdout instead of file (warnings to stderr)")
+	fmt.Println("  --help                           Show this help message")
 }
 
 func main2(conf *Config) {

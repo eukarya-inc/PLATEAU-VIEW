@@ -255,10 +255,10 @@ func HandleSpecSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 
 		// Note: Content search would require fetching and searching actual document content
 		// This is expensive and should be implemented with caching/indexing in production
-		if scope == "content" || scope == "all" {
-			// Simplified implementation - would need proper text search
-			// This is a placeholder that indicates where content search would go
-		}
+		// if scope == "content" || scope == "all" {
+		// Simplified implementation - would need proper text search
+		// This is a placeholder that indicates where content search would go
+		// }
 	}
 
 	// Sort by score and apply limit
@@ -297,7 +297,7 @@ func formatSectionsAsTree(sections []Section, basePath string) string {
 
 func formatAsMarkdown(doc *PlateauDocument) string {
 	var sb strings.Builder
-	
+
 	// Title
 	if doc.Title != "" {
 		sb.WriteString(fmt.Sprintf("# %s\n\n", doc.Title))
@@ -335,15 +335,15 @@ func formatAsMarkdown(doc *PlateauDocument) string {
 
 func formatAsHTML(doc *PlateauDocument) string {
 	var sb strings.Builder
-	
+
 	sb.WriteString("<html><body>\n")
-	
+
 	if doc.Title != "" {
 		sb.WriteString(fmt.Sprintf("<h1>%s</h1>\n", doc.Title))
 	}
-	
+
 	sb.WriteString(fmt.Sprintf("<p><strong>Path:</strong> <code>%s</code></p>\n", doc.Path))
-	
+
 	for _, content := range doc.Content {
 		switch content.Type {
 		case "text":
@@ -362,16 +362,16 @@ func formatAsHTML(doc *PlateauDocument) string {
 			sb.WriteString("</code></pre>\n")
 		}
 	}
-	
+
 	sb.WriteString("</body></html>\n")
-	
+
 	return sb.String()
 }
 
 func calculateScore(text, query string) float64 {
 	textLower := strings.ToLower(text)
 	queryLower := strings.ToLower(query)
-	
+
 	// Simple scoring based on position and exact match
 	if textLower == queryLower {
 		return 1.0
@@ -382,7 +382,7 @@ func calculateScore(text, query string) float64 {
 	if strings.Contains(textLower, queryLower) {
 		return 0.5
 	}
-	
+
 	// Partial word matching
 	words := strings.Fields(queryLower)
 	matches := 0
@@ -391,11 +391,11 @@ func calculateScore(text, query string) float64 {
 			matches++
 		}
 	}
-	
+
 	if len(words) > 0 {
 		return float64(matches) / float64(len(words)) * 0.3
 	}
-	
+
 	return 0.0
 }
 

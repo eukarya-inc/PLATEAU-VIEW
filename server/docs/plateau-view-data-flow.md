@@ -2114,28 +2114,32 @@ jq -r '.datasets.PLATEAU[] |
 
 ### ⚠️ 重要：必ず最初にキャッシュを更新する
 
-調査を開始する前に、**必ずキャッシュを最新化**してください：
+調査を開始する前に、**必ずキャッシュを最新化**してください。
+
+#### CLIツールを使用してキャッシュを生成
 
 ```bash
-# 1. 既存のサーバープロセスを停止
-lsof -ti :8080 | xargs kill
+# 1. データカタログキャッシュを生成（サーバー起動不要）
+go run . --generate-datacatalog plateau-2024
 
-# 2. デバッグモードを有効にしてサーバーを再起動
-REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true go run .
+# 2. 生成されたキャッシュファイルを確認
+ls -la cache/repo_plateau-2024.json
+ls -la cache/repo_plateau-2024_warnings.txt
 
-# または .envファイルに設定を追加
-echo "REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true" >> .env
-go run .
-
-# 3. キャッシュ更新の完了を確認（ログを確認）
-# "datacatalogv3: updated repo plateau-2024" を確認
-# "datacatalogv3: wrote repo_plateau-2024.json" を確認（デバッグモード時）
+# 3. JSON形式で標準出力に出力（調査用）
+go run . --generate-datacatalog plateau-2024 --stdout > datacatalog.json 2> warnings.log
 ```
 
-**重要**: 
-- キャッシュはサーバー起動時にのみ生成されます
-- **`REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true`がないとキャッシュファイルは生成されません**
+**CLIツールの利点**:
+- サーバーを起動せずにキャッシュ生成可能
+- `--stdout`オプションでJSONを直接取得・解析可能
+- 警告は標準エラー出力に分離されて出力
+- スクリプト化や自動化に適している
+- `REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG`環境変数が不要
+
+**重要**:
 - 古いキャッシュで調査すると誤った結論に至る可能性があります
+- サーバー起動時のキャッシュ生成には`REEARTH_PLATEAUVIEW_DATACATALOG_DEBUG=true`が必要ですが、CLIツールでは不要です
 
 ### 10.1 よくある問題
 
@@ -2193,9 +2197,11 @@ go run .
    # キャッシュファイルのタイムスタンプ確認
    ls -la cache/repo_plateau-2024.json
 
-   # サーバーを再起動してキャッシュを更新
-   lsof -ti :8080 | xargs kill
-   go run .
+   # CLIツールでキャッシュを再生成
+   go run . --generate-datacatalog plateau-2024
+
+   # 生成完了を確認
+   ls -la cache/repo_plateau-2024.json
    ```
 
 2. **Webhookの設定ミス**
@@ -2257,6 +2263,13 @@ go run .
 **warnings.txtファイルには、データ処理中の問題が記録されます**：
 
 ```bash
+# CLIツールで最新の警告を生成・確認（推奨）
+go run . --generate-datacatalog plateau-2024
+cat cache/repo_plateau-2024_warnings.txt | head -20
+
+# または標準エラー出力で直接確認
+go run . --generate-datacatalog plateau-2024 --stdout 2>&1 1>/dev/null | grep "warning"
+
 # 特定の都市の警告を確認
 grep -i "都市名\|都市コード" cache/repo_plateau-*_warnings.txt
 
@@ -2271,6 +2284,25 @@ grep -i "岡山\|okayama\|33100" cache/repo_plateau-2024_warnings.txt
 - `invalid asset name` - アセット名の形式エラー
 
 #### キャッシュファイルの確認
+
+**CLIツールを使った調査（推奨）**:
+```bash
+# 最新のデータを標準出力で取得して解析
+go run . --generate-datacatalog plateau-2024 --stdout | jq '.areas | keys'
+
+# 特定地域のデータセット確認（パイプで直接解析）
+go run . --generate-datacatalog plateau-2024 --stdout | \
+  jq '.datasets.plateau[] | select(.cityCode == "04100")'
+
+# データセットタイプの一覧
+go run . --generate-datacatalog plateau-2024 --stdout | jq '.datasetTypes | keys'
+
+# 警告も同時に確認したい場合
+go run . --generate-datacatalog plateau-2024 --stdout 2> warnings.log | \
+  jq '.areas | length' && echo "Warnings:" && head -10 warnings.log
+```
+
+**既存のキャッシュファイルを確認**:
 ```bash
 # メインキャッシュの構造確認
 jq '.areas | keys' cache/repo_plateau-2024.json
@@ -2310,25 +2342,53 @@ grep "graphql error" server.log
 ### 10.3 区（Ward）関連の問題（政令指定都市）
 
 #### 背景知識
-- 区は**PLATEAUデータの辞書「admin」エントリ**から生成される
-- PLATEAUデータ（3D都市モデル）がない都市は区が定義されない
+- 区は**建築物（bldg）データの辞書「admin」エントリ**から生成される
+- PLATEAUデータがあっても**建築物データがない場合**は区が定義されない
 - 関連データセット（避難施設、ランドマーク、鉄道駅）のファイル名に区コードが含まれる場合、区の定義が必要
 
 #### 診断方法
-```bash
-# 都市にPLATEAUデータがあるか確認
-jq '.datasets.PLATEAU[] | select(.city == "都市コード")' cache/repo_plateau-*.json
 
-# 都市に区の定義があるか確認
-jq '.areas.CITY[] | select(.code == "都市コード") | .wards' cache/repo_plateau-*.json
+##### ⚠️ データ構造の注意点
+キャッシュファイルのデータ構造を正しく理解する：
+```javascript
+{
+  "areas": {
+    "PREFECTURE": [...],  // 都道府県の配列
+    "CITY": [...],        // 市区町村の配列
+    "WARD": [...]         // 区の配列
+  },
+  "datasets": {
+    "PLATEAU": [...],     // PLATEAUデータセットの配列（大文字）
+    "RELATED": [...],     // 関連データセットの配列（大文字）
+    "GENERIC": [...]      // 汎用データセットの配列（大文字）
+  }
+}
+```
+
+##### 正しい診断手順
+```bash
+# 1. キャッシュを一度生成してファイルに保存（時間がかかるので一度だけ実行）
+go run . --generate-datacatalog plateau-2024
+
+# 2. 岡山市の基本情報を確認
+jq '.areas.CITY[] | select(.code == "33100")' cache/repo_plateau-2024.json
+
+# 3. 岡山市の建築物データの有無を確認（これが重要！）
+jq '[.datasets.PLATEAU[] | select(.cityCode == "33100" and .typeCode == "bldg")] | length' cache/repo_plateau-2024.json
+
+# 4. 岡山市のPLATEAUデータ全体を確認
+jq '[.datasets.PLATEAU[] | select(.cityCode == "33100")] | group_by(.typeCode) | map({type: .[0].typeCode, count: length})' cache/repo_plateau-2024.json
+
+# 5. 関連データセットの警告を確認
+grep "33100.*ward not found" cache/repo_plateau-2024_warnings.txt
 ```
 
 #### 解決方法
-1. **PLATEAUデータがない場合**: 関連データセットのファイル名を市レベルに統一
+1. **建築物データがない場合**: 関連データセットのファイル名を市レベルに統一
    - 誤: `33100_okayama-shi_city_2024_33101_kita-ku_shelter.geojson`
    - 正: `33100_okayama-shi_city_2024_shelter.geojson`
 
-2. **PLATEAUデータがある場合**: CMSで辞書「admin」エントリを追加
+2. **建築物データがある場合**: CMSで辞書「admin」エントリを確認・追加
 
 ### 10.4 問題の切り分け
 
@@ -2378,4 +2438,93 @@ GraphQL Playgroundでのテスト：
     }
   }
 }
+```
+
+### 10.5 CLIツールを使った効率的な調査フロー
+
+#### 完全な調査例：岡山市のデータ配信問題
+
+```bash
+# 1. キャッシュを一度だけ生成（時間がかかるので重要）
+echo "Generating datacatalog cache (once only)..."
+go run . --generate-datacatalog plateau-2024
+
+# 2. 警告の概要を確認
+echo "Warning summary:"
+wc -l cache/repo_plateau-2024_warnings.txt
+grep "ward not found" cache/repo_plateau-2024_warnings.txt | head -5
+
+# 3. 岡山市の基本情報を確認
+echo "Okayama city basic info:"
+jq '.areas.CITY[] | select(.code == "33100")' cache/repo_plateau-2024.json
+
+# 4. 岡山市のPLATEAUデータを分析
+echo "Checking PLATEAU datasets for Okayama:"
+jq '[.datasets.PLATEAU[] | select(.cityCode == "33100")] | length' cache/repo_plateau-2024.json
+
+# 5. 建築物データの有無を確認（最重要）
+echo "Checking building (bldg) data:"
+BLDG_COUNT=$(jq '[.datasets.PLATEAU[] | select(.cityCode == "33100" and .typeCode == "bldg")] | length' cache/repo_plateau-2024.json)
+echo "Building datasets: $BLDG_COUNT"
+
+# 6. データセットタイプ別の内訳
+echo "Dataset breakdown by type:"
+jq '[.datasets.PLATEAU[] | select(.cityCode == "33100")] | group_by(.typeCode) | map({type: .[0].typeCode, count: length})' cache/repo_plateau-2024.json
+
+# 7. 関連データセットのエラーを確認
+echo "Related dataset errors:"
+grep "33100.*ward not found" cache/repo_plateau-2024_warnings.txt | wc -l
+
+# 8. 根本原因の診断
+if [ "$BLDG_COUNT" -eq "0" ]; then
+  echo ""
+  echo "❌ ROOT CAUSE IDENTIFIED:"
+  echo "   岡山市にPLATEAUデータは存在するが、建築物（bldg）データがない"
+  echo "   → 建築物データの'admin'辞書から区が生成される"
+  echo "   → 建築物データがないため区の定義が作成されない"
+  echo "   → 関連データセットのファイル名の区コードがマッチしない"
+  echo ""
+  echo "SOLUTION:"
+  echo "   Option 1: 建築物データを追加して区の定義を生成"
+  echo "   Option 2: 関連データセットのファイル名から区コードを削除"
+else
+  echo "✅ Building data exists, checking admin dictionary..."
+fi
+```
+
+#### ワンライナーでの素早い確認
+
+```bash
+# キャッシュファイルから都市の区の有無を確認
+jq -r '.areas.CITY[] | 
+  "\(.code) \(.name): " + 
+  (if (.wards // [] | length) > 0 then "✅ Has wards (\(.wards | length))" else "❌ No wards" end)' \
+  cache/repo_plateau-2024.json | grep "岡山\|仙台\|横浜"
+
+# 建築物データがある都市を一覧
+jq -r '[.datasets.PLATEAU[] | select(.typeCode == "bldg")] | 
+  group_by(.cityCode) | 
+  map({city: .[0].cityCode, count: length}) | 
+  sort_by(.count) | reverse | .[0:10]' cache/repo_plateau-2024.json
+
+# 警告が多い都市TOP10
+grep -oE '[0-9]{5}' cache/repo_plateau-2024_warnings.txt | 
+  sort | uniq -c | sort -rn | head -10
+
+# データセット種別ごとの件数（正しい構造）
+jq '{
+  plateau: (.datasets.PLATEAU | length),
+  related: (.datasets.RELATED | length),
+  generic: (.datasets.GENERIC | length),
+  total: ((.datasets.PLATEAU | length) + (.datasets.RELATED | length) + (.datasets.GENERIC | length))
+}' cache/repo_plateau-2024.json
+
+# 特定都市の建築物データ有無をチェック
+CITY_CODE="33100" && \
+jq --arg code "$CITY_CODE" '
+  {
+    city: (.areas.CITY[] | select(.code == $code) | .name),
+    has_bldg: ([.datasets.PLATEAU[] | select(.cityCode == $code and .typeCode == "bldg")] | length > 0),
+    has_wards: ((.areas.CITY[] | select(.code == $code) | .wards // []) | length > 0)
+  }' cache/repo_plateau-2024.json
 ```

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -34,17 +32,19 @@ func AdminContext(ctx context.Context, bypassAdminRemoval, includeBeta, includeA
 }
 
 type Repos struct {
-	pcms  *plateaucms.CMS
-	cms   *util.SyncMap[string, *CMS]
-	cache bool
-	debug bool
+	pcms   *plateaucms.CMS
+	cms    *util.SyncMap[string, *CMS]
+	cache  bool
+	debug  bool
+	writer RepoWriter
 	*plateauapi.Repos
 }
 
 func NewRepos(pcms *plateaucms.CMS) *Repos {
 	r := &Repos{
-		pcms: pcms,
-		cms:  util.NewSyncMap[string, *CMS](),
+		pcms:   pcms,
+		cms:    util.NewSyncMap[string, *CMS](),
+		writer: NewFileRepoWriter("cache"), // Default to file writer
 	}
 	r.Repos = plateauapi.NewRepos(r.update)
 	return r
@@ -56,6 +56,10 @@ func (r *Repos) EnableCache(cache bool) {
 
 func (r *Repos) EnableDebug(debug bool) {
 	r.debug = debug
+}
+
+func (r *Repos) SetWriter(writer RepoWriter) {
+	r.writer = writer
 }
 
 func (r *Repos) Prepare(ctx context.Context, project string, year int, plateau bool, cms cms.Interface) error {
@@ -102,8 +106,8 @@ func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUp
 
 	log.Debugfc(ctx, "datacatalogv3: updated repo %s: %.2fs", project, time.Since(t).Seconds())
 
-	if r.debug {
-		dumpRepo(ctx, repo, c, warning, project)
+	if r.debug && r.writer != nil {
+		dumpRepo(ctx, repo, c, warning, project, r.writer)
 	}
 
 	return &plateauapi.ReposUpdateResult{
@@ -124,45 +128,37 @@ func (r *Repos) setCMS(project string, year int, plateau bool, cms cms.Interface
 	r.cms.Store(project, c)
 }
 
-func dumpRepo(ctx context.Context, _ *plateauapi.InMemoryRepo, c *plateauapi.InMemoryRepoContext, warning []string, project string) {
-	const basedir = "cache"
-
-	var f *os.File
-	var wf *os.File
-	defer func() {
-		if f != nil {
-			_ = f.Close()
-		}
-		if wf != nil {
-			_ = wf.Close()
-		}
-	}()
-
-	var err error
-
-	f, err = os.Create(filepath.Join(basedir, fmt.Sprintf("repo_%s.json", project)))
+func dumpRepo(ctx context.Context, _ *plateauapi.InMemoryRepo, c *plateauapi.InMemoryRepoContext, warning []string, project string, writer RepoWriter) {
+	// Get writer for JSON data
+	f, err := writer.GetWriter(project)
 	if err != nil {
-		log.Errorfc(ctx, "datacatalogv3: failed to create repo_%s.json: %v", project, err)
+		log.Errorfc(ctx, "datacatalogv3: failed to get writer for repo_%s.json: %v", project, err)
 		return
 	}
+	defer func() {
+		_ = f.Close()
+	}()
 
-	if len(warning) > 0 {
-		wf, err = os.Create(filepath.Join(basedir, fmt.Sprintf("repo_%s_warnings.txt", project)))
-		if err != nil {
-			log.Errorfc(ctx, "datacatalogv3: failed to create repo_%s_warnings.txt: %v", project, err)
-			return
-		}
-	}
-
+	// Write JSON data
 	d := json.NewEncoder(f)
 	d.SetIndent("", "  ")
 	if err := d.Encode(c); err != nil {
 		log.Errorfc(ctx, "datacatalogv3: failed to write repo_%s.json: %v", project, err)
 	}
 
-	if wf != nil {
+	// Write warnings if any
+	if len(warning) > 0 {
+		wf, err := writer.GetWarningWriter(project)
+		if err != nil {
+			log.Errorfc(ctx, "datacatalogv3: failed to get warning writer for repo_%s_warnings.txt: %v", project, err)
+			return
+		}
+		defer func() {
+			_ = wf.Close()
+		}()
+
 		for _, w := range warning {
-			if _, err := wf.WriteString(w + "\n"); err != nil {
+			if _, err := wf.Write([]byte(w + "\n")); err != nil {
 				log.Errorfc(ctx, "datacatalogv3: failed to write repo_%s_warnings.txt: %v", project, err)
 			}
 		}
