@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { init, waitFor, waitForCesiumStable } from '../utils';
+import { init, waitForCesiumStable } from '../utils';
 import { ToolbarPage, CanvasPage, AttributesPage } from '../pages';
 
 test.describe.configure({ mode: 'serial' });
