@@ -33,11 +33,11 @@ type CityGMLFile struct {
 	MeshCode string `json:"code"`
 	MaxLOD   int    `json:"maxLod"`
 	URL      string `json:"url"`
-	LOD0     *bool  `json:"lod0,omitempty"`
-	LOD1     *bool  `json:"lod1,omitempty"`
-	LOD2     *bool  `json:"lod2,omitempty"`
-	LOD3     *bool  `json:"lod3,omitempty"`
-	LOD4     *bool  `json:"lod4,omitempty"`
+	LOD0     *int   `json:"lod0,omitempty"`
+	LOD1     *int   `json:"lod1,omitempty"`
+	LOD2     *int   `json:"lod2,omitempty"`
+	LOD3     *int   `json:"lod3,omitempty"`
+	LOD4     *int   `json:"lod4,omitempty"`
 }
 
 type CityGMLFeatureType struct {
@@ -169,11 +169,11 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 		maxlod, _ := strconv.Atoi(record[3])
 		citygmlURL := ""
 		gmlPath := record[4]
-		lod0 := parseBool(record[5])
-		lod1 := parseBool(record[6])
-		lod2 := parseBool(record[7])
-		lod3 := parseBool(record[8])
-		lod4 := parseBool(record[9])
+		lod0 := parseLOD(record[5])
+		lod1 := parseLOD(record[6])
+		lod2 := parseLOD(record[7])
+		lod3 := parseLOD(record[8])
+		lod4 := parseLOD(record[9])
 
 		if len(record) > 4 && gmlURLs == nil {
 			citygmlURL = citygmlItemURLFrom(base, gmlPath, featureType)
@@ -259,15 +259,20 @@ func nameWithoutExt(name string) string {
 	return strings.TrimSuffix(name, path.Ext(name))
 }
 
-func parseBool(s string) *bool {
+func parseLOD(s string) *int {
 	if s == "" {
 		return nil
 	}
-
-	b, err := strconv.ParseBool(s)
-	if err != nil {
-		return nil
+	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+		v := int(v)
+		return &v
 	}
-
-	return &b
+	if v, err := strconv.ParseBool(s); err == nil {
+		x := 0
+		if v {
+			x = 1
+		}
+		return &x
+	}
+	return nil
 }
