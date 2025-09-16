@@ -26,6 +26,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/orisano/gosax v1.1.2
 	github.com/paulmach/go.geojson v1.5.0
+	github.com/paulmach/orb v0.11.1
 	github.com/reearth/reearth-cms-api/go v0.0.0-20250326155811-55d8dc895286
 	github.com/reearth/reearthx v0.0.0-20250514022647-16f9d767d93f
 	github.com/samber/lo v1.50.0
@@ -114,7 +115,6 @@ require (
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
-	github.com/paulmach/orb v0.11.1 // indirect
 	github.com/paulmach/protoscan v0.2.1 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
