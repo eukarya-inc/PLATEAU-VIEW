@@ -63,6 +63,7 @@ func Echo(conf Config, g *echo.Group) error {
 		}
 
 		features := map[string]jisx0410.MeshCode{}
+		lodStat := map[string]int{}
 		lod0Count := map[string]int{}
 		lod1Count := map[string]int{}
 		lod2Count := map[string]int{}
@@ -83,6 +84,18 @@ func Echo(conf Config, g *echo.Group) error {
 					}
 					if _, ok := features[file.Code]; !ok {
 						features[file.Code] = mesh
+					}
+					switch file.MaxLod {
+					case 0:
+						lodStat[file.Code] |= 0b00001
+					case 1:
+						lodStat[file.Code] |= 0b00011
+					case 2:
+						lodStat[file.Code] |= 0b00111
+					case 3:
+						lodStat[file.Code] |= 0b01111
+					case 4:
+						lodStat[file.Code] |= 0b11111
 					}
 					if lod := file.LOD0; lod != nil && *lod > 0 {
 						lod0Count[file.Code] += *lod
@@ -117,12 +130,13 @@ func Echo(conf Config, g *echo.Group) error {
 			}
 			f.Properties["meshCode"] = code
 
-			f.Properties["lod0"] = true
-			f.Properties["lod1"] = true
-			f.Properties["lod2"] = true
-			f.Properties["lod3"] = false
-			f.Properties["lod4"] = false
-
+			if lod, ok := lodStat[code]; ok {
+				f.Properties["lod0"] = (lod & 0b00001) != 0
+				f.Properties["lod1"] = (lod & 0b00010) != 0
+				f.Properties["lod2"] = (lod & 0b00100) != 0
+				f.Properties["lod3"] = (lod & 0b01000) != 0
+				f.Properties["lod4"] = (lod & 0b10000) != 0
+			}
 			f.Properties["lod0Count"] = lod0Count[code]
 			f.Properties["lod1Count"] = lod1Count[code]
 			f.Properties["lod2Count"] = lod2Count[code]
