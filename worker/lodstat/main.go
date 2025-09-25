@@ -89,7 +89,7 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 			return fmt.Errorf("remote zip: %w", err)
 		}
 		log.Infofc(ctx, "lodstat: remote zip opened, found %d files", len(rz.File))
-	
+
 		ucGMLSize := uint64(0)
 		cGMLSize := uint64(0)
 		cTotal := uint64(0)
@@ -147,14 +147,12 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 		d := time.Since(begin).Seconds()
 		log.Infofc(ctx, "files=%d gml=%d processed=%s throughput=%s/s downloadRate=%.3f (%s/%s) ", len(rz.File), gml, humanize.Bytes(ucGMLSize), humanize.Bytes(uint64(float64(ucGMLSize)/d)), float64(cGMLSize)/float64(cTotal), humanize.Bytes(cGMLSize), humanize.Bytes(cTotal))
 
-		// 7.2.6
-		// 媒体名は[都市コード]_[都市名英名]_[提供者区分]_[整備年度]_citygml_[更新回数]_[オプション]
-		// ref: https://www.mlit.go.jp/plateaudocument/toc7/toc7_02/toc7_02_06/
-		// example: 13101_chiyoda-ku_city_2023_citygml_1_op.zip
-		cityCode, rest, _ := strings.Cut(path.Base(u.Path), "_")
-		cityName, _, _ := strings.Cut(rest, "_")
-		// {cityCode}_{cityName}_{feature}_lodstat.csv
-		assetName := fmt.Sprintf("%s_%s_%s_lodstat.csv", cityCode, cityName, cfg.Feature)
+		// Get the base filename without extension
+		baseFileName := path.Base(u.Path)
+		baseFileName = strings.TrimSuffix(baseFileName, ".zip")
+
+		// Append _lodstat.csv to the base filename
+		assetName := fmt.Sprintf("%s_lodstat.csv", baseFileName)
 		log.Infofc(ctx, "lodstat: uploading CSV as %s", assetName)
 
 		assetID, err := cmsClient.UploadAssetDirectly(ctx, cfg.ProjectID, assetName, csvBuf)
@@ -173,6 +171,9 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 			return fmt.Errorf("update item: %w", err)
 		}
 		log.Infofc(ctx, "lodstat: CMS item updated successfully")
+
+		// Add success comment to CMS
+		_ = cmsClient.CommentToItem(ctx, cfg.ItemID, fmt.Sprintf("LOD抽出が完了しました。"))
 	default:
 		return fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
