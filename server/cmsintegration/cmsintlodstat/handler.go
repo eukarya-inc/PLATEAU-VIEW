@@ -37,17 +37,15 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return nil
 	}
 
-	if ft.Conv {
-		log.Debugfc(ctx, "no need to extract maxlod: %s", modelName)
-		return nil
-	}
-
 	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
 	if err != nil {
 		return fmt.Errorf("maxlod: failed to get main item: %w", err)
 	}
 
-	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag != nil && tag.Name != "" && tag.Name != "未実行" {
+	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag == nil {
+		log.Debugfc(ctx, "maxlod_status metadata is missing")
+		return nil
+	} else if tag.Name != "" && tag.Name != "未実行" {
 		log.Debugfc(ctx, "already running")
 		return nil
 	}

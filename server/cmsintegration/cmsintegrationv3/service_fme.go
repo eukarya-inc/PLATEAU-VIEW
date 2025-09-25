@@ -220,7 +220,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 					var err error
 					qcResultAsset, err := s.UploadAsset(ctx, id.ProjectID, qcResultStr)
 					if err != nil {
-						return fmt.Errorf("failed to upload maxlod: %w", err)
+						return fmt.Errorf("failed to upload qc result: %w", err)
 					}
 
 					item := (&cmsintegrationcommon.FeatureItem{
@@ -313,6 +313,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	}
 
 	// upload maxlod
+	// NOTE: it should be deprecated and replaced to lodstat
 	var maxlodAssetID string
 	if assets.MaxLOD != "" {
 		log.Debugfc(ctx, "upload maxlod: %s", assets.MaxLOD)
