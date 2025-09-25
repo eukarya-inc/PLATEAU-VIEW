@@ -45,8 +45,6 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
 	if err != nil {
 		return fmt.Errorf("maxlod: failed to get main item: %w", err)
-	} else if mainItem.MetadataItemID == nil {
-		return fmt.Errorf("maxlod: main item has no metadata")
 	}
 
 	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag == nil {
@@ -96,7 +94,9 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return fmt.Errorf("maxlod: failed to run task: %w", err)
 	}
 
-	if _, err := s.CMS.UpdateItem(ctx, *mainItem.MetadataItemID, nil, []*cms.Field{
+	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "CityGMLが変更されたためLOD抽出を開始しました。")
+
+	if _, err := s.CMS.UpdateItem(ctx, mainItem.ID, nil, []*cms.Field{
 		{
 			ID:    "maxlod_status",
 			Type:  "tag",
@@ -105,8 +105,6 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 	}); err != nil {
 		log.Errorfc(ctx, "cmsintegrationv3: maxlod: failed to update item: %v", err)
 	}
-
-	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "CityGMLが変更されたためLOD抽出を開始しました。")
 
 	log.Debugfc(ctx, "done")
 	return nil

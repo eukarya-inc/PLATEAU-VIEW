@@ -7,6 +7,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	cms "github.com/reearth/reearth-cms-api/go"
+	"github.com/samber/lo"
 )
 
 func GenerateCMSID() string {
@@ -34,6 +35,7 @@ func GetMainItemWithMetadata(ctx context.Context, c cms.Interface, i *cms.Item) 
 		return nil, fmt.Errorf("invalid webhook payload")
 	}
 
+	mainItem.MetadataItemID = lo.ToPtr(metadataItem.ID)
 	mainItem.MetadataFields = metadataItem.Fields
 	return mainItem, nil
 }
