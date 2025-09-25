@@ -58,14 +58,12 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 	city := lo.FromPtr(mainItem.FieldByKey("city").GetValue().String())
 	if city == "" {
 		log.Debugfc(ctx, "city not found")
-		_ = s.CMS.CommentToItem(ctx, mainItem.ID, "LOD抽出をスキップしました: cityフィールドが空です")
 		return nil
 	}
 
 	asset := *mainItem.FieldByKey("citygml").GetValue().String()
 	if asset == "" {
 		log.Debugfc(ctx, "citygml not updated")
-		_ = s.CMS.CommentToItem(ctx, mainItem.ID, "LOD抽出をスキップしました: citygmlフィールドが空です")
 		return nil
 	}
 
@@ -74,11 +72,8 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		assetURL = a.URL
 	} else {
 		log.Debugfc(ctx, "asset not found: %v", err)
-		_ = s.CMS.CommentToItem(ctx, mainItem.ID, fmt.Sprintf("LOD抽出をスキップしました: アセットが見つかりません (%s)", asset))
 		return nil
 	}
-
-	log.Debugfc(ctx, "run")
 
 	if err := s.TaskRunner.Run(ctx, gcptaskrunner.Task{
 		Args: []string{
@@ -94,8 +89,6 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return fmt.Errorf("maxlod: failed to run task: %w", err)
 	}
 
-	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "CityGMLが変更されたためLOD抽出を開始しました。")
-
 	if _, err := s.CMS.UpdateItem(ctx, mainItem.ID, nil, []*cms.Field{
 		{
 			ID:    "maxlod_status",
@@ -103,8 +96,10 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 			Value: "実行中",
 		},
 	}); err != nil {
-		log.Errorfc(ctx, "cmsintegrationv3: maxlod: failed to update item: %v", err)
+		log.Warnfc(ctx, "failed to update item to make maxlod_status running (%s): %v", mainItem.ID, err)
 	}
+
+	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "LOD抽出を開始しました。")
 
 	log.Debugfc(ctx, "done")
 	return nil

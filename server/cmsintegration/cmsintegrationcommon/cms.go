@@ -18,21 +18,21 @@ func GetMainItemWithMetadata(ctx context.Context, c cms.Interface, i *cms.Item) 
 	var mainItem, metadataItem *cms.Item
 
 	if i.MetadataItemID == nil && i.OriginalItemID != nil {
-		// w is metadata item
+		// item is metadata
 		metadataItem = i
 		mainItem, err = c.GetItem(ctx, *i.OriginalItemID, false)
-		if err != nil {
+		if err != nil || mainItem == nil {
 			return nil, fmt.Errorf("failed to get main item: %w", err)
 		}
 	} else if i.OriginalItemID == nil && i.MetadataItemID != nil {
-		// w is main item
+		// item is main
 		mainItem = i
 		metadataItem, err = c.GetItem(ctx, *i.MetadataItemID, false)
-		if err != nil {
+		if err != nil || metadataItem == nil {
 			return nil, fmt.Errorf("failed to get metadata item: %w", err)
 		}
 	} else {
-		return nil, fmt.Errorf("invalid webhook payload")
+		return nil, fmt.Errorf("invalid item")
 	}
 
 	mainItem.MetadataItemID = lo.ToPtr(metadataItem.ID)
