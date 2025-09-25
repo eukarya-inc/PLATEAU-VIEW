@@ -37,9 +37,16 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return nil
 	}
 
+	if !ft.LODStat {
+		log.Debugfc(ctx, "maxlod: lodStat is false: %s", modelName)
+		return nil
+	}
+
 	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
 	if err != nil {
 		return fmt.Errorf("maxlod: failed to get main item: %w", err)
+	} else if mainItem.MetadataItemID == nil {
+		return fmt.Errorf("maxlod: main item has no metadata")
 	}
 
 	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag == nil {
@@ -86,7 +93,7 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return fmt.Errorf("maxlod: failed to run task: %w", err)
 	}
 
-	if _, err := s.CMS.UpdateItem(ctx, mainItem.ID, nil, []*cms.Field{
+	if _, err := s.CMS.UpdateItem(ctx, *mainItem.MetadataItemID, nil, []*cms.Field{
 		{
 			ID:    "maxlod_status",
 			Type:  "tag",
