@@ -10,6 +10,8 @@ WORKDIR /app
 
 RUN --mount=type=bind,source=worker/go.mod,target=go.mod \
     --mount=type=bind,source=worker/go.sum,target=go.sum \
+    --mount=type=bind,source=server/go.mod,target=/server/go.mod \
+    --mount=type=bind,source=server/go.sum,target=/server/go.sum \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
