@@ -391,6 +391,7 @@ func collectLOD(r io.Reader) (int, []int, error) {
 		if featureLOD[i] {
 			lod[i]++
 		}
+		featureLOD[i] = false
 	}
 	return features, lod[:], nil
 }
