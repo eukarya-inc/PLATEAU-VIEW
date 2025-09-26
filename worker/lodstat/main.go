@@ -173,7 +173,7 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 		log.Infofc(ctx, "lodstat: CMS item updated successfully")
 
 		// Add success comment to CMS
-		_ = cmsClient.CommentToItem(ctx, cfg.ItemID, fmt.Sprintf("LOD抽出が完了しました。"))
+		_ = cmsClient.CommentToItem(ctx, cfg.ItemID, "LOD抽出が完了しました。")
 	default:
 		return fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
