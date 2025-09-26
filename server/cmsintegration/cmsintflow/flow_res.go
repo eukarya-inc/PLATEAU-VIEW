@@ -19,7 +19,6 @@ type FlowResult struct {
 type FlowInternalResult struct {
 	Conv     map[string][]string
 	Dic      string
-	MaxLOD   string
 	QCResult string
 	QCOK     bool
 }
@@ -39,9 +38,6 @@ func (r FlowResult) Internal() (res FlowInternalResult) {
 		switch {
 		case strings.HasSuffix(base, "dic.json"):
 			res.Dic = output
-			continue
-		case strings.HasSuffix(base, "maxlod.csv") || strings.HasSuffix(base, "maxLod.csv"):
-			res.MaxLOD = output
 			continue
 		case strings.HasSuffix(base, "qc_result.zip"):
 			res.QCResult = output

@@ -267,7 +267,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 
 	log.Debugfc(ctx, "featureType: %s", pp.Sprint(featureType))
 
-	// get newitem
+	// get an item
 	item, err := s.CMS.GetItem(ctx, id.ItemID, false)
 	if err != nil {
 		log.Errorfc(ctx, "failed to get item: %v", err)
@@ -313,14 +313,30 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	}
 
 	// upload maxlod
-	// NOTE: it should be deprecated and replaced to lodstat
 	var maxlodAssetID string
 	if assets.MaxLOD != "" {
-		log.Debugfc(ctx, "upload maxlod: %s", assets.MaxLOD)
-		var err error
-		maxlodAssetID, err = s.UploadAsset(ctx, id.ProjectID, assets.MaxLOD)
-		if err != nil {
-			return fmt.Errorf("failed to upload maxlod: %w", err)
+		// check existing maxlod file name contains _lodstat
+		alreadyHasLODStat := baseFeatureItem.LODStatStatus != nil && baseFeatureItem.LODStatStatus.Name != ""
+		if !alreadyHasLODStat && baseFeatureItem.MaxLOD != "" {
+			maxlodAsset, err := s.CMS.Asset(ctx, baseFeatureItem.MaxLOD)
+			if err != nil {
+				log.Errorfc(ctx, "failed to get maxlod asset: %v", err)
+			} else if strings.Contains(maxlodAsset.Name, "_lodstat") {
+				log.Debugfc(ctx, "skip uploading maxlod because existing maxlod file name contains _lodstat: %s", maxlodAsset.Name)
+				alreadyHasLODStat = true
+			}
+		}
+
+		// Do not upload maxlod if LODStatStatus is enabled.
+		if alreadyHasLODStat {
+			log.Debugfc(ctx, "skip uploading maxlod because lodstat is enabled: %s", assets.MaxLOD)
+		} else {
+			log.Debugfc(ctx, "upload maxlod: %s", assets.MaxLOD)
+			var err error
+			maxlodAssetID, err = s.UploadAsset(ctx, id.ProjectID, assets.MaxLOD)
+			if err != nil {
+				return fmt.Errorf("failed to upload maxlod: %w", err)
+			}
 		}
 	}
 

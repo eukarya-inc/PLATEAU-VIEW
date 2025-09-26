@@ -40,7 +40,6 @@ func TestFlowResult_Internal(t *testing.T) {
 			},
 		},
 		Dic:      "https://example.com/13999_hoge-shi_citygml_op_1_bldg_dic.json",
-		MaxLOD:   "https://example.com/13999_hoge-shi_citygml_op_1_bldg_maxLod.csv",
 		QCResult: "https://example.com/13999_hoge-shi_citygml_op_1_bldg_qc_result.zip",
 		QCOK:     true,
 	}
