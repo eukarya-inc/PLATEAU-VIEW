@@ -339,6 +339,7 @@ func (r *remoteZipReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 func collectLOD(r io.Reader) (int, []int, error) {
 	features := 0
 	var lod [5]int
+	var featureLOD [5]bool
 	dec := xmlb.NewDecoder(r, make([]byte, 16*1024))
 	for {
 		tok, err := dec.Token()
@@ -356,11 +357,18 @@ func collectLOD(r io.Reader) (int, []int, error) {
 			}
 			if se.Name.Space == "core" && se.Name.Local == "cityObjectMember" {
 				features++
+				// reset and count
+				for i := range featureLOD {
+					if featureLOD[i] {
+						lod[i]++
+					}
+					featureLOD[i] = false
+				}
 			}
 			if strings.HasPrefix(se.Name.Local, "lod") && len(se.Name.Local) >= 4 {
 				c := se.Name.Local[3]
 				if '0' <= c && c <= '4' {
-					lod[c-'0']++
+					featureLOD[c-'0'] = true
 				}
 			}
 			if se.Name.Space == "dem" && se.Name.Local == "lod" {
@@ -373,9 +381,15 @@ func collectLOD(r io.Reader) (int, []int, error) {
 					return 0, nil, err
 				}
 				if 0 <= v && v <= 4 {
-					lod[v]++
+					featureLOD[v] = true
 				}
 			}
+		}
+	}
+	// last element
+	for i := range featureLOD {
+		if featureLOD[i] {
+			lod[i]++
 		}
 	}
 	return features, lod[:], nil
