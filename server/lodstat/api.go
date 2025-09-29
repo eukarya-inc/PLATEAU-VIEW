@@ -65,7 +65,7 @@ func (c *APIClient) QueryDatasetFilesAll(ctx context.Context, id string) ([]Data
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
