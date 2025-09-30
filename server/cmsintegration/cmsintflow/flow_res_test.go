@@ -23,7 +23,7 @@ func TestFlowResult_Internal(t *testing.T) {
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_dic.json",
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_maxLod.csv",
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_qc_result.zip",
-			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_qc_result_succeeded",
+			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_qc_result_ok",
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_3dtiles_lod1.zip",
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_3dtiles_lod2.zip",
 			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_3dtiles_lod2_no_texture.zip",

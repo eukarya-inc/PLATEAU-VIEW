@@ -42,7 +42,7 @@ func (r FlowResult) Internal() (res FlowInternalResult) {
 		case strings.HasSuffix(base, "qc_result.zip"):
 			res.QCResult = output
 			continue
-		case strings.HasSuffix(base, "qc_result_succeeded"):
+		case strings.HasSuffix(base, "qc_result_succeeded") || strings.HasSuffix(base, "qc_result_ok"):
 			res.QCOK = true
 			continue
 		}
