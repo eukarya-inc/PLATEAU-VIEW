@@ -6,7 +6,7 @@ import (
 	"maps"
 )
 
-const minZoomLevel3 = 8
+const minZoomLevel3 = 6
 const minZoomLevel2 = 3 // Minimum zoom for level 2 and auto mode
 
 var tj = map[string]any{

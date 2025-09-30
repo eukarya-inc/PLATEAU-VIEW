@@ -6,9 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/hasura/go-graphql-client"
 )
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 type APIClient struct {
 	client   *graphql.Client
@@ -28,8 +33,7 @@ func NewAPIClient(conf Config) (*APIClient, error) {
 		return nil, fmt.Errorf("error joining url path: %w", err)
 	}
 
-	hc := http.DefaultClient
-	c := graphql.NewClient(u, hc).WithRequestModifier(func(req *http.Request) {
+	c := graphql.NewClient(u, httpClient).WithRequestModifier(func(req *http.Request) {
 		if conf.DataCatalogAPIToken != "" {
 			req.Header.Set("Authorization", "Bearer "+conf.DataCatalogAPIToken)
 		}
@@ -37,7 +41,7 @@ func NewAPIClient(conf Config) (*APIClient, error) {
 
 	return &APIClient{
 		client:   c,
-		http:     hc,
+		http:     httpClient,
 		filesURL: u2,
 		token:    conf.DataCatalogAPIToken,
 	}, nil

@@ -246,13 +246,13 @@ func TestLodstatContext_Collect(t *testing.T) {
 			},
 		},
 		{
-			name:        "skip mesh codes with wrong level",
+			name:        "aggregate level 3 to level 2 when requesting level 2",
 			level:       2,
 			featureType: "all",
 			cityFile: DatasetFilesResponse{
 				"bldg": []DatasetFilesResponseItem{
 					{
-						Code:   "53394547", // Level 3 mesh
+						Code:   "53394547", // Level 3 mesh - will be aggregated to 533945
 						MaxLod: 2,
 						LOD0:   lo.ToPtr(10),
 					},
@@ -267,13 +267,39 @@ func TestLodstatContext_Collect(t *testing.T) {
 				"533945": true,
 			},
 			wantLodStat: map[string]int{
-				"533945": 0b00011,
+				"533945": 0b00111, // Combined from both: 0b00111 (maxLod 2) | 0b00011 (maxLod 1)
 			},
 			wantMaxlod: map[string]int{
-				"533945": 1,
+				"533945": 2, // Max of both: max(2, 1) = 2
 			},
 			wantCounts: map[string]map[string]int{
-				"lod0": {"533945": 5},
+				"lod0": {"533945": 15}, // Sum of both: 10 + 5 = 15
+			},
+		},
+		{
+			name:        "use level 2 data when requesting level 3",
+			level:       3,
+			featureType: "all",
+			cityFile: DatasetFilesResponse{
+				"dem": []DatasetFilesResponseItem{
+					{
+						Code:   "594037", // Level 2 mesh
+						MaxLod: 1,
+						LOD0:   lo.ToPtr(8),
+					},
+				},
+			},
+			wantFeatures: map[string]bool{
+				"594037": true,
+			},
+			wantLodStat: map[string]int{
+				"594037": 0b00011,
+			},
+			wantMaxlod: map[string]int{
+				"594037": 1,
+			},
+			wantCounts: map[string]map[string]int{
+				"lod0": {"594037": 8},
 			},
 		},
 		{
