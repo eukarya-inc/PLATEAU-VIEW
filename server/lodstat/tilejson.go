@@ -3,9 +3,11 @@ package lodstat
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 )
 
-const minZoom = 8
+const minZoomLevel3 = 8
+const minZoomLevel2 = 3 // Minimum zoom for level 2 and auto mode
 
 var tj = map[string]any{
 	"tilejson":    "3.0.0",
@@ -13,7 +15,7 @@ var tj = map[string]any{
 	"description": "PLATEAU 3D都市モデルの地域メッシュ単位のLOD統計情報を提供するMVTタイルサービス",
 	"scheme":      "xyz",
 	"attribution": "<a href=\"https://www.mlit.go.jp/plateau/site-policy/\">国土交通省 PLATEAU</a>",
-	"minzoom":     minZoom,
+	"minzoom":     minZoomLevel3,
 	"vector_layers": []map[string]any{
 		{
 			"id":          "lodstat",
@@ -40,11 +42,17 @@ var tj = map[string]any{
 	},
 }
 
-func tilesetJSON(host, ft string, level int) ([]byte, error) {
+func tilesetJSON(host, ft string, levelStr string, level int) ([]byte, error) {
 	res := map[string]any{}
-	for k, v := range tj {
-		res[k] = v
+	maps.Copy(res, tj)
+
+	// Set minzoom based on level
+	if level == 2 {
+		res["minzoom"] = minZoomLevel2
+	} else {
+		res["minzoom"] = minZoomLevel3
 	}
-	tj["tiles"] = []string{fmt.Sprintf("https://%s/lodstat/%s/%d/{z}/{x}/{y}.mvt", host, ft, level)}
-	return json.Marshal(tj)
+
+	res["tiles"] = []string{fmt.Sprintf("https://%s/lodstat/mvt/%s/%s/{z}/{x}/{y}.mvt", host, ft, levelStr)}
+	return json.Marshal(res)
 }

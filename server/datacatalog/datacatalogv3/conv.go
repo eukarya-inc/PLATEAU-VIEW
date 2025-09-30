@@ -363,8 +363,8 @@ func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType, host str
 		return nil, warning
 	}
 
-	// Build URL with host prefix
-	url := "/lodstat/mvt/bldg/3/{z}/{x}/{y}.mvt"
+	// Build URL with host prefix (using auto mode)
+	url := "/lodstat/mvt/bldg/auto/{z}/{x}/{y}.mvt"
 	if host != "" {
 		url = fmt.Sprintf("https://%s%s", host, url)
 	}

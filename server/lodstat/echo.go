@@ -21,16 +21,23 @@ func Echo(conf Config, g *echo.Group) error {
 		return fmt.Errorf("failed to initialize sdk client: %w", err)
 	}
 
-	g.GET("mvt/:ft/:level/tilejson.json", func(c echo.Context) error {
+	g.GET("/mvt/:ft/:level/tilejson.json", func(c echo.Context) error {
 		featureType := c.Param("ft")
 		levelStr := c.Param("level")
-		level, err := strconv.Atoi(levelStr)
-		if err != nil || !isValidLevel(level) {
-			return echo.ErrNotFound
+
+		var level int
+		if levelStr == "auto" {
+			level = 2 // use level 2 for auto mode minzoom
+		} else {
+			var err error
+			level, err = strconv.Atoi(levelStr)
+			if err != nil || !isValidLevel(level) {
+				return echo.ErrNotFound
+			}
 		}
 
 		host := c.Request().Host
-		b, err := tilesetJSON(host, featureType, level)
+		b, err := tilesetJSON(host, featureType, levelStr, level)
 		if err != nil {
 			log.Errorf("lodstat: failed to create tileset json: %v", err)
 			return echo.ErrInternalServerError
@@ -39,7 +46,7 @@ func Echo(conf Config, g *echo.Group) error {
 		return c.Blob(http.StatusOK, "application/json", b)
 	})
 
-	g.GET("mvt/:ft/:level/:z/:x/:y", func(c echo.Context) error {
+	g.GET("/mvt/:ft/:level/:z/:x/:y", func(c echo.Context) error {
 		const ext = ".mvt"
 
 		ctx := c.Request().Context()
@@ -53,18 +60,32 @@ func Echo(conf Config, g *echo.Group) error {
 		}
 
 		yStr = strings.TrimSuffix(yStr, ext)
-		level, err := strconv.Atoi(levelStr)
-		if err != nil || !isValidLevel(level) {
-			return echo.ErrNotFound
-		}
 
 		z, err := strconv.Atoi(zStr)
 		if err != nil {
 			return echo.ErrNotFound
 		}
 
-		if z < minZoom {
-			return echo.ErrNotFound
+		var level int
+		if levelStr == "auto" {
+			// Auto mode: switch between mesh levels based on zoom
+			if z < minZoomLevel2 {
+				return echo.ErrNotFound
+			}
+			level = autoSelectLevel(z)
+		} else {
+			level, err = strconv.Atoi(levelStr)
+			if err != nil || !isValidLevel(level) {
+				return echo.ErrNotFound
+			}
+
+			// Check minzoom based on level
+			if level == 2 && z < minZoomLevel2 {
+				return echo.ErrNotFound
+			}
+			if level == 3 && z < minZoomLevel3 {
+				return echo.ErrNotFound
+			}
 		}
 
 		x, err := strconv.Atoi(xStr)
@@ -90,5 +111,16 @@ func Echo(conf Config, g *echo.Group) error {
 }
 
 func isValidLevel(level int) bool {
-	return level == 2 || level == 3 || level == 4
+	return level == 2 || level == 3
+}
+
+// autoSelectLevel returns the appropriate mesh level based on zoom level.
+// z < 3: not displayed
+// 3 <= z < 8: level 2 (2nd order mesh)
+// z >= 8: level 3 (3rd order mesh)
+func autoSelectLevel(z int) int {
+	if z < 8 {
+		return 2
+	}
+	return 3
 }
