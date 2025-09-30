@@ -109,6 +109,13 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		res.Datasets.Append(plateauapi.DatasetTypeCategoryGeneric, datasets)
 	}
 
+	// global lodstat (hardcoded)
+	{
+		datasets, w := createGlobalLodstatDatasets(res.DatasetTypes[plateauapi.DatasetTypeCategoryGeneric])
+		warning = append(warning, w...)
+		res.Datasets.Append(plateauapi.DatasetTypeCategoryGeneric, datasets)
+	}
+
 	// citygml
 	{
 		var w []string
@@ -334,6 +341,55 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 		}
 	}
 
+	return
+}
+
+func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType) (res []plateauapi.Dataset, warning []string) {
+	const lodstatCode = "lodstat"
+	const lodstatName = "PLATEAU 建築物モデル 3次メッシュ別LOD統計情報"
+
+	// Find or create lodstat dataset type
+	var lodstatType plateauapi.DatasetType
+	for _, dt := range datasetTypes {
+		if dt.GetCode() == lodstatCode {
+			lodstatType = dt
+			break
+		}
+	}
+
+	if lodstatType == nil {
+		warning = append(warning, "lodstat dataset type not found, creating hardcoded type")
+		lodstatType = &plateauapi.GenericDatasetType{
+			ID:       plateauapi.NewID(lodstatCode, plateauapi.TypeDatasetType),
+			Code:     lodstatCode,
+			Name:     lodstatName,
+			Category: plateauapi.DatasetTypeCategoryGeneric,
+			Order:    10000,
+		}
+	}
+
+	// Create global lodstat dataset
+	dataset := &plateauapi.GenericDataset{
+		ID:                plateauapi.NewID("global_"+lodstatCode, plateauapi.TypeDataset),
+		Name:              lodstatName,
+		Description:       lo.ToPtr("PLATEAU 3D都市モデルの地域メッシュ単位のLOD統計情報を提供するMVTタイルサービス"),
+		Year:              2024,
+		RegisterationYear: 2024,
+		TypeID:            lodstatType.GetID(),
+		TypeCode:          lodstatCode,
+		Items: []*plateauapi.GenericDatasetItem{
+			{
+				ID:       plateauapi.NewID("global_"+lodstatCode+"_mvt", plateauapi.TypeDatasetItem),
+				Format:   plateauapi.DatasetFormatMvt,
+				Name:     lodstatName,
+				URL:      "/lodstat/bldg/3/{z}/{x}/{y}.mvt",
+				Layers:   []string{"lodstat"},
+				ParentID: plateauapi.NewID("global_"+lodstatCode, plateauapi.TypeDataset),
+			},
+		},
+	}
+
+	res = append(res, dataset)
 	return
 }
 

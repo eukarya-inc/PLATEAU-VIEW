@@ -316,21 +316,33 @@ paths:
                             type: string
                             format: uri
                             description: The URL to access this specific CityGML file.
+                          fileSize:
+                            type: integer
+                            format: int64
+                            description: The file size in bytes.
+                          features:
+                            type: integer
+                            description: The total number of features in the CityGML file.
                           lod0:
-                            type: boolean
-                            description: Indicates if LOD0 is available for this file.
+                            type: integer
+                            nullable: true
+                            description: The number of features with LOD0, or null if not available.
                           lod1:
-                            type: boolean
-                            description: Indicates if LOD1 is available for this file.
+                            type: integer
+                            nullable: true
+                            description: The number of features with LOD1, or null if not available.
                           lod2:
-                            type: boolean
-                            description: Indicates if LOD2 is available for this file.
+                            type: integer
+                            nullable: true
+                            description: The number of features with LOD2, or null if not available.
                           lod3:
-                            type: boolean
-                            description: Indicates if LOD3 is available for this file.
+                            type: integer
+                            nullable: true
+                            description: The number of features with LOD3, or null if not available.
                           lod4:
-                            type: boolean
-                            description: Indicates if LOD4 is available for this file.
+                            type: integer
+                            nullable: true
+                            description: The number of features with LOD4, or null if not available.
                         required:
                           - code
                           - maxLod

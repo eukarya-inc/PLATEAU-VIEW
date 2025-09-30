@@ -40,7 +40,7 @@ func TestRepos(t *testing.T) {
 	repos := NewRepos(pcms)
 	err := repos.Prepare(ctx, "prj", 2023, true, cms)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"dataset type landmark (ランドマーク) has no datasets, filtering out", "plateau bldg2 bldg: invalid city: city2", "plateau bldg2: city not found: city2"}, repos.Warnings("prj"))
+	assert.Equal(t, []string{"dataset type landmark (ランドマーク) has no datasets, filtering out", "lodstat dataset type not found, creating hardcoded type", "plateau bldg2 bldg: invalid city: city2", "plateau bldg2: city not found: city2"}, repos.Warnings("prj"))
 
 	assertRes := func(t *testing.T, ctx context.Context, r plateauapi.Repo, cityName, cityCode, itemID string, admin bool, stage *string, isPref, found, noCity bool) {
 		t.Helper()

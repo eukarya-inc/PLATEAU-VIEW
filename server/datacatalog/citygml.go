@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -33,6 +32,8 @@ type CityGMLFile struct {
 	MeshCode string `json:"code"`
 	MaxLOD   int    `json:"maxLod"`
 	URL      string `json:"url"`
+	FileSize *int64 `json:"fileSize,omitempty"`
+	Features *int   `json:"features,omitempty"`
 	LOD0     *int   `json:"lod0,omitempty"`
 	LOD1     *int   `json:"lod1,omitempty"`
 	LOD2     *int   `json:"lod2,omitempty"`
@@ -143,82 +144,6 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 		MetadataZipUrls:  citygml.MetadataZipUrls,
 		FeatureTypes:     featureTypes,
 	}, nil
-}
-
-func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles {
-	res := make(CityGMLFiles)
-
-	for _, record := range data {
-		if len(record) < 3 || record[0] == "" || record[1] == "" {
-			continue
-		}
-
-		if !isNumeric(rune(record[1][0])) {
-			continue // skip header
-		}
-
-		if len(record) < 10 {
-			// expand record with empty values
-			record = append(record, make([]string, 10-len(record))...)
-		}
-
-		// base,code,type,maxLod,path,lod0,lod1,lod2,lod3,lod4
-		base := record[0]
-		meshCode := record[1]
-		featureType := record[2]
-		maxlod, _ := strconv.Atoi(record[3])
-		citygmlURL := ""
-		gmlPath := record[4]
-		lod0 := parseLOD(record[5])
-		lod1 := parseLOD(record[6])
-		lod2 := parseLOD(record[7])
-		lod3 := parseLOD(record[8])
-		lod4 := parseLOD(record[9])
-
-		if len(record) > 4 && gmlURLs == nil {
-			citygmlURL = citygmlItemURLFrom(base, gmlPath, featureType)
-		} else {
-			// compat for datacatalogv2
-			prefix := fmt.Sprintf("%s_%s_", meshCode, featureType)
-
-			u, ok := lo.Find(gmlURLs, func(u *url.URL) bool {
-				return strings.HasPrefix(path.Base(u.Path), prefix) && path.Ext(u.Path) == ".gml"
-			})
-			if ok {
-				citygmlURL = u.String()
-			}
-			// warning = append(warning, fmt.Sprintf("unmatched:type=%s,code=%s,path=%s", ty, code, f))
-		}
-
-		if citygmlURL == "" {
-			continue
-		}
-
-		item := CityGMLFile{
-			MeshCode: meshCode,
-			MaxLOD:   maxlod,
-			URL:      citygmlURL,
-			LOD0:     lod0,
-			LOD1:     lod1,
-			LOD2:     lod2,
-			LOD3:     lod3,
-			LOD4:     lod4,
-		}
-
-		if _, ok := res[featureType]; !ok {
-			res[featureType] = make([]CityGMLFile, 0)
-		}
-
-		res[featureType] = append(res[featureType], item)
-	}
-
-	for _, v := range res {
-		slices.SortFunc(v, func(i, j CityGMLFile) int {
-			return strings.Compare(i.MeshCode, j.MeshCode)
-		})
-	}
-
-	return res
 }
 
 func citygmlItemURLFrom(base, p, typeCode string) string {
