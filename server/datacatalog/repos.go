@@ -36,6 +36,7 @@ type reposHandler struct {
 	gqlComplexityLimit int
 	cacheUpdateKey     string
 	geocodingAppID     string
+	cityConcurrency    int
 
 	qt *govpolygon.Quadtree
 }
@@ -45,6 +46,7 @@ const conditionsParamName = "conditions"
 const gqlComplexityLimit = 1000
 const cmsSchemaVersion = "v3"
 const cmsSchemaVersionV2 = "v2"
+const defaultCityConcurrency = 10
 
 func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
 	reposv3 := datacatalogv3.NewRepos(pcms)
@@ -52,6 +54,10 @@ func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
 
 	if conf.GraphqlMaxComplexity <= 0 {
 		conf.GraphqlMaxComplexity = gqlComplexityLimit
+	}
+
+	if conf.CityConcurrency <= 0 {
+		conf.CityConcurrency = defaultCityConcurrency
 	}
 
 	if conf.DiskCache {
@@ -73,6 +79,7 @@ func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
 		gqlComplexityLimit: conf.GraphqlMaxComplexity,
 		cacheUpdateKey:     conf.CacheUpdateKey,
 		geocodingAppID:     conf.GeocodingAppID,
+		cityConcurrency:    conf.CityConcurrency,
 		qt:                 qt,
 	}, nil
 }
@@ -158,16 +165,49 @@ func (h *reposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		adminContext(c, true, admin, admin && isAlpha(c))
 		ctx = c.Request().Context() // do not forget to update context
 
-		cities := []*CityGMLFilesCity{}
-		for _, cid := range cityIDs {
-			cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid)
-			if err != nil {
-				return err
+		// Pre-fetch DatasetTypes once to share across all cities
+		datasetTypes, err := merged.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
+			Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get dataset types: %w", err)
+		}
+
+		// Fetch cities concurrently
+		results := make([]*CityGMLFilesCity, len(cityIDs))
+		errg := errgroup.Group{}
+		errg.SetLimit(h.cityConcurrency) // Limit concurrent fetches to avoid overwhelming upstream servers
+
+		for i, cid := range cityIDs {
+			i := i     // Capture loop variable
+			cid := cid // Capture loop variable
+			errg.Go(func() error {
+				start := time.Now()
+				cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid, datasetTypes)
+				duration := time.Since(start)
+
+				if err != nil {
+					log.Warnfc(ctx, "datacatalog: failed to fetch citygml files for city %s in %s: %v", cid, duration, err)
+					return nil // Allow partial failures - continue fetching other cities
+				}
+				if cityGMLFiles != nil {
+					log.Debugfc(ctx, "datacatalog: fetched citygml files for city %s in %s", cid, duration)
+					results[i] = cityGMLFiles
+				}
+				return nil
+			})
+		}
+
+		if err := errg.Wait(); err != nil {
+			return err
+		}
+
+		// Collect non-nil results
+		cities := make([]*CityGMLFilesCity, 0, len(results))
+		for _, city := range results {
+			if city != nil {
+				cities = append(cities, city)
 			}
-			if cityGMLFiles == nil {
-				continue
-			}
-			cities = append(cities, cityGMLFiles)
 		}
 
 		res := applyCityGMLCityFilter(cities, filter)

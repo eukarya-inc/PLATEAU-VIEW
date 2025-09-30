@@ -45,7 +45,7 @@ type CityGMLFeatureType struct {
 	Name string `json:"name"`
 }
 
-func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*CityGMLFilesCity, error) {
+func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string, datasetTypes []plateauapi.DatasetType) (*CityGMLFilesCity, error) {
 	n, err := r.Node(ctx, plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(id)))
 	if err != nil {
 		return nil, err
@@ -113,14 +113,7 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 
 	files := csvToCityGMLFilesResponse(data, gurls)
 
-	// feature types
-	datasetTypes, err := r.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
-		Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dataset types: %w", err)
-	}
-
+	// Build feature types map from provided datasetTypes
 	featureTypes := make(map[string]CityGMLFeatureType)
 	if datasetTypes != nil {
 		for k := range files {

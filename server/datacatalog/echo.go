@@ -21,6 +21,7 @@ type Config struct {
 	GraphqlMaxComplexity int
 	ErrorOnInit          bool
 	GeocodingAppID       string
+	CityConcurrency      int  // Concurrent city fetches limit (default: 10)
 	DiskCache            bool // for debugging
 	Debug                bool // for debugging
 	// v2
