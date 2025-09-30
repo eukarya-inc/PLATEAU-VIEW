@@ -23,10 +23,12 @@ func fetchCSVs(ctx context.Context, urls, citygmlBaseURLs []string) (records [][
 		return nil, fmt.Errorf("length of urls and citygmlBaseURLs must be the same")
 	}
 
+	results := make([][][]string, len(urls))
 	errg := errgroup.Group{}
 	errg.SetLimit(10)
 
 	for i, url := range urls {
+		i := i
 		url := url
 		base := citygmlBaseURLs[i]
 		errg.Go(func() error {
@@ -35,13 +37,18 @@ func fetchCSVs(ctx context.Context, urls, citygmlBaseURLs []string) (records [][
 				return fmt.Errorf("failed to fetch %s: %w", url, err)
 			}
 
-			records = append(records, data...)
+			results[i] = data
 			return nil
 		})
 	}
 
 	if err := errg.Wait(); err != nil {
 		return nil, err
+	}
+
+	// Merge results after all goroutines complete
+	for _, data := range results {
+		records = append(records, data...)
 	}
 
 	return records, nil
