@@ -347,7 +347,8 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType, host string) (res []plateauapi.Dataset, warning []string) {
 	const globalCode = "global"
 	const lodstatCode = "lodstat"
-	const lodstatName = "PLATEAU 建築物モデル 3次メッシュ別LOD統計情報"
+	const lodstatName = "PLATEAU 地域メッシュ別LOD統計情報（建築物モデル）"
+	const desc = "PLATEAU 3D都市モデルの建築物モデルにおける、地域メッシュ単位のLOD統計情報を提供するベクタータイル"
 
 	// Find global dataset type
 	var globalType plateauapi.DatasetType
@@ -373,7 +374,7 @@ func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType, host str
 	dataset := &plateauapi.GenericDataset{
 		ID:                plateauapi.NewID(lodstatCode, plateauapi.TypeDataset),
 		Name:              lodstatName,
-		Description:       lo.ToPtr("PLATEAU 3D都市モデルの地域メッシュ単位のLOD統計情報を提供するMVTタイルセット"),
+		Description:       lo.ToPtr(desc),
 		Year:              2025,
 		RegisterationYear: 2025,
 		TypeID:            globalType.GetID(),
