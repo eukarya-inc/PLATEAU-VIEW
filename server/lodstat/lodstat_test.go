@@ -12,7 +12,7 @@ func TestNewLodstatContext(t *testing.T) {
 	ctx := newLodstatContext()
 
 	assert.NotNil(t, ctx)
-	assert.NotNil(t, ctx.Features)
+	assert.NotNil(t, ctx.Codes)
 	assert.NotNil(t, ctx.LodStat)
 	assert.NotNil(t, ctx.Maxlod)
 	assert.NotNil(t, ctx.Lod0Count)
@@ -20,7 +20,7 @@ func TestNewLodstatContext(t *testing.T) {
 	assert.NotNil(t, ctx.Lod2Count)
 	assert.NotNil(t, ctx.Lod3Count)
 	assert.NotNil(t, ctx.Lod4Count)
-	assert.Empty(t, ctx.Features)
+	assert.Empty(t, ctx.Codes)
 	assert.Empty(t, ctx.LodStat)
 	assert.Empty(t, ctx.Maxlod)
 }
@@ -340,9 +340,9 @@ func TestLodstatContext_Collect(t *testing.T) {
 			ctx.Collect(tt.level, tt.featureType, tt.cityFile)
 
 			// Check features
-			assert.Equal(t, len(tt.wantFeatures), len(ctx.Features))
+			assert.Equal(t, len(tt.wantFeatures), len(ctx.Codes))
 			for code := range tt.wantFeatures {
-				_, ok := ctx.Features[code]
+				_, ok := ctx.Codes[code]
 				assert.True(t, ok, "Expected feature %s to be present", code)
 			}
 
@@ -418,10 +418,10 @@ func TestLodstatContext_CollectAll(t *testing.T) {
 	ctx.CollectAll(3, "all", cityFiles)
 
 	// Should have collected from all files
-	assert.Len(t, ctx.Features, 3)
-	assert.Contains(t, ctx.Features, "53394547")
-	assert.Contains(t, ctx.Features, "53394548")
-	assert.Contains(t, ctx.Features, "53394549")
+	assert.Len(t, ctx.Codes, 3)
+	assert.Contains(t, ctx.Codes, "53394547")
+	assert.Contains(t, ctx.Codes, "53394548")
+	assert.Contains(t, ctx.Codes, "53394549")
 
 	// Check LOD stats
 	assert.Equal(t, 0b00111, ctx.LodStat["53394547"])
@@ -448,7 +448,7 @@ func TestLodstatContext_Properties(t *testing.T) {
 			featureType: "all",
 			setup: func(ctx *lodstatContext) {
 				mesh, _ := jisx0410.Parse("53394547")
-				ctx.Features["53394547"] = mesh
+				ctx.Codes["53394547"] = mesh
 				ctx.LodStat["53394547"] = 0b00111 // LOD 0,1,2
 				ctx.Maxlod["53394547"] = 2
 				ctx.Lod0Count["53394547"] = 10
@@ -457,6 +457,9 @@ func TestLodstatContext_Properties(t *testing.T) {
 			},
 			want: map[string]any{
 				"meshCode":  "53394547",
+				"level":     3,
+				"fileSize":  int64(0),
+				"features":  0,
 				"maxLod":    2,
 				"lod0":      true,
 				"lod1":      true,
@@ -476,7 +479,7 @@ func TestLodstatContext_Properties(t *testing.T) {
 			featureType: "bldg",
 			setup: func(ctx *lodstatContext) {
 				mesh, _ := jisx0410.Parse("53394547")
-				ctx.Features["53394547"] = mesh
+				ctx.Codes["53394547"] = mesh
 				ctx.LodStat["53394547"] = 0b11111 // All LODs
 				ctx.Maxlod["53394547"] = 4
 				ctx.Lod0Count["53394547"] = 10
@@ -488,6 +491,9 @@ func TestLodstatContext_Properties(t *testing.T) {
 			want: map[string]any{
 				"featureType": "bldg",
 				"meshCode":    "53394547",
+				"level":       3,
+				"fileSize":    int64(0),
+				"features":    0,
 				"maxLod":      4,
 				"lod0":        true,
 				"lod1":        true,
@@ -507,11 +513,14 @@ func TestLodstatContext_Properties(t *testing.T) {
 			featureType: "all",
 			setup: func(ctx *lodstatContext) {
 				mesh, _ := jisx0410.Parse("53394547")
-				ctx.Features["53394547"] = mesh
+				ctx.Codes["53394547"] = mesh
 				ctx.Maxlod["53394547"] = 1
 			},
 			want: map[string]any{
 				"meshCode":  "53394547",
+				"level":     3,
+				"fileSize":  int64(0),
+				"features":  0,
 				"maxLod":    1,
 				"lod0Count": 0,
 				"lod1Count": 0,
@@ -525,15 +534,7 @@ func TestLodstatContext_Properties(t *testing.T) {
 			code:        "unknown",
 			featureType: "all",
 			setup:       func(ctx *lodstatContext) {},
-			want: map[string]any{
-				"meshCode":  "unknown",
-				"maxLod":    0,
-				"lod0Count": 0,
-				"lod1Count": 0,
-				"lod2Count": 0,
-				"lod3Count": 0,
-				"lod4Count": 0,
-			},
+			want:        nil,
 		},
 		{
 			name:        "properties with partial LOD coverage",
@@ -541,7 +542,7 @@ func TestLodstatContext_Properties(t *testing.T) {
 			featureType: "all",
 			setup: func(ctx *lodstatContext) {
 				mesh, _ := jisx0410.Parse("53394547")
-				ctx.Features["53394547"] = mesh
+				ctx.Codes["53394547"] = mesh
 				ctx.LodStat["53394547"] = 0b00101 // LOD 0,2 only
 				ctx.Maxlod["53394547"] = 2
 				ctx.Lod0Count["53394547"] = 10
@@ -549,6 +550,9 @@ func TestLodstatContext_Properties(t *testing.T) {
 			},
 			want: map[string]any{
 				"meshCode":  "53394547",
+				"level":     3,
+				"fileSize":  int64(0),
+				"features":  0,
 				"maxLod":    2,
 				"lod0":      true,
 				"lod1":      false,
@@ -598,7 +602,7 @@ func TestLodstatContext_EdgeCases(t *testing.T) {
 		ctx.Collect(3, "all", cityFile3)
 
 		assert.Equal(t, 3, ctx.Maxlod["53394547"])
-		assert.Equal(t, 60, ctx.Lod0Count["53394547"]) // 10+20+30
+		assert.Equal(t, 60, ctx.Lod0Count["53394547"])    // 10+20+30
 		assert.Equal(t, 0b01111, ctx.LodStat["53394547"]) // Combined all LODs up to 3
 	})
 
@@ -607,7 +611,7 @@ func TestLodstatContext_EdgeCases(t *testing.T) {
 		cityFiles := []DatasetFilesResponse{}
 		ctx.CollectAll(3, "all", cityFiles)
 
-		assert.Empty(t, ctx.Features)
+		assert.Empty(t, ctx.Codes)
 		assert.Empty(t, ctx.LodStat)
 		assert.Empty(t, ctx.Maxlod)
 	})
@@ -617,7 +621,7 @@ func TestLodstatContext_EdgeCases(t *testing.T) {
 		cityFile := DatasetFilesResponse{}
 		ctx.Collect(3, "all", cityFile)
 
-		assert.Empty(t, ctx.Features)
+		assert.Empty(t, ctx.Codes)
 		assert.Empty(t, ctx.LodStat)
 		assert.Empty(t, ctx.Maxlod)
 	})
@@ -629,7 +633,7 @@ func TestLodstatContext_EdgeCases(t *testing.T) {
 		}
 		ctx.Collect(3, "all", cityFile)
 
-		assert.Empty(t, ctx.Features)
+		assert.Empty(t, ctx.Codes)
 		assert.Empty(t, ctx.LodStat)
 		assert.Empty(t, ctx.Maxlod)
 	})

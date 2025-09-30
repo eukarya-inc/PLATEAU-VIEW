@@ -106,12 +106,14 @@ type DatasetCityResponse struct {
 type DatasetFilesResponse map[string][]DatasetFilesResponseItem
 
 type DatasetFilesResponseItem struct {
-	Code   string `json:"code"`
-	MaxLod int    `json:"maxLod"`
-	URL    string `json:"url"`
-	LOD0   *int   `json:"lod0,omitempty"`
-	LOD1   *int   `json:"lod1,omitempty"`
-	LOD2   *int   `json:"lod2,omitempty"`
-	LOD3   *int   `json:"lod3,omitempty"`
-	LOD4   *int   `json:"lod4,omitempty"`
+	Code     string `json:"code"`
+	MaxLod   int    `json:"maxLod"`
+	URL      string `json:"url"`
+	FileSize int64  `json:"fileSize,omitempty"`
+	Features int    `json:"features,omitempty"`
+	LOD0     *int   `json:"lod0,omitempty"`
+	LOD1     *int   `json:"lod1,omitempty"`
+	LOD2     *int   `json:"lod2,omitempty"`
+	LOD3     *int   `json:"lod3,omitempty"`
+	LOD4     *int   `json:"lod4,omitempty"`
 }

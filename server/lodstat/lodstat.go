@@ -3,7 +3,9 @@ package lodstat
 import "github.com/eukarya-inc/PLATEAU-VIEW/server/geo/jisx0410"
 
 type lodstatContext struct {
-	Features  map[string]jisx0410.MeshCode
+	Codes     map[string]jisx0410.MeshCode
+	FileSize  map[string]int64
+	Features  map[string]int
 	LodStat   map[string]int
 	Maxlod    map[string]int
 	Lod0Count map[string]int
@@ -15,7 +17,9 @@ type lodstatContext struct {
 
 func newLodstatContext() *lodstatContext {
 	return &lodstatContext{
-		Features:  map[string]jisx0410.MeshCode{},
+		Codes:     map[string]jisx0410.MeshCode{},
+		FileSize:  map[string]int64{},
+		Features:  map[string]int{},
 		LodStat:   map[string]int{},
 		Maxlod:    map[string]int{},
 		Lod0Count: map[string]int{},
@@ -45,8 +49,14 @@ func (c *lodstatContext) Collect(level int, featureType string, cityFile Dataset
 			if mesh.Level != level {
 				continue
 			}
-			if _, ok := c.Features[file.Code]; !ok {
-				c.Features[file.Code] = mesh
+			if _, ok := c.Codes[file.Code]; !ok {
+				c.Codes[file.Code] = mesh
+			}
+			if file.FileSize > 0 {
+				c.FileSize[file.Code] += file.FileSize
+			}
+			if file.Features > 0 {
+				c.Features[file.Code] += file.Features
 			}
 			switch file.MaxLod {
 			case 0:
@@ -87,7 +97,14 @@ func (c *lodstatContext) Properties(code, featureType string) map[string]any {
 	if featureType != "all" {
 		props["featureType"] = featureType
 	}
+	m, ok := c.Codes[code]
+	if !ok {
+		return nil
+	}
 	props["meshCode"] = code
+	props["level"] = m.Level
+	props["fileSize"] = c.FileSize[code]
+	props["features"] = c.Features[code]
 	props["maxLod"] = c.Maxlod[code]
 	if lod, ok := c.LodStat[code]; ok {
 		props["lod0"] = (lod & 0b00001) != 0
@@ -96,10 +113,15 @@ func (c *lodstatContext) Properties(code, featureType string) map[string]any {
 		props["lod3"] = (lod & 0b01000) != 0
 		props["lod4"] = (lod & 0b10000) != 0
 	}
-	props["lod0Count"] = c.Lod0Count[code]
-	props["lod1Count"] = c.Lod1Count[code]
-	props["lod2Count"] = c.Lod2Count[code]
-	props["lod3Count"] = c.Lod3Count[code]
-	props["lod4Count"] = c.Lod4Count[code]
+	lod0Count := c.Lod0Count[code]
+	lod1Count := c.Lod1Count[code]
+	lod2Count := c.Lod2Count[code]
+	lod3Count := c.Lod3Count[code]
+	lod4Count := c.Lod4Count[code]
+	props["lod0Count"] = lod0Count
+	props["lod1Count"] = lod1Count
+	props["lod2Count"] = lod2Count
+	props["lod3Count"] = lod3Count
+	props["lod4Count"] = lod4Count
 	return props
 }
