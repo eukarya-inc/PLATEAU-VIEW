@@ -15,6 +15,7 @@ import (
 type Config struct {
 	plateaucms.Config
 	// v3
+	Host                 string
 	CacheUpdateKey       string
 	PlaygroundEndpoint   string
 	GraphqlMaxComplexity int

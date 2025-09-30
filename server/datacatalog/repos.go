@@ -62,6 +62,10 @@ func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
 		reposv3.EnableDebug(true)
 	}
 
+	if conf.Host != "" {
+		reposv3.SetHost(conf.Host)
+	}
+
 	return &reposHandler{
 		reposv3:            reposv3,
 		reposv2:            reposv2,

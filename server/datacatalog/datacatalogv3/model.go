@@ -9,6 +9,7 @@ import (
 type AllData struct {
 	Name                  string
 	Year                  int
+	Host                  string
 	PlateauSpecs          []plateauapi.PlateauSpecSimple
 	FeatureTypes          FeatureTypes
 	City                  []*CityItem

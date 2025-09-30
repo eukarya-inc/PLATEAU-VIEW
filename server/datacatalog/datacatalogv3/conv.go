@@ -111,7 +111,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 
 	// global lodstat (hardcoded)
 	{
-		datasets, w := createGlobalLodstatDatasets(res.DatasetTypes[plateauapi.DatasetTypeCategoryGeneric])
+		datasets, w := createGlobalLodstatDatasets(res.DatasetTypes[plateauapi.DatasetTypeCategoryGeneric], all.Host)
 		warning = append(warning, w...)
 		res.Datasets.Append(plateauapi.DatasetTypeCategoryGeneric, datasets)
 	}
@@ -344,47 +344,48 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 	return
 }
 
-func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType) (res []plateauapi.Dataset, warning []string) {
+func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType, host string) (res []plateauapi.Dataset, warning []string) {
+	const globalCode = "global"
 	const lodstatCode = "lodstat"
 	const lodstatName = "PLATEAU 建築物モデル 3次メッシュ別LOD統計情報"
 
-	// Find or create lodstat dataset type
-	var lodstatType plateauapi.DatasetType
+	// Find global dataset type
+	var globalType plateauapi.DatasetType
 	for _, dt := range datasetTypes {
-		if dt.GetCode() == lodstatCode {
-			lodstatType = dt
+		if dt.GetCode() == globalCode {
+			globalType = dt
 			break
 		}
 	}
 
-	if lodstatType == nil {
-		warning = append(warning, "lodstat dataset type not found, creating hardcoded type")
-		lodstatType = &plateauapi.GenericDatasetType{
-			ID:       plateauapi.NewID(lodstatCode, plateauapi.TypeDatasetType),
-			Code:     lodstatCode,
-			Name:     lodstatName,
-			Category: plateauapi.DatasetTypeCategoryGeneric,
-			Order:    10000,
-		}
+	if globalType == nil {
+		warning = append(warning, "global dataset type not found")
+		return nil, warning
+	}
+
+	// Build URL with host prefix
+	url := "/lodstat/mvt/bldg/3/{z}/{x}/{y}.mvt"
+	if host != "" {
+		url = fmt.Sprintf("https://%s%s", host, url)
 	}
 
 	// Create global lodstat dataset
 	dataset := &plateauapi.GenericDataset{
-		ID:                plateauapi.NewID("global_"+lodstatCode, plateauapi.TypeDataset),
+		ID:                plateauapi.NewID(lodstatCode, plateauapi.TypeDataset),
 		Name:              lodstatName,
-		Description:       lo.ToPtr("PLATEAU 3D都市モデルの地域メッシュ単位のLOD統計情報を提供するMVTタイルサービス"),
-		Year:              2024,
-		RegisterationYear: 2024,
-		TypeID:            lodstatType.GetID(),
-		TypeCode:          lodstatCode,
+		Description:       lo.ToPtr("PLATEAU 3D都市モデルの地域メッシュ単位のLOD統計情報を提供するMVTタイルセット"),
+		Year:              2025,
+		RegisterationYear: 2025,
+		TypeID:            globalType.GetID(),
+		TypeCode:          globalCode,
 		Items: []*plateauapi.GenericDatasetItem{
 			{
-				ID:       plateauapi.NewID("global_"+lodstatCode+"_mvt", plateauapi.TypeDatasetItem),
+				ID:       plateauapi.NewID(lodstatCode, plateauapi.TypeDatasetItem),
 				Format:   plateauapi.DatasetFormatMvt,
 				Name:     lodstatName,
-				URL:      "/lodstat/bldg/3/{z}/{x}/{y}.mvt",
+				URL:      url,
 				Layers:   []string{"lodstat"},
-				ParentID: plateauapi.NewID("global_"+lodstatCode, plateauapi.TypeDataset),
+				ParentID: plateauapi.NewID(lodstatCode, plateauapi.TypeDataset),
 			},
 		},
 	}

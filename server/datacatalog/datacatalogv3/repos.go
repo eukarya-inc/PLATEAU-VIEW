@@ -36,6 +36,7 @@ type Repos struct {
 	cms    *util.SyncMap[string, *CMS]
 	cache  bool
 	debug  bool
+	host   string
 	writer RepoWriter
 	*plateauapi.Repos
 }
@@ -56,6 +57,10 @@ func (r *Repos) EnableCache(cache bool) {
 
 func (r *Repos) EnableDebug(debug bool) {
 	r.debug = debug
+}
+
+func (r *Repos) SetHost(host string) {
+	r.host = host
 }
 
 func (r *Repos) SetWriter(writer RepoWriter) {
@@ -89,7 +94,7 @@ func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUp
 
 	t := time.Now()
 
-	data, err := cms.GetAll(ctx)
+	data, err := cms.GetAll(ctx, r.host)
 	if err != nil {
 		return nil, err
 	}
