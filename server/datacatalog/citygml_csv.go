@@ -1,6 +1,7 @@
 package datacatalog
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -11,12 +12,17 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/reearth/reearthx/rerror"
 	"github.com/samber/lo"
 	"github.com/spkg/bom"
 	"golang.org/x/sync/errgroup"
 )
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 func fetchCSVs(ctx context.Context, urls, citygmlBaseURLs []string) (records [][]string, _ error) {
 	if len(urls) != len(citygmlBaseURLs) {
@@ -55,12 +61,15 @@ func fetchCSVs(ctx context.Context, urls, citygmlBaseURLs []string) (records [][
 }
 
 func fetchCSV(ctx context.Context, url, prefix string) (records [][]string, _ error) {
-	res, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(res)
+	// Request gzip encoding for faster downloads
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request: %w", err)
 	}
@@ -76,7 +85,20 @@ func fetchCSV(ctx context.Context, url, prefix string) (records [][]string, _ er
 		return nil, fmt.Errorf("failed to request: %w", err)
 	}
 
-	c := csv.NewReader(bom.NewReader(resp.Body))
+	// Handle gzip decompression if content is gzip encoded
+	var reader io.Reader = resp.Body
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		gzipReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer func() {
+			_ = gzipReader.Close()
+		}()
+		reader = gzipReader
+	}
+
+	c := csv.NewReader(bom.NewReader(reader))
 	for {
 		record, err := c.Read()
 		if err == io.EOF {

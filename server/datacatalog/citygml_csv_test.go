@@ -1,6 +1,7 @@
 package datacatalog
 
 import (
+	"compress/gzip"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -72,6 +73,9 @@ func TestFetchCSV(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Check Accept-Encoding header
+				assert.Equal(t, "gzip", r.Header.Get("Accept-Encoding"))
+
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode == http.StatusOK {
 					_, _ = w.Write([]byte(tt.csvContent))
@@ -92,6 +96,87 @@ func TestFetchCSV(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchCSVWithGzip(t *testing.T) {
+	tests := []struct {
+		name        string
+		csvContent  string
+		useGzip     bool
+		wantRecords [][]string
+		wantErr     bool
+	}{
+		{
+			name: "gzip compressed csv",
+			csvContent: `12345,bldg,2,path/to/file.gml,1024,100,10,20,30,0,0
+67890,tran,1,path/to/file2.gml,2048,200,50,60,0,0,0`,
+			useGzip: true,
+			wantRecords: [][]string{
+				{"https://example.com", "12345", "bldg", "2", "path/to/file.gml", "1024", "100", "10", "20", "30", "0", "0"},
+				{"https://example.com", "67890", "tran", "1", "path/to/file2.gml", "2048", "200", "50", "60", "0", "0", "0"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "uncompressed csv (backward compatibility)",
+			csvContent: `12345,bldg,2,path/to/file.gml,1024,100,10,20,30,0,0
+67890,tran,1,path/to/file2.gml,2048,200,50,60,0,0,0`,
+			useGzip: false,
+			wantRecords: [][]string{
+				{"https://example.com", "12345", "bldg", "2", "path/to/file.gml", "1024", "100", "10", "20", "30", "0", "0"},
+				{"https://example.com", "67890", "tran", "1", "path/to/file2.gml", "2048", "200", "50", "60", "0", "0", "0"},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "gzip compressed empty csv",
+			csvContent:  "",
+			useGzip:     true,
+			wantRecords: nil,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify Accept-Encoding header is set
+				assert.Equal(t, "gzip", r.Header.Get("Accept-Encoding"))
+
+				if tt.useGzip {
+					w.Header().Set("Content-Encoding", "gzip")
+					gzipWriter := gzip.NewWriter(w)
+					_, _ = gzipWriter.Write([]byte(tt.csvContent))
+					_ = gzipWriter.Close()
+				} else {
+					_, _ = w.Write([]byte(tt.csvContent))
+				}
+			}))
+			defer server.Close()
+
+			records, err := fetchCSV(context.Background(), server.URL, "https://example.com")
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantRecords, records)
+			}
+		})
+	}
+}
+
+func TestFetchCSVWithInvalidGzip(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		// Write invalid gzip data
+		_, _ = w.Write([]byte("this is not gzip data"))
+	}))
+	defer server.Close()
+
+	_, err := fetchCSV(context.Background(), server.URL, "https://example.com")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create gzip reader")
 }
 
 func TestFetchCSVs(t *testing.T) {
