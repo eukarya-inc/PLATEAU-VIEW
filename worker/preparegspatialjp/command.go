@@ -200,11 +200,11 @@ func CommandSingle(conf *Config) (err error) {
 
 	// maxlod
 	if !conf.SkipMaxLOD {
-		if err := PrepareMaxLOD(ctx, cw, mc); err != nil {
+		if err := PrepareLODStat(ctx, cw, mc); err != nil {
 			return err
 		}
 	} else if conf.ValidateMaxLOD {
-		if err := ValidateMaxLOD(ctx, cw, mc); err != nil {
+		if err := ValidateLODStat(ctx, cw, mc); err != nil {
 			return err
 		}
 	}
