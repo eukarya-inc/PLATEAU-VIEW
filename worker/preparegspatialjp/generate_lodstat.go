@@ -83,34 +83,58 @@ func PrepareLODStat(ctx context.Context, cw *CMSWrapper, mc MergeContext) (err e
 	buf := allData.Bytes()
 
 	// validate csv
-	records, err := csv.NewReader(bytes.NewReader(buf)).ReadAll()
+	reader := csv.NewReader(bytes.NewReader(buf))
+	reader.FieldsPerRecord = -1 // Allow variable number of fields
+	records, err := reader.ReadAll()
 	if err != nil {
 		return fmt.Errorf("invalid lodstat csv data: %w", err)
 	}
 
-	// Validate that each record has the expected number of columns (11 for new format, 4 for old format)
-	// Old format: code,type,maxLod,file
-	// New format: code,type,maxLod,file,filesize,features,lod0,lod1,lod2,lod3,lod4
 	if len(records) == 0 {
 		return fmt.Errorf("empty lodstat csv data")
 	}
 
-	numColumns := len(records[0])
-	if numColumns != 4 && numColumns != 11 {
-		return fmt.Errorf("invalid header: expected 4 or 11 columns, got %d", numColumns)
+	// Find the maximum number of columns
+	maxColumns := 0
+	for _, record := range records {
+		if len(record) > maxColumns {
+			maxColumns = len(record)
+		}
 	}
 
+	// Validate that maxColumns is either 4 or 11
+	// Old format: code,type,maxLod,file
+	// New format: code,type,maxLod,file,filesize,features,lod0,lod1,lod2,lod3,lod4
+	if maxColumns != 4 && maxColumns != 11 {
+		return fmt.Errorf("invalid header: expected 4 or 11 columns, got %d", maxColumns)
+	}
+
+	// Normalize records to have the same number of columns
 	for i, record := range records {
-		if i == 0 {
-			// Already verified header above
-			continue
-		}
-		if len(record) != numColumns {
-			return fmt.Errorf("invalid record at line %d: expected %d columns, got %d", i+1, numColumns, len(record))
+		if len(record) < maxColumns {
+			// Pad with empty strings
+			padded := make([]string, maxColumns)
+			copy(padded, record)
+			for j := len(record); j < maxColumns; j++ {
+				padded[j] = ""
+			}
+			records[i] = padded
 		}
 	}
 
-	log.Infofc(ctx, "lodstat validation passed: %d records", len(records)-1)
+	log.Infofc(ctx, "lodstat validation passed: %d records with %d columns", len(records)-1, maxColumns)
+
+	// Regenerate CSV with normalized records
+	normalizedBuf := bytes.NewBuffer(nil)
+	writer := csv.NewWriter(normalizedBuf)
+	if err := writer.WriteAll(records); err != nil {
+		return fmt.Errorf("failed to write normalized csv: %w", err)
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("failed to flush csv writer: %w", err)
+	}
+	buf = normalizedBuf.Bytes()
 
 	// upload
 	aid, err := cw.UploadNormally(ctx, fileName, bytes.NewReader(buf))
