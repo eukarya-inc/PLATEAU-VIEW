@@ -4,18 +4,26 @@ on:
     outputs:
       image:
         value: ${{ jobs.docker.outputs.image }}
+      latest_tag:
+        value: ${{ jobs.docker.outputs.latest_tag }}
 jobs:
   docker:
     name: Build and push Docker image
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-geo:latest
+      IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-geo
     outputs:
-      image: ${{ env.IMAGE_NAME }}@sha256:${{ steps.docker.outputs.digest }}
+      image: ${{ steps.set-tags.outputs.build_tag }}
+      latest_tag: ${{ steps.set-tags.outputs.latest_tag }}
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Set tags
+        id: set-tags
+        run: |
+          echo "build_tag=${{ env.IMAGE_NAME }}:build-${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "latest_tag=${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
       - name: Checkout
         uses: actions/checkout@v3
       - name: Set up Docker Buildx
@@ -26,13 +34,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build docker image
+      - name: Build and push docker image with temporary tag
         uses: docker/build-push-action@v3
         id: docker
         with:
           context: ./geo
           platforms: linux/amd64
-          tags: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.set-tags.outputs.build_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           push: true
