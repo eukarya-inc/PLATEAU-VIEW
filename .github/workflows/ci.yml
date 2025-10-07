@@ -201,7 +201,7 @@ jobs:
 
   build-geo:
     needs: [prepare]
-    if: ${{ !failure() && needs.prepare.outputs.build == 'true' }}
+    if: ${{ !failure() && needs.prepare.outputs.geo == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-geo.yml
 
   push-geo:
@@ -224,7 +224,7 @@ jobs:
 
   build-server:
     needs: [prepare]
-    if: ${{ !failure() && needs.prepare.outputs.build == 'true' }}
+    if: ${{ !failure() && needs.prepare.outputs.server == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-server.yml
 
   push-server:
@@ -247,7 +247,7 @@ jobs:
 
   build-worker:
     needs: [prepare]
-    if: ${{ !failure() && needs.prepare.outputs.build == 'true' }}
+    if: ${{ !failure() && needs.prepare.outputs.worker == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-worker.yml
 
   push-worker:
