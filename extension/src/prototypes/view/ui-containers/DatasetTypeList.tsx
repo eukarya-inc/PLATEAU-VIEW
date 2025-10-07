@@ -3,9 +3,10 @@ import { atomWithReset } from "jotai/utils";
 import { unionBy } from "lodash-es";
 import { useCallback, type FC, useContext, useMemo } from "react";
 
-import { useAreaDatasets, useAreas, useDatasetTypes } from "../../../shared/graphql";
+import { useAreaDatasets, useAreas, useDatasets, useDatasetTypes } from "../../../shared/graphql";
 import { AreasQuery } from "../../../shared/graphql/types/catalog";
 import { AppOverlayLayoutContext, DatasetTreeItem, DatasetTreeView } from "../../ui-components";
+import { datasetTypeNames } from "../constants/datasetTypeNames";
 import { isGenericDatasetType } from "../constants/generic";
 import { PlateauDatasetType } from "../constants/plateau";
 
@@ -13,6 +14,17 @@ import { DatasetFolderList } from "./DatasetFolderList";
 import { DatasetListItem, joinPath } from "./DatasetListItem";
 
 const expandedAtom = atomWithReset<string[]>([]);
+
+const GlobalItem: FC<{}> = () => {
+  const query = useDatasets({
+    includeTypes: ["global"],
+  });
+  return (
+    <DatasetTreeItem nodeId="global" label={datasetTypeNames.global} loading={query.loading}>
+      <DatasetFolderList folderId="global" datasets={query.data?.datasets} />
+    </DatasetTreeItem>
+  );
+};
 
 const MunicipalityItem: FC<{
   datasetType: PlateauDatasetType;
@@ -198,6 +210,7 @@ export const DatasetTypeList: FC = () => {
       expanded={expanded}
       onNodeToggle={handleNodeToggle}
       maxheight={maxMainHeight - searchHeaderHeight}>
+      <GlobalItem />
       {types?.map(type => (
         <DatasetTypeItem
           key={type.id}
