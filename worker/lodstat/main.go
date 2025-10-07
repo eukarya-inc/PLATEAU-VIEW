@@ -36,38 +36,60 @@ type Config struct {
 }
 
 func Run(ctx context.Context, cfg Config) error {
+	log.Infofc(ctx, "lodstat: starting with config: src=%s, project=%s, item=%s, feature=%s",
+		cfg.SrcURL, cfg.ProjectID, cfg.ItemID, cfg.Feature)
+
 	cmsClient, err := cms.New(cfg.CMSURL, cfg.CMSToken)
 	if err != nil {
+		log.Errorfc(ctx, "lodstat: failed to create CMS client: %v", err)
 		return fmt.Errorf("cms: %w", err)
 	}
+
 	if err := run(ctx, cmsClient, cfg); err != nil {
-		if _, err := cmsClient.UpdateItem(ctx, cfg.ItemID, nil, []*cms.Field{
+		log.Errorfc(ctx, "lodstat: run failed: %v", err)
+
+		if _, updateErr := cmsClient.UpdateItem(ctx, cfg.ItemID, nil, []*cms.Field{
 			{
 				Key:   "maxlod_status",
 				Type:  "tag",
 				Value: "エラー",
 			},
-		}); err != nil {
-			log.Errorfc(ctx, "failed to update feature status: %v", err)
+		}); updateErr != nil {
+			log.Errorfc(ctx, "lodstat: failed to update feature status: %v", updateErr)
 		}
-		_ = cmsClient.CommentToItem(ctx, cfg.ItemID, fmt.Sprintf("最大LOD抽出でエラーが発生しました。%s", err))
+
+		if commentErr := cmsClient.CommentToItem(ctx, cfg.ItemID, fmt.Sprintf("最大LOD抽出でエラーが発生しました。%s", err)); commentErr != nil {
+			log.Errorfc(ctx, "lodstat: failed to add comment: %v", commentErr)
+		}
+
+		// Return the original error so it can be properly handled
+		return err
 	}
+
+	log.Infofc(ctx, "lodstat: completed successfully")
 	return nil
 }
 
 func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 	begin := time.Now()
+	log.Debugfc(ctx, "lodstat: parsing URL: %s", cfg.SrcURL)
+
 	u, err := url.Parse(cfg.SrcURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse URL: %w", err)
 	}
+
+	log.Infofc(ctx, "lodstat: processing %s file from %s", u.Scheme, u.Host)
+
 	switch u.Scheme {
 	case "http", "https":
+		log.Debugfc(ctx, "lodstat: opening remote zip file")
 		rz, err := newRemoteZip(http.DefaultClient, u.String())
 		if err != nil {
 			return fmt.Errorf("remote zip: %w", err)
 		}
-	
+		log.Infofc(ctx, "lodstat: remote zip opened, found %d files", len(rz.File))
+
 		ucGMLSize := uint64(0)
 		cGMLSize := uint64(0)
 		cTotal := uint64(0)
@@ -125,19 +147,21 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 		d := time.Since(begin).Seconds()
 		log.Infofc(ctx, "files=%d gml=%d processed=%s throughput=%s/s downloadRate=%.3f (%s/%s) ", len(rz.File), gml, humanize.Bytes(ucGMLSize), humanize.Bytes(uint64(float64(ucGMLSize)/d)), float64(cGMLSize)/float64(cTotal), humanize.Bytes(cGMLSize), humanize.Bytes(cTotal))
 
-		// 7.2.6
-		// 媒体名は[都市コード]_[都市名英名]_[提供者区分]_[整備年度]_citygml_[更新回数]_[オプション]
-		// ref: https://www.mlit.go.jp/plateaudocument/toc7/toc7_02/toc7_02_06/
-		// example: 13101_chiyoda-ku_city_2023_citygml_1_op.zip
-		cityCode, rest, _ := strings.Cut(path.Base(u.Path), "_")
-		cityName, _, _ := strings.Cut(rest, "_")
-		// {cityCode}_{cityName}_{feature}_lodstat.csv
-		assetName := fmt.Sprintf("%s_%s_%s_lodstat.csv", cityCode, cityName, cfg.Feature)
+		// Get the base filename without extension
+		baseFileName := path.Base(u.Path)
+		baseFileName = strings.TrimSuffix(baseFileName, ".zip")
+
+		// Append _lodstat.csv to the base filename
+		assetName := fmt.Sprintf("%s_lodstat.csv", baseFileName)
+		log.Infofc(ctx, "lodstat: uploading CSV as %s", assetName)
 
 		assetID, err := cmsClient.UploadAssetDirectly(ctx, cfg.ProjectID, assetName, csvBuf)
 		if err != nil {
 			return fmt.Errorf("upload asset: %w", err)
 		}
+		log.Infofc(ctx, "lodstat: asset uploaded with ID: %s", assetID)
+
+		log.Debugfc(ctx, "lodstat: updating item %s with maxlod asset", cfg.ItemID)
 		_, err = cmsClient.UpdateItem(ctx, cfg.ItemID, []*cms.Field{
 			{Key: "maxlod", Value: assetID},
 		}, []*cms.Field{
@@ -146,6 +170,10 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 		if err != nil {
 			return fmt.Errorf("update item: %w", err)
 		}
+		log.Infofc(ctx, "lodstat: CMS item updated successfully")
+
+		// Add success comment to CMS
+		_ = cmsClient.CommentToItem(ctx, cfg.ItemID, "LOD抽出が完了しました。")
 	default:
 		return fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
@@ -311,6 +339,7 @@ func (r *remoteZipReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 func collectLOD(r io.Reader) (int, []int, error) {
 	features := 0
 	var lod [5]int
+	var featureLOD [5]bool
 	dec := xmlb.NewDecoder(r, make([]byte, 16*1024))
 	for {
 		tok, err := dec.Token()
@@ -328,11 +357,18 @@ func collectLOD(r io.Reader) (int, []int, error) {
 			}
 			if se.Name.Space == "core" && se.Name.Local == "cityObjectMember" {
 				features++
+				// reset and count
+				for i := range featureLOD {
+					if featureLOD[i] {
+						lod[i]++
+					}
+					featureLOD[i] = false
+				}
 			}
 			if strings.HasPrefix(se.Name.Local, "lod") && len(se.Name.Local) >= 4 {
 				c := se.Name.Local[3]
 				if '0' <= c && c <= '4' {
-					lod[c-'0']++
+					featureLOD[c-'0'] = true
 				}
 			}
 			if se.Name.Space == "dem" && se.Name.Local == "lod" {
@@ -345,10 +381,17 @@ func collectLOD(r io.Reader) (int, []int, error) {
 					return 0, nil, err
 				}
 				if 0 <= v && v <= 4 {
-					lod[v]++
+					featureLOD[v] = true
 				}
 			}
 		}
+	}
+	// last element
+	for i := range featureLOD {
+		if featureLOD[i] {
+			lod[i]++
+		}
+		featureLOD[i] = false
 	}
 	return features, lod[:], nil
 }

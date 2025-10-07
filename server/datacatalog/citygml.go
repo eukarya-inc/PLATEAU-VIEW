@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -33,18 +32,20 @@ type CityGMLFile struct {
 	MeshCode string `json:"code"`
 	MaxLOD   int    `json:"maxLod"`
 	URL      string `json:"url"`
-	LOD0     *bool  `json:"lod0,omitempty"`
-	LOD1     *bool  `json:"lod1,omitempty"`
-	LOD2     *bool  `json:"lod2,omitempty"`
-	LOD3     *bool  `json:"lod3,omitempty"`
-	LOD4     *bool  `json:"lod4,omitempty"`
+	FileSize *int64 `json:"fileSize,omitempty"`
+	Features *int   `json:"features,omitempty"`
+	LOD0     *int   `json:"lod0,omitempty"`
+	LOD1     *int   `json:"lod1,omitempty"`
+	LOD2     *int   `json:"lod2,omitempty"`
+	LOD3     *int   `json:"lod3,omitempty"`
+	LOD4     *int   `json:"lod4,omitempty"`
 }
 
 type CityGMLFeatureType struct {
 	Name string `json:"name"`
 }
 
-func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*CityGMLFilesCity, error) {
+func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string, datasetTypes []plateauapi.DatasetType) (*CityGMLFilesCity, error) {
 	n, err := r.Node(ctx, plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(id)))
 	if err != nil {
 		return nil, err
@@ -112,14 +113,7 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 
 	files := csvToCityGMLFilesResponse(data, gurls)
 
-	// feature types
-	datasetTypes, err := r.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
-		Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dataset types: %w", err)
-	}
-
+	// Build feature types map from provided datasetTypes
 	featureTypes := make(map[string]CityGMLFeatureType)
 	if datasetTypes != nil {
 		for k := range files {
@@ -143,82 +137,6 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 		MetadataZipUrls:  citygml.MetadataZipUrls,
 		FeatureTypes:     featureTypes,
 	}, nil
-}
-
-func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles {
-	res := make(CityGMLFiles)
-
-	for _, record := range data {
-		if len(record) < 3 || record[0] == "" || record[1] == "" {
-			continue
-		}
-
-		if !isNumeric(rune(record[1][0])) {
-			continue // skip header
-		}
-
-		if len(record) < 10 {
-			// expand record with empty values
-			record = append(record, make([]string, 10-len(record))...)
-		}
-
-		// base,code,type,maxLod,path,lod0,lod1,lod2,lod3,lod4
-		base := record[0]
-		meshCode := record[1]
-		featureType := record[2]
-		maxlod, _ := strconv.Atoi(record[3])
-		citygmlURL := ""
-		gmlPath := record[4]
-		lod0 := parseBool(record[5])
-		lod1 := parseBool(record[6])
-		lod2 := parseBool(record[7])
-		lod3 := parseBool(record[8])
-		lod4 := parseBool(record[9])
-
-		if len(record) > 4 && gmlURLs == nil {
-			citygmlURL = citygmlItemURLFrom(base, gmlPath, featureType)
-		} else {
-			// compat for datacatalogv2
-			prefix := fmt.Sprintf("%s_%s_", meshCode, featureType)
-
-			u, ok := lo.Find(gmlURLs, func(u *url.URL) bool {
-				return strings.HasPrefix(path.Base(u.Path), prefix) && path.Ext(u.Path) == ".gml"
-			})
-			if ok {
-				citygmlURL = u.String()
-			}
-			// warning = append(warning, fmt.Sprintf("unmatched:type=%s,code=%s,path=%s", ty, code, f))
-		}
-
-		if citygmlURL == "" {
-			continue
-		}
-
-		item := CityGMLFile{
-			MeshCode: meshCode,
-			MaxLOD:   maxlod,
-			URL:      citygmlURL,
-			LOD0:     lod0,
-			LOD1:     lod1,
-			LOD2:     lod2,
-			LOD3:     lod3,
-			LOD4:     lod4,
-		}
-
-		if _, ok := res[featureType]; !ok {
-			res[featureType] = make([]CityGMLFile, 0)
-		}
-
-		res[featureType] = append(res[featureType], item)
-	}
-
-	for _, v := range res {
-		slices.SortFunc(v, func(i, j CityGMLFile) int {
-			return strings.Compare(i.MeshCode, j.MeshCode)
-		})
-	}
-
-	return res
 }
 
 func citygmlItemURLFrom(base, p, typeCode string) string {
@@ -259,15 +177,20 @@ func nameWithoutExt(name string) string {
 	return strings.TrimSuffix(name, path.Ext(name))
 }
 
-func parseBool(s string) *bool {
+func parseLOD(s string) *int {
 	if s == "" {
 		return nil
 	}
-
-	b, err := strconv.ParseBool(s)
-	if err != nil {
-		return nil
+	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+		v := int(v)
+		return &v
 	}
-
-	return &b
+	if v, err := strconv.ParseBool(s); err == nil {
+		x := 0
+		if v {
+			x = 1
+		}
+		return &x
+	}
+	return nil
 }

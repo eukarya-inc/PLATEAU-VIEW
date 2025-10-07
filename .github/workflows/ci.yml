@@ -175,9 +175,19 @@ jobs:
       - ci-server
       - ci-tools
       - ci-worker
-    if: '!failure()'
+    if: always()
     steps:
-      - run: echo OK
+      - run: |
+          results="${{ toJSON(needs.*.result) }}"
+          if echo "$results" | grep -q "failure"; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          if echo "$results" | grep -q "cancelled"; then
+            echo "One or more CI jobs were cancelled"
+            exit 1
+          fi
+          echo OK
 
   deploy-extension-dev:
     needs: [prepare, ci-extension]
@@ -190,13 +200,21 @@ jobs:
           event-type: deploy-extension-dev
 
   build-geo:
-    needs: [prepare, ci-geo]
-    if: ${{ success() && needs.prepare.outputs.build == 'true' }}
+    needs: [prepare]
+    if: ${{ !failure() && needs.prepare.outputs.geo == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-geo.yml
 
+  push-geo:
+    needs: [prepare, ci-geo, build-geo]
+    if: ${{ !failure() && needs.ci-geo.result == 'success' && needs.build-geo.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/push-image.yml
+    with:
+      build_tag: ${{ needs.build-geo.outputs.image }}
+      latest_tag: ${{ needs.build-geo.outputs.latest_tag }}
+
   deploy-geo-dev:
-    needs: build-geo
-    if: ${{ always() && needs.build-geo.result == 'success' }}
+    needs: push-geo
+    if: ${{ always() && needs.push-geo.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
@@ -205,16 +223,21 @@ jobs:
           event-type: deploy-geo-dev
 
   build-server:
-    needs:
-      - prepare
-      - ci-extension
-      - ci-server
-    if: ${{ !failure() && needs.ci-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    needs: [prepare]
+    if: ${{ !failure() && needs.prepare.outputs.server == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-server.yml
 
+  push-server:
+    needs: [prepare, ci-server, build-server]
+    if: ${{ !failure() && needs.ci-server.result == 'success' && needs.build-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/push-image.yml
+    with:
+      build_tag: ${{ needs.build-server.outputs.image }}
+      latest_tag: ${{ needs.build-server.outputs.latest_tag }}
+
   deploy-server-dev:
-    needs: build-server
-    if: ${{ always() && needs.build-server.result == 'success' }}
+    needs: push-server
+    if: ${{ always() && needs.push-server.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
@@ -223,13 +246,21 @@ jobs:
           event-type: deploy-server-dev
 
   build-worker:
-    needs: [prepare, ci-worker]
-    if: ${{ success() && needs.prepare.outputs.build == 'true' }}
+    needs: [prepare]
+    if: ${{ !failure() && needs.prepare.outputs.worker == 'true' && needs.prepare.outputs.build == 'true' }}
     uses: ./.github/workflows/build-worker.yml
 
+  push-worker:
+    needs: [prepare, ci-worker, build-worker]
+    if: ${{ !failure() && needs.ci-worker.result == 'success' && needs.build-worker.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/push-image.yml
+    with:
+      build_tag: ${{ needs.build-worker.outputs.image }}
+      latest_tag: ${{ needs.build-worker.outputs.latest_tag }}
+
   deploy-worker-dev:
-    needs: build-worker
-    if: ${{ always() && needs.build-worker.result == 'success' }}
+    needs: push-worker
+    if: ${{ always() && needs.push-worker.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment

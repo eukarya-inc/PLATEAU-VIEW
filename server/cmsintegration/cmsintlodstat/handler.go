@@ -37,8 +37,8 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return nil
 	}
 
-	if ft.Conv {
-		log.Debugfc(ctx, "no need to extract maxlod: %s", modelName)
+	if !ft.LODStat {
+		log.Debugfc(ctx, "maxlod: lodstat is false: %s", modelName)
 		return nil
 	}
 
@@ -47,7 +47,10 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return fmt.Errorf("maxlod: failed to get main item: %w", err)
 	}
 
-	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag != nil && tag.Name != "" && tag.Name != "未実行" {
+	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag == nil {
+		log.Debugfc(ctx, "maxlod_status metadata is missing")
+		return nil
+	} else if tag.Name != "" && tag.Name != "未実行" {
 		log.Debugfc(ctx, "already running")
 		return nil
 	}
@@ -72,8 +75,6 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 		return nil
 	}
 
-	log.Debugfc(ctx, "run")
-
 	if err := s.TaskRunner.Run(ctx, gcptaskrunner.Task{
 		Args: []string{
 			"lodstat",
@@ -95,10 +96,10 @@ func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) erro
 			Value: "実行中",
 		},
 	}); err != nil {
-		log.Errorfc(ctx, "cmsintegrationv3: maxlod: failed to update item: %v", err)
+		log.Warnfc(ctx, "failed to update item to make maxlod_status running (%s): %v", mainItem.ID, err)
 	}
 
-	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "CityGMLが変更されたため最大LOD抽出を開始しました。")
+	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "LOD抽出を開始しました。")
 
 	log.Debugfc(ctx, "done")
 	return nil

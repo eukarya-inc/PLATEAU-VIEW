@@ -59,6 +59,26 @@ func TestRenameCityGMLZip(t *testing.T) {
 			path:     "file.gml",
 			expected: "file.gml",
 		},
+		{
+			ty:       "misc",
+			path:     "misc/README.md",
+			expected: "README.md",
+		},
+		{
+			ty:       "misc",
+			path:     "misc/indexmap.pdf",
+			expected: "indexmap.pdf",
+		},
+		{
+			ty:       "misc",
+			path:     "README.md",
+			expected: "README.md",
+		},
+		{
+			ty:       "misc",
+			path:     "xxx_misc/README.md",
+			expected: "README.md",
+		},
 	}
 
 	for _, test := range tests {

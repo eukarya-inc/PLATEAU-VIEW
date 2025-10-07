@@ -59,7 +59,7 @@ func TestExtractDataFromCMS(t *testing.T) {
 		Project: prj,
 		Cache:   false,
 	})
-	all, err := c2.GetAll(ctx)
+	all, err := c2.GetAll(ctx, "")
 	assert.NoError(t, err)
 
 	t.Log("get all data done")

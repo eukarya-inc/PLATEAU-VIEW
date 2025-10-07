@@ -109,6 +109,13 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		res.Datasets.Append(plateauapi.DatasetTypeCategoryGeneric, datasets)
 	}
 
+	// global lodstat (hardcoded)
+	{
+		datasets, w := createGlobalLodstatDatasets(res.DatasetTypes[plateauapi.DatasetTypeCategoryGeneric], all.Host)
+		warning = append(warning, w...)
+		res.Datasets.Append(plateauapi.DatasetTypeCategoryGeneric, datasets)
+	}
+
 	// citygml
 	{
 		var w []string
@@ -334,6 +341,58 @@ func convertGeneric(items []*GenericItem, datasetTypes []plateauapi.DatasetType,
 		}
 	}
 
+	return
+}
+
+func createGlobalLodstatDatasets(datasetTypes []plateauapi.DatasetType, host string) (res []plateauapi.Dataset, warning []string) {
+	const globalCode = "global"
+	const lodstatCode = "lodstat"
+	const lodstatName = "PLATEAU 地域メッシュ別LOD統計情報（建築物モデル）"
+	const desc = "PLATEAU 3D都市モデルの建築物モデルにおける、地域メッシュ単位のLOD統計情報を提供するベクタータイル"
+
+	// Find global dataset type
+	var globalType plateauapi.DatasetType
+	for _, dt := range datasetTypes {
+		if dt.GetCode() == globalCode {
+			globalType = dt
+			break
+		}
+	}
+
+	if globalType == nil {
+		warning = append(warning, "global dataset type not found")
+		return nil, warning
+	}
+
+	// Build URL with host prefix (using auto mode)
+	url := "/lodstat/mvt/bldg/auto/{z}/{x}/{y}.mvt"
+	if host != "" {
+		// Host may already contain https://, so just concatenate
+		url = host + url
+	}
+
+	// Create global lodstat dataset
+	dataset := &plateauapi.GenericDataset{
+		ID:                plateauapi.NewID(lodstatCode, plateauapi.TypeDataset),
+		Name:              lodstatName,
+		Description:       lo.ToPtr(desc),
+		Year:              2025,
+		RegisterationYear: 2025,
+		TypeID:            globalType.GetID(),
+		TypeCode:          globalCode,
+		Items: []*plateauapi.GenericDatasetItem{
+			{
+				ID:       plateauapi.NewID(lodstatCode, plateauapi.TypeDatasetItem),
+				Format:   plateauapi.DatasetFormatMvt,
+				Name:     lodstatName,
+				URL:      url,
+				Layers:   []string{"lodstat"},
+				ParentID: plateauapi.NewID(lodstatCode, plateauapi.TypeDataset),
+			},
+		},
+	}
+
+	res = append(res, dataset)
 	return
 }
 

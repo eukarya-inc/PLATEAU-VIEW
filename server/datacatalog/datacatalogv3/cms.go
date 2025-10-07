@@ -52,7 +52,7 @@ func NewCMS(opts CMSOpts) *CMS {
 	}
 }
 
-func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
+func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	cmsinfo, err := c.GetCMSInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CMS info: %w", err)
@@ -65,6 +65,7 @@ func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
 	all := AllData{
 		Name:    c.project,
 		Year:    c.year,
+		Host:    host,
 		CMSInfo: *cmsinfo,
 	}
 

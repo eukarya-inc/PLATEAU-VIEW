@@ -1,0 +1,33 @@
+name: push-image
+on:
+  workflow_call:
+    inputs:
+      build_tag:
+        description: 'Build tag to pull (e.g., repo:build-sha)'
+        required: true
+        type: string
+      latest_tag:
+        description: 'Latest tag to push (e.g., repo:latest)'
+        required: true
+        type: string
+
+jobs:
+  push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull, retag and push image
+        run: |
+          BUILD_TAG="${{ inputs.build_tag }}"
+          LATEST_TAG="${{ inputs.latest_tag }}"
+          docker pull "$BUILD_TAG"
+          docker tag "$BUILD_TAG" "$LATEST_TAG"
+          docker push "$LATEST_TAG"

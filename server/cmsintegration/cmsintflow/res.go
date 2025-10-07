@@ -96,17 +96,6 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		}
 	}
 
-	// upload maxlod
-	var maxlodAssetID string
-	if internal.MaxLOD != "" {
-		log.Debugfc(ctx, "upload maxlod: %s", internal.MaxLOD)
-		var err error
-		maxlodAssetID, err = s.UploadAsset(ctx, id.ProjectID, internal.MaxLOD)
-		if err != nil {
-			return fmt.Errorf("failed to upload maxlod: %w", err)
-		}
-	}
-
 	// upload qc result
 	var qcResult string
 	if internal.QCResult != "" {
@@ -135,7 +124,6 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		Data:             data,
 		Items:            items,
 		Dic:              dic,
-		MaxLOD:           maxlodAssetID,
 		QCResult:         qcResult,
 		ConvertionStatus: cmsintegrationcommon.TagFrom(convStatus),
 		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),

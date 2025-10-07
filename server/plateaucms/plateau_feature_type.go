@@ -27,6 +27,7 @@ type PlateauFeatureType struct {
 	Order                     int            `json:"order" cms:"order,integer"`
 	QC                        bool           `json:"qc" cms:"qc,boolean"`
 	Conv                      bool           `json:"conv" cms:"conv,boolean"`
+	LODStat                   bool           `json:"lodstat" cms:"lodstat,boolean"`
 	MVTLayers                 []string       `json:"layers" cms:"mvt_layers,text"`
 	MVTLayersLOD0             []string       `json:"layersLod0" cms:"mvt_layers_lod0,text"`
 	MVTLayersLOD1             []string       `json:"layersLod1" cms:"mvt_layers_lod1,text"`

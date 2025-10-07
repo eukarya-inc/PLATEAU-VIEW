@@ -114,7 +114,7 @@ func TestSendRequestToFME(t *testing.T) {
 		c.Reset()
 
 		err := sendRequestToFME(ctx, s, conf, w)
-		assert.ErrorContains(t, err, "invalid webhook payload")
+		assert.ErrorContains(t, err, "invalid item")
 	})
 
 	t.Run("already converted", func(t *testing.T) {

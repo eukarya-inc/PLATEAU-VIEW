@@ -15,11 +15,13 @@ import (
 type Config struct {
 	plateaucms.Config
 	// v3
+	Host                 string
 	CacheUpdateKey       string
 	PlaygroundEndpoint   string
 	GraphqlMaxComplexity int
 	ErrorOnInit          bool
 	GeocodingAppID       string
+	CityConcurrency      int  // Concurrent city fetches limit (default: 10)
 	DiskCache            bool // for debugging
 	Debug                bool // for debugging
 	// v2

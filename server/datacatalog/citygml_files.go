@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -58,6 +59,7 @@ func parseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 			return nil, nil, fmt.Errorf("bounds for different levels: %v", levels)
 		}
 	case "s":
+		cond, _ = url.PathUnescape(cond)
 		for s := range strings.SplitSeq(cond, ",") {
 			v, err := spatialid.Parse(s)
 			if err != nil {

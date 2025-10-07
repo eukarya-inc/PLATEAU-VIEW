@@ -7,6 +7,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
@@ -190,6 +191,7 @@ func (c *Config) Sidebar() sidebar.Config {
 func (c *Config) DataCatalog() datacatalog.Config {
 	return datacatalog.Config{
 		Config:               c.plateauCMS(),
+		Host:                 c.Host,
 		CacheUpdateKey:       c.DataCatalog_CacheUpdateKey,
 		PlaygroundEndpoint:   c.DataCatalog_PlaygroundEndpoint,
 		GraphqlMaxComplexity: c.DataCatalog_GQL_MaxComplexity,
@@ -244,5 +246,12 @@ func (c *Config) CityGML() citygml.Config {
 		WorkerProject:      workProject,
 		DataCatalogAPIURL:  c.LocalURL("/datacatalog"),
 		PackerTimeout:      c.CityGML_PackerTimeout,
+	}
+}
+
+func (c *Config) LodStat() lodstat.Config {
+	return lodstat.Config{
+		DataCatalogAPIURL:   c.LocalURL("/datacatalog"),
+		DataCatalogAPIToken: c.SDK_Token,
 	}
 }
