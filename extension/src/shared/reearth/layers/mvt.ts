@@ -143,7 +143,6 @@ export const MVTLayer: FC<MVTProps> = ({
     visible,
     appearances: mergedAppearances,
     onLoad: handleOnLoad,
-    loading: !meta,
   });
 
   return null;
