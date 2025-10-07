@@ -191,6 +191,7 @@ func (c *Config) Sidebar() sidebar.Config {
 func (c *Config) DataCatalog() datacatalog.Config {
 	return datacatalog.Config{
 		Config:               c.plateauCMS(),
+		Host:                 c.Host,
 		CacheUpdateKey:       c.DataCatalog_CacheUpdateKey,
 		PlaygroundEndpoint:   c.DataCatalog_PlaygroundEndpoint,
 		GraphqlMaxComplexity: c.DataCatalog_GQL_MaxComplexity,
