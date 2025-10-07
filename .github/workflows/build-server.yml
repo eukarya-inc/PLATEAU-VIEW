@@ -3,13 +3,12 @@ on:
   workflow_call:
     outputs:
       image:
-        value: ${{ jobs.docker.outputs.image }}
+        value: ${{ jobs.build-server.outputs.image }}
       latest_tag:
-        value: ${{ jobs.docker.outputs.latest_tag }}
+        value: ${{ jobs.build-server.outputs.latest_tag }}
 
 jobs:
-  docker:
-    name: Build and push Docker image
+  build-server:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ghcr.io/eukarya-inc/plateau-view/plateauview-api
