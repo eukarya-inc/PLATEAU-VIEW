@@ -1,0 +1,197 @@
+package memory
+
+import (
+	"context"
+
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/reearth/reearthx/account/accountdomain"
+	"github.com/reearth/reearthx/rerror"
+	"github.com/reearth/reearthx/usecasex"
+	"github.com/reearth/reearthx/util"
+	"github.com/samber/lo"
+)
+
+type Project struct {
+	data *util.SyncMap[id.ProjectID, *project.Project]
+	f    repo.WorkspaceFilter
+	err  error
+}
+
+func NewProject() repo.Project {
+	return &Project{
+		data: &util.SyncMap[id.ProjectID, *project.Project]{},
+	}
+}
+
+func (r *Project) Filtered(f repo.WorkspaceFilter) repo.Project {
+	return &Project{
+		data: r.data,
+		f:    r.f.Merge(f),
+	}
+}
+
+func (r *Project) Search(_ context.Context, f interfaces.ProjectFilter) (project.List, *usecasex.PageInfo, error) {
+	if r.err != nil {
+		return nil, nil, r.err
+	}
+
+	// TODO: implement sort & pagination
+
+	result := project.List(r.data.FindAll(func(_ id.ProjectID, v *project.Project) bool {
+		if f.Visibility != nil {
+			if v.Accessibility().Visibility() != *f.Visibility {
+				return false
+			}
+		}
+		return f.WorkspaceIds.Has(v.Workspace()) && r.f.CanRead(v.Workspace())
+	})).SortByID()
+
+	var startCursor, endCursor *usecasex.Cursor
+	if len(result) > 0 {
+		startCursor = lo.ToPtr(usecasex.Cursor(result[0].ID().String()))
+		endCursor = lo.ToPtr(usecasex.Cursor(result[len(result)-1].ID().String()))
+	}
+
+	return result, usecasex.NewPageInfo(
+		int64(len(result)),
+		startCursor,
+		endCursor,
+		false,
+		true,
+	), nil
+}
+
+func (r *Project) FindByIDs(_ context.Context, ids id.ProjectIDList) (project.List, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	result := r.data.FindAll(func(k id.ProjectID, v *project.Project) bool {
+		return ids.Has(k) && r.f.CanRead(v.Workspace())
+	})
+
+	return project.List(result).SortByID(), nil
+}
+
+func (r *Project) FindByID(_ context.Context, pid id.ProjectID) (*project.Project, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	p := r.data.Find(func(k id.ProjectID, v *project.Project) bool {
+		return k == pid && r.f.CanRead(v.Workspace())
+	})
+
+	if p != nil {
+		return p, nil
+	}
+	return nil, rerror.ErrNotFound
+}
+
+func (r *Project) FindByIDOrAlias(_ context.Context, q project.IDOrAlias) (*project.Project, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	pid := q.ID()
+	alias := q.Alias()
+	if pid == nil && (alias == nil || *alias == "") {
+		return nil, rerror.ErrNotFound
+	}
+
+	p := r.data.Find(func(k id.ProjectID, v *project.Project) bool {
+		return (pid != nil && k == *pid || alias != nil && v.Alias() == *alias) && r.f.CanRead(v.Workspace())
+	})
+
+	if p != nil {
+		return p, nil
+	}
+	return nil, rerror.ErrNotFound
+}
+
+func (r *Project) IsAliasAvailable(_ context.Context, name string) (bool, error) {
+	if r.err != nil {
+		return false, r.err
+	}
+
+	if name == "" {
+		return false, nil
+	}
+
+	// no need to filter by workspace, because alias is unique across all workspaces
+	p := r.data.Find(func(_ id.ProjectID, v *project.Project) bool {
+		return v.Alias() == name
+	})
+
+	if p != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (r *Project) FindByPublicAPIKey(_ context.Context, key string) (*project.Project, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	p := r.data.Find(func(_ id.ProjectID, p *project.Project) bool {
+		if !r.f.CanRead(p.Workspace()) {
+			return false
+		}
+		if p.Accessibility().APIKeyByKey(key) == nil {
+			return false
+		}
+		return true
+	})
+
+	if p != nil {
+		return p, nil
+	}
+	return nil, rerror.ErrNotFound
+}
+
+func (r *Project) CountByWorkspace(_ context.Context, workspace accountdomain.WorkspaceID) (c int, err error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+
+	if !r.f.CanRead(workspace) {
+		return 0, nil
+	}
+
+	return r.data.CountAll(func(_ id.ProjectID, v *project.Project) bool {
+		return v.Workspace() == workspace
+	}), nil
+}
+
+func (r *Project) Save(_ context.Context, p *project.Project) error {
+	if r.err != nil {
+		return r.err
+	}
+
+	if !r.f.CanWrite(p.Workspace()) {
+		return repo.ErrOperationDenied
+	}
+
+	r.data.Store(p.ID(), p)
+	return nil
+}
+
+func (r *Project) Remove(_ context.Context, id id.ProjectID) error {
+	if r.err != nil {
+		return r.err
+	}
+
+	if p, ok := r.data.Load(id); ok && r.f.CanWrite(p.Workspace()) {
+		r.data.Delete(id)
+		return nil
+	}
+	return rerror.ErrNotFound
+}
+
+func SetProjectError(r repo.Project, err error) {
+	r.(*Project).err = err
+}
