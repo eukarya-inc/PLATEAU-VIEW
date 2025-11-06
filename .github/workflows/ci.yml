@@ -29,6 +29,9 @@ jobs:
       server: ${{ steps.server.outputs.any_changed }}
       tools: ${{ steps.tools.outputs.any_changed }}
       worker: ${{ steps.worker.outputs.any_changed }}
+      cms-server: ${{ steps.cms-server.outputs.any_changed }}
+      cms-worker: ${{ steps.cms-worker.outputs.any_changed }}
+      cms-web: ${{ steps.cms-web.outputs.any_changed }}
       build: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name == 'main' }}
     steps:
       - uses: actions/checkout@v3
@@ -108,6 +111,36 @@ jobs:
             .github/workflows/ci-editor.yml
             .github/workflows/build-editor.yml
             .github/workflows/deploy-editor-*.yml
+      - name: changed files for cms - server
+        id: cms-server
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            cms/server/**
+            .github/workflows/ci-cms-server.yml
+            .github/workflows/build-cms-server.yml
+            .github/workflows/deploy-cms-*.yml
+      - name: changed files for cms - worker
+        id: cms-worker
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            cms/worker/**
+            .github/workflows/ci-cms-worker.yml
+            .github/workflows/build-cms-worker.yml
+            .github/workflows/deploy-cms-*.yml
+      - name: changed files for cms - web
+        id: cms-web
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            cms/web/**
+            .github/workflows/ci-cms-web.yml
+            .github/workflows/build-cms-web.yml
+            .github/workflows/deploy-cms-*.yml
 
 
   # ci-extension-version-update:
@@ -167,6 +200,21 @@ jobs:
     if: ${{ needs.prepare.outputs.worker == 'true' || inputs.action_type == 'worker' }}
     uses: ./.github/workflows/ci-worker.yml
 
+  ci-cms-server:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.cms-server == 'true' }}
+    uses: ./.github/workflows/ci-cms-server.yml
+
+  ci-cms-worker:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.cms-worker == 'true' }}
+    uses: ./.github/workflows/ci-cms-worker.yml
+
+  ci-cms-web:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.cms-web == 'true' }}
+    uses: ./.github/workflows/ci-cms-web.yml
+
   ci:
     runs-on: ubuntu-latest
     needs:
@@ -175,6 +223,9 @@ jobs:
       - ci-server
       - ci-tools
       - ci-worker
+      - ci-cms-server
+      - ci-cms-worker
+      - ci-cms-web
     if: always()
     steps:
       - run: |
@@ -315,3 +366,46 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           event-type: deploy-editor-web-dev
+
+  build-cms-server:
+    needs:
+      - prepare
+      - ci-cms-server
+    if: ${{ !failure() && needs.ci-cms-server.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-cms-server.yml
+    with:
+      server: 'true'
+    secrets: inherit
+
+  build-cms-worker:
+    needs:
+      - prepare
+      - ci-cms-worker
+    if: ${{ !failure() && needs.ci-cms-worker.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-cms-worker.yml
+    with:
+      worker: 'true'
+    secrets: inherit
+
+  build-cms-web:
+    needs:
+      - prepare
+      - ci-cms-web
+    if: ${{ !failure() && needs.ci-cms-web.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-cms-web.yml
+    with:
+      web: 'true'
+    secrets: inherit
+
+  deploy-cms-dev:
+    needs:
+      - build-cms-server
+      - build-cms-worker
+      - build-cms-web
+    if: ${{ !failure() && needs.build-cms-server.result == 'success' && needs.build-cms-worker.result == 'success' && needs.build-cms-web.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-cms-dev
