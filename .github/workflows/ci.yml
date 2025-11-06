@@ -118,6 +118,7 @@ jobs:
           since_last_remote_commit: true
           files: |
             cms/server/**
+            cms/.golangci.yml
             .github/workflows/ci-cms-server.yml
             .github/workflows/build-cms-server.yml
             .github/workflows/deploy-cms-*.yml
@@ -128,6 +129,7 @@ jobs:
           since_last_remote_commit: true
           files: |
             cms/worker/**
+            cms/.golangci.yml
             .github/workflows/ci-cms-worker.yml
             .github/workflows/build-cms-worker.yml
             .github/workflows/deploy-cms-*.yml
