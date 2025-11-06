@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: lts/*
           cache: yarn
-          cache-dependency-path: '**/yarn.lock'
+          cache-dependency-path: 'cms/web/yarn.lock'
       - name: Install
         run: yarn install
       - name: Lint
