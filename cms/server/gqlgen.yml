@@ -140,8 +140,8 @@ models:
   Cursor:
     model: github.com/reearth/reearthx/usecasex.Cursor
   URL:
-    model: github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel.URL
+    model: github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel.URL
   Lang:
-    model: github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel.Lang
+    model: github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel.Lang
   ID:
-    model: github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel.ID
+    model: github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel.ID
