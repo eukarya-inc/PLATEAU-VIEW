@@ -1,0 +1,8 @@
+version: "2"
+linters:
+  default: standard
+run:
+  timeout: 5m
+  tests: true
+  allow-parallel-runners: true
+  concurrency: 4
