@@ -19,7 +19,7 @@ jobs:
         with:
           version: v2.1.0
           working-directory: cms/worker
-          args: --config=../cms/.golangci.yml
+          args: --config=../.golangci.yml
           skip-cache: true
       - name: Check go.mod tidiness
         run: |
