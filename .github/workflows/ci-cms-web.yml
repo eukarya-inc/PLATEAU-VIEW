@@ -23,8 +23,6 @@ jobs:
           node-version: lts/*
           cache: yarn
           cache-dependency-path: '**/yarn.lock'
-      - name: Enable Corepack
-        run: corepack enable
       - name: Install
         run: yarn install
       - name: Lint
