@@ -7,7 +7,7 @@ jobs:
     with:
       template_directory: cms/web/docker
       template_values: '{"PORT": 8080, "REAL_IP_HEADER": "${{ vars.WEB_REAL_IP_HEADER }}"}' # Ref: https://github.com/reearth/reearth-cms/blob/main/web/Dockerfile#L35
-      working_directory: web
+      working_directory: cms/web
 
   ci:
     name: ci
@@ -22,6 +22,8 @@ jobs:
           node-version: lts/*
           cache: yarn
           cache-dependency-path: '**/yarn.lock'
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn install
       - name: Lint
@@ -43,5 +45,5 @@ jobs:
         if: github.ref_name == 'main' || github.ref_name == 'release'
         with:
           name: reearth-cms-web
-          path: web/reearth-cms-web.tar.gz
+          path: cms/web/reearth-cms-web.tar.gz
           if-no-files-found: error
