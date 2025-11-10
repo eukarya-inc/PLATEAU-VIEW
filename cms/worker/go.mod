@@ -1,6 +1,6 @@
 module github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker
 
-go 1.24.2
+go 1.24.4
 
 require (
 	cloud.google.com/go/pubsub v1.48.1
