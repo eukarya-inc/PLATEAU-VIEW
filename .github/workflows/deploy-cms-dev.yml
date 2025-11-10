@@ -3,17 +3,14 @@ on:
   workflow_call:
   workflow_dispatch:
 env:
-  CMS_IMAGE_NAME: reearth/reearth-cms:rc
-  CMS_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-cms:latest
-  CMS_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/reearth-cms:latest
+  CMS_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/plateauview-cms-api:latest
+  CMS_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/plateauview-cms-api:latest
 
-  CMS_WEB_IMAGE_NAME: reearth/reearth-cms-web:rc
-  CMS_WEB_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-cms-web:latest
-  CMS_WEB_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/reearth-cms-web:latest
+  CMS_WEB_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/plateauview-cms-web:latest
+  CMS_WEB_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/plateauview-cms-web:latest
 
-  CMS_WORKER_IMAGE_NAME: reearth/reearth-cms-worker:rc
-  CMS_WORKER_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-cms-worker:latest
-  CMS_WORKER_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/reearth-cms-worker:latest
+  CMS_WORKER_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/plateauview-cms-worker:latest
+  CMS_WORKER_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/plateauview-cms-worker:latest
 concurrency:
   group: ${{ github.workflow }}
 jobs:
@@ -39,11 +36,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker images
-        run: docker pull $CMS_WEB_IMAGE_NAME
+        run: docker pull $CMS_WEB_IMAGE_NAME_GHCR
       - name: Tag docker images
-        run: |
-          docker tag $CMS_WEB_IMAGE_NAME $CMS_WEB_IMAGE_NAME_GHCR
-          docker tag $CMS_WEB_IMAGE_NAME $CMS_WEB_IMAGE_NAME_GCP
+        run: docker tag $CMS_WEB_IMAGE_NAME_GHCR $CMS_WEB_IMAGE_NAME_GCP
       - name: Push docker images
         run: |
           docker push $CMS_WEB_IMAGE_NAME_GHCR
@@ -78,18 +73,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker images
-        run: docker pull $CMS_IMAGE_NAME && docker pull $CMS_WORKER_IMAGE_NAME
+        run: docker pull $CMS_IMAGE_NAME_GHCR && docker pull $CMS_WORKER_IMAGE_NAME_GHCR
       - name: Tag docker images
         run: |
-          docker tag $CMS_IMAGE_NAME $CMS_IMAGE_NAME_GHCR && \
-          docker tag $CMS_IMAGE_NAME $CMS_IMAGE_NAME_GCP && \
-          docker tag $CMS_WORKER_IMAGE_NAME $CMS_WORKER_IMAGE_NAME_GHCR && \
-          docker tag $CMS_WORKER_IMAGE_NAME $CMS_WORKER_IMAGE_NAME_GCP
+          docker tag $CMS_IMAGE_NAME_GHCR $CMS_IMAGE_NAME_GCP && \
+          docker tag $CMS_WORKER_IMAGE_NAME_GHCR $CMS_WORKER_IMAGE_NAME_GCP
       - name: Push docker images
         run: |
-          docker push $CMS_IMAGE_NAME_GHCR && \
           docker push $CMS_IMAGE_NAME_GCP && \
-          docker push $CMS_WORKER_IMAGE_NAME_GHCR && \
           docker push $CMS_WORKER_IMAGE_NAME_GCP
       - name: Deploy
         run: |
