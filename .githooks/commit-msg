@@ -1,0 +1,9 @@
+#!/bin/bash
+# Remove Claude Code signature from commit messages
+
+# Remove the Claude Code generation line and co-author line
+sed -i '' '/🤖 Generated with \[Claude Code\]/d' "$1"
+sed -i '' '/Co-Authored-By: Claude <noreply@anthropic.com>/d' "$1"
+
+# Remove trailing empty lines
+sed -i '' -e :a -e '/^\s*$/d;N;ba' "$1"
