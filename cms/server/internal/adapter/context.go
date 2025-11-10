@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
-	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"golang.org/x/text/language"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
@@ -19,11 +17,9 @@ type ContextKey string
 const (
 	contextUser     ContextKey = "user"
 	contextOperator ContextKey = "operator"
-	contextAPIKeyId ContextKey = "api-key-id"
-	ContextAuthInfo ContextKey = "auth-info"
+	ContextAuthInfo ContextKey = "authinfo"
 	contextUsecases ContextKey = "usecases"
 	contextGateways ContextKey = "gateways"
-	contextAcRepos  ContextKey = "ac-repos"
 )
 
 func AttachUser(ctx context.Context, u *user.User) context.Context {
@@ -78,32 +74,6 @@ func Gateways(ctx context.Context) *gateway.Container {
 	return nil
 }
 
-func AttachAcRepos(ctx context.Context, r *accountrepo.Container) context.Context {
-	return context.WithValue(ctx, contextAcRepos, r)
-}
-
-func AcRepos(ctx context.Context) *accountrepo.Container {
-	if v := ctx.Value(contextAcRepos); v != nil {
-		if r, ok := v.(*accountrepo.Container); ok {
-			return r
-		}
-	}
-	return nil
-}
-
-func AttachAPIKeyId(ctx context.Context, a *project.APIKeyID) context.Context {
-	return context.WithValue(ctx, contextAPIKeyId, a)
-}
-
-func APIKeyId(ctx context.Context) *project.APIKeyID {
-	if v := ctx.Value(contextAPIKeyId); v != nil {
-		if a, ok := v.(*project.APIKeyID); ok {
-			return a
-		}
-	}
-	return nil
-}
-
 func Lang(ctx context.Context, lang *language.Tag) string {
 	if lang != nil && !lang.IsRoot() {
 		return lang.String()
@@ -114,7 +84,7 @@ func Lang(ctx context.Context, lang *language.Tag) string {
 		return "en" // default language
 	}
 
-	l := u.Metadata().Lang()
+	l := u.Lang()
 	if l.IsRoot() {
 		return "en" // default language
 	}

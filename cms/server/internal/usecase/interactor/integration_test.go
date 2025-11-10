@@ -129,6 +129,7 @@ func TestIntegration_Create(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -239,6 +240,7 @@ func TestIntegration_Update(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -329,6 +331,7 @@ func TestIntegration_RegenerateToken(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -403,6 +406,7 @@ func TestIntegration_Delete(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -489,6 +493,7 @@ func TestIntegration_DeleteMany(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -547,6 +552,7 @@ func TestIntegration_FindByIDs(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -605,6 +611,7 @@ func TestIntegration_FindByMe(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -620,7 +627,7 @@ func TestIntegration_FindByMe(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			for idx, in := range got {
-				// assert.Regexp(t, regexp.MustCompile("secret_[a-zA-Z0-9]{43}"), got.Key())
+				// assert.Regexp(t, regexp.MustCompile("secret_[a-zA-Z0-9]{43}"), got.Token())
 				assert.False(t, in.ID().IsEmpty())
 				assertIntegrationEq(t, tt.want[idx], in)
 			}
@@ -711,6 +718,7 @@ func TestIntegration_CreateWebhook(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -853,6 +861,7 @@ func TestIntegration_UpdateWebhook(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)
@@ -992,6 +1001,7 @@ func TestIntegration_DeleteWebhook(t *testing.T) {
 
 			ctx := context.Background()
 			db := memory.New()
+			defer memory.MockNow(db, ts.Now)
 			for _, s := range tt.seeds {
 				err := db.Integration.Save(ctx, s.Clone())
 				assert.NoError(t, err)

@@ -1,5 +1,4 @@
 import styled from "@emotion/styled";
-import { useMemo } from "react";
 
 import DropdownAtom, { MenuProps } from "@reearth-cms/components/atoms/Dropdown";
 import Icon from "@reearth-cms/components/atoms/Icon";
@@ -9,39 +8,21 @@ import UserAvatar from "@reearth-cms/components/atoms/UserAvatar";
 type Props = {
   items: MenuProps["items"];
   name?: string;
-  profilePictureUrl?: string;
   personal: boolean;
-  showName?: boolean;
-  showArrow?: boolean;
 };
 
-const Dropdown: React.FC<Props> = ({
-  items,
-  name,
-  profilePictureUrl,
-  personal,
-  showName,
-  showArrow,
-  ...props
-}) => {
-  const isUserMenu = useMemo(() => !showName && !showArrow, [showName, showArrow]);
-
+const Dropdown: React.FC<Props> = ({ items, name, personal, ...props }) => {
   return (
     <StyledDropdown
       menu={{ items }}
       trigger={["click"]}
       dropdownRender={menu => <StyledDropdownMenu>{menu}</StyledDropdownMenu>}
       {...props}>
-      <a onClick={e => e.preventDefault()} data-testid={isUserMenu ? "user-menu" : undefined}>
+      <a onClick={e => e.preventDefault()}>
         <Space>
-          <UserAvatar
-            username={name ?? ""}
-            profilePictureUrl={personal ? profilePictureUrl : ""}
-            shape={personal ? "circle" : "square"}
-            size={"small"}
-          />
-          {showName && <Text>{name}</Text>}
-          {showArrow && <StyledIcon icon="caretDown" />}
+          <UserAvatar username={name ?? ""} shape={personal ? "circle" : "square"} size={"small"} />
+          <Text>{name}</Text>
+          <StyledIcon icon="caretDown" />
         </Space>
       </a>
     </StyledDropdown>
@@ -54,15 +35,10 @@ const StyledDropdown = styled(DropdownAtom)`
   padding-left: 10px;
   color: #fff;
   background-color: #1d1d1d;
-
-  .anticon,
-  .anticon-caret-down {
-    color: #dbdbdb;
-  }
 `;
 const StyledDropdownMenu = styled.div`
   .ant-dropdown-menu {
-    background-color: #ffffff !important;
+    background-color: #141414 !important;
     min-width: 190px;
     max-width: 205px;
     padding: 4px 0;
@@ -73,14 +49,14 @@ const StyledDropdownMenu = styled.div`
   .ant-dropdown-menu-item-group-title,
   .ant-dropdown-menu-item,
   .ant-dropdown-menu-submenu-title {
-    color: #000000 !important;
+    color: #fff !important;
   }
   .ant-dropdown-menu-item-group-title {
     font-weight: 400;
     font-size: 12px;
     line-height: 22px;
     user-select: none;
-    color: #000000;
+    color: #dbdbdb;
   }
   .ant-dropdown-menu-item-group-list {
     max-height: 50vh;
@@ -97,7 +73,7 @@ const StyledDropdownMenu = styled.div`
 `;
 
 const StyledIcon = styled(Icon)`
-  color: #000000;
+  color: #8c8c8c;
 `;
 
 const Text = styled.p`
@@ -106,5 +82,4 @@ const Text = styled.p`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: bold;
 `;

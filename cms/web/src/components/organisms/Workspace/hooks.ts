@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import Notification from "@reearth-cms/components/atoms/Notification";
 import { FormValues as ProjectFormValues } from "@reearth-cms/components/molecules/Common/ProjectCreationModal";
 import { FormValues as WorkspaceFormValues } from "@reearth-cms/components/molecules/Common/WorkspaceCreationModal";
-import { SortBy } from "@reearth-cms/components/molecules/Workspace/types";
 import { fromGraphQLProject } from "@reearth-cms/components/organisms/DataConverters/project";
 import { fromGraphQLWorkspace } from "@reearth-cms/components/organisms/DataConverters/setting";
 import {
@@ -14,8 +13,6 @@ import {
   Workspace as GQLWorkspace,
   useCheckProjectAliasLazyQuery,
   Project as GQLProject,
-  useGetMeQuery,
-  useCheckProjectLimitsQuery,
 } from "@reearth-cms/gql/graphql-client-api";
 import { useT } from "@reearth-cms/i18n";
 import { useWorkspace, useUserRights } from "@reearth-cms/state";
@@ -28,36 +25,36 @@ export default () => {
   const [currentWorkspace, setCurrentWorkspace] = useWorkspace();
 
   const [searchedProjectName, setSearchedProjectName] = useState<string>("");
-  const [projectSort, setProjectSort] = useState<SortBy>("updatedAt");
-
   const [userRights] = useUserRights();
   const hasCreateRight = useMemo(() => !!userRights?.project.create, [userRights?.project.create]);
 
   const workspaceId = currentWorkspace?.id;
-
-  const { data: meData } = useGetMeQuery();
-  const username = useMemo(() => meData?.me?.name || "", [meData?.me?.name]);
 
   const {
     data,
     loading,
     refetch: projectsRefetch,
   } = useGetProjectsQuery({
-    variables: {
-      workspaceId: workspaceId ?? "",
-      keyword: searchedProjectName,
-      sort: { key: projectSort, reverted: false },
-      pagination: { first: 100 },
-    },
+    variables: { workspaceId: workspaceId ?? "", pagination: { first: 100 } },
     skip: !workspaceId,
   });
 
-  const projects = useMemo(
+  const allProjects = useMemo(
     () =>
       data?.projects.nodes
         .map(project => (project ? fromGraphQLProject(project as GQLProject) : undefined))
         .filter(project => !!project) ?? [],
     [data?.projects.nodes],
+  );
+
+  const projects = useMemo(
+    () =>
+      searchedProjectName
+        ? allProjects.filter(project =>
+            project.name.toLocaleLowerCase().includes(searchedProjectName.toLocaleLowerCase()),
+          )
+        : allProjects,
+    [allProjects, searchedProjectName],
   );
 
   const [createNewProject] = useCreateProjectMutation({
@@ -71,13 +68,6 @@ export default () => {
     [setSearchedProjectName],
   );
 
-  const handleProjectSort = useCallback(
-    (sort: SortBy) => {
-      setProjectSort(sort);
-    },
-    [setProjectSort],
-  );
-
   const handleProjectCreate = useCallback(
     async (data: ProjectFormValues) => {
       if (!workspaceId) throw new Error();
@@ -87,8 +77,6 @@ export default () => {
           name: data.name,
           alias: data.alias,
           description: data.description,
-          visibility: data.visibility,
-          license: data.license,
         },
       });
       if (project.errors || !project.data?.createProject) {
@@ -143,24 +131,12 @@ export default () => {
     [CheckProjectAlias],
   );
 
-  const { data: projectLimitsData } = useCheckProjectLimitsQuery({
-    variables: { workspaceId: workspaceId ?? "" },
-    skip: !workspaceId,
-  });
-
-  const privateProjectsAllowed = useMemo(() => {
-    return projectLimitsData?.checkWorkspaceProjectLimits?.privateProjectsAllowed ?? false;
-  }, [projectLimitsData]);
-
   return {
-    username,
-    privateProjectsAllowed,
     coverImageUrl,
     projects,
     loading,
     hasCreateRight,
     handleProjectSearch,
-    handleProjectSort,
     handleProjectCreate,
     handleProjectNavigation,
     handleWorkspaceCreate,

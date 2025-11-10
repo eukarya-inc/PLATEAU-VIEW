@@ -2,12 +2,11 @@ import { Cartesian3 } from "cesium";
 import { useCallback, useEffect } from "react";
 import { useCesium } from "resium";
 
-import { useAuthHeader } from "@reearth-cms/gql";
+import { waitForViewer } from "@reearth-cms/components/molecules/Asset/Asset/AssetBody/waitForViewer";
 
 import mapPin from "./mapPin.svg";
 
 type Props = {
-  isAssetPublic?: boolean;
   url: string;
 };
 
@@ -17,15 +16,13 @@ type GeoObj = {
   [x: string]: string | undefined;
 };
 
-export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
+export const Imagery: React.FC<Props> = ({ url }) => {
   const { viewer } = useCesium();
-  const { getHeader } = useAuthHeader();
 
   const dataFetch = useCallback(async () => {
     try {
       const res = await fetch(url, {
         method: "GET",
-        headers: isAssetPublic ? {} : await getHeader(),
       });
       if (!res.ok) {
         throw new Error("Error loading CSV data");
@@ -34,7 +31,7 @@ export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
     } catch (err) {
       console.error(err);
     }
-  }, [getHeader, isAssetPublic, url]);
+  }, [url]);
 
   const parseCsv = useCallback((text: string): GeoObj[] => {
     const result: GeoObj[] = [];
@@ -54,10 +51,11 @@ export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
 
   const addPointsToViewer = useCallback(
     async (objects: GeoObj[]) => {
-      viewer?.entities.removeAll();
+      const resolvedViewer = await waitForViewer(viewer);
+      resolvedViewer.entities.removeAll();
       for (const obj of objects) {
         if (obj.lng && obj.lat) {
-          viewer?.entities.add({
+          resolvedViewer.entities.add({
             position: Cartesian3.fromDegrees(Number(obj.lng), Number(obj.lat)),
             billboard: {
               image: mapPin,
@@ -69,7 +67,7 @@ export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
           });
         }
       }
-      viewer?.zoomTo(viewer?.entities);
+      resolvedViewer.zoomTo(resolvedViewer.entities);
     },
     [viewer],
   );
@@ -80,6 +78,12 @@ export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
       if (text) await addPointsToViewer(parseCsv(text));
     };
     loadAndRenderData();
+
+    return () => {
+      if (viewer) {
+        viewer.entities.removeAll();
+      }
+    };
   }, [dataFetch, parseCsv, addPointsToViewer, viewer]);
 
   return null;

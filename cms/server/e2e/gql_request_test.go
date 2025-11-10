@@ -303,11 +303,11 @@ func TestRequestFlow(t *testing.T) {
 
 	// 1- create public project
 	pId, _ := createProject(e, wId.String(), "test", "test", "test-1")
-	updateProject(e, pId, "test", "test", "test-1", "PUBLIC", false, []string{})
+	updateProject(e, pId, "test", "test", "test-1", "PUBLIC", true)
 
 	// 2- create public model
 	mId, _ := createModel(e, pId, "test", "test", "test-1")
-	updateModel(e, mId, lo.ToPtr("test"), lo.ToPtr("test"), lo.ToPtr("test-1"))
+	updateModel(e, mId, lo.ToPtr("test"), lo.ToPtr("test"), lo.ToPtr("test-1"), true)
 
 	fid, _ := createField(e, mId, "text", "text", "text",
 		false, false, false, false, "Text",
@@ -329,8 +329,7 @@ func TestRequestFlow(t *testing.T) {
 	ver2 := i1.Path("$.data.updateItem.item.version").Raw().(string)
 
 	// check public item: should return no results
-	res := e.GET("/api/p/{workspace}/{project}/{model}", "test-workspace", "test-1", "test-1").
-		WithQuery("page", "1").
+	res := e.GET("/api/p/{project}/{model}", "test-1", "test-1").
 		Expect().
 		Status(http.StatusOK).
 		JSON()
@@ -366,8 +365,7 @@ func TestRequestFlow(t *testing.T) {
 	itm.Path("$.data.node").Object().Value("status").IsEqual("PUBLIC_DRAFT")
 
 	// check public item: should return version 2
-	res = e.GET("/api/p/{workspace}/{project}/{model}", "test-workspace", "test-1", "test-1").
-		WithQuery("page", "1").
+	res = e.GET("/api/p/{project}/{model}", "test-1", "test-1").
 		Expect().
 		Status(http.StatusOK).
 		JSON()
@@ -407,8 +405,7 @@ func TestRequestFlow(t *testing.T) {
 	itm.Path("$.data.node").Object().Value("status").IsEqual("PUBLIC")
 
 	// check public item: should return version 3
-	res = e.GET("/api/p/{workspace}/{project}/{model}", "test-workspace", "test-1", "test-1").
-		WithQuery("page", "1").
+	res = e.GET("/api/p/{project}/{model}", "test-1", "test-1").
 		Expect().
 		Status(http.StatusOK).
 		JSON()

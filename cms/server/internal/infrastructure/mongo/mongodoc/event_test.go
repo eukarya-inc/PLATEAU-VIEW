@@ -24,14 +24,11 @@ func TestEventDocument_Model(t *testing.T) {
 		Alias:       "ppp123",
 		ImageURL:    "https://huho.com/xzy",
 		Workspace:   wId.String(),
-		Accessibility: &ProjectAccessibilityDocument{
-			Visibility: "public",
+		Publication: &ProjectPublicationDocument{
+			AssetPublic: true,
+			Scope:       "public",
 		},
 	}
-
-	pDoc.StarredBy = []string{}
-	pDoc.Topics = []string{}
-
 	tests := []struct {
 		name    string
 		eDoc    EventDocument
@@ -87,11 +84,10 @@ func TestNewEvent(t *testing.T) {
 		Description: "xyz",
 		Alias:       "ppp123",
 		ImageURL:    "https://huho.com/xzy",
-		StarredBy:   []string{},
-		Topics:      []string{},
 		Workspace:   wId.String(),
-		Accessibility: &ProjectAccessibilityDocument{
-			Visibility: "public",
+		Publication: &ProjectPublicationDocument{
+			AssetPublic: true,
+			Scope:       "public",
 		},
 	}
 	tests := []struct {

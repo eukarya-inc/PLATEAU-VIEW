@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 
@@ -132,11 +131,12 @@ func TestProjectRepo_CountByWorkspace(t *testing.T) {
 }
 
 func TestProjectRepo_Filtered(t *testing.T) {
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
 	id2 := id.NewProjectID()
-	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(time.Now()).MustBuild()
-	p2 := project.New().ID(id2).Workspace(tid1).MustBuild()
+	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(mocknow).MustBuild()
+	p2 := project.New().ID(id2).Workspace(tid1).UpdatedAt(mocknow).MustBuild()
 
 	tests := []struct {
 		name    string
@@ -185,7 +185,7 @@ func TestProjectRepo_Filtered(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
-
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
@@ -198,8 +198,8 @@ func TestProjectRepo_Filtered(t *testing.T) {
 func TestProjectRepo_FindByID(t *testing.T) {
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
-	p1 := project.New().ID(id1).Workspace(tid1).MustBuild()
-
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
+	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(mocknow).MustBuild()
 	tests := []struct {
 		name    string
 		seeds   project.List
@@ -289,6 +289,7 @@ func TestProjectRepo_FindByID(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
@@ -310,11 +311,12 @@ func TestProjectRepo_FindByID(t *testing.T) {
 }
 
 func TestProjectRepo_FindByIDs(t *testing.T) {
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
 	id2 := id.NewProjectID()
-	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(time.Now().Add(-time.Hour)).MustBuild()
-	p2 := project.New().ID(id2).Workspace(tid1).MustBuild()
+	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(mocknow).MustBuild()
+	p2 := project.New().ID(id2).Workspace(tid1).UpdatedAt(mocknow).MustBuild()
 
 	tests := []struct {
 		name    string
@@ -420,6 +422,7 @@ func TestProjectRepo_FindByIDs(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
@@ -442,13 +445,14 @@ func TestProjectRepo_FindByIDs(t *testing.T) {
 }
 
 func TestProjectRepo_IsAliasAvailable(t *testing.T) {
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
 	p1 := project.New().
 		ID(id1).
 		Workspace(tid1).
 		Alias("xyz123").
-		UpdatedAt(time.Now().Add(-time.Hour)).
+		UpdatedAt(mocknow).
 		MustBuild()
 
 	id2 := id.NewProjectID()
@@ -456,6 +460,7 @@ func TestProjectRepo_IsAliasAvailable(t *testing.T) {
 		ID(id2).
 		Workspace(accountdomain.NewWorkspaceID()).
 		Alias("xyz321").
+		UpdatedAt(mocknow).
 		MustBuild()
 
 	tests := []struct {
@@ -557,6 +562,7 @@ func TestProjectRepo_IsAliasAvailable(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
@@ -579,9 +585,10 @@ func TestProjectRepo_IsAliasAvailable(t *testing.T) {
 }
 
 func TestProjectRepo_FindByWorkspaces(t *testing.T) {
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
 	tid1 := accountdomain.NewWorkspaceID()
-	p1 := project.New().NewID().Workspace(tid1).UpdatedAt(time.Now().Add(-time.Hour)).MustBuild()
-	p2 := project.New().NewID().Workspace(tid1).MustBuild()
+	p1 := project.New().NewID().Workspace(tid1).UpdatedAt(mocknow).MustBuild()
+	p2 := project.New().NewID().Workspace(tid1).UpdatedAt(mocknow).MustBuild()
 
 	type args struct {
 		wids  accountdomain.WorkspaceIDList
@@ -703,6 +710,7 @@ func TestProjectRepo_FindByWorkspaces(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
@@ -713,10 +721,7 @@ func TestProjectRepo_FindByWorkspaces(t *testing.T) {
 				r = r.Filtered(*tc.filter)
 			}
 
-			got, _, err := r.Search(ctx, interfaces.ProjectFilter{
-				WorkspaceIds: &tc.args.wids,
-				Pagination:   tc.args.pInfo,
-			})
+			got, _, err := r.FindByWorkspaces(ctx, tc.args.wids, tc.args.pInfo)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -838,7 +843,7 @@ func TestProjectRepo_Remove(t *testing.T) {
 func TestProjectRepo_Save(t *testing.T) {
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
-	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(time.Now().Add(-time.Hour)).MustBuild()
+	p1 := project.New().ID(id1).Workspace(tid1).UpdatedAt(time.Now().Truncate(time.Millisecond).UTC()).MustBuild()
 
 	tests := []struct {
 		name    string
@@ -935,15 +940,16 @@ func TestProjectRepo_Save(t *testing.T) {
 	}
 }
 
-func TestProject_FindByAPIKey(t *testing.T) {
+func TestProject_FindByPublicAPIToken(t *testing.T) {
+	mocknow := time.Now().Truncate(time.Millisecond).UTC()
 	tid1 := accountdomain.NewWorkspaceID()
 	id1 := id.NewProjectID()
-	apikey := project.NewAPIKeyBuilder().NewID().GenerateKey().Name("key1").Build()
-	pub := project.NewPrivateAccessibility(*project.NewPublicationSettings(nil, false), project.APIKeys{apikey})
+	pub := project.NewPublication(project.PublicationScopeLimited, false)
 	p1 := project.New().
 		ID(id1).
 		Workspace(tid1).
-		Accessibility(pub).
+		UpdatedAt(mocknow).
+		Publication(pub).
 		MustBuild()
 
 	tests := []struct {
@@ -975,7 +981,7 @@ func TestProject_FindByAPIKey(t *testing.T) {
 			seeds: project.List{
 				p1,
 			},
-			arg:     apikey.Key(),
+			arg:     pub.Token(),
 			want:    p1,
 			wantErr: nil,
 		},
@@ -995,13 +1001,14 @@ func TestProject_FindByAPIKey(t *testing.T) {
 			if tc.mockErr {
 				SetProjectError(r, tc.wantErr)
 			}
+			defer MockProjectNow(r, mocknow)()
 			ctx := context.Background()
 			for _, p := range tc.seeds {
 				err := r.Save(ctx, p.Clone())
 				assert.NoError(t, err)
 			}
 
-			got, err := r.FindByPublicAPIKey(ctx, tc.arg)
+			got, err := r.FindByPublicAPIToken(ctx, tc.arg)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return

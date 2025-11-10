@@ -28,6 +28,7 @@ func TestModel_Clone(t *testing.T) {
 				name:        "n1",
 				description: "d1",
 				key:         id.NewKey("123456"),
+				public:      false,
 				updatedAt:   now,
 				order:       2,
 			},
@@ -196,6 +197,37 @@ func TestModel_Project(t *testing.T) {
 			t.Parallel()
 
 			assert.Equal(t, tt.want, tt.model.Project(), "Project()")
+		})
+	}
+}
+
+func TestModel_Public(t *testing.T) {
+	tests := []struct {
+		name  string
+		model Model
+		want  bool
+	}{
+		{
+			name: "public true",
+			model: Model{
+				public: true,
+			},
+			want: true,
+		},
+		{
+			name: "public false",
+			model: Model{
+				public: false,
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, tt.model.Public())
 		})
 	}
 }
@@ -373,6 +405,16 @@ func TestModel_SetName(t *testing.T) {
 			assert.Equal(t, tt.want, m)
 		})
 	}
+}
+
+func TestModel_SetPublic(t *testing.T) {
+	m := &Model{public: false}
+	m.SetPublic(true)
+	assert.Equal(t, &Model{public: true}, m)
+
+	m = &Model{public: true}
+	m.SetPublic(false)
+	assert.Equal(t, &Model{public: false}, m)
 }
 
 func TestModel_SetOrder(t *testing.T) {

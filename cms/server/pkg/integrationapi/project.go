@@ -7,7 +7,12 @@ import (
 )
 
 func NewProject(p *project.Project) Project {
-	accessibility := ToProjectAccessibility(p.Accessibility())
+	publication := &ProjectPublication{Scope: lo.ToPtr(PRIVATE)}
+	if p.Publication() != nil {
+		publication.Scope = ToProjectPublicationScope(p.Publication().Scope())
+		publication.AssetPublic = lo.ToPtr(p.Publication().AssetPublic())
+		publication.Token = lo.ToPtr(p.Publication().Token())
+	}
 
 	var requestRoles *[]ProjectRequestRole = nil
 	if len(p.RequestRoles()) > 0 {
@@ -22,17 +27,15 @@ func NewProject(p *project.Project) Project {
 	}
 
 	return Project{
-		Id:            p.ID(),
-		WorkspaceId:   p.Workspace(),
-		Name:          p.Name(),
-		Description:   p.Description(),
-		License:       p.License(),
-		Readme:        p.Readme(),
-		Alias:         p.Alias(),
-		Accessibility: accessibility,
-		RequestRoles:  requestRoles,
-		CreatedAt:     p.CreatedAt(),
-		UpdatedAt:     p.UpdatedAt(),
+		Id:           p.ID(),
+		WorkspaceId:  p.Workspace(),
+		Name:         p.Name(),
+		Description:  p.Description(),
+		Alias:        p.Alias(),
+		Publication:  publication,
+		RequestRoles: requestRoles,
+		CreatedAt:    p.CreatedAt(),
+		UpdatedAt:    p.UpdatedAt(),
 	}
 }
 
@@ -51,60 +54,15 @@ func ToRequestRole(r workspace.Role) *ProjectRequestRole {
 	}
 }
 
-func ToProjectVisibility(p project.Visibility) AccessibilityVisibility {
+func ToProjectPublicationScope(p project.PublicationScope) *ProjectPublicationScope {
 	switch p {
-	case project.VisibilityPublic:
-		return PUBLIC
-	case project.VisibilityPrivate:
-		return PRIVATE
+	case project.PublicationScopePublic:
+		return lo.ToPtr(PUBLIC)
+	case project.PublicationScopePrivate:
+		return lo.ToPtr(PRIVATE)
+	case project.PublicationScopeLimited:
+		return lo.ToPtr(LIMITED)
 	default:
-		return PUBLIC
-	}
-}
-
-func ToProjectPublicationSettings(p *project.PublicationSettings) *PublicationSettings {
-	if p == nil {
 		return nil
-	}
-	return &PublicationSettings{
-		PublicAssets: p.PublicAssets(),
-		PublicModels: p.PublicModels(),
-	}
-}
-
-func ToAPIKey(a *project.APIKey) *ApiKey {
-	if a == nil {
-		return nil
-	}
-	return &ApiKey{
-		Id:          a.ID(),
-		Key:         a.Key(),
-		Name:        a.Name(),
-		Description: lo.ToPtr(a.Description()),
-		Publication: *ToProjectPublicationSettings(a.Publication()),
-	}
-}
-
-func ToProjectAccessibility(a *project.Accessibility) Accessibility {
-	if a == nil {
-		return Accessibility{
-			Visibility:  PUBLIC,
-			ApiKeys:     nil,
-			Publication: nil,
-		}
-	}
-	if a.Visibility() == project.VisibilityPublic {
-		return Accessibility{
-			Visibility:  PUBLIC,
-			Publication: nil,
-			ApiKeys:     nil,
-		}
-	}
-	return Accessibility{
-		Visibility:  ToProjectVisibility(a.Visibility()),
-		Publication: ToProjectPublicationSettings(a.Publication()),
-		ApiKeys: lo.Map(a.ApiKeys(), func(apiKey *project.APIKey, _ int) ApiKey {
-			return *ToAPIKey(apiKey)
-		}),
 	}
 }

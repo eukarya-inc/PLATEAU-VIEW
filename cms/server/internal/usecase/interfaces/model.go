@@ -17,6 +17,7 @@ type CreateModelParam struct {
 	Name        *string
 	Description *string
 	Key         *string
+	Public      *bool
 }
 
 type CopyModelParam struct {
@@ -27,8 +28,8 @@ type CopyModelParam struct {
 
 type FindByProjectAndKeywordParam struct {
 	ProjectID  id.ProjectID
-	Keyword    *string
-	Sort       *usecasex.Sort
+	Keyword    string
+	Sort       *model.Sort
 	Pagination *usecasex.Pagination
 }
 
@@ -46,6 +47,7 @@ type UpdateModelParam struct {
 	Name        *string
 	Description *string
 	Key         *string
+	Public      *bool
 }
 
 type PublishModelParam struct {
@@ -54,8 +56,7 @@ type PublishModelParam struct {
 }
 
 var (
-	ErrModelKey                     error = rerror.NewE(i18n.T("model key is already used by another model"))
-	ErrModelCountPerProjectExceeded       = rerror.NewE(i18n.T("the number of models in a project has exceeded the limit"))
+	ErrModelKey error = rerror.NewE(i18n.T("model key is already used by another model"))
 )
 
 type Model interface {
@@ -72,5 +73,6 @@ type Model interface {
 	UpdateOrder(context.Context, id.ModelIDList, *usecase.Operator) (model.List, error)
 	CheckKey(context.Context, id.ProjectID, string) (bool, error)
 	Delete(context.Context, id.ModelID, *usecase.Operator) error
+	Publish(context.Context, []PublishModelParam, *usecase.Operator) error
 	Copy(context.Context, CopyModelParam, *usecase.Operator) (*model.Model, error)
 }

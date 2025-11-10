@@ -97,9 +97,6 @@ func (s *Schema) FieldByIDOrKey(fId *FieldID, key *id.Key) *Field {
 }
 
 func (s *Schema) Fields() FieldList {
-	if s == nil {
-		return nil
-	}
 	var fl FieldList = slices.Clone(s.fields)
 	return fl.Ordered()
 }

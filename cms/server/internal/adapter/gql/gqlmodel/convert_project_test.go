@@ -18,17 +18,15 @@ func TestConvertProject_ToProject(t *testing.T) {
 	pid := id.NewProjectID()
 	p := project.New().ID(pid).Workspace(wid).RequestRoles(r).UpdatedAt(mocktime.Add(-time.Second)).MustBuild()
 	want := &Project{
-		ID:          IDFrom(pid),
-		Name:        p.Name(),
-		Description: p.Description(),
-		Alias:       p.Alias(),
-		WorkspaceID: IDFrom(wid),
-		Workspace:   nil,
-		CreatedAt:   p.CreatedAt(),
-		UpdatedAt:   p.UpdatedAt(),
-		Accessibility: &ProjectAccessibility{
-			Visibility: ProjectVisibilityPublic,
-		},
+		ID:           IDFrom(pid),
+		Name:         p.Name(),
+		Description:  p.Description(),
+		Alias:        p.Alias(),
+		WorkspaceID:  IDFrom(wid),
+		Workspace:    nil,
+		CreatedAt:    p.CreatedAt(),
+		UpdatedAt:    p.UpdatedAt(),
+		Publication:  nil,
 		RequestRoles: []Role{RoleOwner},
 	}
 	assert.Equal(t, want, ToProject(p))

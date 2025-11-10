@@ -29,16 +29,13 @@ export const GET_ME = gql`
       name
       email
       lang
-      profilePictureUrl
       myWorkspace {
         id
         name
-        alias
       }
       workspaces {
         id
         name
-        alias
         members {
           ... on WorkspaceUserMember {
             user {
@@ -85,7 +82,6 @@ export const GET_PROFILE = gql`
       myWorkspace {
         id
         name
-        alias
       }
       auths
     }
@@ -138,7 +134,6 @@ export const UPDATE_ME = gql`
         myWorkspace {
           id
           name
-          alias
         }
       }
     }

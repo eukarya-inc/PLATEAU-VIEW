@@ -8,7 +8,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 )
 
-func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
+func TestIntegrationSchemaJSONExportAPI(t *testing.T) {
 	e := StartServer(t, &app.Config{}, true, baseSeeder)
 
 	// /api/schemata/{schemaId}/schema.json
@@ -28,10 +28,8 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":         sid1,
-			"title":       "m1",
-			"description": "m1 desc",
-			"$schema":     "https://json-schema.org/draft/2020-12/schema",
+			"$id":     sid1,
+			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				"asset": map[string]any{
 					"type":   "string",
@@ -61,10 +59,8 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":         sid1,
-			"title":       "m1",
-			"description": "m1 desc",
-			"$schema":     "https://json-schema.org/draft/2020-12/schema",
+			"$id":     sid1,
+			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				"asset": map[string]any{
 					"type":   "string",
@@ -94,7 +90,7 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":     sid1,
+			"$id":     mId1,
 			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				"asset": map[string]any{
@@ -127,7 +123,7 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":     msid1,
+			"$id":     mId1,
 			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				sfKey4.String(): map[string]any{
@@ -156,7 +152,7 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":     sid1,
+			"$id":     mId1,
 			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				"asset": map[string]any{
@@ -189,7 +185,7 @@ func TestIntegrationJSONSchemaExportAPI(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		IsEqual(map[string]any{
-			"$id":     msid1,
+			"$id":     mId1,
 			"$schema": "https://json-schema.org/draft/2020-12/schema",
 			"properties": map[string]any{
 				sfKey4.String(): map[string]any{

@@ -24,6 +24,7 @@ import {
 import Search from "@reearth-cms/components/atoms/Search";
 import Space from "@reearth-cms/components/atoms/Space";
 import Tooltip from "@reearth-cms/components/atoms/Tooltip";
+import UserAvatar from "@reearth-cms/components/atoms/UserAvatar";
 import ResizableProTable from "@reearth-cms/components/molecules/Common/ResizableProTable";
 import LinkItemRequestModal from "@reearth-cms/components/molecules/Content/LinkItemRequestModal/LinkItemRequestModal";
 import Status from "@reearth-cms/components/molecules/Content/Status";
@@ -49,7 +50,7 @@ import { dateTimeFormat } from "@reearth-cms/utils/format";
 import DropdownRender from "./DropdownRender";
 import FilterDropdown from "./filterDropdown";
 
-export type Props = {
+type Props = {
   contentTableFields?: ContentTableField[];
   contentTableColumns?: ExtendedColumns[];
   loading: boolean;
@@ -194,12 +195,6 @@ const ContentTable: React.FC<Props> = ({
         width: 148,
         minWidth: 148,
       },
-    ],
-    [t, onItemEdit, selectedItem?.id, onItemSelect],
-  );
-
-  const systemMetaDataColumns: ExtendedColumns[] = useMemo(
-    () => [
       {
         title: t("Created At"),
         dataIndex: "createdAt",
@@ -220,7 +215,12 @@ const ContentTable: React.FC<Props> = ({
         fieldType: "CREATION_USER",
         key: "CREATION_USER",
         sortOrder: sortOrderGet("CREATION_USER"),
-        render: (_, item) => item.createdBy.name,
+        render: (_, item) => (
+          <Space>
+            <UserAvatar username={item.createdBy.name} size={"small"} />
+            {item.createdBy.name}
+          </Space>
+        ),
         sorter: true,
         defaultSortOrder: sortOrderGet("CREATION_USER"),
         width: 148,
@@ -248,7 +248,15 @@ const ContentTable: React.FC<Props> = ({
         fieldType: "MODIFICATION_USER",
         key: "MODIFICATION_USER",
         sortOrder: sortOrderGet("MODIFICATION_USER"),
-        render: (_, item) => (item.updatedBy ? item.updatedBy : "-"),
+        render: (_, item) =>
+          item.updatedBy ? (
+            <Space>
+              <UserAvatar username={item.updatedBy} size={"small"} />
+              {item.updatedBy}
+            </Space>
+          ) : (
+            "-"
+          ),
         sorter: true,
         defaultSortOrder: sortOrderGet("MODIFICATION_USER"),
         width: 148,
@@ -257,14 +265,12 @@ const ContentTable: React.FC<Props> = ({
         ellipsis: true,
       },
     ],
-    [t, sortOrderGet],
+    [t, sortOrderGet, onItemEdit, selectedItem?.id, onItemSelect],
   );
 
   const tableColumns = useMemo(() => {
-    return contentTableColumns
-      ? [...actionsColumns, ...contentTableColumns, ...systemMetaDataColumns]
-      : [...actionsColumns];
-  }, [actionsColumns, contentTableColumns, systemMetaDataColumns]);
+    return contentTableColumns ? [...actionsColumns, ...contentTableColumns] : [...actionsColumns];
+  }, [actionsColumns, contentTableColumns]);
 
   const rowSelection: TableRowSelection = useMemo(
     () => ({

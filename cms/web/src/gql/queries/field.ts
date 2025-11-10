@@ -38,16 +38,6 @@ export const CREATE_FIELD = gql`
   }
 `;
 
-export const CREATE_FIELDS = gql`
-  mutation CreateFields($inputs: [CreateFieldInput!]!) {
-    createFields(input: $inputs) {
-      fields {
-        id
-      }
-    }
-  }
-`;
-
 export const UPDATE_FIELD = gql`
   mutation UpdateField(
     $modelId: ID

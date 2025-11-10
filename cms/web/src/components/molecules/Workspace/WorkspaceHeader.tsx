@@ -1,73 +1,61 @@
 import styled from "@emotion/styled";
-import { useMemo } from "react";
 
+import Content from "@reearth-cms/components/atoms/Content";
 import Search from "@reearth-cms/components/atoms/Search";
-import Select from "@reearth-cms/components/atoms/Select";
+import { FormValues as ProjectFormValues } from "@reearth-cms/components/molecules/Common/ProjectCreationModal";
+import { FormValues as WorkspaceFormValues } from "@reearth-cms/components/molecules/Common/WorkspaceCreationModal";
+import CreateProjectButton from "@reearth-cms/components/molecules/Workspace/CreateProjectButton";
+import CreateWorkspaceButton from "@reearth-cms/components/molecules/Workspace/CreateWorkspaceButton";
 import { useT } from "@reearth-cms/i18n";
 
-import { SortBy, SortOption } from "./types";
-
 type Props = {
+  hasCreateRight: boolean;
+  onWorkspaceCreate: (values: WorkspaceFormValues) => Promise<void>;
   onProjectSearch: (value: string) => void;
-  onProjectSort: (sort: SortBy) => void;
+  onProjectCreate: (values: ProjectFormValues) => Promise<void>;
+  onProjectAliasCheck: (alias: string) => Promise<boolean>;
 };
 
-const WorkspaceHeader: React.FC<Props> = ({ onProjectSearch, onProjectSort }) => {
+const WorkspaceHeader: React.FC<Props> = ({
+  hasCreateRight,
+  onWorkspaceCreate,
+  onProjectSearch,
+  onProjectCreate,
+  onProjectAliasCheck,
+}) => {
   const t = useT();
 
-  const projectSortOptions: SortOption[] = useMemo(
-    () => [
-      { key: "updatedAt", label: t("Last Modified") },
-      { key: "createdAt", label: t("Created At") },
-      { key: "name", label: t("Name") },
-    ],
-    [t],
-  );
-
   return (
-    <Container>
+    <ActionHeader>
       <StyledSearch
         onSearch={onProjectSearch}
         placeholder={t("search projects")}
         allowClear
         type="text"
       />
-      <Wrapper>
-        <Label>{t("Sort by")}</Label>
-        <StyledSelect
-          defaultValue="updatedAt"
-          onChange={value => {
-            onProjectSort(value as SortBy);
-          }}>
-          {projectSortOptions.map(option => (
-            <Select.Option key={option.key} value={option.key}>
-              {option.label}
-            </Select.Option>
-          ))}
-        </StyledSelect>
-      </Wrapper>
-    </Container>
+      <ButtonWrapper>
+        <CreateWorkspaceButton onWorkspaceCreate={onWorkspaceCreate} />
+        <CreateProjectButton
+          hasCreateRight={hasCreateRight}
+          onProjectCreate={onProjectCreate}
+          onProjectAliasCheck={onProjectAliasCheck}
+        />
+      </ButtonWrapper>
+    </ActionHeader>
   );
 };
 
-const Container = styled.div`
+const ActionHeader = styled(Content)`
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  margin: auto;
+  padding-bottom: 16px;
 `;
 
-const Wrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const Label = styled.span`
-  color: rgba(0, 0, 0, 0.45);
-`;
-
-const StyledSelect = styled(Select)`
-  width: 160px;
+const ButtonWrapper = styled.div`
+  Button + Button {
+    margin-left: 8px;
+  }
 `;
 
 const StyledSearch = styled(Search)`

@@ -5,6 +5,7 @@ import Badge from "@reearth-cms/components/atoms/Badge";
 import Button from "@reearth-cms/components/atoms/Button";
 import Select from "@reearth-cms/components/atoms/Select";
 import Space from "@reearth-cms/components/atoms/Space";
+import UserAvatar from "@reearth-cms/components/atoms/UserAvatar";
 import SidebarCard from "@reearth-cms/components/molecules/Request/Details/SidebarCard";
 import { Request, RequestUpdatePayload } from "@reearth-cms/components/molecules/Request/types";
 import { badgeColors } from "@reearth-cms/components/molecules/Request/utils";
@@ -90,14 +91,15 @@ const RequestSidebarWrapper: React.FC<Props> = ({
         <Badge color={badgeColors[currentRequest.state]} text={t(currentRequest.state)} />
       </SidebarCard>
       <SidebarCard title={t("Created By")}>
-        <StyledSpace>{currentRequest?.createdBy?.name}</StyledSpace>
+        <StyledSpace>
+          <UserAvatar username={currentRequest?.createdBy?.name} />
+          {currentRequest?.createdBy?.name}
+        </StyledSpace>
       </SidebarCard>
       <SidebarCard title={t("Reviewer")}>
         <ReviewerContainer>
           {currentRequest?.reviewers.map((reviewer, index) => (
-            <Reviewer title={reviewer.name} key={index}>
-              {reviewer.name}
-            </Reviewer>
+            <UserAvatar username={reviewer.name} key={index} />
           ))}
         </ReviewerContainer>
         {viewReviewers ? (
@@ -114,7 +116,10 @@ const RequestSidebarWrapper: React.FC<Props> = ({
             allowClear>
             {reviewers.map(reviewer => (
               <Option key={reviewer.value} label={reviewer.label}>
-                {reviewer.label}
+                <Space>
+                  <UserAvatar username={reviewer.label} size={22} />
+                  {reviewer.label}
+                </Space>
               </Option>
             ))}
           </StyledSelect>
@@ -142,7 +147,6 @@ const SideBarWrapper = styled.div`
 
 const StyledSpace = styled(Space)`
   width: 100%;
-
   .ant-space-item:nth-child(2) {
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -152,7 +156,7 @@ const StyledSpace = styled(Space)`
 
 const ReviewerContainer = styled.div`
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px 8px;
   margin: 4px 0;
 `;
@@ -167,12 +171,6 @@ const ViewReviewers = styled.div`
 
 const StyledButton = styled(Button)`
   padding-right: 0;
-`;
-
-const Reviewer = styled.div`
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 `;
 
 export default RequestSidebarWrapper;

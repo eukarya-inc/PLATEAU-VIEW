@@ -43,14 +43,13 @@ func ToMe(u *user.User) *Me {
 		ID:            IDFrom(u.ID()),
 		Name:          u.Name(),
 		Email:         u.Email(),
-		Lang:          u.Metadata().Lang(),
+		Lang:          u.Lang(),
 		Host:          lo.EmptyableToPtr(u.Host()),
-		Theme:         Theme(u.Metadata().Theme()),
+		Theme:         Theme(u.Theme()),
 		MyWorkspaceID: IDFrom(u.Workspace()),
 		Auths: util.Map(u.Auths(), func(a user.Auth) string {
 			return a.Provider
 		}),
-		ProfilePictureURL: lo.ToPtr(u.Metadata().PhotoURL()),
 	}
 }
 
@@ -98,7 +97,6 @@ func ToWorkspace(t *workspace.Workspace) *Workspace {
 	return &Workspace{
 		ID:       IDFrom(t.ID()),
 		Name:     t.Name(),
-		Alias:    lo.ToPtr(t.Alias()),
 		Personal: t.IsPersonal(),
 		Members:  members,
 	}

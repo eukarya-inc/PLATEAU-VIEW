@@ -4,14 +4,9 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 import Notification from "@reearth-cms/components/atoms/Notification";
 import { ColumnsState } from "@reearth-cms/components/atoms/ProTable";
-import { UploadFile as RawUploadFile, RcFile } from "@reearth-cms/components/atoms/Upload";
+import { UploadFile as RawUploadFile } from "@reearth-cms/components/atoms/Upload";
 import { Asset, AssetItem, SortType } from "@reearth-cms/components/molecules/Asset/types";
-import { CreateFieldInput } from "@reearth-cms/components/molecules/Schema/types";
 import { fromGraphQLAsset } from "@reearth-cms/components/organisms/DataConverters/content";
-import {
-  convertSchemaFieldType,
-  defaultTypePropertyGet,
-} from "@reearth-cms/components/organisms/Project/Schema/helpers";
 import { useAuthHeader } from "@reearth-cms/gql";
 import {
   useGetAssetsLazyQuery,
@@ -23,8 +18,6 @@ import {
   useGetAssetsItemsLazyQuery,
   useCreateAssetUploadMutation,
   useGetAssetLazyQuery,
-  ContentTypesEnum,
-  useGuessSchemaFieldsQuery,
 } from "@reearth-cms/gql/graphql-client-api";
 import { useT } from "@reearth-cms/i18n";
 import { useUserId, useUserRights } from "@reearth-cms/state";
@@ -33,22 +26,19 @@ import { uploadFiles } from "./upload";
 
 type UploadType = "local" | "url";
 
-type UploadFile = RcFile & {
+type UploadFile = File & {
   skipDecompression?: boolean;
 };
 
-export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = []) => {
+export default (isItemsRequired: boolean) => {
   const t = useT();
   const [userRights] = useUserRights();
   const [userId] = useUserId();
   const hasCreateRight = useMemo(() => !!userRights?.asset.create, [userRights?.asset.create]);
   const [hasDeleteRight, setHasDeleteRight] = useState(false);
   const [uploadModalVisibility, setUploadModalVisibility] = useState(false);
-  const [importSchemaModalVisibility, setImportSchemaModalVisibility] = useState(false);
-  const [selectFileModalVisibility, setSelectFileModalVisibility] = useState(false);
-  const [importFields, setImportFields] = useState<CreateFieldInput[]>([]);
 
-  const { workspaceId, projectId, modelId } = useParams();
+  const { workspaceId, projectId } = useParams();
   const navigate = useNavigate();
   const location: {
     state?: {
@@ -124,7 +114,6 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
           }
         : { sortBy: "DATE" as GQLSortType, direction: "DESC" as GQLSortDirection },
       keyword: searchTerm,
-      contentTypes: contentTypes,
     },
     notifyOnNetworkStatusChange: true,
     skip: !projectId,
@@ -140,42 +129,6 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
     }
   }, [getAssets, isItemsRequired]);
 
-  const {
-    data: guessSchemaFieldsData,
-    loading: guessSchemaFieldsLoading,
-    error: guessSchemaFieldsError,
-  } = useGuessSchemaFieldsQuery({
-    fetchPolicy: "cache-and-network",
-    variables: {
-      modelId: modelId ?? "",
-      assetId: selectedAssetId ?? "",
-    },
-    skip: !modelId || !selectedAssetId,
-  });
-
-  const parsedFields = useMemo(() => {
-    const fields = guessSchemaFieldsData?.guessSchemaFields?.fields;
-    if (!fields || fields.length === 0) return [];
-    return fields.map(field => ({
-      title: field.name,
-      metadata: false,
-      description: "",
-      key: field.name,
-      multiple: false,
-      unique: false,
-      isTitle: false,
-      required: false,
-      type: convertSchemaFieldType(field.type),
-      modelId: modelId,
-      groupId: undefined,
-      typeProperty: defaultTypePropertyGet(field.type),
-    }));
-  }, [guessSchemaFieldsData, modelId]);
-
-  useEffect(() => {
-    setImportFields(parsedFields);
-  }, [parsedFields]);
-
   const assetList = useMemo(
     () =>
       (data?.assets.nodes
@@ -184,48 +137,12 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
     [data?.assets.nodes],
   );
 
-  const handleUploadModalOpen = useCallback(() => {
-    setUploadModalVisibility(true);
-  }, [setUploadModalVisibility]);
-
-  const handleSelectFileModalOpen = useCallback(() => {
-    setSelectFileModalVisibility(true);
-  }, []);
-
-  const handleSchemaImportModalOpen = useCallback(async () => {
-    setImportSchemaModalVisibility(true);
-  }, []);
-
   const handleUploadModalCancel = useCallback(() => {
     setUploadModalVisibility(false);
     setFileList([]);
     setUploadUrl({ url: "", autoUnzip: true });
     setUploadType("local");
-  }, []);
-
-  const handleSelectFileModalCancel = useCallback(() => {
-    setSelectFileModalVisibility(false);
-    setSearchTerm("");
-    setPage(1);
-    setSort(undefined);
-    handleUploadModalCancel();
-  }, [handleUploadModalCancel]);
-
-  const handleAssetSelect = useCallback(
-    (id?: string) => {
-      setSelectedAssetId(id);
-      setCollapsed(false);
-    },
-    [setCollapsed, setSelectedAssetId],
-  );
-
-  const handleSchemaImportModalCancel = useCallback(() => {
-    setImportSchemaModalVisibility(false);
-    handleAssetSelect(undefined);
-    setImportFields([]);
-    setSelectedAssetId(undefined);
-    handleUploadModalCancel();
-  }, [handleAssetSelect, handleUploadModalCancel]);
+  }, [setUploadModalVisibility, setFileList, setUploadUrl, setUploadType]);
 
   const handleAssetsCreate = useCallback(
     async (files: RawUploadFile[]) => {
@@ -237,7 +154,7 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
       try {
         results = (
           await uploadFiles<UploadFile, Asset | undefined>(
-            files as UploadFile[],
+            files as unknown as UploadFile[], // TODO: refactor
             async ({ contentLength, contentEncoding, cursor, filename }) => {
               const result = await createAssetUploadMutation({
                 variables: {
@@ -380,6 +297,14 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
     [navigate, workspaceId, projectId, searchTerm, sort, columns, page, pageSize],
   );
 
+  const handleAssetSelect = useCallback(
+    (id: string) => {
+      setSelectedAssetId(id);
+      setCollapsed(false);
+    },
+    [setCollapsed, setSelectedAssetId],
+  );
+
   const handleAssetItemSelect = useCallback(
     (assetItem: AssetItem) => {
       navigate(
@@ -461,15 +386,10 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
   };
 
   return {
-    importFields,
-    guessSchemaFieldsError: !!guessSchemaFieldsError,
-    importSchemaModalVisibility,
-    selectFileModalVisibility,
     assetList,
     selection,
     fileList,
     uploading,
-    guessSchemaFieldsLoading,
     uploadModalVisibility,
     loading,
     deleteLoading,
@@ -485,19 +405,13 @@ export default (isItemsRequired: boolean, contentTypes: ContentTypesEnum[] = [])
     columns,
     hasCreateRight,
     hasDeleteRight,
-    handleUploadModalOpen,
-    handleSelectFileModalOpen,
-    handleSchemaImportModalOpen,
-    handleUploadModalCancel,
-    handleSelectFileModalCancel,
-    handleSchemaImportModalCancel,
     handleColumnsChange,
     handleToggleCommentMenu,
     handleAssetItemSelect,
     handleAssetSelect,
+    handleUploadModalCancel,
     setUploadUrl,
     setUploadType,
-    setImportFields,
     handleSelect,
     setFileList,
     setUploadModalVisibility,

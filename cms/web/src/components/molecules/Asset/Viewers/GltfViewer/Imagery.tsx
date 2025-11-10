@@ -1,50 +1,49 @@
-import { Cartesian3, Resource } from "cesium";
+import { Cartesian3 } from "cesium";
 import { useEffect } from "react";
 import { useCesium } from "resium";
 
-import { useAuthHeader } from "@reearth-cms/gql";
+import { waitForViewer } from "@reearth-cms/components/molecules/Asset/Asset/AssetBody/waitForViewer";
 
 type Props = {
-  isAssetPublic?: boolean;
   url: string;
 };
 
-export const Imagery: React.FC<Props> = ({ isAssetPublic, url }) => {
+export const Imagery: React.FC<Props> = ({ url }) => {
   const { viewer } = useCesium();
-  const { getHeader } = useAuthHeader();
 
   useEffect(() => {
-    if (!viewer) return;
-
     const loadModel = async () => {
       try {
-        const headers = await getHeader();
-        const resource = new Resource({
-          url: url,
-          headers: isAssetPublic ? {} : headers,
-        });
-        viewer.entities.removeAll();
-        const entity = viewer.entities.add({
+        const resolvedViewer = await waitForViewer(viewer);
+        resolvedViewer.entities.removeAll();
+        const entity = resolvedViewer.entities.add({
           position: Cartesian3.fromDegrees(
             Math.floor(Math.random() * 360 - 180),
             Math.floor(Math.random() * 180 - 90),
             0,
           ),
           model: {
-            uri: resource,
+            uri: url,
             minimumPixelSize: 128,
             maximumScale: 20000,
             show: true,
           },
         });
-        viewer.trackedEntity = entity;
-        await viewer.zoomTo(entity);
+        resolvedViewer.trackedEntity = entity;
+        await resolvedViewer.zoomTo(entity);
       } catch (err) {
         console.error(err);
       }
     };
     loadModel();
-  }, [getHeader, isAssetPublic, url, viewer]);
+
+    return () => {
+      if (viewer) {
+        viewer.entities.removeAll();
+        viewer.trackedEntity = undefined;
+      }
+    };
+  }, [url, viewer]);
 
   return null;
 };

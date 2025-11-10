@@ -58,6 +58,7 @@ func TestBuilder_Build(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 					order:       2,
 				},
@@ -70,6 +71,7 @@ func TestBuilder_Build(t *testing.T) {
 				name:        "m1",
 				description: "m1 desc",
 				key:         id.NewKey("T123456"),
+				public:      false,
 				updatedAt:   now,
 				order:       2,
 			},
@@ -85,6 +87,7 @@ func TestBuilder_Build(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					// updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -96,6 +99,7 @@ func TestBuilder_Build(t *testing.T) {
 				name:        "m1",
 				description: "m1 desc",
 				key:         id.NewKey("T123456"),
+				public:      false,
 				updatedAt:   mId.Timestamp(),
 			},
 			wantErr: nil,
@@ -110,6 +114,7 @@ func TestBuilder_Build(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -127,6 +132,7 @@ func TestBuilder_Build(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -144,6 +150,7 @@ func TestBuilder_Build(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				// k: key.New("T123456"),
@@ -199,6 +206,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -210,6 +218,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 				name:        "m1",
 				description: "m1 desc",
 				key:         id.NewKey("T123456"),
+				public:      false,
 				updatedAt:   now,
 			},
 			wantErr: nil,
@@ -224,6 +233,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					// updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -235,6 +245,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 				name:        "m1",
 				description: "m1 desc",
 				key:         id.NewKey("T123456"),
+				public:      false,
 				updatedAt:   mId.Timestamp(),
 			},
 			wantErr: nil,
@@ -249,6 +260,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -266,6 +278,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				k: id.NewKey("T123456"),
@@ -283,6 +296,7 @@ func TestBuilder_MustBuild(t *testing.T) {
 					name:        "m1",
 					description: "m1 desc",
 					key:         id.NewKey("T123456"),
+					public:      false,
 					updatedAt:   now,
 				},
 				// k: key.New("T123456"),
@@ -402,6 +416,67 @@ func TestBuilder_ID(t *testing.T) {
 				k:     tt.fields.k,
 			}
 			assert.Equal(t, tt.want, b.ID(tt.args.id))
+		})
+	}
+}
+
+func TestBuilder_Public(t *testing.T) {
+	type fields struct {
+		model *Model
+		k     id.Key
+	}
+	type args struct {
+		public bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   *Builder
+	}{
+		{
+			name: "test 1",
+			fields: fields{
+				model: &Model{},
+				k:     id.Key{},
+			},
+			args: args{
+				public: true,
+			},
+			want: &Builder{
+				model: &Model{
+					public: true,
+				},
+				k: id.Key{},
+			},
+		},
+		{
+			name: "test 2",
+			fields: fields{
+				model: &Model{},
+				k:     id.Key{},
+			},
+			args: args{
+				public: false,
+			},
+			want: &Builder{
+				model: &Model{
+					public: false,
+				},
+				k: id.Key{},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := &Builder{
+				model: tt.fields.model,
+				k:     tt.fields.k,
+			}
+			assert.Equal(t, tt.want, b.Public(tt.args.public))
 		})
 	}
 }

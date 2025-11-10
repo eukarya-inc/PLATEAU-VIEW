@@ -11,6 +11,7 @@ type Props = {
   loading: boolean;
   workspaceIntegrations?: WorkspaceIntegration[];
   onSearchTerm: (term?: string) => void;
+  onReload: () => void;
   setSelectedIntegration: (integration: WorkspaceIntegration) => void;
   onIntegrationRemove: (integrationIds: string[]) => Promise<void>;
   deleteLoading: boolean;
@@ -32,6 +33,7 @@ const IntegrationWrapper: React.FC<Props> = ({
   loading,
   workspaceIntegrations,
   onSearchTerm,
+  onReload,
   setSelectedIntegration,
   onIntegrationRemove,
   deleteLoading,
@@ -81,6 +83,7 @@ const IntegrationWrapper: React.FC<Props> = ({
         pageSize={pageSize}
         onTableChange={onTableChange}
         loading={loading}
+        onReload={onReload}
         hasConnectRight={hasConnectRight}
         hasUpdateRight={hasUpdateRight}
         hasDeleteRight={hasDeleteRight}

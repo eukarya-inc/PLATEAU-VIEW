@@ -25,7 +25,7 @@ import {
   useWorkspaceId,
   useUserRights,
 } from "@reearth-cms/state";
-import { joinPaths, splitPathname } from "@reearth-cms/utils/path";
+import { splitPathname } from "@reearth-cms/utils/path";
 
 import { userRightsGet } from "./utils";
 
@@ -35,7 +35,6 @@ export default () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const logoUrl = window.REEARTH_CONFIG?.logoUrl;
-  const dashboardBaseUrl = window.REEARTH_CONFIG?.dashboardBaseUrl;
 
   const [currentUserId, setCurrentUserId] = useUserId();
   const [currentWorkspace, setCurrentWorkspace] = useWorkspace();
@@ -50,11 +49,6 @@ export default () => {
   const [, secondaryRoute, subRoute] = useMemo(() => splitPathname(pathname), [pathname]);
 
   const username = useMemo(() => data?.me?.name || "", [data?.me?.name]);
-
-  const profilePictureUrl = useMemo(
-    () => data?.me?.profilePictureUrl ?? undefined,
-    [data?.me?.profilePictureUrl],
-  );
 
   setCurrentUserId(data?.me?.id);
 
@@ -74,7 +68,6 @@ export default () => {
       ? {
           id: foundWorkspace.id,
           name: foundWorkspace.name,
-          alias: foundWorkspace.alias,
           members: foundWorkspace.members?.map(member =>
             fromGraphQLMember(member as WorkspaceMember),
           ),
@@ -142,12 +135,8 @@ export default () => {
   const handleWorkspaceModalOpen = useCallback(() => setWorkspaceModalShown(true), []);
 
   const handleNavigateToSettings = useCallback(() => {
-    if (dashboardBaseUrl) {
-      window.open(joinPaths(dashboardBaseUrl, "settings/profile"), "_blank", "noopener,noreferrer");
-    } else {
-      navigate(`/workspace/${personalWorkspace?.id}/account`);
-    }
-  }, [dashboardBaseUrl, navigate, personalWorkspace?.id]);
+    navigate(`/workspace/${personalWorkspace?.id}/account`);
+  }, [personalWorkspace?.id, navigate]);
 
   const { data: projectData } = useGetProjectQuery({
     variables: { projectId: projectId ?? "" },
@@ -169,7 +158,7 @@ export default () => {
     (info: MenuInfo) => {
       if (info.key === "home") {
         navigate(`/workspace/${workspaceId}`);
-      } else if (info.key === "models") {
+      } else if (info.key === "overview") {
         navigate(`/workspace/${workspaceId}/project/${projectId}`);
       } else {
         navigate(`/workspace/${workspaceId}/project/${projectId}/${info.key}`);
@@ -182,29 +171,11 @@ export default () => {
     (info: MenuInfo) => {
       if (info.key === "home") {
         navigate(`/workspace/${workspaceId}`);
-      } else if (info.key === "members" && dashboardBaseUrl) {
-        window.open(
-          joinPaths(dashboardBaseUrl, currentWorkspace?.alias ?? "", "members"),
-          "_blank",
-          "noopener,noreferrer",
-        );
-      } else if (info.key === "workspaceSettings" && dashboardBaseUrl) {
-        window.open(
-          joinPaths(dashboardBaseUrl, currentWorkspace?.alias ?? "", "settings/general"),
-          "_blank",
-          "noopener,noreferrer",
-        );
-      } else if (info.key === "account" && dashboardBaseUrl) {
-        window.open(
-          joinPaths(dashboardBaseUrl, "settings/profile"),
-          "_blank",
-          "noopener,noreferrer",
-        );
       } else {
         navigate(`/workspace/${workspaceId}/${info.key}`);
       }
     },
-    [currentWorkspace?.alias, dashboardBaseUrl, navigate, workspaceId],
+    [navigate, workspaceId],
   );
 
   const handleWorkspaceNavigation = useCallback(
@@ -220,7 +191,6 @@ export default () => {
 
   return {
     username,
-    profilePictureUrl,
     personalWorkspace,
     workspaces,
     currentWorkspace,

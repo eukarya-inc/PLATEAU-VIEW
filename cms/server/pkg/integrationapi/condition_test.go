@@ -363,6 +363,10 @@ func TestFieldSelector_Into(t *testing.T) {
 
 func TestConditionInto(t *testing.T) {
 	fieldID := id.NewFieldID().Ref()
+	var pIntf *interface{}
+	var emptyInterface interface{}
+	pIntf = &emptyInterface
+	*pIntf = "test"
 	timeNow := time.Now()
 
 	tests := []struct {
@@ -460,14 +464,14 @@ func TestConditionInto(t *testing.T) {
 				Basic: &struct {
 					FieldId  *FieldSelector          "json:\"fieldId,omitempty\""
 					Operator *ConditionBasicOperator "json:\"operator,omitempty\""
-					Value    interface{}             "json:\"value,omitempty\""
+					Value    *interface{}            "json:\"value,omitempty\""
 				}{
 					FieldId: &FieldSelector{
 						FieldId: fieldID,
 						Type:    lo.ToPtr(FieldSelectorTypeId),
 					},
 					Operator: lo.ToPtr(ConditionBasicOperatorEquals),
-					Value:    "test",
+					Value:    pIntf,
 				},
 			},
 			want: &view.Condition{
@@ -549,7 +553,7 @@ func TestConditionInto(t *testing.T) {
 					},
 					Operator: IncludesAll,
 					Value: []any{
-						"test",
+						pIntf,
 					},
 				},
 			},
@@ -562,7 +566,7 @@ func TestConditionInto(t *testing.T) {
 					},
 					Op: view.MultipleOperatorIncludesAll,
 					Value: []any{
-						"test",
+						pIntf,
 					},
 				},
 			},

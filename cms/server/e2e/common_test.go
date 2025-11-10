@@ -103,8 +103,6 @@ func startServer(t *testing.T, cfg *app.Config, repos *repo.Container, accountre
 }
 
 func StartServerWithRepos(t *testing.T, cfg *app.Config, useMongo bool, seeder Seeder) (*httpexpect.Expect, *repo.Container, *accountrepo.Container) {
-	t.Helper()
-
 	ctx := context.Background()
 
 	var repos *repo.Container
@@ -126,9 +124,9 @@ func StartServerWithRepos(t *testing.T, cfg *app.Config, useMongo bool, seeder S
 		cfg.Host = "https://example.com"
 	}
 
-	f := lo.Must(fs.NewFile(afero.NewMemMapFs(), cfg.AssetBaseURL, cfg.AssetUploadURLReplacement))
+	f := lo.Must(fs.NewFile(afero.NewMemMapFs(), cfg.AssetBaseURL))
 	if !cfg.Asset_Public {
-		f = lo.Must(fs.NewFileWithACL(afero.NewMemMapFs(), cfg.AssetBaseURL, cfg.Host, cfg.AssetUploadURLReplacement))
+		f = lo.Must(fs.NewFileWithACL(afero.NewMemMapFs(), cfg.AssetBaseURL, cfg.Host))
 	}
 	gateway := &gateway.Container{File: f}
 	accountGateways := &accountgateway.Container{

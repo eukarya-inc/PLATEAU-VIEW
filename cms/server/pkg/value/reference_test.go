@@ -96,32 +96,17 @@ func TestValue_ValueReference(t *testing.T) {
 }
 
 func TestMultiple_ValuesReference(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		var m *Multiple
-		got, ok := m.ValuesReference()
-		var expected []Reference
-		assert.Equal(t, expected, got)
-		assert.False(t, ok)
-	})
+	var m *Multiple
+	got, ok := m.ValuesReference()
+	var expected []Reference
+	assert.Equal(t, expected, got)
+	assert.Equal(t, false, ok)
 
 	iid1 := id.NewItemID()
 	iid2 := id.NewItemID()
 	iid3 := id.NewItemID()
-	t.Run("empty", func(t *testing.T) {
-		m := NewMultiple(TypeReference, []any{iid1, iid2, iid3})
-		expected := []Reference{iid1, iid2, iid3}
-		got, ok := m.ValuesReference()
-		assert.True(t, ok)
-		assert.Equal(t, expected, got)
-	})
-
-	t.Run("with invalid value", func(t *testing.T) {
-		m := Multiple{
-			t: TypeReference,
-			v: []*Value{New(TypeReference, iid1), New(TypeReference, "invalid")},
-		}
-		got, ok := m.ValuesReference()
-		assert.False(t, ok)
-		assert.Nil(t, got)
-	})
+	m = NewMultiple(TypeReference, []any{iid1, iid2, iid3})
+	expected = []Reference{iid1, iid2, iid3}
+	got, _ = m.ValuesReference()
+	assert.Equal(t, expected, got)
 }

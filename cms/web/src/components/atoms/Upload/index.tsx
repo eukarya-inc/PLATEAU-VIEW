@@ -12,4 +12,3 @@ type UploadFile<T = any> = {
 
 export default Upload;
 export type { UploadChangeParam, UploadFile, UploadProps };
-export type { RcFile } from "antd/es/upload";

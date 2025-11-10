@@ -8,6 +8,7 @@ import Icon from "@reearth-cms/components/atoms/Icon";
 import Modal from "@reearth-cms/components/atoms/Modal";
 import Search from "@reearth-cms/components/atoms/Search";
 import Select from "@reearth-cms/components/atoms/Select";
+import UserAvatar from "@reearth-cms/components/atoms/UserAvatar";
 import { User, Role } from "@reearth-cms/components/molecules/Member/types";
 import { UserMember, MemberInput } from "@reearth-cms/components/molecules/Workspace/types";
 import { useT } from "@reearth-cms/i18n";
@@ -99,6 +100,7 @@ const MemberAddModal: React.FC<Props> = ({
         user,
         label: (
           <UserWrapper>
+            <UserAvatar username={user.name} size={24} />
             <UserInfo>
               <UserName>{user.name}</UserName>
               <Email>{user.email}</Email>
@@ -207,10 +209,13 @@ const MemberAddModal: React.FC<Props> = ({
           <StyledFormItem label={`${t("Selected Members")} (${selectedUsers.length})`}>
             {selectedUsers.map(user => (
               <SelectedUser key={user.id}>
-                <UserInfo>
-                  <UserName title={user.name}>{user.name}</UserName>
-                  <Email title={user.email}>{user.email}</Email>
-                </UserInfo>
+                <UserWrapperShrinked>
+                  <UserAvatar username={user.name} size={24} />
+                  <UserInfo>
+                    <UserName>{user.name}</UserName>
+                    <Email>{user.email}</Email>
+                  </UserInfo>
+                </UserWrapperShrinked>
                 <Actions>
                   <FormItemRole name={[user.id]}>
                     <Select defaultValue={"READER"} popupMatchSelectWidth={105}>
@@ -273,8 +278,12 @@ const UserWrapper = styled.div`
   align-items: center;
 `;
 
-const UserInfo = styled.div`
+const UserWrapperShrinked = styled(UserWrapper)`
   max-width: 65%;
+`;
+
+const UserInfo = styled.div`
+  max-width: calc(100% - 36px);
   display: flex;
   gap: 8px;
 `;

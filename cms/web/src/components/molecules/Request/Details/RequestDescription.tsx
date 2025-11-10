@@ -6,6 +6,7 @@ import Button from "@reearth-cms/components/atoms/Button";
 import Collapse from "@reearth-cms/components/atoms/Collapse";
 import AntDComment from "@reearth-cms/components/atoms/Comment";
 import Tooltip from "@reearth-cms/components/atoms/Tooltip";
+import UserAvatar from "@reearth-cms/components/atoms/UserAvatar";
 import { Request, ItemInRequest } from "@reearth-cms/components/molecules/Request/types";
 import { Group } from "@reearth-cms/components/molecules/Schema/types";
 import { dateTimeFormat } from "@reearth-cms/utils/format";
@@ -55,6 +56,7 @@ export const RequestDescription: React.FC<Props> = ({
   return (
     <StyledAntDComment
       author={currentRequest.createdBy?.name}
+      avatar={<UserAvatar username={currentRequest.createdBy?.name} />}
       content={
         <>
           <RequestTextWrapper>
@@ -96,24 +98,21 @@ const StyledAntDComment = styled(AntDComment)`
     padding: 16px 24px;
     margin: 0;
     border-bottom: 1px solid #f0f0f0;
-
     .ant-comment-content-author-name {
-      font-weight: 500;
+      font-weight: 400;
       font-size: 14px;
-      color: #000000;
+      color: #00000073;
       overflow: hidden;
     }
-
-    .ant-comment-content-author-time {
-      display: flex;
-      align-items: center;
-    }
   }
-
   .ant-comment-inner {
     padding: 0;
   }
-
+  .ant-comment-avatar {
+    background-color: #f5f5f5;
+    margin-right: 0;
+    padding-right: 12px;
+  }
   .ant-comment-content {
     background-color: #fff;
   }

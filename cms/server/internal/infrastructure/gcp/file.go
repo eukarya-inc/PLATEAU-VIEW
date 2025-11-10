@@ -22,7 +22,6 @@ import (
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 )
 
 const (
@@ -30,18 +29,15 @@ const (
 	fileSizeLimit    int64  = 10 * 1024 * 1024 * 1024 // 10GB
 )
 
-const workspaceContextKey = "workspace"
-
 type fileRepo struct {
-	bucketName       string
-	publicBase       *url.URL
-	privateBase      *url.URL
-	cacheControl     string
-	public           bool
-	replaceUploadURL bool
+	bucketName   string
+	publicBase   *url.URL
+	privateBase  *url.URL
+	cacheControl string
+	public       bool
 }
 
-func NewFile(bucketName, publicBase, cacheControl string, replaceUploadURL bool) (gateway.File, error) {
+func NewFile(bucketName, publicBase, cacheControl string) (gateway.File, error) {
 	if bucketName == "" {
 		return nil, rerror.NewE(i18n.T("bucket name is empty"))
 	}
@@ -57,17 +53,16 @@ func NewFile(bucketName, publicBase, cacheControl string, replaceUploadURL bool)
 	}
 
 	return &fileRepo{
-		bucketName:       bucketName,
-		publicBase:       u,
-		privateBase:      nil,
-		cacheControl:     cacheControl,
-		public:           true,
-		replaceUploadURL: replaceUploadURL,
+		bucketName:   bucketName,
+		publicBase:   u,
+		privateBase:  nil,
+		cacheControl: cacheControl,
+		public:       true,
 	}, nil
 }
 
-func NewFileWithACL(bucketName, publicBase, privateBase, cacheControl string, replaceUploadURL bool) (gateway.File, error) {
-	f, err := NewFile(bucketName, publicBase, cacheControl, replaceUploadURL)
+func NewFileWithACL(bucketName, publicBase, privateBase, cacheControl string) (gateway.File, error) {
+	f, err := NewFile(bucketName, publicBase, cacheControl)
 	if err != nil {
 		return nil, err
 	}
@@ -234,58 +229,30 @@ func (f *fileRepo) IssueUploadAssetLink(ctx context.Context, param gateway.Issue
 	if p == "" {
 		return nil, gateway.ErrInvalidFile
 	}
-
 	bucket, err := f.bucket(ctx)
 	if err != nil {
 		return nil, err
 	}
 	opt := &storage.SignedURLOptions{
-		Scheme:      storage.SigningSchemeV4,
 		Method:      http.MethodPut,
 		Expires:     param.ExpiresAt,
 		ContentType: contentType,
-		QueryParameters: map[string][]string{
-			"reearth-x-workspace": {param.Workspace},
-			"reearth-x-project":   {param.Project},
-			"reearth-x-public":    {fmt.Sprintf("%v", param.Public)},
-		},
 	}
-
-	var headers []string
 	if param.ContentEncoding != "" {
-		headers = append(headers, "Content-Encoding: "+param.ContentEncoding)
-	}
-
-	if len(headers) > 0 {
-		opt.Headers = headers
+		opt.Headers = []string{"Content-Encoding: " + param.ContentEncoding}
 	}
 	uploadURL, err := bucket.SignedURL(p, opt)
 	if err != nil {
 		log.Errorf("gcs: failed to issue signed url: %v", err)
 		return nil, gateway.ErrUnsupportedOperation
 	}
-
 	return &gateway.UploadAssetLink{
-		URL:             f.toPublicUrl(uploadURL),
+		URL:             uploadURL,
 		ContentType:     contentType,
 		ContentLength:   param.ContentLength,
 		ContentEncoding: param.ContentEncoding,
 		Next:            "",
 	}, nil
-}
-
-func (f *fileRepo) toPublicUrl(uploadURL string) string {
-	// Replace storage.googleapis.com with custom asset base URL if configured and enabled
-	if f.replaceUploadURL && f.publicBase != nil && f.publicBase.Host != "" && f.publicBase.Host != "storage.googleapis.com" {
-		parsedURL, err := url.Parse(uploadURL)
-		if err == nil {
-			parsedURL.Scheme = f.publicBase.Scheme
-			parsedURL.Host = f.publicBase.Host
-			parsedURL.Path = path.Join(f.publicBase.Path, parsedURL.Path)
-			uploadURL = parsedURL.String()
-		}
-	}
-	return uploadURL
 }
 
 func (f *fileRepo) UploadedAsset(ctx context.Context, u *asset.Upload) (*file.File, error) {
@@ -391,24 +358,13 @@ func (f *fileRepo) Upload(ctx context.Context, file *file.File, objectName strin
 		file.ContentEncoding = ""
 	}
 
-	// Use gcsproxy endpoint for upload to enable tracking
-	bucketForUpload, clientForUpload, err := f.bucketWithEndpoint(ctx)
+	bucket, err := f.bucket(ctx)
 	if err != nil {
 		log.Errorf("gcs: upload bucket err: %+v\n", err)
 		return 0, rerror.ErrInternalBy(err)
 	}
 
-	// Close the upload client when done
-	if clientForUpload != nil {
-		defer func() {
-			if closeErr := clientForUpload.Close(); closeErr != nil {
-				log.Errorf("gcs: failed to close upload client: %v", closeErr)
-			}
-		}()
-	}
-
-	object := bucketForUpload.Object(objectName)
-
+	object := bucket.Object(objectName)
 	if err := object.Delete(ctx); err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
 		log.Errorf("gcs: upload err: %+v\n", err)
 		return 0, gateway.ErrFailedToUploadFile
@@ -416,13 +372,6 @@ func (f *fileRepo) Upload(ctx context.Context, file *file.File, objectName strin
 
 	writer := object.NewWriter(ctx)
 	writer.CacheControl = f.cacheControl
-
-	if workspace := getWorkspaceFromContext(ctx); workspace != "" {
-		if writer.Metadata == nil {
-			writer.Metadata = make(map[string]string)
-		}
-		writer.Metadata["X-Reearth-Workspace-ID"] = workspace
-	}
 
 	if file.ContentType == "" {
 		writer.ContentType = getContentType(file.Name)
@@ -623,39 +572,10 @@ func getGCSObjectPathFolder(uuid string) string {
 func (f *fileRepo) bucket(ctx context.Context) (*storage.BucketHandle, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		log.Errorf("gcs: failed to initialize client: %v", err)
 		return nil, err
 	}
-
 	bucket := client.Bucket(f.bucketName)
-
 	return bucket, nil
-}
-
-// bucketWithEndpoint creates a bucket handle using gcsproxy endpoint for upload tracking
-// Returns both bucket and client so caller can close the client after use
-func (f *fileRepo) bucketWithEndpoint(ctx context.Context) (*storage.BucketHandle, *storage.Client, error) {
-	var opts []option.ClientOption
-
-	// Configure custom endpoint if publicBase is set and not standard GCS
-	if f.publicBase != nil && f.publicBase.Host != "storage.googleapis.com" {
-		endpoint := f.publicBase.String()
-		opts = append(opts, option.WithEndpoint(endpoint))
-	}
-
-	// Create client with or without custom endpoint
-	client, err := storage.NewClient(ctx, opts...)
-	if err != nil {
-		if len(opts) > 0 {
-			log.Errorf("gcs: failed to initialize client with custom endpoint: %v", err)
-		} else {
-			log.Errorf("gcs: failed to initialize client: %v", err)
-		}
-		return nil, nil, err
-	}
-
-	bucket := client.Bucket(f.bucketName)
-	return bucket, client, nil
 }
 
 func newUUID() string {
@@ -704,14 +624,3 @@ func hasAcceptEncoding(accept, encoding string) bool {
 	}
 	return false
 }
-
-func getWorkspaceFromContext(ctx context.Context) string {
-	if v := ctx.Value(contextKey(workspaceContextKey)); v != nil {
-		if ws, ok := v.(string); ok {
-			return ws
-		}
-	}
-	return ""
-}
-
-type contextKey string

@@ -1,9 +1,6 @@
 package gqlmodel
 
 import (
-	"path/filepath"
-	"strings"
-
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/samber/lo"
@@ -41,7 +38,6 @@ func ToAsset(a *asset.Asset) *Asset {
 		ArchiveExtractionStatus: ToArchiveExtractionStatus(a.ArchiveExtractionStatus()),
 		Size:                    int64(a.Size()),
 		Public:                  ai.Public,
-		ContentType:             detectContentTypeByFilename(a.FileName()),
 	}
 }
 
@@ -163,53 +159,5 @@ func (s *AssetSort) Into() *usecasex.Sort {
 	return &usecasex.Sort{
 		Key:      key,
 		Reverted: s.Direction != nil && *s.Direction == SortDirectionDesc,
-	}
-}
-
-func detectContentTypeByFilename(filename string) *string {
-	ext := strings.ToLower(filepath.Ext(filename))
-
-	var contentType string
-
-	switch ext {
-	case ".json":
-		contentType = "application/json"
-	case ".geojson":
-		contentType = "application/geo+json"
-	case ".csv":
-		contentType = "text/csv"
-	case ".html", ".htm":
-		contentType = "text/html"
-	case ".xml":
-		contentType = "application/xml"
-	case ".pdf":
-		contentType = "application/pdf"
-	case ".txt":
-		contentType = "text/plain"
-	default:
-		return nil
-	}
-
-	return &contentType
-}
-
-func FromContentType(ct ContentTypesEnum) string {
-	switch ct {
-	case ContentTypesEnumJSON:
-		return "application/json"
-	case ContentTypesEnumGeojson:
-		return "application/geo+json"
-	case ContentTypesEnumCSV:
-		return "text/csv"
-	case ContentTypesEnumHTML:
-		return "text/html"
-	case ContentTypesEnumXML:
-		return "application/xml"
-	case ContentTypesEnumPDF:
-		return "application/pdf"
-	case ContentTypesEnumPlain:
-		return "text/plain"
-	default:
-		return ""
 	}
 }

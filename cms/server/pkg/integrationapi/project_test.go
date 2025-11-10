@@ -23,15 +23,15 @@ func Test_NewProject(t *testing.T) {
 			name: "success",
 			p:    p1,
 			want: Project{
-				Id:            p1.ID(),
-				WorkspaceId:   p1.Workspace(),
-				Alias:         p1.Alias(),
-				Name:          p1.Name(),
-				Description:   p1.Description(),
-				CreatedAt:     p1.CreatedAt(),
-				UpdatedAt:     p1.UpdatedAt(),
-				Accessibility: Accessibility{Visibility: PUBLIC, ApiKeys: nil},
-				RequestRoles:  nil,
+				Id:           p1.ID(),
+				WorkspaceId:  p1.Workspace(),
+				Alias:        p1.Alias(),
+				Name:         p1.Name(),
+				Description:  p1.Description(),
+				CreatedAt:    p1.CreatedAt(),
+				UpdatedAt:    p1.UpdatedAt(),
+				Publication:  &ProjectPublication{Scope: lo.ToPtr(PRIVATE)},
+				RequestRoles: nil,
 			},
 		},
 	}
@@ -68,14 +68,18 @@ func Test_ToRequestRole(t *testing.T) {
 
 func Test_ToProjectPublicationScope(t *testing.T) {
 	t.Run("public", func(t *testing.T) {
-		assert.Equal(t, PUBLIC, ToProjectVisibility(project.VisibilityPublic))
+		assert.Equal(t, lo.ToPtr(PUBLIC), ToProjectPublicationScope(project.PublicationScopePublic))
 	})
 
 	t.Run("private", func(t *testing.T) {
-		assert.Equal(t, PRIVATE, ToProjectVisibility(project.VisibilityPrivate))
+		assert.Equal(t, lo.ToPtr(PRIVATE), ToProjectPublicationScope(project.PublicationScopePrivate))
+	})
+
+	t.Run("limited", func(t *testing.T) {
+		assert.Equal(t, lo.ToPtr(LIMITED), ToProjectPublicationScope(project.PublicationScopeLimited))
 	})
 
 	t.Run("unknown scope", func(t *testing.T) {
-		assert.Equal(t, PUBLIC, ToProjectVisibility("SOMETHING_ELSE"))
+		assert.Nil(t, ToProjectPublicationScope("SOMETHING_ELSE"))
 	})
 }

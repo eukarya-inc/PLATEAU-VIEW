@@ -6,7 +6,9 @@ import (
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
 	"github.com/reearth/reearthx/rerror"
+	"github.com/samber/lo"
 )
 
 func (s *Server) SchemaByModelAsJSON(ctx context.Context, request SchemaByModelAsJSONRequestObject) (SchemaByModelAsJSONResponseObject, error) {
@@ -26,7 +28,16 @@ func (s *Server) SchemaByModelAsJSON(ctx context.Context, request SchemaByModelA
 		return SchemaByModelAsJSON404Response{}, err
 	}
 
-	return SchemaByModelAsJSON200JSONResponse(exporters.NewJSONSchema(m, sp, exporters.JSONSchemaExportTargetSchema)), nil
+	gsMap := exporters.BuildGroupSchemaMap(sp)
+	res := exporters.NewSchemaJSON(m.ID().Ref().StringRef(), lo.ToPtr(m.Name()), lo.ToPtr(m.Description()), exporters.BuildProperties(sp.Schema().Fields(), gsMap))
+	return SchemaByModelAsJSON200JSONResponse{
+		Schema:      res.Schema,
+		Id:          res.Id,
+		Title:       res.Title,
+		Description: res.Description,
+		Type:        res.Type,
+		Properties:  toSchemaJSONProperties(res.Properties),
+	}, nil
 }
 
 func (s *Server) MetadataSchemaByModelAsJSON(ctx context.Context, request MetadataSchemaByModelAsJSONRequestObject) (MetadataSchemaByModelAsJSONResponseObject, error) {
@@ -46,7 +57,15 @@ func (s *Server) MetadataSchemaByModelAsJSON(ctx context.Context, request Metada
 		return MetadataSchemaByModelAsJSON404Response{}, err
 	}
 
-	return MetadataSchemaByModelAsJSON200JSONResponse(exporters.NewJSONSchema(m, sp, exporters.JSONSchemaExportTargetMetadataSchema)), nil
+	res := exporters.NewSchemaJSON(m.ID().Ref().StringRef(), lo.ToPtr(m.Name()), lo.ToPtr(m.Description()), exporters.BuildProperties(sp.MetaSchema().Fields(), nil))
+	return MetadataSchemaByModelAsJSON200JSONResponse{
+		Schema:      res.Schema,
+		Id:          res.Id,
+		Title:       res.Title,
+		Description: res.Description,
+		Type:        res.Type,
+		Properties:  toSchemaJSONProperties(res.Properties),
+	}, nil
 }
 
 func (s *Server) SchemaByModelWithProjectAsJSON(ctx context.Context, request SchemaByModelWithProjectAsJSONRequestObject) (SchemaByModelWithProjectAsJSONResponseObject, error) {
@@ -77,7 +96,16 @@ func (s *Server) SchemaByModelWithProjectAsJSON(ctx context.Context, request Sch
 		return SchemaByModelWithProjectAsJSON400Response{}, err
 	}
 
-	return SchemaByModelWithProjectAsJSON200JSONResponse(exporters.NewJSONSchema(m, sp, exporters.JSONSchemaExportTargetSchema)), nil
+	gsMap := exporters.BuildGroupSchemaMap(sp)
+	res := exporters.NewSchemaJSON(m.ID().Ref().StringRef(), lo.ToPtr(m.Name()), lo.ToPtr(m.Description()), exporters.BuildProperties(sp.Schema().Fields(), gsMap))
+	return SchemaByModelWithProjectAsJSON200JSONResponse{
+		Schema:      res.Schema,
+		Id:          res.Id,
+		Title:       res.Title,
+		Description: res.Description,
+		Type:        res.Type,
+		Properties:  toSchemaJSONProperties(res.Properties),
+	}, nil
 }
 
 func (s *Server) MetadataSchemaByModelWithProjectAsJSON(ctx context.Context, request MetadataSchemaByModelWithProjectAsJSONRequestObject) (MetadataSchemaByModelWithProjectAsJSONResponseObject, error) {
@@ -108,7 +136,15 @@ func (s *Server) MetadataSchemaByModelWithProjectAsJSON(ctx context.Context, req
 		return MetadataSchemaByModelWithProjectAsJSON400Response{}, err
 	}
 
-	return MetadataSchemaByModelWithProjectAsJSON200JSONResponse(exporters.NewJSONSchema(m, sch, exporters.JSONSchemaExportTargetMetadataSchema)), nil
+	res := exporters.NewSchemaJSON(m.ID().Ref().StringRef(), lo.ToPtr(m.Name()), lo.ToPtr(m.Description()), exporters.BuildProperties(sch.MetaSchema().Fields(), nil))
+	return MetadataSchemaByModelWithProjectAsJSON200JSONResponse{
+		Schema:      res.Schema,
+		Id:          res.Id,
+		Title:       res.Title,
+		Description: res.Description,
+		Type:        res.Type,
+		Properties:  toSchemaJSONProperties(res.Properties),
+	}, nil
 }
 
 func (s *Server) SchemaByIDAsJSON(ctx context.Context, request SchemaByIDAsJSONRequestObject) (SchemaByIDAsJSONResponseObject, error) {
@@ -131,7 +167,14 @@ func (s *Server) SchemaByIDAsJSON(ctx context.Context, request SchemaByIDAsJSONR
 		return SchemaByIDAsJSON400Response{}, err
 	}
 
-	return SchemaByIDAsJSON200JSONResponse(exporters.NewJSONSchema(m, sp, exporters.JSONSchemaExportTargetSchema)), nil
+	gsMap := exporters.BuildGroupSchemaMap(sp)
+	res := exporters.NewSchemaJSON(sp.Schema().ID().Ref().StringRef(), nil, nil, exporters.BuildProperties(sp.Schema().Fields(), gsMap))
+	return SchemaByIDAsJSON200JSONResponse{
+		Schema:     res.Schema,
+		Id:         res.Id,
+		Type:       res.Type,
+		Properties: toSchemaJSONProperties(res.Properties),
+	}, nil
 }
 
 func (s *Server) SchemaByIDWithProjectAsJSON(ctx context.Context, request SchemaByIDWithProjectAsJSONRequestObject) (SchemaByIDWithProjectAsJSONResponseObject, error) {
@@ -162,5 +205,39 @@ func (s *Server) SchemaByIDWithProjectAsJSON(ctx context.Context, request Schema
 		return SchemaByIDWithProjectAsJSON400Response{}, err
 	}
 
-	return SchemaByIDWithProjectAsJSON200JSONResponse(exporters.NewJSONSchema(m, sp, exporters.JSONSchemaExportTargetSchema)), nil
+	gsMap := exporters.BuildGroupSchemaMap(sp)
+	res := exporters.NewSchemaJSON(sp.Schema().ID().Ref().StringRef(), nil, nil, exporters.BuildProperties(sp.Schema().Fields(), gsMap))
+	return SchemaByIDWithProjectAsJSON200JSONResponse{
+		Schema:     res.Schema,
+		Id:         res.Id,
+		Type:       res.Type,
+		Properties: toSchemaJSONProperties(res.Properties),
+	}, nil
+}
+
+func toSchemaJSONProperties(pp map[string]exporters.SchemaJSONProperties) map[string]integrationapi.SchemaJSONProperties {
+	res := map[string]integrationapi.SchemaJSONProperties{}
+	for k, v := range pp {
+		res[k] = integrationapi.SchemaJSONProperties{
+			Type:        v.Type,
+			Title:       v.Title,
+			Description: v.Description,
+			Format:      v.Format,
+			Minimum:     v.Minimum,
+			Maximum:     v.Maximum,
+			MaxLength:   v.MaxLength,
+			Items:       toSchemaJSONItems(v.Items),
+		}
+	}
+	return res
+}
+
+func toSchemaJSONItems(pp *exporters.SchemaJSON) *integrationapi.SchemaJSON {
+	if pp == nil {
+		return nil
+	}
+	return &integrationapi.SchemaJSON{
+		Type:       pp.Type,
+		Properties: toSchemaJSONProperties(pp.Properties),
+	}
 }

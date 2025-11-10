@@ -11,7 +11,6 @@ import (
 
 type Builder struct {
 	p *Project
-	a *Accessibility
 }
 
 func New() *Builder {
@@ -28,12 +27,6 @@ func (b *Builder) Build() (*Project, error) {
 	if b.p.updatedAt.IsZero() {
 		b.p.updatedAt = b.p.CreatedAt()
 	}
-
-	// by default project is public
-	if b.a == nil {
-		b.a = NewPublicAccessibility()
-	}
-	b.p.accessibility = b.a
 
 	return b.p, nil
 }
@@ -71,16 +64,6 @@ func (b *Builder) Description(description string) *Builder {
 	return b
 }
 
-func (b *Builder) Readme(readme string) *Builder {
-	b.p.readme = readme
-	return b
-}
-
-func (b *Builder) License(license string) *Builder {
-	b.p.license = license
-	return b
-}
-
 func (b *Builder) Alias(alias string) *Builder {
 	b.p.alias = alias
 	return b
@@ -102,27 +85,12 @@ func (b *Builder) Workspace(team accountdomain.WorkspaceID) *Builder {
 	return b
 }
 
-func (b *Builder) Accessibility(accessibility *Accessibility) *Builder {
-	b.a = accessibility
+func (b *Builder) Publication(publication *Publication) *Builder {
+	b.p.publication = publication
 	return b
 }
 
 func (b *Builder) RequestRoles(requestRoles []workspace.Role) *Builder {
 	b.p.requestRoles = slices.Clone(requestRoles)
-	return b
-}
-
-func (b *Builder) StarCount(starCount int64) *Builder {
-	b.p.starCount = starCount
-	return b
-}
-
-func (b *Builder) StarredBy(starredBy []string) *Builder {
-	b.p.starredBy = slices.Clone(starredBy)
-	return b
-}
-
-func (b *Builder) Topics(topics []string) *Builder {
-	b.p.SetTopics(topics)
 	return b
 }

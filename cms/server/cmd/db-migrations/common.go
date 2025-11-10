@@ -19,7 +19,8 @@ type Entity interface {
 // BatchUpdate processes documents from a MongoDB collection in batches and applies the given update function to each document
 func BatchUpdate[T Entity](ctx context.Context, col *mongo.Collection, filter bson.M, batchSize int, fn func(item T) (T, error)) (int, error) {
 	opts := options.Find().
-		SetBatchSize(int32(batchSize))
+		SetBatchSize(int32(batchSize)).
+		SetNoCursorTimeout(true)
 
 	cursor, err := col.Find(ctx, filter, opts)
 	if err != nil {

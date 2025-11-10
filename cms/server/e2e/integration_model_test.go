@@ -47,6 +47,7 @@ func TestIntegrationModelGetAPI(t *testing.T) {
 		HasValue("id", mId1.String()).
 		HasValue("name", "m1").
 		HasValue("description", "m1 desc").
+		HasValue("public", true).
 		HasValue("key", ikey1.String()).
 		HasValue("projectId", pid).
 		HasValue("schemaId", sid1)
@@ -100,6 +101,7 @@ func TestIntegrationModelCopy(t *testing.T) {
 		ContainsKey("id").
 		ContainsKey("projectId").
 		ContainsKey("schemaId").
+		ContainsKey("public").
 		ContainsKey("createdAt").
 		ContainsKey("updatedAt").
 		ContainsKey("key")
@@ -115,6 +117,7 @@ func TestIntegrationModelCopy(t *testing.T) {
 	copiedModel.
 		HasValue("id", newModelID.Raw()).
 		HasValue("projectId", oldModel.Value("projectId").String().Raw()).
+		HasValue("public", oldModel.Value("public").Boolean().Raw()).
 		HasValue("name", newName).
 		HasValue("key", newKey).
 		HasValue("description", oldModel.Value("description").String().Raw())
@@ -206,6 +209,7 @@ func TestIntegrationModelUpdateAPI(t *testing.T) {
 		HasValue("id", mId1).
 		HasValue("name", "newM1 updated").
 		HasValue("description", "newM1 desc updated").
+		HasValue("public", true).
 		HasValue("key", "newM1KeyUpdated").
 		HasValue("projectId", pid)
 
@@ -298,6 +302,7 @@ func TestIntegrationModelFilterAPI(t *testing.T) {
 			HasValue("id", mId0.String()).
 			HasValue("name", "m0").
 			HasValue("description", "m0 desc").
+			HasValue("public", true).
 			HasValue("key", ikey0.String()).
 			HasValue("projectId", pid).
 			HasValue("schemaId", sid0)
@@ -307,6 +312,7 @@ func TestIntegrationModelFilterAPI(t *testing.T) {
 			HasValue("id", mId1.String()).
 			HasValue("name", "m1").
 			HasValue("description", "m1 desc").
+			HasValue("public", true).
 			HasValue("key", ikey1.String()).
 			HasValue("projectId", pid).
 			HasValue("schemaId", sid1)
@@ -320,6 +326,7 @@ func TestIntegrationModelFilterAPI(t *testing.T) {
 			HasValue("id", mId2.String()).
 			HasValue("name", "m2").
 			HasValue("description", "m2 desc").
+			HasValue("public", true).
 			HasValue("key", ikey2.String()).
 			HasValue("projectId", pid).
 			HasValue("schemaId", sid2)
@@ -333,16 +340,12 @@ func TestIntegrationModelFilterAPI(t *testing.T) {
 		WithHeader("authorization", "Bearer "+secret).
 		WithQuery("page", 1).
 		WithQuery("perPage", 10).
-		WithQuery("sort", "id").
-		WithQuery("dir", "asc").
 		Expect())
 
 	assertRes(t, e.GET(endpoint, palias).
 		WithHeader("authorization", "Bearer "+secret).
 		WithQuery("page", 1).
 		WithQuery("perPage", 10).
-		WithQuery("sort", "id").
-		WithQuery("dir", "asc").
 		Expect())
 }
 
@@ -394,6 +397,7 @@ func TestIntegrationModelCreateAPI(t *testing.T) {
 		HasValue("id", mId).
 		HasValue("name", "newM1").
 		HasValue("description", "newM1 desc").
+		HasValue("public", true).
 		HasValue("key", "newM1Key").
 		HasValue("projectId", pid)
 
@@ -439,6 +443,7 @@ func TestIntegrationModelGetWithProjectAPI(t *testing.T) {
 		HasValue("id", mId1.String()).
 		HasValue("name", "m1").
 		HasValue("description", "m1 desc").
+		HasValue("public", true).
 		HasValue("key", ikey1.String()).
 		HasValue("projectId", pid).
 		HasValue("schemaId", sid1)
@@ -458,6 +463,7 @@ func TestIntegrationModelGetWithProjectAPI(t *testing.T) {
 		HasValue("id", mId1.String()).
 		HasValue("name", "m1").
 		HasValue("description", "m1 desc").
+		HasValue("public", true).
 		HasValue("key", ikey1.String()).
 		HasValue("projectId", pid).
 		HasValue("schemaId", sid1)
@@ -505,6 +511,7 @@ func TestIntegrationModelUpdateWithProjectAPI(t *testing.T) {
 		HasValue("id", mId1.String()).
 		HasValue("name", "newM1 updated").
 		HasValue("description", "newM1 desc updated").
+		HasValue("public", true).
 		HasValue("key", "newM1KeyUpdated").
 		HasValue("projectId", pid).
 		HasValue("schemaId", sid1)
@@ -522,6 +529,7 @@ func TestIntegrationModelUpdateWithProjectAPI(t *testing.T) {
 		HasValue("id", mId1.String()).
 		HasValue("name", "newM1 updated").
 		HasValue("description", "newM1 desc updated").
+		HasValue("public", true).
 		HasValue("key", "newM1KeyUpdated").
 		HasValue("projectId", pid).
 		HasValue("schemaId", sid1)

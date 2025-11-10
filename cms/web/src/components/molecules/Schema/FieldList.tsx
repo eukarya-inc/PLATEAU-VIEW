@@ -6,18 +6,18 @@ import List from "@reearth-cms/components/atoms/List";
 import { useT } from "@reearth-cms/i18n";
 
 import { fieldTypes } from "./fieldTypes";
-import { SchemaFieldType, Tab, SelectedSchemaType } from "./types";
+import { FieldType, Tab, SelectedSchemaType } from "./types";
 
 type Props = {
   currentTab: Tab;
   selectedSchemaType: SelectedSchemaType;
   hasCreateRight: boolean;
-  addField: (fieldType: SchemaFieldType) => void;
+  addField: (fieldType: FieldType) => void;
 };
 
 type FieldListItem = {
   title: string;
-  fields: SchemaFieldType[];
+  fields: FieldType[];
 };
 
 const FieldList: React.FC<Props> = ({

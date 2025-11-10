@@ -2,8 +2,8 @@ package memory
 
 import (
 	"context"
+	"time"
 
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
@@ -17,12 +17,14 @@ import (
 type Project struct {
 	data *util.SyncMap[id.ProjectID, *project.Project]
 	f    repo.WorkspaceFilter
+	now  *util.TimeNow
 	err  error
 }
 
 func NewProject() repo.Project {
 	return &Project{
 		data: &util.SyncMap[id.ProjectID, *project.Project]{},
+		now:  &util.TimeNow{},
 	}
 }
 
@@ -30,23 +32,19 @@ func (r *Project) Filtered(f repo.WorkspaceFilter) repo.Project {
 	return &Project{
 		data: r.data,
 		f:    r.f.Merge(f),
+		now:  &util.TimeNow{},
 	}
 }
 
-func (r *Project) Search(_ context.Context, f interfaces.ProjectFilter) (project.List, *usecasex.PageInfo, error) {
+func (r *Project) FindByWorkspaces(_ context.Context, wids accountdomain.WorkspaceIDList, _ *usecasex.Pagination) (project.List, *usecasex.PageInfo, error) {
 	if r.err != nil {
 		return nil, nil, r.err
 	}
 
-	// TODO: implement sort & pagination
+	// TODO: implement pagination
 
 	result := project.List(r.data.FindAll(func(_ id.ProjectID, v *project.Project) bool {
-		if f.Visibility != nil {
-			if v.Accessibility().Visibility() != *f.Visibility {
-				return false
-			}
-		}
-		return f.WorkspaceIds.Has(v.Workspace()) && r.f.CanRead(v.Workspace())
+		return wids.Has(v.Workspace()) && r.f.CanRead(v.Workspace())
 	})).SortByID()
 
 	var startCursor, endCursor *usecasex.Cursor
@@ -132,19 +130,13 @@ func (r *Project) IsAliasAvailable(_ context.Context, name string) (bool, error)
 	return true, nil
 }
 
-func (r *Project) FindByPublicAPIKey(_ context.Context, key string) (*project.Project, error) {
+func (r *Project) FindByPublicAPIToken(ctx context.Context, token string) (*project.Project, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
 
-	p := r.data.Find(func(_ id.ProjectID, p *project.Project) bool {
-		if !r.f.CanRead(p.Workspace()) {
-			return false
-		}
-		if p.Accessibility().APIKeyByKey(key) == nil {
-			return false
-		}
-		return true
+	p := r.data.Find(func(_ id.ProjectID, v *project.Project) bool {
+		return v.Publication().Token() == token && r.f.CanRead(v.Workspace())
 	})
 
 	if p != nil {
@@ -176,6 +168,7 @@ func (r *Project) Save(_ context.Context, p *project.Project) error {
 		return repo.ErrOperationDenied
 	}
 
+	p.SetUpdatedAt(r.now.Now())
 	r.data.Store(p.ID(), p)
 	return nil
 }
@@ -190,6 +183,10 @@ func (r *Project) Remove(_ context.Context, id id.ProjectID) error {
 		return nil
 	}
 	return rerror.ErrNotFound
+}
+
+func MockProjectNow(r repo.Project, t time.Time) func() {
+	return r.(*Project).now.Mock(t)
 }
 
 func SetProjectError(r repo.Project, err error) {

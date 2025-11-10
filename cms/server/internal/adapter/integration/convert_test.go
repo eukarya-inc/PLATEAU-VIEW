@@ -5,6 +5,7 @@ import (
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/group"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
 	"github.com/reearth/reearthx/usecasex"
@@ -40,60 +41,60 @@ func TestToModelSort(t *testing.T) {
 		name     string
 		sort     *integrationapi.SortParam
 		dir      *integrationapi.SortDirParam
-		expected *usecasex.Sort
+		expected *model.Sort
 	}{
 		{
 			name: "Default direction (nil dir)",
 			sort: lo.ToPtr(integrationapi.SortParamCreatedAt),
 			dir:  nil,
-			expected: &usecasex.Sort{
-				Key:      "id",
-				Reverted: true,
+			expected: &model.Sort{
+				Column:    model.ColumnCreatedAt,
+				Direction: model.DirectionDesc,
 			},
 		},
 		{
 			name: "Sort by CreatedAt Asc",
 			sort: lo.ToPtr(integrationapi.SortParamCreatedAt),
 			dir:  lo.ToPtr(integrationapi.SortDirParamAsc),
-			expected: &usecasex.Sort{
-				Key:      "id",
-				Reverted: false,
+			expected: &model.Sort{
+				Column:    model.ColumnCreatedAt,
+				Direction: model.DirectionAsc,
 			},
 		},
 		{
 			name: "Sort by CreatedAt Desc",
 			sort: lo.ToPtr(integrationapi.SortParamCreatedAt),
 			dir:  lo.ToPtr(integrationapi.SortDirParamDesc),
-			expected: &usecasex.Sort{
-				Key:      "id",
-				Reverted: true,
+			expected: &model.Sort{
+				Column:    model.ColumnCreatedAt,
+				Direction: model.DirectionDesc,
 			},
 		},
 		{
 			name: "Sort by UpdatedAt Asc",
 			sort: lo.ToPtr(integrationapi.SortParamUpdatedAt),
 			dir:  lo.ToPtr(integrationapi.SortDirParamAsc),
-			expected: &usecasex.Sort{
-				Key:      "updatedat",
-				Reverted: false,
+			expected: &model.Sort{
+				Column:    model.ColumnUpdatedAt,
+				Direction: model.DirectionAsc,
 			},
 		},
 		{
 			name: "Sort by UpdatedAt Desc",
 			sort: lo.ToPtr(integrationapi.SortParamUpdatedAt),
 			dir:  lo.ToPtr(integrationapi.SortDirParamDesc),
-			expected: &usecasex.Sort{
-				Key:      "updatedat",
-				Reverted: true,
+			expected: &model.Sort{
+				Column:    model.ColumnUpdatedAt,
+				Direction: model.DirectionDesc,
 			},
 		},
 		{
 			name: "Unknown sort param, defaults to ColumnCreatedAt",
 			sort: lo.ToPtr(integrationapi.SortParam("unknown")),
 			dir:  lo.ToPtr(integrationapi.SortDirParamAsc),
-			expected: &usecasex.Sort{
-				Key:      "order",
-				Reverted: false,
+			expected: &model.Sort{
+				Column:    model.ColumnCreatedAt,
+				Direction: model.DirectionAsc,
 			},
 		},
 	}
@@ -161,18 +162,18 @@ func TestToGroupSort(t *testing.T) {
 
 func Test_fromProjectPublicationScope(t *testing.T) {
 	// public
-	expected := lo.ToPtr(project.VisibilityPublic)
-	actual := fromProjectVisibility(integrationapi.PUBLIC)
+	expected := lo.ToPtr(project.PublicationScopePublic)
+	actual := fromProjectPublicationScope(integrationapi.PUBLIC)
 	assert.Equal(t, expected, actual)
 
 	// private
-	expected = lo.ToPtr(project.VisibilityPrivate)
-	actual = fromProjectVisibility(integrationapi.PRIVATE)
+	expected = lo.ToPtr(project.PublicationScopePrivate)
+	actual = fromProjectPublicationScope(integrationapi.PRIVATE)
 	assert.Equal(t, expected, actual)
 
-	// unknown
-	expected = nil
-	actual = fromProjectVisibility(integrationapi.AccessibilityVisibility("unknown"))
+	// limited
+	expected = lo.ToPtr(project.PublicationScopeLimited)
+	actual = fromProjectPublicationScope(integrationapi.LIMITED)
 	assert.Equal(t, expected, actual)
 }
 

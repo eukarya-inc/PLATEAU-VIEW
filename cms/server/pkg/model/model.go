@@ -24,6 +24,7 @@ type Model struct {
 	name        string
 	description string
 	key         id.Key
+	public      bool
 	updatedAt   time.Time
 	order       int
 }
@@ -79,6 +80,14 @@ func (p *Model) SetKey(key id.Key) error {
 	return nil
 }
 
+func (p *Model) Public() bool {
+	return p.public
+}
+
+func (p *Model) SetPublic(public bool) {
+	p.public = public
+}
+
 func (p *Model) UpdatedAt() time.Time {
 	if p.updatedAt.IsZero() {
 		return p.id.Timestamp()
@@ -114,6 +123,7 @@ func (p *Model) Clone() *Model {
 		name:        p.name,
 		description: p.description,
 		key:         p.Key(),
+		public:      p.public,
 		updatedAt:   p.updatedAt,
 		order:       p.order,
 	}

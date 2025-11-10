@@ -20,9 +20,6 @@ const playwrightConfig = {
       ...globals.browser,
     },
   },
-  rules: {
-    "react-hooks/rules-of-hooks": "off",
-  },
 };
 
 export default [
@@ -31,10 +28,5 @@ export default [
   playwrightConfig,
   {
     ignores: ["coverage/*", "src/gql/graphql-client-api.tsx", "amplify/*"],
-  },
-  {
-    rules: {
-      "react-refresh/only-export-components": "off",
-    },
   },
 ];

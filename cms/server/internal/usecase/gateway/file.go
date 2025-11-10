@@ -51,11 +51,6 @@ type IssueUploadAssetParam struct {
 	ExpiresAt       time.Time
 
 	Cursor string
-
-	// Metadata for gcsproxy
-	Workspace string
-	Project   string
-	Public    bool
 }
 
 func (p IssueUploadAssetParam) GetOrGuessContentType() string {
@@ -90,5 +85,4 @@ func init() {
 	lo.Must0(mime.AddExtensionType(".bz2", "application/x-bzip2"))
 	lo.Must0(mime.AddExtensionType(".tar", "application/x-tar"))
 	lo.Must0(mime.AddExtensionType(".rar", "application/vnd.rar"))
-	lo.Must0(mime.AddExtensionType(".geojson", "application/geo+json"))
 }

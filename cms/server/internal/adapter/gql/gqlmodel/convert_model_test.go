@@ -40,6 +40,7 @@ func TestToModel(t *testing.T) {
 				Key:         k.String(),
 				Project:     nil,
 				Schema:      nil,
+				Public:      false,
 				CreatedAt:   mId.Timestamp(),
 				UpdatedAt:   mId.Timestamp(),
 				Order:       lo.ToPtr(1),

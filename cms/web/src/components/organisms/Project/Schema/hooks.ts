@@ -5,9 +5,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import Notification from "@reearth-cms/components/atoms/Notification";
 import { Model } from "@reearth-cms/components/molecules/Model/types";
 import {
-  CreateFieldInput,
   Field,
-  SchemaFieldType,
+  FieldType,
   Group,
   SelectedSchemaType,
   Schema,
@@ -18,6 +17,8 @@ import { fromGraphQLModel } from "@reearth-cms/components/organisms/DataConverte
 import { fromGraphQLGroup } from "@reearth-cms/components/organisms/DataConverters/schema";
 import {
   useCreateFieldMutation,
+  SchemaFieldType,
+  SchemaFieldTypePropertyInput,
   useDeleteFieldMutation,
   useUpdateFieldMutation,
   useUpdateFieldsMutation,
@@ -35,9 +36,6 @@ import {
   useDeleteModelMutation,
   useCheckModelKeyAvailabilityLazyQuery,
   useModelsByGroupQuery,
-  useCreateFieldsMutation,
-  SchemaFieldType as GQLSchemaFieldType,
-  SchemaFieldTypePropertyInput,
 } from "@reearth-cms/gql/graphql-client-api";
 import { useT } from "@reearth-cms/i18n";
 import { useModel, useCollapsedModelMenu, useUserRights } from "@reearth-cms/state";
@@ -60,7 +58,7 @@ export default () => {
   const [fieldModalShown, setFieldModalShown] = useState(false);
   const [isMeta, setIsMeta] = useState(false);
   const [selectedField, setSelectedField] = useState<Field | null>(null);
-  const [selectedType, setSelectedType] = useState<SchemaFieldType | null>(null);
+  const [selectedType, setSelectedType] = useState<FieldType | null>(null);
   const [collapsed, setCollapsed] = useCollapsedModelMenu();
   const { data: modelsData } = useGetModelsQuery({
     variables: {
@@ -277,7 +275,7 @@ export default () => {
           unique: data.unique,
           isTitle: data.isTitle,
           required: data.required,
-          type: data.type as GQLSchemaFieldType,
+          type: data.type as SchemaFieldType,
           typeProperty: data.typeProperty as SchemaFieldTypePropertyInput,
           modelId: selectedSchemaType === "model" ? schemaId : undefined,
           groupId: selectedSchemaType === "group" ? schemaId : undefined,
@@ -429,7 +427,7 @@ export default () => {
   );
 
   const handleFieldCreationModalOpen = useCallback(
-    (fieldType: SchemaFieldType) => {
+    (fieldType: FieldType) => {
       if (fieldType === "Group" && groups?.length === 0) {
         confirm({
           title: t("No available Group"),
@@ -510,6 +508,7 @@ export default () => {
           name: data.name,
           description: data.description,
           key: data.key,
+          public: false,
         },
       });
       if (model.errors || !model.data?.updateModel) {
@@ -573,48 +572,7 @@ export default () => {
     [handleGroupDelete, handleModelDelete, isGroup],
   );
 
-  const [createNewFields, { loading: fieldsCreationLoading, error: fieldsCreationError }] =
-    useCreateFieldsMutation({
-      refetchQueries: ["GetModel", "GetGroup"],
-    });
-
-  const handleFieldsCreate = useCallback(
-    async (fields: CreateFieldInput[]) => {
-      if (!schemaId || fields.length === 0) return;
-      const response = await createNewFields({
-        variables: {
-          inputs: fields.map(field => ({
-            title: field.title,
-            metadata: field.metadata,
-            description: field.description,
-            key: field.key,
-            multiple: field.multiple,
-            unique: field.unique,
-            isTitle: field.isTitle,
-            required: field.required,
-            type: field.type as GQLSchemaFieldType,
-            typeProperty: field.typeProperty as SchemaFieldTypePropertyInput,
-            modelId: schemaId,
-            groupId: undefined,
-          })),
-        },
-      });
-
-      if (response.errors || !response.data?.createFields) {
-        Notification.error({ message: t("Failed to create fields.") });
-        return;
-      }
-
-      Notification.success({ message: t("Successfully created fields!") });
-    },
-    [schemaId, createNewFields, t],
-  );
-
   return {
-    workspaceId,
-    projectId,
-    fieldsCreationLoading,
-    fieldsCreationError: !!fieldsCreationError,
     data,
     models,
     groups,
@@ -636,7 +594,6 @@ export default () => {
     handleFieldUpdateModalOpen,
     handleFieldModalClose,
     handleFieldCreate,
-    handleFieldsCreate,
     handleReferencedModelGet,
     handleCorrespondingFieldKeyUnique,
     handleFieldKeyUnique,

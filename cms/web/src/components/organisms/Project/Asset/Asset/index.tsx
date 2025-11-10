@@ -14,11 +14,11 @@ const Asset: React.FC = () => {
     asset,
     assetFileExt,
     isLoading,
+    isDelayed,
     selectedPreviewType,
     isModalVisible,
     collapsed,
     viewerType,
-    viewerRef,
     displayUnzipFileList,
     decompressing,
     isSaveDisabled,
@@ -33,11 +33,12 @@ const Asset: React.FC = () => {
     handleFullScreen,
     handleBack,
     handleSave,
+    handleGetViewer,
   } = useHooks(assetId);
 
   const { workspaceSettings } = useSettingsHooks();
 
-  if (isLoading) {
+  if (!isDelayed || isLoading) {
     return <Loading spinnerSize="large" minHeight="100vh" />;
   }
 
@@ -63,7 +64,6 @@ const Asset: React.FC = () => {
       selectedPreviewType={selectedPreviewType}
       isModalVisible={isModalVisible}
       viewerType={viewerType}
-      viewerRef={viewerRef}
       displayUnzipFileList={displayUnzipFileList}
       decompressing={decompressing}
       isSaveDisabled={isSaveDisabled}
@@ -77,6 +77,7 @@ const Asset: React.FC = () => {
       onChangeToFullScreen={handleFullScreen}
       onBack={handleBack}
       onSave={handleSave}
+      onGetViewer={handleGetViewer}
       workspaceSettings={workspaceSettings}
     />
   );

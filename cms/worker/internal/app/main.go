@@ -64,7 +64,6 @@ func Start(debug bool, version string) {
 		Debug:    debug,
 		Gateways: gateways,
 		Repos:    repos,
-		Version:  version,
 	}, handler).Run(ctx)
 }
 
@@ -78,7 +77,6 @@ type ServerConfig struct {
 	Debug    bool
 	Gateways *gateway.Container
 	Repos    *repo.Container
-	Version  string
 }
 
 func NewServer(ctx context.Context, cfg *ServerConfig, handler *Handler) *WebServer {

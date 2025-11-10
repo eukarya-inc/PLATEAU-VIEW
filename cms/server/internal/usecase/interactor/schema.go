@@ -7,12 +7,9 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/group"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/types"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/samber/lo"
 )
@@ -103,22 +100,6 @@ func (i Schema) FindByGroups(ctx context.Context, gIDs id.GroupIDList, op *useca
 	return schemas, nil
 }
 
-func (i Schema) Export(ctx context.Context, param interfaces.ExportSchemaParam, op *usecase.Operator) (*types.JSONSchema, error) {
-	m, err := i.repos.Model.FindByID(ctx, param.ModelID)
-	if err != nil {
-		return nil, err
-	}
-	sp, err := i.FindByModel(ctx, param.ModelID, op)
-	if err != nil {
-		return nil, err
-	}
-	target := exporters.JSONSchemaExportTargetSchema
-	if param.Target == interfaces.SchemaExportTargetMetadata {
-		target = exporters.JSONSchemaExportTargetMetadataSchema
-	}
-	return lo.ToPtr(exporters.NewJSONSchema(m, sp, target)), nil
-}
-
 func (i Schema) CreateField(ctx context.Context, param interfaces.CreateFieldParam, op *usecase.Operator) (*schema.Field, error) {
 	return Run1(ctx, op, i.repos, Usecase().Transaction(), func(ctx context.Context) (*schema.Field, error) {
 		s, err := i.repos.Schema.FindByID(ctx, param.SchemaID)
@@ -126,7 +107,7 @@ func (i Schema) CreateField(ctx context.Context, param interfaces.CreateFieldPar
 			return nil, err
 		}
 
-		if !op.IsWritableProject(s.Project()) {
+		if !op.IsMaintainingProject(s.Project()) {
 			return nil, interfaces.ErrOperationDenied
 		}
 
@@ -223,7 +204,7 @@ func (i Schema) UpdateField(ctx context.Context, param interfaces.UpdateFieldPar
 			return nil, err
 		}
 
-		if !op.IsWritableProject(s.Project()) {
+		if !op.IsMaintainingProject(s.Project()) {
 			return nil, interfaces.ErrOperationDenied
 		}
 
@@ -346,7 +327,7 @@ func (i Schema) DeleteField(ctx context.Context, schemaId id.SchemaID, fieldID i
 				return err
 			}
 
-			if !operator.IsWritableProject(s.Project()) {
+			if !operator.IsMaintainingProject(s.Project()) {
 				return interfaces.ErrOperationDenied
 			}
 
@@ -395,7 +376,7 @@ func (i Schema) UpdateFields(ctx context.Context, sid id.SchemaID, params []inte
 		if err != nil {
 			return nil, err
 		}
-		if !operator.IsWritableProject(s.Project()) {
+		if !operator.IsMaintainingProject(s.Project()) {
 			return nil, interfaces.ErrOperationDenied
 		}
 
@@ -506,7 +487,7 @@ func (i Schema) CreateFields(ctx context.Context, sId id.SchemaID, createFieldsP
 			if err != nil {
 				return nil, err
 			}
-			if !op.IsWritableProject(s.Project()) {
+			if !op.IsMaintainingProject(s.Project()) {
 				return nil, interfaces.ErrOperationDenied
 			}
 
@@ -577,62 +558,4 @@ func (i Schema) CreateFields(ctx context.Context, sId id.SchemaID, createFieldsP
 
 			return s.Fields(), nil
 		})
-}
-
-func (i Schema) GuessSchemaFieldsByAsset(ctx context.Context, assetID id.AssetID, modelID id.ModelID, operator *usecase.Operator) (*interfaces.GuessSchemaFieldsData, error) {
-	if operator.AcOperator.User == nil && operator.Integration == nil {
-		return &interfaces.GuessSchemaFieldsData{}, interfaces.ErrInvalidOperator
-	}
-
-	assetData, err := i.repos.Asset.FindByID(ctx, assetID)
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	assetFileData, err := i.repos.AssetFile.FindByID(ctx, assetID)
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	isJSON := assetFileData.ContentType() == asset.JSONContentType
-	isGeoJSON := assetFileData.ContentType() == asset.GeoJSONContentType
-	if !isJSON && !isGeoJSON {
-		return &interfaces.GuessSchemaFieldsData{}, interfaces.ErrInvalidContentTypeForSchemaConversion
-	}
-
-	// read file
-	file, _, err := i.gateways.File.ReadAsset(ctx, assetData.UUID(), assetFileData.Path(), nil)
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	m, err := i.repos.Model.FindByID(ctx, modelID)
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	s, err := i.repos.Schema.FindByID(ctx, m.Schema())
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	predictedFields, err := s.GuessSchemaFieldFromJson(file, isGeoJSON, true)
-	if err != nil {
-		return &interfaces.GuessSchemaFieldsData{}, err
-	}
-
-	fields := make([]interfaces.GuessSchemaField, 0, len(predictedFields))
-
-	for _, f := range predictedFields {
-		fields = append(fields, interfaces.GuessSchemaField{
-			Name: f.Name,
-			Key:  f.Key,
-			Type: string(f.Type),
-		})
-	}
-
-	return &interfaces.GuessSchemaFieldsData{
-		Fields:     fields,
-		TotalCount: len(fields),
-	}, nil
 }

@@ -19,10 +19,6 @@ import (
 )
 
 func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Container) error {
-	metadata := user.NewMetadata()
-	metadata.SetTheme(user.ThemeDark)
-	metadata.SetLang(language.Japanese)
-
 	u := user.New().ID(uId1).
 		Name("e2e").
 		Email("e2e@e2e.com").
@@ -32,7 +28,8 @@ func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Conta
 				Sub:      "sub",
 			},
 		}).
-		Metadata(metadata).
+		Theme(user.ThemeDark).
+		Lang(language.Japanese).
 		Workspace(wId).
 		MustBuild()
 	if err := r.User.Save(ctx, u); err != nil {
@@ -41,7 +38,6 @@ func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Conta
 	u2 := user.New().ID(uId2).
 		Name("e2e2").
 		Email("e2e2@e2e.com").
-		Metadata(metadata).
 		MustBuild()
 	if err := r.User.Save(ctx, u2); err != nil {
 		return err
@@ -49,7 +45,6 @@ func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Conta
 	u3 := user.New().ID(uId3).
 		Name("e2e2").
 		Email("e2e3@e2e.com").
-		Metadata(metadata).
 		MustBuild()
 	if err := r.User.Save(ctx, u3); err != nil {
 		return err
@@ -58,7 +53,6 @@ func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Conta
 		Role: workspace.RoleOwner,
 	}
 
-	wMetadata := workspace.NewMetadata()
 	w := workspace.New().ID(wId).
 		Name("e2e").
 		Members(map[idx.ID[accountdomain.User]]workspace.Member{
@@ -67,7 +61,6 @@ func baseSeederHTTPUser(ctx context.Context, r *repo.Container, _ *gateway.Conta
 		Integrations(map[idx.ID[accountdomain.Integration]]workspace.Member{
 			iId1: roleOwner,
 		}).
-		Metadata(wMetadata).
 		MustBuild()
 	if err := r.Workspace.Save(ctx, w); err != nil {
 		return err

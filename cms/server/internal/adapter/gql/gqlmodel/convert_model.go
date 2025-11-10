@@ -1,7 +1,6 @@
 package gqlmodel
 
 import (
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 	"github.com/samber/lo"
 )
@@ -19,21 +18,9 @@ func ToModel(m *model.Model) *Model {
 		Description:      m.Description(),
 		Key:              m.Key().String(),
 		MetadataSchemaID: IDFromRef(m.Metadata()),
+		Public:           m.Public(),
 		CreatedAt:        m.ID().Timestamp(),
 		UpdatedAt:        m.UpdatedAt(),
 		Order:            lo.ToPtr(m.Order()),
-	}
-}
-
-func ToExportFormat(f ExportFormat) exporters.ExportFormat {
-	switch f {
-	case ExportFormatJSON:
-		return exporters.FormatJSON
-	case ExportFormatCSV:
-		return exporters.FormatCSV
-	case ExportFormatGeojson:
-		return exporters.FormatGeoJSON
-	default:
-		return exporters.FormatJSON
 	}
 }

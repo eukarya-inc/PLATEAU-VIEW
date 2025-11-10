@@ -3,26 +3,25 @@ package publicapi
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
-	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/rerror"
-	"github.com/reearth/reearthx/usecasex"
+	"github.com/reearth/reearthx/util"
+	"github.com/samber/lo"
 )
 
-func (c *Controller) GetItem(ctx context.Context, wsAlias, pAlias, mKey, i string) (Item, error) {
-	wpm, err := c.loadWPMContext(ctx, wsAlias, pAlias, mKey)
+func (c *Controller) GetItem(ctx context.Context, prj, mkey, i string) (Item, error) {
+	pr, err := c.checkProject(ctx, prj)
 	if err != nil {
 		return Item{}, err
 	}
 
-	if mKey == "" {
+	if mkey == "" {
 		return Item{}, rerror.ErrNotFound
 	}
 
@@ -40,62 +39,106 @@ func (c *Controller) GetItem(ctx context.Context, wsAlias, pAlias, mKey, i strin
 	}
 
 	itv := it.Value()
+	m, err := c.usecases.Model.FindByID(ctx, itv.Model(), nil)
+	if err != nil {
+		return Item{}, err
+	}
 
-	sp, err := c.usecases.Schema.FindByModel(ctx, wpm.Model.ID(), nil)
+	if m.Key().String() != mkey || !m.Public() {
+		return Item{}, rerror.ErrNotFound
+	}
+
+	sp, err := c.usecases.Schema.FindByModel(ctx, m.ID(), nil)
 	if err != nil {
 		return Item{}, err
 	}
 
 	var assets asset.List
-	if wpm.PublicAssets {
+	if pr.Publication().AssetPublic() {
 		assets, err = c.usecases.Asset.FindByIDs(ctx, itv.AssetIDs(), nil)
 		if err != nil {
 			return Item{}, err
 		}
 	}
 
-	return NewItem(itv, sp, assets, getReferencedItems(ctx, itv, wpm.PublicAssets)), nil
+	return NewItem(itv, sp, assets, getReferencedItems(ctx, itv, pr.Publication().AssetPublic())), nil
 }
 
-func (c *Controller) GetPublicItems(ctx context.Context, wsAlias, pAlias, mKey, ext string, p *usecasex.Pagination, w io.Writer) error {
-	wpm, err := c.loadWPMContext(ctx, wsAlias, pAlias, mKey)
+func (c *Controller) GetItems(ctx context.Context, prj, model string, p ListParam) (ListResult[Item], *schema.Schema, error) {
+	pr, err := c.checkProject(ctx, prj)
 	if err != nil {
-		return err
+		return ListResult[Item]{}, nil, err
 	}
 
-	sp, err := c.usecases.Schema.FindByModel(ctx, wpm.Model.ID(), nil)
+	m, err := c.usecases.Model.FindByKey(ctx, pr.ID(), model, nil)
 	if err != nil {
-		return err
+		return ListResult[Item]{}, nil, err
+	}
+	if !m.Public() {
+		return ListResult[Item]{}, nil, rerror.ErrNotFound
 	}
 
-	format := exporters.FormatJSON
-	switch ext {
-	case "json":
-		format = exporters.FormatJSON
-	case "geojson":
-		format = exporters.FormatGeoJSON
-	case "csv":
-		format = exporters.FormatCSV
-	}
-
-	err = c.usecases.Item.Export(ctx, interfaces.ExportItemParams{
-		ModelID:       wpm.Model.ID(),
-		SchemaPackage: *sp,
-		Format:        format,
-		Options: exporters.ExportOptions{
-			PublicOnly:       true,
-			IncludeAssets:    wpm.PublicAssets,
-			IncludeGeometry:  true,
-			GeometryField:    nil,
-			Pagination:       p,
-			IncloudRefModels: wpm.PublicModels,
-		},
-	}, w, nil)
+	sp, err := c.usecases.Schema.FindByModel(ctx, m.ID(), nil)
 	if err != nil {
-		return err
+		return ListResult[Item]{}, nil, err
 	}
 
-	return nil
+	items, pi, err := c.usecases.Item.FindPublicByModel(ctx, m.ID(), p.Pagination, nil)
+	if err != nil {
+		return ListResult[Item]{}, nil, err
+	}
+
+	var assets asset.List
+	if pr.Publication().AssetPublic() {
+		assetIDs := lo.FlatMap(items.Unwrap(), func(i *item.Item, _ int) []id.AssetID {
+			return i.AssetIDs()
+		})
+		assets, err = c.usecases.Asset.FindByIDs(ctx, assetIDs, nil)
+		if err != nil {
+			return ListResult[Item]{}, nil, err
+		}
+	}
+
+	itms, err := util.TryMap(items.Unwrap(), func(i *item.Item) (Item, error) {
+
+		if err != nil {
+			return Item{}, err
+		}
+		return NewItem(i, sp, assets, getReferencedItems(ctx, i, pr.Publication().AssetPublic())), nil
+	})
+	if err != nil {
+		return ListResult[Item]{}, nil, err
+	}
+
+	res := NewListResult(itms, pi, p.Pagination)
+	return res, sp.Schema(), nil
+}
+
+func (c *Controller) GetVersionedItems(ctx context.Context, prj, model string, p ListParam) (item.VersionedList, *schema.Schema, error) {
+	pr, err := c.checkProject(ctx, prj)
+	if err != nil {
+		return item.VersionedList{}, nil, err
+	}
+
+	m, err := c.usecases.Model.FindByKey(ctx, pr.ID(), model, nil)
+	if err != nil {
+		return item.VersionedList{}, nil, err
+	}
+	if !m.Public() {
+		return item.VersionedList{}, nil, rerror.ErrNotFound
+	}
+
+	sp, err := c.usecases.Schema.FindByModel(ctx, m.ID(), nil)
+	if err != nil {
+		return item.VersionedList{}, nil, err
+	}
+
+	items, _, err := c.usecases.Item.FindPublicByModel(ctx, m.ID(), p.Pagination, nil)
+	if err != nil {
+		return item.VersionedList{}, nil, err
+	}
+
+	return items, sp.Schema(), nil
 }
 
 func getReferencedItems(ctx context.Context, i *item.Item, prp bool) []Item {
@@ -107,7 +150,10 @@ func getReferencedItems(ctx context.Context, i *item.Item, prp bool) []Item {
 	}
 
 	var vi []Item
-	for _, f := range i.Fields().FieldsByType(value.TypeReference) {
+	for _, f := range i.Fields() {
+		if f.Type() != value.TypeReference {
+			continue
+		}
 		for _, v := range f.Value().Values() {
 			iid, ok := v.Value().(id.ItemID)
 			if !ok {

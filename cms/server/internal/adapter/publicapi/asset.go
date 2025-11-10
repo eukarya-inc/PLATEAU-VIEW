@@ -3,22 +3,19 @@ package publicapi
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
 	"github.com/reearth/reearthx/rerror"
-	"github.com/reearth/reearthx/usecasex"
+	"github.com/reearth/reearthx/util"
 )
 
-func (c *Controller) GetAsset(ctx context.Context, wsAlias, pAlias, i string) (Asset, error) {
-	wpm, err := c.loadWPMContext(ctx, wsAlias, pAlias, "")
+func (c *Controller) GetAsset(ctx context.Context, prj, i string) (Asset, error) {
+	_, err := c.checkProject(ctx, prj)
 	if err != nil {
 		return Asset{}, err
-	}
-
-	if !wpm.PublicAssets {
-		return Asset{}, rerror.ErrNotFound
 	}
 
 	iid, err := id.AssetIDFrom(i)
@@ -42,32 +39,35 @@ func (c *Controller) GetAsset(ctx context.Context, wsAlias, pAlias, i string) (A
 	return NewAsset(a, f), nil
 }
 
-func (c *Controller) GetAssets(ctx context.Context, wsAlias, pAlias string, p *usecasex.Pagination, w io.Writer) error {
-	wpm, err := c.loadWPMContext(ctx, wsAlias, pAlias, "")
+func (c *Controller) GetAssets(ctx context.Context, pKey string, p ListParam) (ListResult[Asset], error) {
+	prj, err := c.checkProject(ctx, pKey)
 	if err != nil {
-		return err
+		return ListResult[Asset]{}, err
 	}
 
-	if !wpm.PublicAssets {
-		return rerror.ErrNotFound
+	if prj.Publication().Scope() != project.PublicationScopePublic || !prj.Publication().AssetPublic() {
+		return ListResult[Asset]{}, rerror.ErrNotFound
 	}
 
-	err = c.usecases.Asset.Export(ctx, interfaces.ExportAssetsParams{
-		ProjectID: wpm.Project.ID(),
-		Filter: interfaces.AssetFilter{
-			Sort:         nil,
-			Keyword:      nil,
-			Pagination:   p,
-			ContentTypes: nil,
-		},
-		IncludeFiles: true,
-	}, w, nil)
+	al, pi, err := c.usecases.Asset.FindByProject(ctx, prj.ID(), interfaces.AssetFilter{
+		Sort:       nil,
+		Keyword:    nil,
+		Pagination: p.Pagination,
+	}, nil)
+
 	if err != nil {
 		if errors.Is(err, rerror.ErrNotFound) {
-			return rerror.ErrNotFound
+			return ListResult[Asset]{}, rerror.ErrNotFound
 		}
-		return err
+		return ListResult[Asset]{}, err
 	}
 
-	return nil
+	fileMap, err := c.usecases.Asset.FindFilesByIDs(ctx, al.IDs(), nil)
+	if err != nil {
+		return ListResult[Asset]{}, err
+	}
+
+	return NewListResult(util.Map(al, func(a *asset.Asset) Asset {
+		return NewAsset(a, fileMap[a.ID()])
+	}), pi, p.Pagination), nil
 }

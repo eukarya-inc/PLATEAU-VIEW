@@ -1,12 +1,32 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 
 import WorkspaceHeader from "./WorkspaceHeader";
 
-test("WorkspaceHeader renders with search input and sort select", () => {
-  render(<WorkspaceHeader onProjectSearch={vi.fn()} onProjectSort={vi.fn()} />);
+const hasCreateRight = true;
+const onProjectSearch = () => {};
+const onProjectCreate = () => {
+  return Promise.resolve();
+};
+const onWorkspaceCreate = () => {
+  return Promise.resolve();
+};
+const onProjectAliasCheck = () => {
+  return Promise.resolve(true);
+};
 
-  expect(screen.getByPlaceholderText("search projects")).toBeVisible();
-  expect(screen.getByText("Sort by")).toBeVisible();
-  expect(screen.getByText("Last Modified")).toBeVisible();
+test("Workspace header works successfully", () => {
+  render(
+    <WorkspaceHeader
+      hasCreateRight={hasCreateRight}
+      onWorkspaceCreate={onWorkspaceCreate}
+      onProjectSearch={onProjectSearch}
+      onProjectCreate={onProjectCreate}
+      onProjectAliasCheck={onProjectAliasCheck}
+    />,
+  );
+
+  expect(screen.getByRole("searchbox")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Create a Workspace" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "plus New Project" })).toBeVisible();
 });

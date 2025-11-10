@@ -7,11 +7,9 @@ import Input from "@reearth-cms/components/atoms/Input";
 import TextArea from "@reearth-cms/components/atoms/TextArea";
 import { keyReplace } from "@reearth-cms/components/molecules/Common/Form/utils";
 import { useT } from "@reearth-cms/i18n";
-import { Constant } from "@reearth-cms/utils/constant";
+import { validateKey, MAX_KEY_LENGTH } from "@reearth-cms/utils/regex";
 
 import { Project } from "../Workspace/types";
-
-import useHook from "./hook";
 
 type Props = {
   project: Project;
@@ -36,7 +34,6 @@ const GeneralForm: React.FC<Props> = ({
   const t = useT();
   const [isDisabled, setIsDisabled] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const { aliasValidate } = useHook(onProjectAliasCheck, project.alias);
 
   const handleSubmit = useCallback(async () => {
     setIsDisabled(true);
@@ -78,6 +75,24 @@ const GeneralForm: React.FC<Props> = ({
     [form, project.alias, project.description, project.name],
   );
 
+  const prevAlias = useRef<{ alias: string; isSuccess: boolean }>();
+  const aliasValidate = useCallback(
+    async (value: string) => {
+      if (project.alias === value) {
+        return Promise.resolve();
+      } else if (prevAlias.current?.alias === value) {
+        return prevAlias.current?.isSuccess ? Promise.resolve() : Promise.reject();
+      } else if (value.length >= 5 && validateKey(value) && (await onProjectAliasCheck(value))) {
+        prevAlias.current = { alias: value, isSuccess: true };
+        return Promise.resolve();
+      } else {
+        prevAlias.current = { alias: value, isSuccess: false };
+        return Promise.reject();
+      }
+    },
+    [onProjectAliasCheck, project.alias],
+  );
+
   const handleAliasChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       keyReplace(e, { form, key: "alias" });
@@ -104,12 +119,20 @@ const GeneralForm: React.FC<Props> = ({
         name="alias"
         label={t("Alias")}
         extra={t("A simpler way to access to the project.")}
-        rules={[{ validator: async (_, value) => await aliasValidate(value) }]}>
+        rules={[
+          {
+            required: true,
+            message: t("Project alias is not valid"),
+            validator: async (_, value) => {
+              await aliasValidate(value);
+            },
+          },
+        ]}>
         <Input
           disabled={!hasUpdateRight}
           onChange={handleAliasChange}
           showCount
-          maxLength={Constant.PROJECT_ALIAS.MAX_LENGTH}
+          maxLength={MAX_KEY_LENGTH}
         />
       </Form.Item>
       <Form.Item

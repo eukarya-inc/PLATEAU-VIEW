@@ -7,74 +7,63 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
-	"github.com/samber/lo"
+	"github.com/reearth/reearthx/i18n"
+	"github.com/reearth/reearthx/rerror"
 )
 
-func CSVFromItems(l item.List, sp *schema.Package) ([][]string, error) {
-	header := BuildCSVHeaders(sp)
-	data := lo.Map(l, func(itm *item.Item, _ int) []string {
-		row, ok := RowFromItem(itm, sp)
-		if !ok {
-			return nil
+var (
+	noPointFieldError = rerror.NewE(i18n.T("no point field in this model"))
+)
+
+func BuildCSVHeaders(s *schema.Schema) []string {
+	keys := []string{"id", "location_lat", "location_lng"}
+	for _, f := range s.Fields() {
+		if !f.IsGeometryField() {
+			keys = append(keys, f.Name())
 		}
-		return row
-	})
-	rows := [][]string{header}
-
-	return append(rows, data...), nil
+	}
+	return keys
 }
 
-func BuildCSVHeaders(sp *schema.Package) []string {
-	sfl := supportedFields(sp)
-	keys := lo.Map(sfl, func(f *schema.Field, _ int) string {
-		return f.Key().String()
-	})
+func RowFromItem(itm *item.Item, nonGeoFields []*schema.Field) ([]string, bool) {
+	geoField, err := extractFirstPointField(itm)
+	if err != nil {
+		return nil, false
+	}
 
-	return append([]string{"id"}, keys...)
-}
+	id := itm.ID().String()
+	lat, lng := float64ToString(geoField[1]), float64ToString(geoField[0])
+	row := []string{id, lat, lng}
 
-func RowFromItem(itm *item.Item, sp *schema.Package) ([]string, bool) {
-	sfl := supportedFields(sp)
-	primitiveValues := lo.Map(sfl, func(sf *schema.Field, _ int) string {
+	for _, sf := range nonGeoFields {
 		f := itm.Field(sf.ID())
-		return toCSVProp(f)
-	})
-	row := []string{itm.ID().String()}
+		v := toCSVProp(f)
+		row = append(row, v)
+	}
 
-	return append(row, primitiveValues...), true
+	return row, true
 }
 
-func csvSupportedFieldTypes() []value.Type {
-	return []value.Type{
-		value.TypeText,
-		value.TypeTextArea,
-		value.TypeRichText,
-		value.TypeMarkdown,
-		value.TypeSelect,
-		value.TypeTag,
-		value.TypeURL,
-		value.TypeInteger,
-		value.TypeNumber,
-		value.TypeBool,
-		value.TypeCheckbox,
-		value.TypeDateTime,
+func extractFirstPointField(itm *item.Item) ([]float64, error) {
+	for _, f := range itm.Fields() {
+		if !f.Type().IsGeometryFieldType() {
+			continue
+		}
+		ss, ok := f.Value().First().ValueString()
+		if !ok {
+			continue
+		}
+		g, err := stringToGeometry(ss)
+		if err != nil || g == nil || g.Type == nil || *g.Type != GeometryTypePoint {
+			continue
+		}
+		return g.Coordinates.AsPoint()
 	}
+	return nil, noPointFieldError
 }
 
-func isFieldSupported(f *schema.Field) bool {
-	if f == nil {
-		return false
-	}
-	return lo.Contains(csvSupportedFieldTypes(), f.Type()) && !f.Multiple()
-}
-
-func supportedFields(sp *schema.Package) schema.FieldList {
-	if sp == nil || sp.Schema() == nil {
-		return nil
-	}
-	return lo.Filter(sp.Schema().Fields(), func(f *schema.Field, _ int) bool {
-		return isFieldSupported(f)
-	})
+func float64ToString(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 func toCSVProp(f *item.Field) string {
