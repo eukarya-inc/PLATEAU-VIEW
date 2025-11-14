@@ -43,8 +43,9 @@ func main() {
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
 		conf := lo.Must(NewConfig())
 		tool.Main(&tool.Config{
-			CMS_BaseURL: conf.CMS_BaseURL,
-			CMS_Token:   conf.CMS_Token,
+			CMS_BaseURL:       conf.CMS_BaseURL,
+			CMS_Token:         conf.CMS_Token,
+			CMS_SystemProject: conf.CMS_SystemProject,
 		}, os.Args[1:])
 		return
 	}
