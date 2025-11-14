@@ -1,0 +1,79 @@
+name: ci-cms-server
+on:
+  workflow_call:
+
+jobs:
+  ci-server-lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: go setup
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'cms/server/go.mod'
+          check-latest: true
+          cache-dependency-path: 'cms/server/go.sum'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.0
+          working-directory: cms/server
+          args: --config=../.golangci.yml
+          skip-cache: true
+      - name: Check go.mod tidiness
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+        working-directory: cms/server
+      - name: Check gql generation
+        working-directory: cms/server
+        run: |
+          go generate ./internal/adapter/gql
+          git diff --exit-code ./internal/adapter/gql
+      - name: Check go fmt
+        working-directory: cms/server
+        run: |
+          go fmt ./
+          git diff --exit-code ./
+  ci-server-i18n:
+    name: i18n
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cms/server
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: go setup
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'cms/server/go.mod'
+          check-latest: true
+          cache-dependency-path: 'cms/server/go.sum'
+      - name: check forgotten translations
+        working-directory: cms/server
+        run: make i18n-ci
+  ci-server-test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6-focal
+        ports:
+          - 27017:27017
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: go setup
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'cms/server/go.mod'
+          check-latest: true
+          cache-dependency-path: 'cms/server/go.sum'
+      - name: test
+        run: go test ./... -v -race -coverprofile=coverage.txt -covermode=atomic -timeout 10m
+        working-directory: cms/server
+        env:
+          REEARTH_CMS_DB: mongodb://localhost

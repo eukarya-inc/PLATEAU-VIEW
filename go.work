@@ -1,0 +1,8 @@
+go 1.24.4
+
+use (
+	./server
+	./cms/server
+	./cms/worker
+	./worker
+)
