@@ -40,7 +40,8 @@ func NewService(reposHandler ReposHandler) *Service {
 	s.httpServer = server.NewStreamableHTTPServer(
 		mcpServer,
 		server.WithEndpointPath("/"),
-		server.WithStateLess(true), // Stateless mode for simplicity
+		server.WithStateLess(true),        // Stateless mode for simplicity
+		server.WithDisableStreaming(true), // Disable SSE, use single JSON response
 	)
 
 	return s

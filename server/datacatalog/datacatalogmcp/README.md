@@ -324,7 +324,7 @@ PLATEAU全体のメタデータを取得します。
 ## 技術仕様
 
 - プロトコル: MCP (Model Context Protocol) v1.0
-- トランスポート: Streamable HTTP (HTTP with SSE for streaming)
+- トランスポート: HTTP (単一JSONレスポンス、SSE非使用)
 - メッセージ形式: JSON-RPC 2.0
 - レスポンス形式: JSON
 - 認証: なし（公開データのため）
@@ -335,12 +335,13 @@ PLATEAU全体のメタデータを取得します。
 このサーバーは [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io/) の公式仕様に準拠しています：
 
 - **JSON-RPC 2.0**: すべての通信は JSON-RPC 2.0 メッセージ形式で行われます
-- **Streamable HTTP**: HTTP POST（リクエスト）および GET（SSEストリーミング）をサポート
+- **HTTP トランスポート**: 単一JSONレスポンス形式（`Content-Type: application/json`）
+- **SSE非使用**: Server-Sent Eventsは使用せず、通常のHTTPリクエスト/レスポンスで動作
 - **自動エンドポイント**: `/` エンドポイントで以下が自動的に提供されます：
   - `tools/list`: 利用可能なツールの一覧取得
   - `tools/call`: ツールの実行
 - **ステートレスモード**: セッション管理なしでシンプルに利用可能
-- **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.32.0 を使用
+- **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.43.0 を使用
 
 ## 関連リンク
 
