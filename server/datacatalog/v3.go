@@ -4,8 +4,8 @@ import (
 	"context"
 	"path"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogmcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalogmcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
