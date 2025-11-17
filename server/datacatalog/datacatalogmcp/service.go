@@ -50,10 +50,11 @@ func NewService(reposHandler ReposHandler) *Service {
 func (s *Service) RegisterRoutes(g *echo.Group) {
 	// Mount Streamable HTTP server as a handler
 	// The mcp-go library handles JSON-RPC, tools/list, tools/call automatically
+	// Only POST is enabled; GET (SSE streaming) is disabled as we don't use server notifications
 	handler := echo.WrapHandler(s.httpServer)
-	g.Any("", handler)
-	g.Any("/", handler)
-	g.Any("/*", handler)
+	g.POST("", handler)
+	g.POST("/", handler)
+	g.POST("/*", handler)
 }
 
 // registerTools registers all MCP tools
