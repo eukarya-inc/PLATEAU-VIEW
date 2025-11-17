@@ -176,6 +176,30 @@ go run . setup-city-items \
   -limit 10
 ```
 
+#### ⚠️ 重要: ツール実行後の追加作業
+
+`setup-city-items`ツールで都市アイテムを登録した後、**必ずシステムプロジェクトの`workspaces`モデルにプロジェクト情報を登録してください**。この登録を忘れると、FME品質検査・変換処理が実行されません。
+
+##### 必要な作業
+
+1. CMSのシステムプロジェクトにアクセス
+2. `workspaces`モデルのアイテムを作成
+3. 以下のフィールドを設定：
+   - `project_alias`: プロジェクトのエイリアス（例: `plateau-2023`）
+   - `project_id`: プロジェクトID（`-project`で指定したID）
+   - `cms_api_key`: CMSのAPIキー
+   - `converter`: FMEを使用する場合は`fme`または`fme_flow`を設定
+   - `sidebar_access_token`: サイドバーアクセストークン（任意の文字列）
+   - その他必要な設定
+
+##### トラブルシューティング
+
+もし、CityGMLデータを登録してもFME品質検査・変換処理が実行されない（LOD抽出処理のみ実行される）場合は、以下を確認してください：
+
+- システムプロジェクトの`workspaces`モデルに、対象プロジェクトのアイテムが存在するか
+- `converter`フィールドが`fme`または`fme_flow`に設定されているか
+- サーバーログに`failed to get metadata: not found`エラーが出ていないか
+
 ---
 
 ### 2. copy-related
