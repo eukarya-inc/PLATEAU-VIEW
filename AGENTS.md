@@ -139,3 +139,4 @@ The core provides an engine-agnostic map abstraction:
 - All JavaScript/TypeScript projects use Yarn as package manager
 - Mock authentication available for local development
 - Environment variables configured in `.env` files (not committed)
+- **When investigating or modifying `/server`**: Always read `/server/CLAUDE.md` or `/server/AGENTS.md` first before using the Explore tool or making changes. These files contain critical server-specific architecture, patterns, and development guidelines.
