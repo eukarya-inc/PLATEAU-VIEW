@@ -50,7 +50,10 @@ func NewService(reposHandler ReposHandler) *Service {
 func (s *Service) RegisterRoutes(g *echo.Group) {
 	// Mount Streamable HTTP server as a handler
 	// The mcp-go library handles JSON-RPC, tools/list, tools/call automatically
-	g.Any("/*", echo.WrapHandler(s.httpServer))
+	handler := echo.WrapHandler(s.httpServer)
+	g.Any("", handler)
+	g.Any("/", handler)
+	g.Any("/*", handler)
 }
 
 // registerTools registers all MCP tools
