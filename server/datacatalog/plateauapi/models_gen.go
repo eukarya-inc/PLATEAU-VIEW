@@ -249,6 +249,8 @@ type CityGMLDataset struct {
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// CityGMLのzip形式のファイルのURL。
 	URL string `json:"url"`
+	// G空間情報センターへのURL。
+	GspatialjpDatasetURL *string `json:"gspatialjpDatasetUrl,omitempty"`
 	// データセットが属する都道府県。
 	Prefecture *Prefecture `json:"prefecture"`
 	// データセットが属する市。

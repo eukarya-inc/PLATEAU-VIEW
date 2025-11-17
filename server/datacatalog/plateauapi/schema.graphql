@@ -1170,6 +1170,10 @@ type CityGMLDataset implements Node {
   """
   url: String!
   """
+  G空間情報センターへのURL。
+  """
+  gspatialjpDatasetUrl: String
+  """
   データセットが属する都道府県。
   """
   prefecture: Prefecture!

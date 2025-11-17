@@ -80,21 +80,22 @@ type ComplexityRoot struct {
 	}
 
 	CityGMLDataset struct {
-		Admin              func(childComplexity int) int
-		City               func(childComplexity int) int
-		CityCode           func(childComplexity int) int
-		CityID             func(childComplexity int) int
-		FeatureTypes       func(childComplexity int) int
-		ID                 func(childComplexity int) int
-		MetadataZipUrls    func(childComplexity int) int
-		PlateauSpecMinor   func(childComplexity int) int
-		PlateauSpecMinorID func(childComplexity int) int
-		Prefecture         func(childComplexity int) int
-		PrefectureCode     func(childComplexity int) int
-		PrefectureID       func(childComplexity int) int
-		RegistrationYear   func(childComplexity int) int
-		URL                func(childComplexity int) int
-		Year               func(childComplexity int) int
+		Admin                func(childComplexity int) int
+		City                 func(childComplexity int) int
+		CityCode             func(childComplexity int) int
+		CityID               func(childComplexity int) int
+		FeatureTypes         func(childComplexity int) int
+		GspatialjpDatasetURL func(childComplexity int) int
+		ID                   func(childComplexity int) int
+		MetadataZipUrls      func(childComplexity int) int
+		PlateauSpecMinor     func(childComplexity int) int
+		PlateauSpecMinorID   func(childComplexity int) int
+		Prefecture           func(childComplexity int) int
+		PrefectureCode       func(childComplexity int) int
+		PrefectureID         func(childComplexity int) int
+		RegistrationYear     func(childComplexity int) int
+		URL                  func(childComplexity int) int
+		Year                 func(childComplexity int) int
 	}
 
 	GenericDataset struct {
@@ -579,6 +580,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.CityGMLDataset.FeatureTypes(childComplexity), true
+
+	case "CityGMLDataset.gspatialjpDatasetUrl":
+		if e.complexity.CityGMLDataset.GspatialjpDatasetURL == nil {
+			break
+		}
+
+		return e.complexity.CityGMLDataset.GspatialjpDatasetURL(childComplexity), true
 
 	case "CityGMLDataset.id":
 		if e.complexity.CityGMLDataset.ID == nil {
@@ -3294,6 +3302,8 @@ func (ec *executionContext) fieldContext_City_citygml(_ context.Context, field g
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "gspatialjpDatasetUrl":
+				return ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
 			case "prefecture":
 				return ec.fieldContext_CityGMLDataset_prefecture(ctx, field)
 			case "city":
@@ -3741,6 +3751,47 @@ func (ec *executionContext) _CityGMLDataset_url(ctx context.Context, field graph
 }
 
 func (ec *executionContext) fieldContext_CityGMLDataset_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CityGMLDataset",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CityGMLDataset_gspatialjpDatasetUrl(ctx context.Context, field graphql.CollectedField, obj *CityGMLDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GspatialjpDatasetURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CityGMLDataset_gspatialjpDatasetUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -15548,6 +15599,8 @@ func (ec *executionContext) _CityGMLDataset(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "gspatialjpDatasetUrl":
+			out.Values[i] = ec._CityGMLDataset_gspatialjpDatasetUrl(ctx, field, obj)
 		case "prefecture":
 			field := field
 
