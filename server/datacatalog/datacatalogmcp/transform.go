@@ -146,7 +146,19 @@ func generateAreaSuggestions(totalCount int, input *SearchAreasInput) []string {
 // TransformGetArea converts GraphQL area to MCP response
 func TransformGetArea(area plateauapi.Area) *GetAreaResponse {
 	var parent *AreaParent
-	if area.GetParent() != nil {
+	// We need to check if Parent field exists before calling GetParent()
+	// because GetParent() dereferences the parent pointer which causes panic when nil
+	var hasParent bool
+	switch a := area.(type) {
+	case *plateauapi.City:
+		hasParent = a.Parent != nil
+	case *plateauapi.Ward:
+		hasParent = a.Parent != nil
+	default:
+		hasParent = false // Prefecture has no parent
+	}
+
+	if hasParent {
 		p := area.GetParent()
 		parent = &AreaParent{
 			ID:   string(p.GetID()),
@@ -218,15 +230,45 @@ func transformDatasetInfo(dataset plateauapi.Dataset) DatasetInfo {
 		}
 	}
 
+	// Get dataset type safely
+	// We need to check if Type field is nil before calling GetType()
+	// because GetType() dereferences the pointer which causes panic when nil
+	var typeInfo DatasetTypeInfo
+	var hasType bool
+
+	// Check for nil Type field based on dataset type
+	switch d := dataset.(type) {
+	case *plateauapi.PlateauDataset:
+		hasType = d.Type != nil
+	case *plateauapi.RelatedDataset:
+		hasType = d.Type != nil
+	case *plateauapi.GenericDataset:
+		hasType = d.Type != nil
+	default:
+		hasType = true // Unknown type, assume it has type
+	}
+
+	if hasType {
+		dt := dataset.GetType()
+		typeInfo = DatasetTypeInfo{
+			Code:     dataset.GetTypeCode(),
+			Name:     dt.GetName(),
+			Category: string(dt.GetCategory()),
+		}
+	} else {
+		// Fallback when type is nil
+		typeInfo = DatasetTypeInfo{
+			Code:     dataset.GetTypeCode(),
+			Name:     "",
+			Category: "",
+		}
+	}
+
 	return DatasetInfo{
 		ID:          string(dataset.GetID()),
 		Name:        dataset.GetName(),
 		Description: desc,
-		Type: DatasetTypeInfo{
-			Code:     dataset.GetTypeCode(),
-			Name:     dataset.GetType().GetName(),
-			Category: string(dataset.GetType().GetCategory()),
-		},
+		Type:        typeInfo,
 		Area: DatasetAreaInfo{
 			Prefecture: ptrString(dataset.GetPrefecture()),
 			City:       ptrString(dataset.GetCity()),
@@ -306,15 +348,40 @@ func TransformGetDataset(dataset plateauapi.Dataset) *GetDatasetResponse {
 		return transformDatasetItem(item)
 	})
 
+	// Get dataset type safely (same logic as transformDatasetInfo)
+	var typeInfo DatasetTypeInfo
+	var hasType bool
+	switch d := dataset.(type) {
+	case *plateauapi.PlateauDataset:
+		hasType = d.Type != nil
+	case *plateauapi.RelatedDataset:
+		hasType = d.Type != nil
+	case *plateauapi.GenericDataset:
+		hasType = d.Type != nil
+	default:
+		hasType = true
+	}
+
+	if hasType {
+		dt := dataset.GetType()
+		typeInfo = DatasetTypeInfo{
+			Code:     dataset.GetTypeCode(),
+			Name:     dt.GetName(),
+			Category: string(dt.GetCategory()),
+		}
+	} else {
+		typeInfo = DatasetTypeInfo{
+			Code:     dataset.GetTypeCode(),
+			Name:     "",
+			Category: "",
+		}
+	}
+
 	return &GetDatasetResponse{
 		ID:          string(dataset.GetID()),
 		Name:        dataset.GetName(),
 		Description: desc,
-		Type: DatasetTypeInfo{
-			Code:     dataset.GetTypeCode(),
-			Name:     dataset.GetType().GetName(),
-			Category: string(dataset.GetType().GetCategory()),
-		},
+		Type:        typeInfo,
 		Area: DatasetAreaDetail{
 			Prefecture: transformAreaParent(dataset.GetPrefecture()),
 			City:       transformAreaParent(dataset.GetCity()),

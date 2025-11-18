@@ -502,3 +502,66 @@ func TestCreateResponseMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestTransformGetArea_WithNilParent(t *testing.T) {
+	// This test reproduces the nil pointer dereference bug
+	// when City.Parent is nil
+	city := &plateauapi.City{
+		ID:   "city_13101",
+		Type: plateauapi.AreaTypeCity,
+		Code: "13101",
+		Name: "千代田区",
+		// Parent is intentionally nil to reproduce the bug
+		Parent: nil,
+	}
+
+	// This should not panic
+	resp := TransformGetArea(city)
+
+	assert.NotNil(t, resp)
+	assert.Equal(t, "city_13101", resp.ID)
+	assert.Equal(t, "13101", resp.Code)
+	assert.Equal(t, "千代田区", resp.Name)
+	assert.Nil(t, resp.Parent) // Parent should be nil when City.Parent is nil
+}
+
+func TestTransformSearchDatasets_WithNilType(t *testing.T) {
+	// This test reproduces the nil pointer dereference bug
+	// when Dataset.Type is nil
+	datasets := []plateauapi.Dataset{
+		&plateauapi.PlateauDataset{
+			ID:   "ds_1",
+			Name: "データセット1",
+			// Type is intentionally nil to reproduce the bug
+			Type: nil,
+		},
+	}
+
+	// This should not panic
+	resp := TransformSearchDatasets(datasets, nil)
+
+	assert.NotNil(t, resp)
+	// Should handle nil type gracefully
+}
+
+// TestTransformGetDataset_WithNilType tests that TransformGetDataset handles nil Type gracefully
+func TestTransformGetDataset_WithNilType(t *testing.T) {
+	// This test reproduces the nil pointer dereference bug
+	// when Dataset.Type is nil
+	dataset := &plateauapi.PlateauDataset{
+		ID:   "ds_1",
+		Name: "データセット1",
+		// Type is intentionally nil to reproduce the bug
+		Type: nil,
+	}
+
+	// This should not panic
+	resp := TransformGetDataset(dataset)
+
+	assert.NotNil(t, resp)
+	assert.Equal(t, "ds_1", resp.ID)
+	assert.Equal(t, "データセット1", resp.Name)
+	// Type fields should have empty/default values when Type is nil
+	assert.Equal(t, "", resp.Type.Name)
+	assert.Equal(t, "", resp.Type.Category)
+}
