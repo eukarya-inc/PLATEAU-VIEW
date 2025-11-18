@@ -25,12 +25,37 @@ PLATEAU Data Catalog MCP Serverは、PLATEAUの都市モデルデータへのア
 
 ## AIクライアントでの設定方法
 
+### Claude Code での設定
+
+Claude Code では、以下のコマンドで MCP サーバーを追加できます：
+
+```bash
+claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.jp/datacatalog/mcp
+```
+
+**参考**: 設定手順の詳細は [Claude Code MCP 公式ドキュメント](https://docs.anthropic.com/en/docs/claude-code/mcp) をご確認ください。
+
+設定後、以下の6つのツールが利用可能になります：
+
 ### Claude Desktop での設定
 
-Claude Desktop の設定ファイル (`claude_desktop_config.json`) に以下を追加します：
+#### 有料プラン (Pro/Team/Enterprise) の場合
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+1. Claude Desktop を開く
+2. Settings → Integrations を選択
+3. 「+ Add Custom Integration」をクリック
+4. MCP サーバーの URL を入力：
+   ```
+   https://api.plateauview.mlit.go.jp/datacatalog/mcp
+   ```
+5. 設定を保存
+
+#### 無料プランの場合
+
+1. Claude Desktop を開く
+2. Settings → Developer タブを選択
+3. 「Edit Config」をクリック
+4. 設定ファイルに以下を追加：
 
 ```json
 {
@@ -45,7 +70,11 @@ Claude Desktop の設定ファイル (`claude_desktop_config.json`) に以下を
 }
 ```
 
-設定後、Claude Desktopを再起動すると、以下の6つのツールが利用可能になります：
+5. ファイルを保存して Claude Desktop を再起動
+
+**参考**: 設定手順の詳細は [Claude Desktop ヘルプセンター](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) をご確認ください。
+
+設定後、以下の6つのツールが利用可能になります：
 
 - `plateau_get_metadata` - PLATEAU全体のメタデータ取得
 - `plateau_search_areas` - 地域検索
@@ -53,6 +82,21 @@ Claude Desktop の設定ファイル (`claude_desktop_config.json`) に以下を
 - `plateau_search_datasets` - データセット検索
 - `plateau_get_dataset` - データセット詳細取得
 - `plateau_list_dataset_types` - データセット種類一覧
+
+### ChatGPT での設定
+
+ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバーを追加できます：
+
+1. ChatGPT の Settings で Developer Mode（開発者モード）を有効化
+2. Settings → Connectors → Create を選択
+3. 以下の情報を入力：
+   - **Connector name**: `PLATEAU Data Catalog`
+   - **Description**: `日本の3D都市モデル（PLATEAU）のデータカタログにアクセスできます。地域情報、建築物・道路・土地利用などのデータセット情報を検索・取得できます。`
+   - **Connector URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+4. 設定を保存
+5. チャットで「+」ボタン → 「More」→ PLATEAU Data Catalog を選択して利用
+
+**参考**: 設定手順の詳細は [ChatGPT MCP 公式ドキュメント](https://platform.openai.com/docs/mcp) をご確認ください。
 
 ### その他のMCP対応AIクライアント
 
