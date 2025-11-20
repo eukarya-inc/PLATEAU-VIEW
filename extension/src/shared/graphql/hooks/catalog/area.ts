@@ -24,7 +24,7 @@ export const useAreas = (input?: AreasInput, options?: Options) => {
         ? {
             ...data.data,
             areas: data.data.areas.filter(a =>
-              (a.code as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX),
+              !(a.code as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX),
             ),
           }
         : undefined,
