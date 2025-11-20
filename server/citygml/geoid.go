@@ -16,6 +16,11 @@ func init() {
 	geoid = lo.Must(gsigeoid2011.Load())
 }
 
+// GetGeoidHeight returns the geoid height at the specified longitude and latitude
+func GetGeoidHeight(lng, lat float64) float64 {
+	return geoid.GetHeight(lng, lat)
+}
+
 func GeoidHanlder(c echo.Context) error {
 	lat := c.QueryParam("lat")
 	lng := c.QueryParam("lng")
@@ -33,7 +38,7 @@ func GeoidHanlder(c echo.Context) error {
 		return c.JSON(400, map[string]any{"error": "lng must be a float"})
 	}
 
-	height := geoid.GetHeight(lngFloat, latFloat)
+	height := GetGeoidHeight(lngFloat, latFloat)
 
 	return c.JSON(200, map[string]any{
 		"lat":          latFloat,

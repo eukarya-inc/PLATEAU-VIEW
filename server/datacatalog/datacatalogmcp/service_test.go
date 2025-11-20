@@ -128,7 +128,7 @@ func createTestContext() context.Context {
 func TestService_HandleGetMetadata(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+		service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -159,7 +159,7 @@ func TestService_HandleGetMetadata(t *testing.T) {
 func TestService_HandleSearchAreas(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -191,7 +191,7 @@ func TestService_HandleSearchAreas(t *testing.T) {
 func TestService_HandleGetArea(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -223,7 +223,7 @@ func TestService_HandleGetArea(t *testing.T) {
 func TestService_HandleGetArea_NotFound(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -245,7 +245,7 @@ func TestService_HandleGetArea_NotFound(t *testing.T) {
 func TestService_HandleGetArea_MissingCode(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -267,7 +267,7 @@ func TestService_HandleGetArea_MissingCode(t *testing.T) {
 func TestService_HandleSearchDatasets(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -298,7 +298,7 @@ func TestService_HandleSearchDatasets(t *testing.T) {
 func TestService_HandleGetDataset(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -330,7 +330,7 @@ func TestService_HandleGetDataset(t *testing.T) {
 func TestService_HandleGetDataset_NotFound(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -352,7 +352,7 @@ func TestService_HandleGetDataset_NotFound(t *testing.T) {
 func TestService_HandleListDatasetTypes(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{
@@ -383,7 +383,7 @@ func TestService_HandleListDatasetTypes(t *testing.T) {
 func TestService_GetRepoFromContext_NoMetadata(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-	service := NewService(mockHandler)
+	service := NewService(mockHandler, "")
 
 	// Context without metadata
 	ctx := context.Background()

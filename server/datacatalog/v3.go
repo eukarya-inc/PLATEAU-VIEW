@@ -53,7 +53,7 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	g.POST("/update-cache", h.UpdateCacheHandler)
 
 	// Data catalog MCP API
-	mcpService := datacatalogmcp.NewService(h)
+	mcpService := datacatalogmcp.NewService(h, conf.Host)
 	mcpGroup := g.Group("/mcp")
 	mcpGroup.Use(
 		middleware.CORS(),

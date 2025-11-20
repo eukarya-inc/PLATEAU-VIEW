@@ -17,10 +17,11 @@ type Service struct {
 	mcpServer    *server.MCPServer
 	httpServer   *server.StreamableHTTPServer
 	reposHandler ReposHandler
+	host         string
 }
 
 // NewService creates a new MCP service
-func NewService(reposHandler ReposHandler) *Service {
+func NewService(reposHandler ReposHandler, host string) *Service {
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
 		"PLATEAU Data Catalog",
@@ -31,6 +32,7 @@ func NewService(reposHandler ReposHandler) *Service {
 	s := &Service{
 		mcpServer:    mcpServer,
 		reposHandler: reposHandler,
+		host:         host,
 	}
 
 	// Register tools
@@ -54,12 +56,11 @@ func (s *Service) RegisterRoutes(g *echo.Group) {
 	// Only POST is enabled; GET (SSE streaming) is disabled as we don't use server notifications
 	handler := echo.WrapHandler(s.httpServer)
 	g.POST("", handler)
-	g.POST("/", handler)
-	g.POST("/*", handler)
 }
 
 // registerTools registers all MCP tools
 func (s *Service) registerTools() {
+	// Data Catalog Tools
 	// Tool 1: plateau_get_metadata
 	s.mcpServer.AddTool(s.createGetMetadataTool(), s.handleGetMetadata)
 
@@ -77,6 +78,22 @@ func (s *Service) registerTools() {
 
 	// Tool 6: plateau_list_dataset_types
 	s.mcpServer.AddTool(s.createListDatasetTypesTool(), s.handleListDatasetTypes)
+
+	// CityGML Tools
+	// Tool 7: plateau_citygml_get_attributes
+	s.mcpServer.AddTool(s.createCityGMLGetAttributesTool(), s.handleCityGMLGetAttributes)
+
+	// Tool 8: plateau_citygml_get_features
+	s.mcpServer.AddTool(s.createCityGMLGetFeaturesTool(), s.handleCityGMLGetFeatures)
+
+	// Tool 9: plateau_citygml_get_geoid_height
+	s.mcpServer.AddTool(s.createCityGMLGetGeoidHeightTool(), s.handleCityGMLGetGeoidHeight)
+
+	// Tool 10: plateau_get_citygml_files
+	s.mcpServer.AddTool(s.createGetCityGMLFilesTool(), s.handleGetCityGMLFiles)
+
+	// Note: plateau_citygml_get_spatialid_attributes is not implemented yet
+	// due to import cycle issues with citygml package
 }
 
 // createGetMetadataTool creates the plateau_get_metadata tool definition

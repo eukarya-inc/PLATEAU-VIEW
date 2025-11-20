@@ -35,8 +35,6 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 
 **参考**: 設定手順の詳細は [Claude Code MCP 公式ドキュメント](https://docs.anthropic.com/en/docs/claude-code/mcp) をご確認ください。
 
-設定後、以下の6つのツールが利用可能になります：
-
 ### Claude Desktop での設定
 
 #### 有料プラン (Pro/Team/Enterprise) の場合
@@ -74,15 +72,6 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 
 **参考**: 設定手順の詳細は [Claude Desktop ヘルプセンター](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) をご確認ください。
 
-設定後、以下の6つのツールが利用可能になります：
-
-- `plateau_get_metadata` - PLATEAU全体のメタデータ取得
-- `plateau_search_areas` - 地域検索
-- `plateau_get_area` - 地域詳細取得
-- `plateau_search_datasets` - データセット検索
-- `plateau_get_dataset` - データセット詳細取得
-- `plateau_list_dataset_types` - データセット種類一覧
-
 ### ChatGPT での設定
 
 ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバーを追加できます：
@@ -105,6 +94,22 @@ HTTP MCPをサポートする他のAIクライアントでも、同様にサー�
 ```
 https://api.plateauview.mlit.go.jp/datacatalog/mcp
 ```
+
+設定後、以下の10個のツールが利用可能になります：
+
+**データカタログツール:**
+- `plateau_get_metadata` - PLATEAU全体のメタデータ取得
+- `plateau_search_areas` - 地域検索
+- `plateau_get_area` - 地域詳細取得
+- `plateau_search_datasets` - データセット検索
+- `plateau_get_dataset` - データセット詳細取得
+- `plateau_list_dataset_types` - データセット種類一覧
+
+**CityGMLツール:**
+- `plateau_get_citygml_files` - メッシュコード/空間ID/矩形範囲でCityGMLファイルを検索
+- `plateau_citygml_get_attributes` - CityGMLファイルから建物属性情報を取得
+- `plateau_citygml_get_features` - 空間IDに交差する地物IDリストを取得
+- `plateau_citygml_get_geoid_height` - 緯度経度からジオイド高を取得
 
 ## 利用可能なツール
 
@@ -386,6 +391,183 @@ PLATEAU全体のメタデータを取得します。
   - `tools/call`: ツールの実行
 - **ステートレスモード**: セッション管理なしでシンプルに利用可能
 - **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.43.0 を使用
+
+## CityGML ツール
+
+データカタログツールに加えて、CityGMLファイルから直接属性情報を取得するツールも提供しています。
+
+### 7. `plateau_citygml_get_attributes`
+CityGMLファイルから指定した建物IDの属性情報を取得します。
+
+**使い方の流れ:**
+1. `plateau_get_citygml_files`でメッシュコードや空間IDを指定してCityGML URLを取得
+2. レスポンスの`cities[].files[type][].url`からCityGML URLを取得（typeは'bldg', 'tran'など）
+3. そのURLと建物IDをこのツールに渡す
+
+**パラメータ**:
+- `url` (required): CityGMLファイルのURL
+- `building_ids` (required): 取得する建物IDのリスト
+- `skip_code_list` (optional): コードリストの取得をスキップするか（デフォルト: false）
+
+**レスポンス例**:
+```json
+{
+  "attributes": [
+    {
+      "gml:id": "BLD_12345",
+      "bldg:measuredHeight": 30.5,
+      "bldg:storeysAboveGround": 10,
+      "bldg:usage": "住宅",
+      "_bbox": {
+        "min": {"lng": 139.7, "lat": 35.6, "alt": 0},
+        "max": {"lng": 139.71, "lat": 35.61, "alt": 30.5},
+        "center": {"lng": 139.705, "lat": 35.605, "alt": 15.25}
+      }
+    }
+  ]
+}
+```
+
+### 8. `plateau_citygml_get_features`
+CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。
+
+**使い方の流れ:**
+1. `plateau_get_citygml_files`でメッシュコードや空間IDを指定してCityGML URLを取得
+2. レスポンスの`cities[].files[type][].url`からCityGML URLを取得（typeは'bldg', 'tran'など）
+3. そのURLと空間IDをこのツールに渡す
+4. 返ってきた地物IDを`plateau_citygml_get_attributes`で使用できる
+
+**パラメータ**:
+- `url` (required): CityGMLファイルのURL
+- `spatial_ids` (required): 検索する空間IDのリスト（例: ["25/52235/23212/25/0"]）
+
+**レスポンス例**:
+```json
+{
+  "feature_ids": [
+    "BLD_12345",
+    "BLD_12346",
+    "BLD_12347"
+  ]
+}
+```
+
+### 9. `plateau_citygml_get_geoid_height`
+指定した緯度経度のジオイド高を取得します。標高の楕円体高と正標高の変換に使用できます。
+
+**パラメータ**:
+- `latitude` (required): 緯度（度）
+- `longitude` (required): 経度（度）
+
+**レスポンス例**:
+```json
+{
+  "latitude": 35.681236,
+  "longitude": 139.767125,
+  "geoid_height": 39.456,
+  "geoid": "39.456"
+}
+```
+
+### 10. `plateau_get_citygml_files`
+指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。
+
+**条件フォーマット**:
+- メッシュコード: `m:53393580,53393581` (カンマ区切りで複数指定可)
+- 空間ID: `s:15/0/29134/12950,15/0/29134/12951` (カンマ区切りで複数指定可)
+- 矩形範囲: `r:139.7,35.6,139.8,35.7` (西経度,南緯度,東経度,北緯度)
+
+**使い方の流れ**:
+1. このツールでCityGMLファイルURLを取得
+2. 取得したURLを`plateau_citygml_get_features`または`plateau_citygml_get_attributes`で使用
+
+**パラメータ**:
+- `condition` (required): 検索条件（例: "m:53393580", "s:15/0/29134/12950", "r:139.7,35.6,139.8,35.7"）
+
+**レスポンス例**:
+```json
+{
+  "cities": [
+    {
+      "cityCode": "13112",
+      "cityName": "世田谷区",
+      "year": 2023,
+      "registrationYear": 2024,
+      "spec": "4.1",
+      "url": "https://assets.cms.plateau.reearth.io/assets/.../13112_setagaya-ku_pref_2023_citygml_2_op.zip",
+      "files": {
+        "bldg": [
+          {
+            "code": "53393580",
+            "maxLod": 2,
+            "url": "https://assets.cms.plateau.reearth.io/assets/.../bldg/53393580_bldg_6697_op.gml"
+          }
+        ],
+        "tran": [
+          {
+            "code": "53393580",
+            "maxLod": 2,
+            "url": "https://assets.cms.plateau.reearth.io/assets/.../tran/53393580_tran_6697_op.gml"
+          }
+        ]
+      }
+    }
+  ],
+  "featureTypes": {
+    "bldg": {
+      "name": "建築物モデル"
+    },
+    "tran": {
+      "name": "交通（道路）モデル"
+    }
+  }
+}
+```
+
+### CityGML ツールの使用例
+
+#### 特定地域の建物属性を取得
+
+```
+1. まず、世田谷区のメッシュコードでCityGML URLを取得:
+   plateau_get_citygml_files(condition="m:53393580")
+
+2. レスポンスのcities[0].files.bldg[0].urlから建物のCityGML URLを取得
+
+3. 空間IDで地物を検索:
+   plateau_citygml_get_features(url="取得したURL", spatial_ids=["15/0/29134/12950"])
+
+4. 返ってきた建物IDで属性を取得:
+   plateau_citygml_get_attributes(url="取得したURL", building_ids=["BLD_12345", "BLD_12346"])
+```
+
+#### 空間IDで複数種類のデータを取得
+
+```
+1. 空間IDでCityGMLファイルを検索:
+   plateau_get_citygml_files(condition="s:15/0/29134/12950")
+
+2. レスポンスから複数の種類のファイルを取得:
+   - cities[0].files.bldg[].url: 建築物モデル
+   - cities[0].files.tran[].url: 交通（道路）モデル
+   - cities[0].files.dem[].url: 地形モデル
+
+3. 各URLから必要な属性を取得
+```
+
+#### 矩形範囲で広域検索
+
+```
+1. 矩形範囲でCityGMLファイルを検索（東京駅周辺）:
+   plateau_get_citygml_files(condition="r:139.7,35.6,139.8,35.7")
+
+2. 複数の市区町村のデータが返ってくる:
+   - cities[0]: 千代田区のデータ
+   - cities[1]: 中央区のデータ
+   ...
+
+3. 必要な市区町村のファイルを選択して属性を取得
+```
 
 ## 関連リンク
 
