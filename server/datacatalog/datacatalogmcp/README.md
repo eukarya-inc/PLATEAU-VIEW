@@ -50,6 +50,8 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 
 #### 無料プランの場合
 
+Claude Desktop 無料版はHTTP MCPに対応していないため、HTTP-to-StdioアダプタCLIを使用する必要があります。
+
 1. Claude Desktop を開く
 2. Settings → Developer タブを選択
 3. 「Edit Config」をクリック
@@ -59,9 +61,14 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 {
   "mcpServers": {
     "plateau-catalog": {
-      "url": "https://api.plateauview.mlit.go.jp/datacatalog/mcp",
-      "transport": {
-        "type": "http"
+      "command": "npx",
+      "args": [
+        "-y",
+        "@pyroprompts/mcp-stdio-to-streamable-http-adapter"
+      ],
+      "env": {
+        "URI": "https://api.plateauview.mlit.go.jp/datacatalog/mcp",
+        "MCP_NAME": "plateau-catalog"
       }
     }
   }
@@ -70,7 +77,9 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 
 5. ファイルを保存して Claude Desktop を再起動
 
-**参考**: 設定手順の詳細は [Claude Desktop ヘルプセンター](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) をご確認ください。
+**参考**:
+- 設定手順の詳細は [Claude Desktop ヘルプセンター](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) をご確認ください
+- HTTP-to-Stdioアダプタの詳細は [@pyroprompts/mcp-stdio-to-streamable-http-adapter](https://www.npmjs.com/package/@pyroprompts/mcp-stdio-to-streamable-http-adapter) を参照
 
 ### ChatGPT での設定
 
