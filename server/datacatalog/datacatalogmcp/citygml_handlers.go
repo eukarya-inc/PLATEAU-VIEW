@@ -294,10 +294,13 @@ func (s *Service) handleCityGMLGetGeoidHeight(ctx context.Context, request mcp.C
 func (s *Service) createGetCityGMLFilesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_citygml_files",
-		mcp.WithDescription("指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。\\n\\n条件フォーマット:\\n- メッシュコード: m:53393580,53393581 (カンマ区切りで複数指定可)\\n- 空間ID: s:15/0/29134/12950,15/0/29134/12951 (カンマ区切りで複数指定可)\\n- 矩形範囲: r:139.7,35.6,139.8,35.7 (西経度,南緯度,東経度,北緯度)\\n\\n使い方の流れ:\\n1. このツールでCityGMLファイルURLを取得\\n2. 取得したURLをplateau_citygml_get_featuresまたはplateau_citygml_get_attributesで使用"),
+		mcp.WithDescription("指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。\\n\\n条件フォーマット:\\n- メッシュコード: m:53393580,53393581 (カンマ区切りで複数指定可)\\n- 空間ID: s:15/0/29134/12950,15/0/29134/12951 (カンマ区切りで複数指定可)\\n- 矩形範囲: r:139.7,35.6,139.8,35.7 (西経度,南緯度,東経度,北緯度)\\n\\n地物型フィルタ:\\nfeature_typesパラメータで地物型を絞り込むことができます（例: [\\\"bldg\\\", \\\"tran\\\"]）\\n主な地物型: bldg(建築物), tran(交通), luse(土地利用), dem(地形), fld(洪水), lsld(土砂災害), urf(都市計画)\\n利用可能な全ての地物型はplateau_list_dataset_typesツールで取得できます。\\n\\n使い方の流れ:\\n1. このツールでCityGMLファイルURLを取得\\n2. 取得したURLをplateau_citygml_get_featuresまたはplateau_citygml_get_attributesで使用"),
 		mcp.WithString("condition",
 			mcp.Required(),
 			mcp.Description("検索条件 (例: \\\"m:53393580\\\", \\\"s:15/0/29134/12950\\\", \\\"r:139.7,35.6,139.8,35.7\\\")"),
+		),
+		mcp.WithArray("feature_types",
+			mcp.Description("取得する地物型のリスト (例: [\\\"bldg\\\", \\\"tran\\\"])。指定しない場合は全ての地物型を取得"),
 		),
 	)
 }
@@ -319,6 +322,9 @@ func (s *Service) handleGetCityGMLFiles(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError("condition must start with m:, s:, or r:"), nil
 	}
 
+	// Get feature_types parameter (optional)
+	featureTypes := request.GetStringSlice("feature_types", nil)
+
 	// Call internal datacatalog citygml API
 	// Note: This endpoint is different from other citygml endpoints
 	// It's mounted at /datacatalog/citygml/:conditions instead of /citygml
@@ -330,6 +336,11 @@ func (s *Service) handleGetCityGMLFiles(ctx context.Context, request mcp.CallToo
 		host,
 		url.PathEscape(condition),
 	)
+
+	// Add feature_types query parameter if specified
+	if len(featureTypes) > 0 {
+		apiURL += "?types=" + url.QueryEscape(strings.Join(featureTypes, ","))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {

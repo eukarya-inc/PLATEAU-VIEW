@@ -41,7 +41,8 @@ type GetGeoidHeightResponse struct {
 
 // GetCityGMLFilesInput represents input for plateau_get_citygml_files tool
 type GetCityGMLFilesInput struct {
-	Condition string `json:"condition"`
+	Condition    string   `json:"condition"`
+	FeatureTypes []string `json:"feature_types,omitempty"`
 }
 
 // GetCityGMLFilesResponse represents response from plateau_get_citygml_files tool

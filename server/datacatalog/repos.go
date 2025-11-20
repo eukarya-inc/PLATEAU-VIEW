@@ -138,7 +138,13 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		conditions := c.Param(conditionsParamName)
 
-		bounds, filter, err := parseCityGMLFilesQuery(ctx, conditions, geocoder)
+		// Get feature types from query parameter
+		var featureTypes []string
+		if typesParam := c.QueryParam("types"); typesParam != "" {
+			featureTypes = strings.Split(typesParam, ",")
+		}
+
+		bounds, filter, typeFilter, err := parseCityGMLFilesQuery(ctx, conditions, featureTypes, geocoder)
 		if err != nil {
 			if errors.Is(err, rerror.ErrNotFound) {
 				return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -211,7 +217,7 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 			}
 		}
 
-		res := applyCityGMLCityFilter(cities, filter)
+		res := applyCityGMLCityFilter(cities, filter, typeFilter)
 		if len(res.Cities) == 0 {
 			return echo.NewHTTPError(http.StatusNotFound, "not found")
 		}

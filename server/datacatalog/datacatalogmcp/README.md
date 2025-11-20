@@ -477,12 +477,27 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 - 空間ID: `s:15/0/29134/12950,15/0/29134/12951` (カンマ区切りで複数指定可)
 - 矩形範囲: `r:139.7,35.6,139.8,35.7` (西経度,南緯度,東経度,北緯度)
 
+**地物型フィルタ**:
+`feature_types`パラメータで地物型を絞り込むことができます。指定しない場合は全ての地物型を取得します。
+
+主な地物型:
+- `bldg`: 建築物モデル
+- `tran`: 交通（道路）モデル
+- `luse`: 土地利用モデル
+- `dem`: 地形モデル
+- `fld`: 洪水浸水想定区域モデル
+- `lsld`: 土砂災害警戒区域モデル
+- `urf`: 都市計画決定情報モデル
+
+利用可能な全ての地物型は`plateau_list_dataset_types`ツールで取得できます。
+
 **使い方の流れ**:
 1. このツールでCityGMLファイルURLを取得
 2. 取得したURLを`plateau_citygml_get_features`または`plateau_citygml_get_attributes`で使用
 
 **パラメータ**:
 - `condition` (required): 検索条件（例: "m:53393580", "s:15/0/29134/12950", "r:139.7,35.6,139.8,35.7"）
+- `feature_types` (optional): 取得する地物型のリスト（例: ["bldg", "tran"]）。指定しない場合は全ての地物型を取得
 
 **レスポンス例**:
 ```json
@@ -529,8 +544,8 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 #### 特定地域の建物属性を取得
 
 ```
-1. まず、世田谷区のメッシュコードでCityGML URLを取得:
-   plateau_get_citygml_files(condition="m:53393580")
+1. まず、世田谷区のメッシュコードで建物データのみ取得（コンテキスト節約）:
+   plateau_get_citygml_files(condition="m:53393580", feature_types=["bldg"])
 
 2. レスポンスのcities[0].files.bldg[0].urlから建物のCityGML URLを取得
 
@@ -541,16 +556,15 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
    plateau_citygml_get_attributes(url="取得したURL", building_ids=["BLD_12345", "BLD_12346"])
 ```
 
-#### 空間IDで複数種類のデータを取得
+#### 空間IDで特定の地物型のみ取得（コンテキスト節約）
 
 ```
-1. 空間IDでCityGMLファイルを検索:
-   plateau_get_citygml_files(condition="s:15/0/29134/12950")
+1. 空間IDで建物と道路データのみ検索:
+   plateau_get_citygml_files(condition="s:15/0/29134/12950", feature_types=["bldg", "tran"])
 
-2. レスポンスから複数の種類のファイルを取得:
+2. レスポンスから必要な種類のファイルのみ取得:
    - cities[0].files.bldg[].url: 建築物モデル
    - cities[0].files.tran[].url: 交通（道路）モデル
-   - cities[0].files.dem[].url: 地形モデル
 
 3. 各URLから必要な属性を取得
 ```

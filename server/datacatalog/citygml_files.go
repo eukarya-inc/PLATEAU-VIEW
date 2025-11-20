@@ -20,18 +20,18 @@ type GeoCoder func(ctx context.Context, address string) (quadtree.Bounds, error)
 
 const maxBounds = 30
 
-func parseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder GeoCoder) (bounds []geo.Bounds2, filter cityGMLFileFilterFunc, err error) {
+func parseCityGMLFilesQuery(ctx context.Context, conditions string, featureTypes []string, geocoder GeoCoder) (bounds []geo.Bounds2, filter cityGMLFileFilterFunc, typeFilter []string, err error) {
 	switch conditionType, cond := parseConditions(conditions); conditionType {
 	case "m":
 		for m := range strings.SplitSeq(cond, ",") {
 			b, err := jisx0410.Parse(m)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid mesh: %w", err)
+				return nil, nil, nil, fmt.Errorf("invalid mesh: %w", err)
 			}
 			bounds = append(bounds, b.Bounds)
 		}
 		if len(bounds) > maxBounds {
-			return nil, nil, fmt.Errorf("too many bounds")
+			return nil, nil, nil, fmt.Errorf("too many bounds")
 		}
 		filter = intersectFilter(bounds)
 	case "mm":
@@ -39,16 +39,16 @@ func parseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 		for m := range strings.SplitSeq(cond, ",") {
 			b, err := jisx0410.Parse(m)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid mesh: %w", err)
+				return nil, nil, nil, fmt.Errorf("invalid mesh: %w", err)
 			}
 			if b.Level == 0 {
-				return nil, nil, fmt.Errorf("unsupported mesh: %s", m)
+				return nil, nil, nil, fmt.Errorf("unsupported mesh: %s", m)
 			}
 			levels[b.Level]++
 			bounds = append(bounds, b.Bounds)
 		}
 		if len(bounds) > maxBounds {
-			return nil, nil, fmt.Errorf("too many bounds")
+			return nil, nil, nil, fmt.Errorf("too many bounds")
 		}
 		switch {
 		case levels[2] == len(bounds):
@@ -56,50 +56,50 @@ func parseCityGMLFilesQuery(ctx context.Context, conditions string, geocoder Geo
 		case levels[3] == len(bounds):
 			filter = levelFilter(3, bounds)
 		default:
-			return nil, nil, fmt.Errorf("bounds for different levels: %v", levels)
+			return nil, nil, nil, fmt.Errorf("bounds for different levels: %v", levels)
 		}
 	case "s":
 		cond, _ = url.PathUnescape(cond)
 		for s := range strings.SplitSeq(cond, ",") {
 			v, err := spatialid.Parse(s)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid spatial id: %w", err)
+				return nil, nil, nil, fmt.Errorf("invalid spatial id: %w", err)
 			}
 			b := v.Bounds().ToXY()
 			bounds = append(bounds, b)
 		}
 		if len(bounds) > maxBounds {
-			return nil, nil, fmt.Errorf("too many bounds: %d", len(bounds))
+			return nil, nil, nil, fmt.Errorf("too many bounds: %d", len(bounds))
 		}
 		filter = intersectFilter(bounds)
 	case "r":
 		b, err := parseBounds(cond)
 		if err != nil {
-			return nil, nil, fmt.Errorf("invalid rectangle: %w", err)
+			return nil, nil, nil, fmt.Errorf("invalid rectangle: %w", err)
 		}
 		filter = intersectFilter([]geo.Bounds2{geo.ToBounds2(b)})
 	case "g":
 		if geocoder == nil {
-			return nil, nil, fmt.Errorf("invalid condition type: %s", conditionType)
+			return nil, nil, nil, fmt.Errorf("invalid condition type: %s", conditionType)
 		}
 
 		b, err := geocoder(ctx, cond)
 		if errors.Is(err, geocoding.ErrNotFound) {
-			return nil, nil, rerror.ErrNotFound
+			return nil, nil, nil, rerror.ErrNotFound
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("geocoding: %w", err)
+			return nil, nil, nil, fmt.Errorf("geocoding: %w", err)
 		}
 		filter = intersectFilter([]geo.Bounds2{geo.ToBounds2(b)})
 	case "":
 		if cond == "" {
-			return nil, nil, fmt.Errorf("no conditions")
+			return nil, nil, nil, fmt.Errorf("no conditions")
 		}
 	default:
-		return nil, nil, fmt.Errorf("invalid condition type: %s", conditionType)
+		return nil, nil, nil, fmt.Errorf("invalid condition type: %s", conditionType)
 	}
 
-	return bounds, filter, nil
+	return bounds, filter, featureTypes, nil
 }
 
 type CityGMLFilesResponse struct {
@@ -107,7 +107,7 @@ type CityGMLFilesResponse struct {
 	FeatureTypes map[string]CityGMLFeatureType `json:"featureTypes"`
 }
 
-func applyCityGMLCityFilter(cities []*CityGMLFilesCity, filter cityGMLFileFilterFunc) *CityGMLFilesResponse {
+func applyCityGMLCityFilter(cities []*CityGMLFilesCity, filter cityGMLFileFilterFunc, typeFilter []string) *CityGMLFilesResponse {
 	response := &CityGMLFilesResponse{
 		FeatureTypes: make(map[string]CityGMLFeatureType),
 	}
@@ -117,6 +117,16 @@ func applyCityGMLCityFilter(cities []*CityGMLFilesCity, filter cityGMLFileFilter
 			continue
 		}
 
+		// Filter by feature types first
+		if len(typeFilter) > 0 {
+			for ft := range city.Files {
+				if !slices.Contains(typeFilter, ft) {
+					delete(city.Files, ft)
+				}
+			}
+		}
+
+		// Then filter by bounds
 		if filter != nil {
 			for ft, cityGmlFiles := range city.Files {
 				filtered := cityGmlFiles[:0]

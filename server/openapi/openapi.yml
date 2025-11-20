@@ -209,6 +209,24 @@ paths:
             地理的なエリアや都市の情報をフィルタリングするための条件。詳細は[ドキュメント](https://github.com/Project-PLATEAU/plateau-streaming-tutorial/blob/main/citygml/plateau-citygml.md)参照。
 
             使用例: `m:533945`, `s:spatialID`, `r:135.5,35.0`, `g:locationName`
+        - name: types
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            取得する地物型をカンマ区切りで指定。指定しない場合は全ての地物型を取得する。
+
+            主な地物型:
+            - `bldg`: 建築物モデル
+            - `tran`: 交通（道路）モデル
+            - `luse`: 土地利用モデル
+            - `dem`: 地形モデル
+            - `fld`: 洪水浸水想定区域モデル
+            - `lsld`: 土砂災害警戒区域モデル
+            - `urf`: 都市計画決定情報モデル
+
+            使用例: `types=bldg,tran`
 
             `:conditions`パラメータは以下の条件タイプに対応している。
 
