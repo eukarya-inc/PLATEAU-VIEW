@@ -48,7 +48,7 @@ export const useAreaDatasets = (code: string, input?: DatasetsInput, options?: O
     () =>
       data?.area?.datasets
         .map(d =>
-          (d.cityCode as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX)
+          d.cityCode && (d.cityCode as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX)
             ? { ...d, cityCode: null, city: null }
             : d,
         )
