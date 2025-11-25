@@ -133,7 +133,7 @@ const PrefectureItem: FC<{
       label={prefecture.name}
       title={prefecture.name}
       loading={query.loading}
-      disabled={!query.loading && !query.data?.areas.length}>
+      disabled={!query.loading && !query.data?.areas.length && !prefectureDatasets.length}>
       {query.data?.areas.map(municipality => (
         <MunicipalityItem
           key={municipality.code}
