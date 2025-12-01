@@ -298,6 +298,8 @@ github.com/reearth/reearth-cms-api/go v0.0.0-20250326155811-55d8dc895286 h1:LuDh
 github.com/reearth/reearth-cms-api/go v0.0.0-20250326155811-55d8dc895286/go.mod h1:z7w3KJ6WIhWT1dLr9r1oa3apu4KlS9k8caqO81npwio=
 github.com/reearth/reearthx v0.0.0-20250514022647-16f9d767d93f h1:JFE7ZaFYWIduMUpwZEx1RfgzC+F3IHuVqtOj+/ZGDnE=
 github.com/reearth/reearthx v0.0.0-20250514022647-16f9d767d93f/go.mod h1:/ByvE9o0WANHL2nhOyZjOXWwY8cCgze0OmwyNzxcYoA=
+github.com/reearth/reearthx v0.0.0-20251128044232-3067c04f34da h1:eolcPfhTG4aTAi6yoBpDlE1yyrnHUGDf8D7lIxg7dZQ=
+github.com/reearth/reearthx v0.0.0-20251128044232-3067c04f34da/go.mod h1:z4JjOCy4MZZglLSrJx+btJ1ZLltESDZfSWJCnONwRS4=
 github.com/richardlehane/mscfb v1.0.4 h1:WULscsljNPConisD5hR0+OyZjwK46Pfyr6mPu5ZawpM=
 github.com/richardlehane/mscfb v1.0.4/go.mod h1:YzVpcZg9czvAuhk9T+a3avCpcFPMUWm7gK3DypaEsUk=
 github.com/richardlehane/msoleps v1.0.1/go.mod h1:BWev5JBpU9Ko2WAgmZEuiz4/u3ZYTKbjLycmwiWUfWg=
