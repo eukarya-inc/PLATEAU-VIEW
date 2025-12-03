@@ -38,6 +38,40 @@ func TestParseAssetName(t *testing.T) {
 			},
 		},
 		{
+			name: "citygml with option and op",
+			args: "13999_tokyo_udx-mlit_2023_citygml_1_sample-takeshiba_op",
+			want: &AssetName{
+				CityCode:    "13999",
+				CityName:    "tokyo",
+				Provider:    "udx-mlit",
+				Year:        2023,
+				Format:      "citygml",
+				UpdateCount: 1,
+				Option:      "sample-takeshiba",
+			},
+		},
+		{
+			name: "citygml with option, op and extension",
+			args: "13999_tokyo_udx-mlit_2023_citygml_1_sample-takeshiba_op_bldg_3dtiles_lod2",
+			want: &AssetName{
+				CityCode:    "13999",
+				CityName:    "tokyo",
+				Provider:    "udx-mlit",
+				Year:        2023,
+				Format:      "citygml",
+				UpdateCount: 1,
+				Option:      "sample-takeshiba",
+				Ex: AssetNameEx{
+					Normal: &AssetNameExNormal{
+						Type:   "bldg",
+						Format: "3dtiles",
+						LOD:    2,
+					},
+					Ex: "bldg_3dtiles_lod2",
+				},
+			},
+		},
+		{
 			name: "bldg",
 			args: "26100_kyoto-shi_city_2023_citygml_1_op_bldg_3dtiles_lod2",
 			want: &AssetName{

@@ -16,15 +16,20 @@ type AssetName struct {
 	Year        int
 	Format      string
 	UpdateCount int
+	Option      string // オプション（_opの前に来る任意の文字列）
 	Ex          AssetNameEx
 }
 
 func (n AssetName) String() string {
+	var option string
+	if n.Option != "" {
+		option = "_" + n.Option
+	}
 	var ex string
 	if n.Ex.Ex != "" {
 		ex = "_" + n.Ex.Ex
 	}
-	return fmt.Sprintf("%s_%s_%s_%d_%s_%d_op%s", n.CityCode, n.CityName, n.Provider, n.Year, n.Format, n.UpdateCount, ex)
+	return fmt.Sprintf("%s_%s_%s_%d_%s_%d%s_op%s", n.CityCode, n.CityName, n.Provider, n.Year, n.Format, n.UpdateCount, option, ex)
 }
 
 type AssetNameEx struct {
@@ -126,7 +131,7 @@ func (ex AssetNameExFld) suffix(sep string) string {
 	return suffix
 }
 
-var reAssetName = regexp.MustCompile(`^(\d+)_([a-z0-9-]+)_([a-z0-9-]+)_(\d{4})_(.+?)_(\d+)(?:_op)?(?:_(.+))?$`)
+var reAssetName = regexp.MustCompile(`^(\d+)_([a-z0-9-]+)_([a-z0-9-]+)_(\d{4})_([a-z]+)_(\d+)(.*)$`)
 
 func ParseAssetName(name string) *AssetName {
 	m := reAssetName.FindStringSubmatch(name)
@@ -136,10 +141,10 @@ func ParseAssetName(name string) *AssetName {
 
 	year, _ := strconv.Atoi(m[4])
 	updateCount, _ := strconv.Atoi(m[6])
-	var ex string
-	if len(m) > 7 {
-		ex = m[7]
-	}
+
+	// Parse suffix to extract option and extension
+	// Format: [_option][_op][_extension]
+	option, ex := parseOptionAndExtension(m[7])
 
 	return &AssetName{
 		CityCode:    m[1],
@@ -148,8 +153,46 @@ func ParseAssetName(name string) *AssetName {
 		Year:        year,
 		Format:      m[5],
 		UpdateCount: updateCount,
+		Option:      option,
 		Ex:          ParseAssetNameEx(ex),
 	}
+}
+
+// parseOptionAndExtension parses the suffix after update count
+// and extracts option (before _op) and extension (after _op)
+func parseOptionAndExtension(suffix string) (option, ex string) {
+	if suffix == "" {
+		return "", ""
+	}
+
+	// Remove leading underscore
+	suffix = strings.TrimPrefix(suffix, "_")
+	if suffix == "" {
+		return "", ""
+	}
+
+	// Case 1: Just "op" (_op only, no option, no extension)
+	if suffix == "op" {
+		return "", ""
+	}
+
+	// Case 2: Starts with "op_" (_op followed by extension)
+	if strings.HasPrefix(suffix, "op_") {
+		return "", strings.TrimPrefix(suffix, "op_")
+	}
+
+	// Case 3: Ends with "_op" (option followed by _op, no extension)
+	if strings.HasSuffix(suffix, "_op") {
+		return strings.TrimSuffix(suffix, "_op"), ""
+	}
+
+	// Case 4: Contains "_op_" (option + _op + extension)
+	if idx := strings.Index(suffix, "_op_"); idx != -1 {
+		return suffix[:idx], suffix[idx+4:]
+	}
+
+	// Case 5: No _op found, treat as extension only (backward compatibility)
+	return "", suffix
 }
 
 func ParseAssetNameEx(name string) (ex AssetNameEx) {
