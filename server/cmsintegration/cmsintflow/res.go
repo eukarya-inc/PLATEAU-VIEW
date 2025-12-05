@@ -18,9 +18,11 @@ import (
 )
 
 func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res FlowResult) error {
+	log.Infofc(ctx, "receiveResultFromFlow start: res=%s", pp.Sprint(res))
+
 	id, err := parseID(res.ID, conf.Secret)
 	if err != nil {
-		log.Debugfc(ctx, "failed to parse id: %s", res.ID)
+		log.Infofc(ctx, "early return: failed to parse id: %s, err=%v", res.ID, err)
 		return nil
 	}
 
@@ -34,7 +36,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 
 	// handle error
 	if res.IsFailed() {
-		log.Debugfc(ctx, "failed to convert: logs=%v", res.Logs)
+		log.Infofc(ctx, "early return: flow result is failed: status=%s, logs=%v", res.Status, res.Logs)
 		_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s", cmsintegrationcommon.ReqType(id.Type).Title(), logurls)
 		return nil
 	}
@@ -42,7 +44,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// feature types
 	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
 	if err != nil {
-		log.Errorfc(ctx, "failed to get feature types: %v", err)
+		log.Infofc(ctx, "early return: failed to get feature types: %v", err)
 		return nil
 	}
 
@@ -50,21 +52,24 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		return ft.Code == id.FeatureType
 	})
 	if !ok {
-		log.Debugfc(ctx, "invalid feature type: %s", id.FeatureType)
+		log.Infofc(ctx, "early return: invalid feature type: %s, available=%v", id.FeatureType, lo.Map(featureTypes, func(ft plateaucms.PlateauFeatureType, _ int) string { return ft.Code }))
 		return nil
 	}
 
 	// get mainItem
 	mainItem, err := s.CMS.GetItem(ctx, id.ItemID, false)
 	if err != nil {
-		log.Debugfc(ctx, "failed to get item: %v", err)
+		log.Infofc(ctx, "failed to get item: itemID=%s, err=%v", id.ItemID, err)
 		return fmt.Errorf("failed to get item: %w", err)
 	}
+	log.Infofc(ctx, "mainItem: %s", pp.Sprint(mainItem))
 
 	baseFeatureItem := cmsintegrationcommon.FeatureItemFrom(mainItem)
+	log.Infofc(ctx, "baseFeatureItem: %s", pp.Sprint(baseFeatureItem))
 
 	// outputs
 	internal := res.Internal()
+	log.Infofc(ctx, "internal: %s", pp.Sprint(internal))
 
 	// upload assets
 	log.Infofc(ctx, "upload assets")
@@ -76,9 +81,10 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		for _, u := range urls {
 			aid, err := s.UploadAsset(ctx, id.ProjectID, u)
 			if err != nil {
-				log.Errorfc(ctx, "failed to upload asset (%s): %v", u, err)
+				log.Infofc(ctx, "early return: failed to upload asset: key=%s, url=%s, err=%v", key, u, err)
 				return nil
 			}
+			log.Infofc(ctx, "uploaded asset: key=%s, url=%s, assetID=%s", key, u, aid)
 			dataAssets = append(dataAssets, aid)
 			dataAssetMap[key] = append(dataAssetMap[key], aid)
 		}
@@ -88,23 +94,26 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	var dic string
 	if internal.Dic != "" {
 		var err error
-		log.Debugfc(ctx, "read dic: %s", internal.Dic)
+		log.Infofc(ctx, "read dic: %s", internal.Dic)
 		dic, err = readDic(ctx, internal.Dic)
 		if err != nil {
-			log.Errorfc(ctx, "failed to read dic: %v", err)
+			log.Infofc(ctx, "early return: failed to read dic: url=%s, err=%v", internal.Dic, err)
 			return nil
 		}
+		log.Infofc(ctx, "dic read success: len=%d", len(dic))
 	}
 
 	// upload qc result
 	var qcResult string
 	if internal.QCResult != "" {
-		log.Debugfc(ctx, "upload qc result: %s", internal.QCResult)
+		log.Infofc(ctx, "upload qc result: %s", internal.QCResult)
 		var err error
 		qcResult, err = s.UploadAsset(ctx, id.ProjectID, internal.QCResult)
 		if err != nil {
+			log.Infofc(ctx, "failed to upload qc result: url=%s, err=%v", internal.QCResult, err)
 			return fmt.Errorf("failed to upload qc result: %w", err)
 		}
+		log.Infofc(ctx, "qc result uploaded: assetID=%s", qcResult)
 	}
 
 	// update item
@@ -129,16 +138,17 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),
 	}).CMSItem()
 
-	log.Debugfc(ctx, "update item: %s", pp.Sprint(newitem))
+	log.Infofc(ctx, "update item: itemID=%s, newitem=%s", id.ItemID, pp.Sprint(newitem))
+	j1, _ := json.Marshal(newitem.Fields)
+	j2, _ := json.Marshal(newitem.MetadataFields)
+	log.Infofc(ctx, "update item JSON: fields=%s, metadataFields=%s", j1, j2)
 
-	_, err = s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
+	updatedItem, err := s.CMS.UpdateItem(ctx, id.ItemID, newitem.Fields, newitem.MetadataFields)
 	if err != nil {
-		j1, _ := json.Marshal(newitem.Fields)
-		j2, _ := json.Marshal(newitem.MetadataFields)
-		log.Debugfc(ctx, "item update for %s: %s, %s", id.ItemID, j1, j2)
-		log.Errorfc(ctx, "failed to update item: %v", err)
+		log.Infofc(ctx, "failed to update item: itemID=%s, err=%v", id.ItemID, err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}
+	log.Infofc(ctx, "update item success: response=%s", pp.Sprint(updatedItem))
 
 	// comment to the item
 	qcmsg := ""
