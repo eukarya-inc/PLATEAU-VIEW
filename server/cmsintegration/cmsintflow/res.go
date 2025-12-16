@@ -126,6 +126,12 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// update item
 	qcStatus, convStatus := id.Type.CMSStatus(cmsintegrationcommon.ConvertionStatusSuccess)
 
+	// if QC detected errors, set qcStatus to error
+	if id.Type == cmsintegrationcommon.ReqTypeQC && !internal.QCOK {
+		qcStatus = cmsintegrationcommon.ConvertionStatusError
+		log.Infofc(ctx, "QC detected errors, setting qcStatus to error")
+	}
+
 	// items
 	var data []string
 	var items []cmsintegrationcommon.FeatureItemDatum
@@ -172,18 +178,22 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 
 	log.Infofc(ctx, "success to receive result from flow: %s", id.Type)
 
-	// if the qc is success, trigger the conversion (unless conversion is skipped)
+	// if the qc is success and QCOK, trigger the conversion (unless conversion is skipped)
 	if id.Type == cmsintegrationcommon.ReqTypeQC && qcStatus == cmsintegrationcommon.ConvertionStatusSuccess {
-		// Check if conversion should be skipped
-		_, skipConv := baseFeatureItem.IsQCAndConvSkipped()
-		if skipConv || !featureType.Conv {
-			log.Infofc(ctx, "skip conv after qc success because conversion is marked as skip or feature type doesn't support conversion")
+		if !internal.QCOK {
+			log.Infofc(ctx, "skip conv after qc because QC detected errors (QCOK=false)")
 		} else {
-			log.Infofc(ctx, "trigger conv")
-			rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-			if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, cmsintegrationcommon.ReqTypeConv); err != nil {
-				log.Errorfc(ctx, "failed to trigger conv: %v", err)
-				return fmt.Errorf("failed to send request to flow: %w", err)
+			// Check if conversion should be skipped
+			_, skipConv := baseFeatureItem.IsQCAndConvSkipped()
+			if skipConv || !featureType.Conv {
+				log.Infofc(ctx, "skip conv after qc success because conversion is marked as skip or feature type doesn't support conversion")
+			} else {
+				log.Infofc(ctx, "trigger conv")
+				rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
+				if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, cmsintegrationcommon.ReqTypeConv); err != nil {
+					log.Errorfc(ctx, "failed to trigger conv: %v", err)
+					return fmt.Errorf("failed to send request to flow: %w", err)
+				}
 			}
 		}
 	}
