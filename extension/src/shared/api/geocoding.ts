@@ -8,11 +8,13 @@ export interface GeocodingResponse {
   areas: Area<true>[];
 }
 
-export function useGeocodingFetch() {
+export function useGeocodingLazy(): [
+  (params: { longitude: number; latitude: number; includeRadii?: boolean }) => Promise<void>,
+  { data: { areas: Address<true> } | null; loading: boolean },
+] {
   const [plateauApiUrl] = usePlateauApiUrl();
   const [data, setData] = useState<GeocodingResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
 
   const fetchAreas = useCallback(
     async (params: { longitude: number; latitude: number; includeRadii?: boolean }) => {
@@ -26,19 +28,17 @@ export function useGeocodingFetch() {
       }
 
       setLoading(true);
-      setError(null);
 
       try {
         const response = await fetch(url.toString());
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const result = await response.json();
-        setData(result as GeocodingResponse);
-        return result as GeocodingResponse;
+        const result = (await response.json()) as GeocodingResponse;
+        setData(result);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-        return null;
+        console.error("Geocoding error:", err);
+        setData(null);
       } finally {
         setLoading(false);
       }
@@ -46,21 +46,9 @@ export function useGeocodingFetch() {
     [plateauApiUrl],
   );
 
-  return { data, loading, error, fetchAreas };
-}
+  // Match the structure expected by useReverseGeocoder: { areas: Address<true> }
+  // where Address<true> = { areas: Area<true>[], address?: string }
+  const formattedData = data ? { areas: data as Address<true> } : null;
 
-export function useGeocodingLazy(): [
-  (params: { longitude: number; latitude: number; includeRadii?: boolean }) => Promise<void>,
-  { data: { areas: Address<true> } | null; loading: boolean; error: Error | null },
-] {
-  const { data, loading, error, fetchAreas } = useGeocodingFetch();
-
-  const fetch = useCallback(
-    async (params: { longitude: number; latitude: number; includeRadii?: boolean }) => {
-      await fetchAreas(params);
-    },
-    [fetchAreas],
-  );
-
-  return [fetch, { data: data ? { areas: data } : null, loading, error }];
+  return [fetchAreas, { data: formattedData, loading }];
 }
