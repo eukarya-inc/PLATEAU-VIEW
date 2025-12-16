@@ -7,6 +7,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
@@ -253,5 +254,11 @@ func (c *Config) LodStat() lodstat.Config {
 	return lodstat.Config{
 		DataCatalogAPIURL:   c.LocalURL("/datacatalog"),
 		DataCatalogAPIToken: c.SDK_Token,
+	}
+}
+
+func (c *Config) Geocoding() *geocoding.HandlerConfig {
+	return &geocoding.HandlerConfig{
+		GSIURL: "", // Use default GSI URL
 	}
 }

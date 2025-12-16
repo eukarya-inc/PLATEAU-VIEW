@@ -7,6 +7,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp"
@@ -38,6 +39,7 @@ var services = [](func(*Config) (*Service, error)){
 	Sidebar,
 	DataCatalog,
 	GovPolygon,
+	Geocoding,
 	Tiles,
 	Embed,
 	CityGML,
@@ -229,6 +231,15 @@ func LodStat(conf *Config) (*Service, error) {
 		Name: "lodstat",
 		Echo: func(g *echo.Group) error {
 			return lodstat.Echo(conf.LodStat(), g.Group("/lodstat"))
+		},
+	}, nil
+}
+
+func Geocoding(conf *Config) (*Service, error) {
+	return &Service{
+		Name: "geocoding",
+		Echo: func(g *echo.Group) error {
+			return geocoding.Echo(g.Group("/geocoding"), conf.Geocoding())
 		},
 	}, nil
 }

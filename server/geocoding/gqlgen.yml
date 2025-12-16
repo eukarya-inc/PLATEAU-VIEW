@@ -1,0 +1,19 @@
+schema:
+  - '*.graphql'
+
+exec:
+  filename: generated.go
+  package: geocoding
+
+model:
+  filename: models_gen.go
+  package: geocoding
+
+resolver:
+  layout: follow-schema
+  dir: .
+  package: geocoding
+  filename_template: "{name}.resolvers.go"
+
+autobind:
+  - github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding
