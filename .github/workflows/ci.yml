@@ -298,6 +298,16 @@ jobs:
         with:
           event-type: deploy-server-dev
 
+  deploy-server-job-dev:
+    needs: push-server
+    if: ${{ always() && needs.push-server.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-server-job-dev
+
   build-worker:
     needs: [prepare]
     if: ${{ !failure() && needs.prepare.outputs.worker == 'true' && needs.prepare.outputs.build == 'true' }}
