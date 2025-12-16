@@ -42,6 +42,12 @@ jobs:
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet
+      - name: Deploy server job to Cloud Run
+        run: |
+          gcloud run jobs deploy plateauview-server-job \
+            --image $IMAGE_GCP \
+            --region ${{ vars.GCP_REGION }} \
+            --quiet
 
   push_hub:
     runs-on: ubuntu-latest
