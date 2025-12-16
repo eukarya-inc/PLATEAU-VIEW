@@ -16,16 +16,23 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
+type DatacatalogGeneratorOptions struct {
+	OutputToStdout bool
+	OutputURL      string // gs://bucket/path for GCS
+}
+
 type DatacatalogGenerator struct {
 	config         *Config
 	pcms           *plateaucms.CMS
 	outputToStdout bool
+	outputURL      string
 }
 
-func NewDatacatalogGenerator(config *Config, outputToStdout bool) *DatacatalogGenerator {
+func NewDatacatalogGenerator(config *Config, opts DatacatalogGeneratorOptions) *DatacatalogGenerator {
 	return &DatacatalogGenerator{
 		config:         config,
-		outputToStdout: outputToStdout,
+		outputToStdout: opts.OutputToStdout,
+		outputURL:      opts.OutputURL,
 	}
 }
 
@@ -72,12 +79,25 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 	// デバッグ出力を有効化（キャッシュファイル生成を含む）
 	repos.EnableDebug(true)
 
-	// Writer設定とデバッグモード
+	// Writer設定
 	var memWriter *datacatalogv3.MemRepoWriter
+	var gcsStorage *datacatalogv3.GCSStorage
 	if g.outputToStdout {
 		// 標準出力モードではメモリライターを使用
 		memWriter = datacatalogv3.NewMemRepoWriter()
 		repos.SetWriter(memWriter)
+	} else if g.outputURL != "" && strings.HasPrefix(g.outputURL, "gs://") {
+		// GCS出力モード
+		var err error
+		gcsStorage, err = datacatalogv3.NewGCSStorage(ctx, g.outputURL)
+		if err != nil {
+			return fmt.Errorf("failed to create GCS storage: %w", err)
+		}
+		defer func() {
+			_ = gcsStorage.Close()
+		}()
+		repos.SetWriter(gcsStorage)
+		log.Infof("Output to GCS: %s", g.outputURL)
 	}
 
 	// プロジェクト情報の抽出
@@ -114,12 +134,20 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 		return g.outputToStdoutMode(ctx, repos, projectName, memWriter)
 	}
 
-	// 通常のファイル出力モード
+	// 警告出力
 	warnings := repos.Warnings(projectName)
 	if err := g.outputWarnings(warnings, projectName); err != nil {
 		log.Warnf("Failed to output warnings: %v", err)
 	}
 
+	// GCS出力モードの場合はローカルファイルの確認をスキップ
+	if gcsStorage != nil {
+		log.Infof("Cache written to GCS: %s", g.outputURL)
+		g.outputStatistics(repos, projectName)
+		return nil
+	}
+
+	// 通常のファイル出力モード
 	// 生成されたファイルの確認
 	if err := g.verifyGeneratedFiles(projectName); err != nil {
 		return err

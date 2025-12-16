@@ -35,8 +35,9 @@ func main() {
 	// コマンドライン引数の定義
 	var (
 		generateDatacatalog = flag.String("generate-datacatalog", "", "Generate datacatalog cache for specified project (e.g., plateau-2024) and exit")
-		outputToStdout     = flag.Bool("stdout", false, "Output JSON to stdout instead of file (use with --generate-datacatalog)")
-		help               = flag.Bool("help", false, "Show help message")
+		outputToStdout      = flag.Bool("stdout", false, "Output JSON to stdout instead of file (use with --generate-datacatalog)")
+		outputURL           = flag.String("output", "", "Output cache to specified URL (gs://bucket/path for GCS)")
+		help                = flag.Bool("help", false, "Show help message")
 	)
 	
 	// 既存のtoolコマンド用の処理を保持
@@ -66,7 +67,10 @@ func main() {
 	
 	// データカタログ生成モードの場合
 	if *generateDatacatalog != "" {
-		generator := NewDatacatalogGenerator(conf, *outputToStdout)
+		generator := NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
+			OutputToStdout: *outputToStdout,
+			OutputURL:      *outputURL,
+		})
 		if err := generator.Generate(*generateDatacatalog); err != nil {
 			log.Fatalf("Failed to generate datacatalog: %v", err)
 		}
@@ -86,11 +90,13 @@ func printHelp() {
 	fmt.Println("  plateauview                                      # Start server")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024  # Generate cache and exit")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --stdout  # Output to stdout")
+	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --output=gs://bucket/path  # Output to GCS")
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  --generate-datacatalog <project>  Generate datacatalog cache for specified project")
-	fmt.Println("  --stdout                         Output JSON to stdout instead of file (warnings to stderr)")
-	fmt.Println("  --help                           Show this help message")
+	fmt.Println("  --stdout                          Output JSON to stdout instead of file (warnings to stderr)")
+	fmt.Println("  --output <url>                    Output cache to specified URL (gs://bucket/path for GCS)")
+	fmt.Println("  --help                            Show this help message")
 }
 
 func main2(conf *Config) {

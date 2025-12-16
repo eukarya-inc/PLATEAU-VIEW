@@ -84,6 +84,7 @@ type Config struct {
 	DataCatalog_GeocodingAppID         string   `pp:",omitempty"`
 	DataCatalog_DiskCache              bool     `pp:",omitempty"`
 	DataCatalog_Debug                  bool     `pp:",omitempty"`
+	DataCatalog_CacheURL               string   `pp:",omitempty"` // gs://bucket/path for GCS cache
 	GCParcent                          int      `pp:",omitempty"`
 	CityGML_Domain                     string   `pp:",omitempty"`
 	CityGML_Bucket                     string   `pp:",omitempty"`
@@ -202,6 +203,7 @@ func (c *Config) DataCatalog() datacatalog.Config {
 		CacheTTL:             c.DataCatalog_CacheTTL,
 		ErrorOnInit:          c.DataCatalog_PanicOnInit,
 		GeocodingAppID:       c.DataCatalog_GeocodingAppID,
+		CacheURL:             c.DataCatalog_CacheURL,
 	}
 }
 

@@ -61,6 +61,14 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	)
 	mcpService.RegisterRoutes(mcpGroup)
 
+	// Return initialization function
+	// If CacheURL is set, load from cache instead of CMS
+	if conf.CacheURL != "" {
+		return func(ctx context.Context) error {
+			return h.InitFromCache(ctx, conf.CacheURL)
+		}, nil
+	}
+
 	return func(ctx context.Context) error {
 		return h.Init(ctx)
 	}, nil

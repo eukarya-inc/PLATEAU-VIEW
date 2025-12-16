@@ -303,18 +303,21 @@ func handler(c echo.Context) error {
 
 ## Code Quality
 
-### Before Committing
-Always run these commands before committing code:
+### Before Committing (MANDATORY)
+**IMPORTANT: You MUST run the following commands before committing any code changes. This is not optional.**
+
 ```bash
-# Format code
+# 1. Format code
 go fmt ./...
 
-# Run linting
+# 2. Run linting (REQUIRED - must pass with 0 issues)
 golangci-lint run ./...
 
-# Run tests
+# 3. Run tests
 go test ./...
 ```
+
+**Do NOT skip `golangci-lint`** - all lint issues must be resolved before committing.
 
 ### Linting
 The project uses `golangci-lint` with default settings. Common issues to watch for:

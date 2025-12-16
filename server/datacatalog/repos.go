@@ -312,6 +312,36 @@ func (h *ReposHandler) Init(ctx context.Context) error {
 	return nil
 }
 
+// InitFromCache initializes the repository from a cache storage (e.g., GCS or local file).
+// This skips the CMS API calls and loads data directly from the cache.
+// cacheURL can be:
+//   - gs://bucket/path for GCS
+//   - /path/to/cache for local filesystem
+func (h *ReposHandler) InitFromCache(ctx context.Context, cacheURL string) error {
+	var reader datacatalogv3.RepoReader
+
+	if strings.HasPrefix(cacheURL, "gs://") {
+		// GCS storage
+		storage, err := datacatalogv3.NewGCSStorage(ctx, cacheURL)
+		if err != nil {
+			return fmt.Errorf("datacatalogv3: failed to create GCS storage: %w", err)
+		}
+		defer func() {
+			_ = storage.Close()
+		}()
+		reader = storage
+	} else {
+		// Local filesystem
+		reader = datacatalogv3.NewFileRepoReader(cacheURL)
+	}
+
+	if err := h.reposv3.LoadAllFromStorage(ctx, reader); err != nil {
+		return fmt.Errorf("datacatalogv3: failed to load from cache: %w", err)
+	}
+
+	return nil
+}
+
 func (h *ReposHandler) prepareMergedRepo(c echo.Context, auth bool) (plateauapi.Repo, error) {
 	ctx := c.Request().Context()
 	md := plateaucms.GetCMSMetadataFromContext(ctx)
