@@ -90,6 +90,13 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		}
 	}
 
+	// check if conversion has no assets
+	if id.Type == cmsintegrationcommon.ReqTypeConv && len(dataAssets) == 0 {
+		log.Infofc(ctx, "no assets returned from flow for conversion")
+		_ = s.CMS.CommentToItem(ctx, id.ItemID, "Flowから変換結果のアセットが返されませんでした。Flowのログを確認してください。")
+		return nil
+	}
+
 	// read dic
 	var dic string
 	if internal.Dic != "" {
