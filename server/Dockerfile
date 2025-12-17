@@ -25,4 +25,4 @@ COPY PlateauView3.js* reearth.yml* /app/
 
 WORKDIR /app
 
-CMD [ "/app/plateauview" ]
+ENTRYPOINT [ "/app/plateauview" ]
