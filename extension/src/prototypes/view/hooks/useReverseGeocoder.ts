@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
-import { useCameraAreasLazy } from "../../../shared/graphql/hooks/geo";
+import { useGeocodingLazy } from "../../../shared/api/geocoding";
 import { useReEarthEvent } from "../../../shared/reearth/hooks";
 import { isReEarthAPIv2 } from "../../../shared/reearth/utils/reearth";
 import type { Address } from "../../../shared/states/address";
@@ -8,23 +8,19 @@ import type { Address } from "../../../shared/states/address";
 export type ReverseGeocoderResult = Address<true>;
 
 export function useReverseGeocoder(): ReverseGeocoderResult | undefined {
-  const [croods, setCroods] = useState<{
+  const [coords, setCoords] = useState<{
     longitude?: number;
     latitude?: number;
   }>({});
 
   const viewSize = useRef<number>();
 
-  const [getAreas, { data }] = useCameraAreasLazy({
-    longitude: croods.longitude ?? 0,
-    latitude: croods.latitude ?? 0,
-    includeRadii: true,
-  });
+  const [getAreas, { data }] = useGeocodingLazy();
   const [result, setResult] = useState<ReverseGeocoderResult>();
 
   useEffect(() => {
-    if (data?.areas) {
-      const areas = { ...data.areas };
+    if (data) {
+      const areas = { ...data };
       if (viewSize.current) {
         const threshold = viewSize.current * 0.5;
         areas.areas = areas.areas.filter(area => area.radius > threshold);
@@ -34,14 +30,20 @@ export function useReverseGeocoder(): ReverseGeocoderResult | undefined {
   }, [data]);
 
   useEffect(() => {
-    getAreas();
-  }, [croods, getAreas]);
+    if (coords.longitude !== undefined && coords.latitude !== undefined) {
+      getAreas({
+        longitude: coords.longitude,
+        latitude: coords.latitude,
+        includeRadii: true,
+      });
+    }
+  }, [coords, getAreas]);
 
   const updateFovInfo = useCallback(() => {
     const fovInfo = isReEarthAPIv2(window.reearth)
       ? window.reearth?.camera?.getGlobeIntersection({ withTerrain: true, calcViewSize: true })
       : window.reearth?.camera?.getFovInfo({ withTerrain: true, calcViewSize: true });
-    setCroods({
+    setCoords({
       longitude: fovInfo?.center?.lng,
       latitude: fovInfo?.center?.lat,
     });
