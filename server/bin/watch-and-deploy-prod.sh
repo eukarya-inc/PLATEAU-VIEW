@@ -90,13 +90,15 @@ for i in $(seq 1 "$MAX_CHECKS"); do
     WORKFLOW_TIMESTAMP=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_AT" +%s 2>/dev/null || date -d "$CREATED_AT" +%s 2>/dev/null || echo "0")
   fi
 
-  if [[ "$WORKFLOW_TIMESTAMP" -lt "$LATEST_COMMIT_TIMESTAMP" ]]; then
+  # ワークフローのSHAが最新コミットと一致しているかチェック
+  if [[ "$SHA" != "$LATEST_COMMIT_SHA" ]]; then
     echo ""
-    echo "⚠️  This workflow run was created before the latest commit."
-    echo "  Workflow created: $CREATED_AT (timestamp: $WORKFLOW_TIMESTAMP)"
-    echo "  Latest commit:    $LATEST_COMMIT_DATE (timestamp: $LATEST_COMMIT_TIMESTAMP)"
-    echo "  This appears to be an old workflow. Exiting."
-    exit 0
+    echo "⚠️  This workflow run is for a different commit."
+    echo "  Workflow SHA:  $SHA"
+    echo "  Latest commit: $LATEST_COMMIT_SHA"
+    echo "  Waiting for workflow for latest commit to start..."
+    sleep "$POLL_INTERVAL"
+    continue
   fi
 
   # まだ進行中
@@ -166,13 +168,15 @@ for i in $(seq 1 "$MAX_CHECKS"); do
     WORKFLOW_TIMESTAMP=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_AT" +%s 2>/dev/null || date -d "$CREATED_AT" +%s 2>/dev/null || echo "0")
   fi
 
-  if [[ "$WORKFLOW_TIMESTAMP" -lt "$LATEST_COMMIT_TIMESTAMP" ]]; then
+  # ワークフローのSHAが最新コミットと一致しているかチェック
+  if [[ "$SHA" != "$LATEST_COMMIT_SHA" ]]; then
     echo ""
-    echo "⚠️  This workflow run was created before the latest commit."
-    echo "  Workflow created: $CREATED_AT (timestamp: $WORKFLOW_TIMESTAMP)"
-    echo "  Latest commit:    $LATEST_COMMIT_DATE (timestamp: $LATEST_COMMIT_TIMESTAMP)"
-    echo "  This appears to be an old workflow. Exiting."
-    exit 0
+    echo "⚠️  This workflow run is for a different commit."
+    echo "  Workflow SHA:  $SHA"
+    echo "  Latest commit: $LATEST_COMMIT_SHA"
+    echo "  Waiting for workflow for latest commit to start..."
+    sleep "$POLL_INTERVAL"
+    continue
   fi
 
   # まだ進行中
