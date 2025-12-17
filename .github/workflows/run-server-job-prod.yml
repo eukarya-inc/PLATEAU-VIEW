@@ -25,15 +25,19 @@ jobs:
       - name: Execute Cloud Run Job
         run: |
           if [ -n "${{ inputs.project }}" ]; then
-            ARGS="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET"
+            # プロジェクト指定ありの場合はargsをoverrideする
+            gcloud run jobs execute $JOB_NAME \
+              --region ${{ vars.GCP_REGION }} \
+              --args="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET" \
+              --wait \
+              --quiet
           else
-            ARGS="--generate-datacatalog,--output,$OUTPUT_BUCKET"
+            # プロジェクト指定なしの場合はデフォルトargsを使用（全v3プロジェクト）
+            gcloud run jobs execute $JOB_NAME \
+              --region ${{ vars.GCP_REGION }} \
+              --wait \
+              --quiet
           fi
-          gcloud run jobs execute $JOB_NAME \
-            --region ${{ vars.GCP_REGION }} \
-            --args="$ARGS" \
-            --wait \
-            --quiet
       - name: Check job status
         if: failure()
         run: |
