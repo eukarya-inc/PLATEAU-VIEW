@@ -29,6 +29,17 @@ type RepoReader interface {
 	List(ctx context.Context) ([]string, error)
 	// Load loads InMemoryRepoContext for a project
 	Load(ctx context.Context, project string) (*plateauapi.InMemoryRepoContext, error)
+	// Close releases any resources held by the reader
+	Close() error
+}
+
+// NewRepoReaderFromURL creates a RepoReader from a URL.
+// Supports gs:// for GCS and local filesystem paths.
+func NewRepoReaderFromURL(ctx context.Context, url string) (RepoReader, error) {
+	if strings.HasPrefix(url, "gs://") {
+		return NewGCSStorage(ctx, url)
+	}
+	return NewFileRepoReader(url), nil
 }
 
 // GCSStorage implements CacheStorage for Google Cloud Storage
@@ -210,6 +221,11 @@ type FileRepoReader struct {
 // NewFileRepoReader creates a new FileRepoReader
 func NewFileRepoReader(basedir string) *FileRepoReader {
 	return &FileRepoReader{basedir: basedir}
+}
+
+// Close implements RepoReader (no-op for local filesystem)
+func (r *FileRepoReader) Close() error {
+	return nil
 }
 
 // List implements RepoReader

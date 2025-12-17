@@ -38,6 +38,7 @@ type ReposHandler struct {
 	cacheUpdateKey     string
 	geocodingAppID     string
 	cityConcurrency    int
+	cacheURL           string
 
 	qt *govpolygon.Quadtree
 }
@@ -81,6 +82,7 @@ func newReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 		cacheUpdateKey:     conf.CacheUpdateKey,
 		geocodingAppID:     conf.GeocodingAppID,
 		cityConcurrency:    conf.CityConcurrency,
+		cacheURL:           conf.CacheURL,
 		qt:                 qt,
 	}, nil
 }
@@ -277,6 +279,11 @@ func (h *ReposHandler) WarningHandler(c echo.Context) error {
 }
 
 func (h *ReposHandler) UpdateCache(ctx context.Context) error {
+	// If cache URL is set, reload from GCS instead of CMS
+	if h.cacheURL != "" {
+		return h.reloadFromCache(ctx)
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, p := range h.reposv3.Projects() {
@@ -294,6 +301,24 @@ func (h *ReposHandler) UpdateCache(ctx context.Context) error {
 	}
 
 	return g.Wait()
+}
+
+// reloadFromCache reloads all repos from cache storage (GCS or local file)
+func (h *ReposHandler) reloadFromCache(ctx context.Context) error {
+	reader, err := datacatalogv3.NewRepoReaderFromURL(ctx, h.cacheURL)
+	if err != nil {
+		return fmt.Errorf("datacatalogv3: failed to create cache reader: %w", err)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	if err := h.reposv3.LoadAllFromStorage(ctx, reader); err != nil {
+		return fmt.Errorf("datacatalogv3: failed to reload from cache: %w", err)
+	}
+
+	log.Infofc(ctx, "datacatalog: reloaded repos from cache: %s", h.cacheURL)
+	return nil
 }
 
 func (h *ReposHandler) Init(ctx context.Context) error {
@@ -318,22 +343,13 @@ func (h *ReposHandler) Init(ctx context.Context) error {
 //   - gs://bucket/path for GCS
 //   - /path/to/cache for local filesystem
 func (h *ReposHandler) InitFromCache(ctx context.Context, cacheURL string) error {
-	var reader datacatalogv3.RepoReader
-
-	if strings.HasPrefix(cacheURL, "gs://") {
-		// GCS storage
-		storage, err := datacatalogv3.NewGCSStorage(ctx, cacheURL)
-		if err != nil {
-			return fmt.Errorf("datacatalogv3: failed to create GCS storage: %w", err)
-		}
-		defer func() {
-			_ = storage.Close()
-		}()
-		reader = storage
-	} else {
-		// Local filesystem
-		reader = datacatalogv3.NewFileRepoReader(cacheURL)
+	reader, err := datacatalogv3.NewRepoReaderFromURL(ctx, cacheURL)
+	if err != nil {
+		return fmt.Errorf("datacatalogv3: failed to create cache reader: %w", err)
 	}
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	if err := h.reposv3.LoadAllFromStorage(ctx, reader); err != nil {
 		return fmt.Errorf("datacatalogv3: failed to load from cache: %w", err)
@@ -375,7 +391,7 @@ func (h *ReposHandler) PrepareAndGetMergedRepo(ctx context.Context, project stri
 
 	repos := make([]plateauapi.Repo, 0, len(mds))
 	for _, s := range mds {
-		if r := h.getRepo(s); r != nil {
+		if r := h.getRepo(ctx, s); r != nil {
 			repos = append(repos, r)
 		}
 	}
@@ -397,13 +413,14 @@ func (h *ReposHandler) PrepareAndGetMergedRepo(ctx context.Context, project stri
 	return merged
 }
 
-func (h *ReposHandler) getRepo(md plateaucms.Metadata) (repo plateauapi.Repo) {
+func (h *ReposHandler) getRepo(ctx context.Context, md plateaucms.Metadata) (repo plateauapi.Repo) {
 	if md.DataCatalogProjectAlias == "" {
 		return
 	}
 
 	if isV2(md) {
-		repo = h.reposv2.Repo(md.DataCatalogProjectAlias)
+		// v2: fetch lazily if not cached
+		repo = h.reposv2.GetOrFetch(ctx, md.DataCatalogProjectAlias)
 	} else if isV3(md) {
 		repo = h.reposv3.Repo(md.DataCatalogProjectAlias)
 	}

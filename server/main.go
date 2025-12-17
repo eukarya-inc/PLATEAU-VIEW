@@ -39,7 +39,7 @@ func main() {
 		outputURL           = flag.String("output", "", "Output cache to specified URL (gs://bucket/path for GCS)")
 		help                = flag.Bool("help", false, "Show help message")
 	)
-	
+
 	// 既存のtoolコマンド用の処理を保持
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
 		conf := lo.Must(NewConfig())
@@ -50,32 +50,47 @@ func main() {
 		}, os.Args[1:])
 		return
 	}
-	
+
 	flag.Parse()
-	
+
 	if *help {
 		printHelp()
 		os.Exit(0)
 	}
-	
+
 	// 標準出力モードの場合は早めにログ出力先を変更
 	if *generateDatacatalog != "" && *outputToStdout {
 		log.SetOutput(os.Stderr)
 	}
-	
+
 	conf := lo.Must(NewConfig())
-	
+
 	// データカタログ生成モードの場合
 	if *generateDatacatalog != "" {
-		generator := NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
-			OutputToStdout: *outputToStdout,
-			OutputURL:      *outputURL,
-		})
-		if err := generator.Generate(*generateDatacatalog); err != nil {
-			log.Fatalf("Failed to generate datacatalog: %v", err)
-		}
-		if !*outputToStdout {
-			log.Infof("Successfully generated datacatalog cache for %s", *generateDatacatalog)
+		projects := strings.Split(*generateDatacatalog, ",")
+		for _, project := range projects {
+			project = strings.TrimSpace(project)
+			if project == "" {
+				continue
+			}
+
+			// 出力先URLの決定（常にプロジェクト名をサフィックスとして付加）
+			projectOutputURL := *outputURL
+			if projectOutputURL != "" {
+				// outputURLの末尾にプロジェクト名を追加
+				projectOutputURL = strings.TrimSuffix(projectOutputURL, "/") + "/" + project
+			}
+
+			generator := NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
+				OutputToStdout: *outputToStdout,
+				OutputURL:      projectOutputURL,
+			})
+			if err := generator.Generate(project); err != nil {
+				log.Fatalf("Failed to generate datacatalog for %s: %v", project, err)
+			}
+			if !*outputToStdout {
+				log.Infof("Successfully generated datacatalog cache for %s", project)
+			}
 		}
 		os.Exit(0)
 	}
@@ -89,14 +104,15 @@ func printHelp() {
 	fmt.Println("Usage:")
 	fmt.Println("  plateauview                                      # Start server")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024  # Generate cache and exit")
+	fmt.Println("  plateauview --generate-datacatalog plateau-2024,plateau-2023  # Generate cache for multiple projects")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --stdout  # Output to stdout")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --output=gs://bucket/path  # Output to GCS")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  --generate-datacatalog <project>  Generate datacatalog cache for specified project")
-	fmt.Println("  --stdout                          Output JSON to stdout instead of file (warnings to stderr)")
-	fmt.Println("  --output <url>                    Output cache to specified URL (gs://bucket/path for GCS)")
-	fmt.Println("  --help                            Show this help message")
+	fmt.Println("  --generate-datacatalog <projects>  Generate datacatalog cache for specified project(s) (comma-separated)")
+	fmt.Println("  --stdout                           Output JSON to stdout instead of file (warnings to stderr)")
+	fmt.Println("  --output <url>                     Output cache to specified URL (gs://bucket/path for GCS)")
+	fmt.Println("  --help                             Show this help message")
 }
 
 func main2(conf *Config) {

@@ -3,15 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       project:
-        description: 'Project name to generate cache for (e.g., plateau-2024)'
-        required: true
-        type: string
-      output_url:
-        description: 'GCS output URL (e.g., gs://bucket/path)'
+        description: 'Project name(s) to generate cache for (e.g., plateau-2024 or plateau-2024,plateau-2023)'
         required: true
         type: string
 env:
   JOB_NAME: plateauview-server-job
+  OUTPUT_BUCKET: gs://plateau-prod-server-cache
 jobs:
   run_job:
     runs-on: ubuntu-latest
@@ -29,7 +26,7 @@ jobs:
         run: |
           gcloud run jobs execute $JOB_NAME \
             --region ${{ vars.GCP_REGION }} \
-            --args="--generate-datacatalog,${{ inputs.project }},--output,${{ inputs.output_url }}" \
+            --args="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET" \
             --wait \
             --quiet
       - name: Check job status

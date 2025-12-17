@@ -68,7 +68,13 @@ func (r *Repos) SetWriter(writer RepoWriter) {
 }
 
 func (r *Repos) Prepare(ctx context.Context, project string, year int, plateau bool, cms cms.Interface) error {
+	// Skip if already prepared (cms registered)
 	if _, ok := r.cms.Load(project); ok {
+		return nil
+	}
+
+	// Skip if repo already exists (e.g., loaded from cache)
+	if r.Repo(project) != nil {
 		return nil
 	}
 
