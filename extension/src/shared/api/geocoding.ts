@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import type { Address, Area } from "../states/address";
+import type { Area } from "../states/address";
 import { usePlateauApiUrl } from "../states/environmentVariables";
 
 export interface GeocodingResponse {
@@ -10,7 +10,7 @@ export interface GeocodingResponse {
 
 export function useGeocodingLazy(): [
   (params: { longitude: number; latitude: number; includeRadii?: boolean }) => Promise<void>,
-  { data: { areas: Address<true> } | null; loading: boolean },
+  { data: GeocodingResponse | null; loading: boolean },
 ] {
   const [plateauApiUrl] = usePlateauApiUrl();
   const [data, setData] = useState<GeocodingResponse | null>(null);
@@ -46,9 +46,5 @@ export function useGeocodingLazy(): [
     [plateauApiUrl],
   );
 
-  // Match the structure expected by useReverseGeocoder: { areas: Address<true> }
-  // where Address<true> = { areas: Area<true>[], address?: string }
-  const formattedData = data ? { areas: data as Address<true> } : null;
-
-  return [fetchAreas, { data: formattedData, loading }];
+  return [fetchAreas, { data, loading }];
 }

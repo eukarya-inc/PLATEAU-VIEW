@@ -19,8 +19,8 @@ export function useReverseGeocoder(): ReverseGeocoderResult | undefined {
   const [result, setResult] = useState<ReverseGeocoderResult>();
 
   useEffect(() => {
-    if (data?.areas) {
-      const areas = { ...data.areas };
+    if (data) {
+      const areas = { ...data };
       if (viewSize.current) {
         const threshold = viewSize.current * 0.5;
         areas.areas = areas.areas.filter(area => area.radius > threshold);
