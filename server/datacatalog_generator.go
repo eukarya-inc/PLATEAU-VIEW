@@ -108,8 +108,8 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 		log.Infof("Project: %s, Year: %d, IsPlateau: %v", projectName, year, isPlateau)
 	}
 
-	// CMSインターフェースの準備
-	cmsInterface, err := g.getCMSInterface()
+	// CMSインターフェースの準備（プロジェクト固有のトークンを使用）
+	cmsInterface, err := g.getCMSInterface(allMetadata, projectName)
 	if err != nil {
 		return fmt.Errorf("failed to get CMS interface: %w", err)
 	}
@@ -214,11 +214,32 @@ func (g *DatacatalogGenerator) initializePCMS() error {
 	return nil
 }
 
-func (g *DatacatalogGenerator) getCMSInterface() (cms.Interface, error) {
-	cmsClient, err := cms.New(
-		g.config.CMS_BaseURL,
-		g.config.CMS_Token,
-	)
+func (g *DatacatalogGenerator) getCMSInterface(allMetadata plateaucms.MetadataList, projectName string) (cms.Interface, error) {
+	// プロジェクト固有のトークンを取得（URLはグローバル設定を使用）
+	token := g.config.CMS_Token // デフォルトはグローバルトークン
+
+	if allMetadata != nil {
+		if md, ok := allMetadata.FindDataCatalog(projectName); ok {
+			// プロジェクト表示名（空の場合はフォールバック）
+			displayName := projectName
+			if displayName == "" {
+				displayName = fmt.Sprintf("(ProjectID: %s, Alias: %s)", md.ProjectID, md.ProjectAlias)
+			}
+
+			if md.CMSAPIKey != "" {
+				token = md.CMSAPIKey
+				if !g.outputToStdout {
+					log.Infof("Using project-specific CMS token for: %s", displayName)
+				}
+			} else if !g.outputToStdout {
+				log.Infof("Using global CMS token for: %s", displayName)
+			}
+		} else if !g.outputToStdout {
+			log.Infof("Using global CMS token for: %s (no metadata found)", projectName)
+		}
+	}
+
+	cmsClient, err := cms.New(g.config.CMS_BaseURL, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CMS client: %w", err)
 	}

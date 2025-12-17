@@ -104,6 +104,7 @@ func main() {
 			}
 		}
 
+		var failedProjects []string
 		for _, project := range projects {
 			// 出力先URLの決定（常にプロジェクト名をサフィックスとして付加）
 			projectOutputURL := *outputURL
@@ -117,11 +118,17 @@ func main() {
 				OutputURL:      projectOutputURL,
 			})
 			if err := generator.Generate(project); err != nil {
-				log.Fatalf("Failed to generate datacatalog for %s: %v", project, err)
+				log.Errorf("Failed to generate datacatalog for %s: %v", project, err)
+				failedProjects = append(failedProjects, project)
+				continue
 			}
 			if !*outputToStdout {
 				log.Infof("Successfully generated datacatalog cache for %s", project)
 			}
+		}
+
+		if len(failedProjects) > 0 {
+			log.Warnf("Failed to generate %d project(s): %v", len(failedProjects), failedProjects)
 		}
 		os.Exit(0)
 	}

@@ -108,10 +108,11 @@ func (l MetadataList) PlateauProjects() MetadataList {
 	})
 }
 
-// V3Projects returns all v3 projects that are not disabled, sorted by year (newest first)
+// V3Projects returns all v3 projects sorted by year (newest first)
+// Note: Disabled projects and invalid entries are already filtered out in AllMetadata
 func (l MetadataList) V3Projects() MetadataList {
 	m := lo.FilterMap(l, func(m Metadata, _ int) (lo.Tuple2[Metadata, int], bool) {
-		if m.Disabled || !m.IsV3() {
+		if !m.IsV3() {
 			return lo.Tuple2[Metadata, int]{}, false
 		}
 		y := m.PlateauYear()
@@ -244,11 +245,14 @@ func (h *CMS) AllMetadata(ctx context.Context, findDataCatalog bool) (MetadataLi
 	for _, item := range items.Items {
 		m := Metadata{}
 		item.Unmarshal(&m)
-		if m.CMSAPIKey == "" {
+		if m.CMSAPIKey == "" || m.Disabled {
 			continue
 		}
 		if m.DataCatalogProjectAlias == "" {
 			m.DataCatalogProjectAlias = m.ProjectAlias
+		}
+		if m.DataCatalogProjectAlias == "" {
+			continue
 		}
 		m.CMSBaseURL = h.cmsbase
 		all = append(all, m)
