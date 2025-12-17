@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/tool"
 	"github.com/go-playground/validator/v10"
@@ -51,6 +54,10 @@ func main() {
 		return
 	}
 
+	// --generate-datacatalog が値なしで指定された場合の前処理
+	// (次の引数が -- で始まるか、最後の引数の場合は "all" を補完)
+	preprocessArgs()
+
 	flag.Parse()
 
 	if *help {
@@ -63,17 +70,41 @@ func main() {
 		log.SetOutput(os.Stderr)
 	}
 
+	// --generate-datacatalog フラグが明示的に指定されたかチェック
+	generateDatacatalogSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "generate-datacatalog" {
+			generateDatacatalogSet = true
+		}
+	})
+
 	conf := lo.Must(NewConfig())
 
 	// データカタログ生成モードの場合
-	if *generateDatacatalog != "" {
-		projects := strings.Split(*generateDatacatalog, ",")
-		for _, project := range projects {
-			project = strings.TrimSpace(project)
-			if project == "" {
-				continue
-			}
+	if generateDatacatalogSet {
+		var projects []string
+		projectValue := strings.TrimSpace(*generateDatacatalog)
 
+		// 空文字列または "all" の場合は全v3プロジェクトを対象にする
+		if projectValue == "" || projectValue == "all" {
+			v3Projects, err := getAllV3Projects(conf)
+			if err != nil {
+				log.Fatalf("Failed to get v3 projects: %v", err)
+			}
+			projects = v3Projects
+			if !*outputToStdout {
+				log.Infof("Found %d v3 projects: %v", len(projects), projects)
+			}
+		} else {
+			for _, p := range strings.Split(projectValue, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					projects = append(projects, p)
+				}
+			}
+		}
+
+		for _, project := range projects {
 			// 出力先URLの決定（常にプロジェクト名をサフィックスとして付加）
 			projectOutputURL := *outputURL
 			if projectOutputURL != "" {
@@ -98,18 +129,65 @@ func main() {
 	main2(conf)
 }
 
+// preprocessArgs は --generate-datacatalog が値なしで指定された場合に "all" を補完する
+func preprocessArgs() {
+	for i, arg := range os.Args {
+		// --generate-datacatalog または -generate-datacatalog を探す
+		if arg == "--generate-datacatalog" || arg == "-generate-datacatalog" {
+			// 最後の引数、または次の引数が - で始まる場合は値なし
+			if i+1 >= len(os.Args) || strings.HasPrefix(os.Args[i+1], "-") {
+				// "all" を補完
+				os.Args[i] = "--generate-datacatalog=all"
+			}
+			return
+		}
+		// --generate-datacatalog= 形式（値あり）の場合は何もしない
+		if strings.HasPrefix(arg, "--generate-datacatalog=") || strings.HasPrefix(arg, "-generate-datacatalog=") {
+			return
+		}
+	}
+}
+
+func getAllV3Projects(conf *Config) ([]string, error) {
+	pcms, err := plateaucms.New(plateaucms.Config{
+		CMSBaseURL:       conf.CMS_BaseURL,
+		CMSMainToken:     conf.CMS_Token,
+		CMSSystemProject: conf.CMS_SystemProject,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PLATEAU CMS client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	allMetadata, err := pcms.AllMetadata(ctx, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata: %w", err)
+	}
+
+	v3Projects := allMetadata.V3Projects()
+	projects := make([]string, 0, len(v3Projects))
+	for _, m := range v3Projects {
+		projects = append(projects, m.DataCatalogProjectAlias)
+	}
+
+	return projects, nil
+}
+
 func printHelp() {
 	fmt.Println("PLATEAU VIEW Server")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  plateauview                                      # Start server")
-	fmt.Println("  plateauview --generate-datacatalog plateau-2024  # Generate cache and exit")
+	fmt.Println("  plateauview --generate-datacatalog               # Generate cache for all v3 projects")
+	fmt.Println("  plateauview --generate-datacatalog plateau-2024  # Generate cache for specific project")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024,plateau-2023  # Generate cache for multiple projects")
+	fmt.Println("  plateauview --generate-datacatalog --output=gs://bucket/path  # Output to GCS")
 	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --stdout  # Output to stdout")
-	fmt.Println("  plateauview --generate-datacatalog plateau-2024 --output=gs://bucket/path  # Output to GCS")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  --generate-datacatalog <projects>  Generate datacatalog cache for specified project(s) (comma-separated)")
+	fmt.Println("  --generate-datacatalog [projects]  Generate datacatalog cache (no value for all v3 projects, or comma-separated project names)")
 	fmt.Println("  --stdout                           Output JSON to stdout instead of file (warnings to stderr)")
 	fmt.Println("  --output <url>                     Output cache to specified URL (gs://bucket/path for GCS)")
 	fmt.Println("  --help                             Show this help message")

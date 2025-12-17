@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       project:
-        description: 'Project name(s) to generate cache for (e.g., plateau-2024 or plateau-2024,plateau-2023)'
-        required: true
+        description: 'Project name(s) to generate cache for (empty for all v3 projects, or e.g., plateau-2024)'
+        required: false
         type: string
 env:
   JOB_NAME: plateauview-server-job
@@ -24,9 +24,14 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       - name: Execute Cloud Run Job
         run: |
+          if [ -n "${{ inputs.project }}" ]; then
+            ARGS="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET"
+          else
+            ARGS="--generate-datacatalog,--output,$OUTPUT_BUCKET"
+          fi
           gcloud run jobs execute $JOB_NAME \
             --region ${{ vars.GCP_REGION }} \
-            --args="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET" \
+            --args="$ARGS" \
             --wait \
             --quiet
       - name: Check job status

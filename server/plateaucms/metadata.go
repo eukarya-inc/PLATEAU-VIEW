@@ -39,6 +39,7 @@ type Metadata struct {
 	ProjectID                string `json:"project_id" cms:"project_id,text"`
 	MergePlateau             bool   `json:"merge_plateau" cms:"merge_plateau,boolean"`
 	Converter                string `json:"converter" cms:"converter,select"`
+	Disabled                 bool   `json:"disabled" cms:"disabled,boolean"`
 	// whether the request is authenticated with sidebar access token
 	Auth       bool   `json:"-" cms:"-"`
 	CMSBaseURL string `json:"-" cms:"-"`
@@ -82,12 +83,39 @@ func (m Metadata) IsValidToken(token string) bool {
 	return m.SidebarAccessToken == token
 }
 
+func (m Metadata) IsV2() bool {
+	return m.DataCatalogSchemaVersion == "" || m.DataCatalogSchemaVersion == "v2"
+}
+
+func (m Metadata) IsV3() bool {
+	return m.DataCatalogSchemaVersion == "v3"
+}
+
 type MetadataList []Metadata
 
 func (l MetadataList) PlateauProjects() MetadataList {
 	m := lo.FilterMap(l, func(m Metadata, _ int) (lo.Tuple2[Metadata, int], bool) {
 		y := m.PlateauYear()
 		return lo.Tuple2[Metadata, int]{A: m, B: y}, y > 0
+	})
+
+	slices.SortFunc(m, func(a, b lo.Tuple2[Metadata, int]) int {
+		return b.B - a.B
+	})
+
+	return lo.Map(m, func(t lo.Tuple2[Metadata, int], _ int) Metadata {
+		return t.A
+	})
+}
+
+// V3Projects returns all v3 projects that are not disabled, sorted by year (newest first)
+func (l MetadataList) V3Projects() MetadataList {
+	m := lo.FilterMap(l, func(m Metadata, _ int) (lo.Tuple2[Metadata, int], bool) {
+		if m.Disabled || !m.IsV3() {
+			return lo.Tuple2[Metadata, int]{}, false
+		}
+		y := m.PlateauYear()
+		return lo.Tuple2[Metadata, int]{A: m, B: y}, true
 	})
 
 	slices.SortFunc(m, func(a, b lo.Tuple2[Metadata, int]) int {
