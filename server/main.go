@@ -40,6 +40,8 @@ func main() {
 		generateDatacatalog = flag.String("generate-datacatalog", "", "Generate datacatalog cache for specified project (e.g., plateau-2024) and exit")
 		outputToStdout      = flag.Bool("stdout", false, "Output JSON to stdout instead of file (use with --generate-datacatalog)")
 		outputURL           = flag.String("output", "", "Output cache to specified URL (gs://bucket/path for GCS)")
+		updateCacheURL      = flag.String("update-cache-url", "", "URL to call update-cache API after generation (e.g., https://example.com/datacatalog/update-cache)")
+		updateCacheKey      = flag.String("update-cache-key", "", "Key for update-cache API authentication")
 		help                = flag.Bool("help", false, "Show help message")
 	)
 
@@ -104,7 +106,19 @@ func main() {
 			}
 		}
 
+		// コマンドラインフラグが指定されていない場合は環境変数（config）の値を使用
+		effectiveUpdateCacheURL := *updateCacheURL
+		if effectiveUpdateCacheURL == "" {
+			effectiveUpdateCacheURL = conf.DataCatalog_CacheUpdateURL
+		}
+		effectiveUpdateCacheKey := *updateCacheKey
+		if effectiveUpdateCacheKey == "" {
+			effectiveUpdateCacheKey = conf.DataCatalog_CacheUpdateKey
+		}
+
 		var failedProjects []string
+		var generator *DatacatalogGenerator
+		var anyGenerated bool
 		for _, project := range projects {
 			// 出力先URLの決定（常にプロジェクト名をサフィックスとして付加）
 			projectOutputURL := *outputURL
@@ -113,14 +127,20 @@ func main() {
 				projectOutputURL = strings.TrimSuffix(projectOutputURL, "/") + "/" + project
 			}
 
-			generator := NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
+			generator = NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
 				OutputToStdout: *outputToStdout,
 				OutputURL:      projectOutputURL,
+				UpdateCacheURL: effectiveUpdateCacheURL,
+				UpdateCacheKey: effectiveUpdateCacheKey,
 			})
-			if err := generator.Generate(project); err != nil {
+			skipped, err := generator.Generate(project)
+			if err != nil {
 				log.Errorf("Failed to generate datacatalog for %s: %v", project, err)
 				failedProjects = append(failedProjects, project)
 				continue
+			}
+			if !skipped {
+				anyGenerated = true
 			}
 			if !*outputToStdout {
 				log.Infof("Successfully generated datacatalog cache for %s", project)
@@ -130,6 +150,16 @@ func main() {
 		if len(failedProjects) > 0 {
 			log.Warnf("Failed to generate %d project(s): %v", len(failedProjects), failedProjects)
 		}
+
+		// 実際に生成されたプロジェクトがある場合のみupdate-cache APIを呼び出す
+		if generator != nil && effectiveUpdateCacheURL != "" && anyGenerated {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := generator.NotifyUpdateCache(ctx); err != nil {
+				log.Errorf("Failed to call update-cache API: %v", err)
+			}
+		}
+
 		os.Exit(0)
 	}
 
@@ -197,6 +227,8 @@ func printHelp() {
 	fmt.Println("  --generate-datacatalog [projects]  Generate datacatalog cache (no value for all v3 projects, or comma-separated project names)")
 	fmt.Println("  --stdout                           Output JSON to stdout instead of file (warnings to stderr)")
 	fmt.Println("  --output <url>                     Output cache to specified URL (gs://bucket/path for GCS)")
+	fmt.Println("  --update-cache-url <url>           URL to call update-cache API after generation (env: REEARTH_PLATEAUVIEW_DATACATALOG_CACHEUPDATEURL)")
+	fmt.Println("  --update-cache-key <key>           Key for update-cache API authentication (env: REEARTH_PLATEAUVIEW_DATACATALOG_CACHEUPDATEKEY)")
 	fmt.Println("  --help                             Show this help message")
 }
 

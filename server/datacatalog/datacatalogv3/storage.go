@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
@@ -211,6 +212,20 @@ func (s *GCSStorage) Load(ctx context.Context, project string) (*plateauapi.InMe
 // Close closes the GCS client
 func (s *GCSStorage) Close() error {
 	return s.client.Close()
+}
+
+// GetCacheTimestamp returns the last updated time of the cache object for a project.
+// Returns zero time if the object doesn't exist.
+func (s *GCSStorage) GetCacheTimestamp(ctx context.Context, project string) (time.Time, error) {
+	obj := s.client.Bucket(s.bucket).Object(s.objectName(project))
+	attrs, err := obj.Attrs(ctx)
+	if err != nil {
+		if err == storage.ErrObjectNotExist {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("failed to get object attrs: %w", err)
+	}
+	return attrs.Updated, nil
 }
 
 // FileRepoReader reads from local filesystem

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +22,8 @@ import (
 type DatacatalogGeneratorOptions struct {
 	OutputToStdout bool
 	OutputURL      string // gs://bucket/path for GCS
+	UpdateCacheURL string // URL to call update-cache API after generation
+	UpdateCacheKey string // Key for update-cache API authentication
 }
 
 type DatacatalogGenerator struct {
@@ -26,6 +31,8 @@ type DatacatalogGenerator struct {
 	pcms           *plateaucms.CMS
 	outputToStdout bool
 	outputURL      string
+	updateCacheURL string
+	updateCacheKey string
 }
 
 func NewDatacatalogGenerator(config *Config, opts DatacatalogGeneratorOptions) *DatacatalogGenerator {
@@ -33,10 +40,14 @@ func NewDatacatalogGenerator(config *Config, opts DatacatalogGeneratorOptions) *
 		config:         config,
 		outputToStdout: opts.OutputToStdout,
 		outputURL:      opts.OutputURL,
+		updateCacheURL: opts.UpdateCacheURL,
+		updateCacheKey: opts.UpdateCacheKey,
 	}
 }
 
-func (g *DatacatalogGenerator) Generate(projectName string) error {
+// Generate generates datacatalog cache for a project.
+// Returns (skipped, error) where skipped is true if generation was skipped due to cache being up to date.
+func (g *DatacatalogGenerator) Generate(projectName string) (skipped bool, err error) {
 	ctx := context.Background()
 
 	// タイムアウト設定
@@ -52,7 +63,7 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 
 	// PLATEAU CMSクライアントの初期化
 	if err := g.initializePCMS(); err != nil {
-		return fmt.Errorf("failed to initialize PLATEAU CMS: %w", err)
+		return false, fmt.Errorf("failed to initialize PLATEAU CMS: %w", err)
 	}
 
 	// メタデータの取得とコンテキストへの設定
@@ -91,7 +102,7 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 		var err error
 		gcsStorage, err = datacatalogv3.NewGCSStorage(ctx, g.outputURL)
 		if err != nil {
-			return fmt.Errorf("failed to create GCS storage: %w", err)
+			return false, fmt.Errorf("failed to create GCS storage: %w", err)
 		}
 		defer func() {
 			_ = gcsStorage.Close()
@@ -111,7 +122,19 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 	// CMSインターフェースの準備（プロジェクト固有のトークンを使用）
 	cmsInterface, err := g.getCMSInterface(allMetadata, projectName)
 	if err != nil {
-		return fmt.Errorf("failed to get CMS interface: %w", err)
+		return false, fmt.Errorf("failed to get CMS interface: %w", err)
+	}
+
+	// GCSモードの場合、キャッシュの更新が必要かチェック
+	if gcsStorage != nil {
+		skip, err := g.shouldSkipGeneration(ctx, gcsStorage, cmsInterface, projectName)
+		if err != nil {
+			log.Warnf("Failed to check if generation should be skipped: %v", err)
+			// エラーの場合は続行
+		} else if skip {
+			log.Infof("Skipping datacatalog generation for %s: cache is up to date", projectName)
+			return true, nil
+		}
 	}
 
 	// リポジトリの準備
@@ -121,7 +144,7 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 	startTime := time.Now()
 
 	if err := repos.Prepare(ctx, projectName, year, isPlateau, cmsInterface); err != nil {
-		return fmt.Errorf("failed to prepare repository: %w", err)
+		return false, fmt.Errorf("failed to prepare repository: %w", err)
 	}
 
 	elapsed := time.Since(startTime)
@@ -131,7 +154,7 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 
 	// 標準出力モードの場合
 	if g.outputToStdout {
-		return g.outputToStdoutMode(ctx, repos, projectName, memWriter)
+		return false, g.outputToStdoutMode(ctx, repos, projectName, memWriter)
 	}
 
 	// 警告出力
@@ -144,19 +167,19 @@ func (g *DatacatalogGenerator) Generate(projectName string) error {
 	if gcsStorage != nil {
 		log.Infof("Cache written to GCS: %s", g.outputURL)
 		g.outputStatistics(repos, projectName)
-		return nil
+		return false, nil
 	}
 
 	// 通常のファイル出力モード
 	// 生成されたファイルの確認
 	if err := g.verifyGeneratedFiles(projectName); err != nil {
-		return err
+		return false, err
 	}
 
 	// 統計情報の出力
 	g.outputStatistics(repos, projectName)
 
-	return nil
+	return false, nil
 }
 
 func (g *DatacatalogGenerator) outputToStdoutMode(_ context.Context, repos *datacatalogv3.Repos, projectName string, memWriter *datacatalogv3.MemRepoWriter) error {
@@ -247,6 +270,54 @@ func (g *DatacatalogGenerator) getCMSInterface(allMetadata plateaucms.MetadataLi
 	return cmsClient, nil
 }
 
+// shouldSkipGeneration checks if cache generation can be skipped.
+// Returns true if the GCS cache is newer than the latest CMS model update.
+func (g *DatacatalogGenerator) shouldSkipGeneration(ctx context.Context, gcsStorage *datacatalogv3.GCSStorage, cmsInterface cms.Interface, projectName string) (bool, error) {
+	// GCSキャッシュのタイムスタンプを取得
+	cacheTimestamp, err := gcsStorage.GetCacheTimestamp(ctx, projectName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get cache timestamp: %w", err)
+	}
+
+	// キャッシュが存在しない場合は生成が必要
+	if cacheTimestamp.IsZero() {
+		if !g.outputToStdout {
+			log.Infof("No existing cache found for %s, generation required", projectName)
+		}
+		return false, nil
+	}
+
+	// CMSからモデル一覧を取得し、最新の更新日時を取得
+	models, err := cmsInterface.GetModels(ctx, projectName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get models from CMS: %w", err)
+	}
+
+	if models == nil || len(models.Models) == 0 {
+		// モデルがない場合はスキップしない（エラーの可能性）
+		return false, nil
+	}
+
+	// 最新のLastModifiedを探す
+	var latestModified time.Time
+	for _, model := range models.Models {
+		if model.LastModified.After(latestModified) {
+			latestModified = model.LastModified
+		}
+	}
+
+	if !g.outputToStdout {
+		log.Infof("Cache timestamp: %s, Latest CMS update: %s", cacheTimestamp.Format(time.RFC3339), latestModified.Format(time.RFC3339))
+	}
+
+	// キャッシュがCMSの最新更新より新しければスキップ
+	if cacheTimestamp.After(latestModified) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func (g *DatacatalogGenerator) extractYear(projectName string) int {
 	// "plateau-2024" -> 2024
 	parts := strings.Split(projectName, "-")
@@ -260,6 +331,48 @@ func (g *DatacatalogGenerator) extractYear(projectName string) int {
 
 func (g *DatacatalogGenerator) isPlateau(projectName string) bool {
 	return strings.HasPrefix(projectName, "plateau")
+}
+
+// NotifyUpdateCache calls the update-cache API to reload caches.
+// Should be called after all generations are complete.
+func (g *DatacatalogGenerator) NotifyUpdateCache(ctx context.Context) error {
+	if g.updateCacheURL == "" {
+		return nil
+	}
+
+	log.Infof("Calling update-cache API: %s", g.updateCacheURL)
+
+	body := map[string]string{}
+	if g.updateCacheKey != "" {
+		body["key"] = g.updateCacheKey
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.updateCacheURL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call update-cache API: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("update-cache API returned status %d", resp.StatusCode)
+	}
+
+	log.Infof("Successfully called update-cache API")
+	return nil
 }
 
 func (g *DatacatalogGenerator) outputWarnings(warnings []string, projectName string) error {

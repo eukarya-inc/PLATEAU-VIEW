@@ -77,6 +77,7 @@ type Config struct {
 	DataConv_Disable                   bool     `pp:",omitempty"`
 	DataCatalog_DisableCache           bool     `pp:",omitempty"`
 	DataCatalog_CacheUpdateKey         string   `pp:",omitempty"`
+	DataCatalog_CacheUpdateURL         string   `pp:",omitempty"`
 	DataCatalog_PlaygroundEndpoint     string   `pp:",omitempty"`
 	DataCatalog_CacheTTL               int      `pp:",omitempty"`
 	DataCatalog_GQL_MaxComplexity      int      `pp:",omitempty"`
