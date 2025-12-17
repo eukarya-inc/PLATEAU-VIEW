@@ -159,7 +159,7 @@ func getAllV3Projects(conf *Config) ([]string, error) {
 	pcms, err := plateaucms.New(plateaucms.Config{
 		CMSBaseURL:       conf.CMS_BaseURL,
 		CMSMainToken:     conf.CMS_Token,
-		CMSSystemProject: conf.CMS_SystemProject,
+		CMSSystemProject: conf.CMS_TokenProject, // use TokenProject like other services
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PLATEAU CMS client: %w", err)
