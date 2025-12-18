@@ -1,4 +1,4 @@
-package mcp
+package plateauspecmcp
 
 import (
 	"context"
@@ -7,10 +7,22 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
+// RegisterResources registers PLATEAU specification resources
+func RegisterResources(s *server.MCPServer) {
+	// Get initial resources
+	resources, _ := HandleResourceList(context.Background())
+
+	// Add each resource with its handler
+	for _, resource := range resources {
+		s.AddResource(resource, HandleResourceRead)
+	}
+}
+
 // HandleResourceList returns a list of available PLATEAU specification resources
-func HandleResourceList(ctx context.Context) ([]mcp.Resource, error) {
+func HandleResourceList(_ context.Context) ([]mcp.Resource, error) {
 	resources := []mcp.Resource{
 		{
 			URI:         "plateau://standard/overview",
@@ -72,7 +84,7 @@ func HandleResourceList(ctx context.Context) ([]mcp.Resource, error) {
 }
 
 // HandleResourceRead reads the content of a specific resource
-func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func HandleResourceRead(_ context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	uri := request.Params.URI
 	// Parse URI
 	if !strings.HasPrefix(uri, "plateau://") {
@@ -87,7 +99,7 @@ func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([
 	docType := "standard"
 	category := parts[0]
 	topic := ""
-	
+
 	if category == "procedure" && len(parts) > 1 {
 		docType = "procedure"
 		topic = parts[1]
@@ -111,11 +123,11 @@ func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([
 
 	// Map topics to actual document paths
 	pathMap := map[string]string{
-		"overview":        "",
-		"building":        "/toc4/toc4_02",
-		"transportation":  "/toc4/toc4_03",
-		"landuse":        "/toc4/toc4_01",
-		"disaster":       "/toc4/toc4_05",
+		"overview":         "",
+		"building":         "/toc4/toc4_02",
+		"transportation":   "/toc4/toc4_03",
+		"landuse":          "/toc4/toc4_01",
+		"disaster":         "/toc4/toc4_05",
 		"data-preparation": "/toc_03",
 		"quality-control":  "/toc_06",
 	}
@@ -152,20 +164,20 @@ func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([
 	// Get content for first few sections
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("# %s\n\n", getTopicTitle(topic)))
-	
+
 	maxSections := 3 // Limit to first 3 sections for summary
 	for i, section := range sections {
 		if i >= maxSections {
 			break
 		}
-		
+
 		doc, err := client.GetContentByPath(section.Path)
 		if err != nil {
 			continue
 		}
-		
+
 		content.WriteString(fmt.Sprintf("\n## %s\n\n", section.Title))
-		content.WriteString(formatAsMarkdown(doc))
+		content.WriteString(FormatAsMarkdown(doc))
 		content.WriteString("\n---\n")
 	}
 
@@ -184,34 +196,34 @@ func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([
 
 func formatOverview(chapters []Chapter, docType string) string {
 	var sb strings.Builder
-	
+
 	title := "PLATEAU Standard Product Specification"
 	if docType == "procedure" {
 		title = "3D City Model Standard Work Procedures"
 	}
-	
+
 	sb.WriteString(fmt.Sprintf("# %s Overview\n\n", title))
 	sb.WriteString("## Document Structure\n\n")
-	
+
 	for _, chapter := range chapters {
 		sb.WriteString(fmt.Sprintf("### %s\n", chapter.Title))
 		sb.WriteString(fmt.Sprintf("- **ID**: %s\n", chapter.ID))
 		sb.WriteString(fmt.Sprintf("- **Path**: `%s`\n", chapter.Path))
 		sb.WriteString("\n")
-		
+
 		// Add brief description based on chapter ID
 		desc := getChapterDescription(chapter.ID)
 		if desc != "" {
 			sb.WriteString(desc + "\n\n")
 		}
 	}
-	
+
 	sb.WriteString("\n## How to Navigate\n\n")
 	sb.WriteString("Use the following tools to explore the specification:\n\n")
 	sb.WriteString("- `plateau_spec_list`: Browse chapters and sections\n")
 	sb.WriteString("- `plateau_spec_get_content`: Read specific section content\n")
 	sb.WriteString("- `plateau_spec_search`: Search for specific topics\n")
-	
+
 	return sb.String()
 }
 
@@ -219,28 +231,28 @@ func getGlossaryContent() (string, error) {
 	// This would typically fetch from a glossary endpoint
 	// For now, return a static glossary of common terms
 	glossary := map[string]string{
-		"LOD": "Level of Detail - Describes the granularity of 3D model representation",
-		"CityGML": "Open data model and XML-based format for storage and exchange of 3D city models",
-		"建築物モデル": "Building Model - 3D representation of buildings and structures",
-		"道路モデル": "Road Model - 3D representation of transportation infrastructure",
-		"土地利用モデル": "Land Use Model - Classification and representation of urban land use",
-		"災害リスク": "Disaster Risk - Assessment of natural disaster probabilities and impacts",
-		"洪水浸水想定": "Flood Inundation Assumption - Predicted flood depths and areas",
-		"都市計画決定情報": "Urban Planning Decision Information - Official urban planning designations",
+		"LOD":             "Level of Detail - Describes the granularity of 3D model representation",
+		"CityGML":         "Open data model and XML-based format for storage and exchange of 3D city models",
+		"建築物モデル":         "Building Model - 3D representation of buildings and structures",
+		"道路モデル":          "Road Model - 3D representation of transportation infrastructure",
+		"土地利用モデル":        "Land Use Model - Classification and representation of urban land use",
+		"災害リスク":          "Disaster Risk - Assessment of natural disaster probabilities and impacts",
+		"洪水浸水想定":         "Flood Inundation Assumption - Predicted flood depths and areas",
+		"都市計画決定情報":       "Urban Planning Decision Information - Official urban planning designations",
 	}
-	
+
 	var sb strings.Builder
 	sb.WriteString("# PLATEAU Glossary\n\n")
-	
+
 	for term, definition := range glossary {
 		sb.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", term, definition))
 	}
-	
+
 	data, _ := json.MarshalIndent(glossary, "", "  ")
 	sb.WriteString("\n## Full Glossary (JSON)\n\n```json\n")
 	sb.WriteString(string(data))
 	sb.WriteString("\n```\n")
-	
+
 	return sb.String(), nil
 }
 
@@ -248,12 +260,12 @@ func getTopicTitle(topic string) string {
 	titles := map[string]string{
 		"building":         "Building Model Specification",
 		"transportation":   "Transportation Model Specification",
-		"landuse":         "Land Use Model Specification",
-		"disaster":        "Disaster Prevention Model Specification",
+		"landuse":          "Land Use Model Specification",
+		"disaster":         "Disaster Prevention Model Specification",
 		"data-preparation": "Data Preparation Procedures",
 		"quality-control":  "Quality Control Procedures",
 	}
-	
+
 	if title, ok := titles[topic]; ok {
 		return title
 	}
@@ -262,12 +274,12 @@ func getTopicTitle(topic string) string {
 
 func getChapterDescription(chapterID string) string {
 	descriptions := map[string]string{
-		"toc1": "Introduction and overview of PLATEAU specifications",
-		"toc2": "Basic concepts and terminology definitions",
-		"toc3": "Data product specifications and requirements",
-		"toc4": "Detailed model specifications for various urban features",
-		"toc5": "Quality requirements and validation procedures",
-		"toc6": "Metadata specifications and documentation standards",
+		"toc1":   "Introduction and overview of PLATEAU specifications",
+		"toc2":   "Basic concepts and terminology definitions",
+		"toc3":   "Data product specifications and requirements",
+		"toc4":   "Detailed model specifications for various urban features",
+		"toc5":   "Quality requirements and validation procedures",
+		"toc6":   "Metadata specifications and documentation standards",
 		"toc_01": "Overview of standard work procedures",
 		"toc_02": "Planning and preparation phase procedures",
 		"toc_03": "Data collection and preparation procedures",
@@ -275,7 +287,7 @@ func getChapterDescription(chapterID string) string {
 		"toc_05": "Quality assurance and validation procedures",
 		"toc_06": "Delivery and documentation procedures",
 	}
-	
+
 	if desc, ok := descriptions[chapterID]; ok {
 		return desc
 	}

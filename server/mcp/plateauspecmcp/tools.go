@@ -1,4 +1,4 @@
-package mcp
+package plateauspecmcp
 
 import (
 	"context"
@@ -7,10 +7,97 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+// RegisterTools registers PLATEAU specification reading tools
+func RegisterTools(s *server.MCPServer) {
+	s.AddTool(specListTool, HandleSpecList)
+	s.AddTool(specGetContentTool, HandleSpecGetContent)
+	s.AddTool(specGetContentsBatchTool, HandleSpecGetContentsBatch)
+	s.AddTool(specSearchTool, HandleSpecSearch)
+}
+
+// Specification reading tools with spec_ prefix
+var specListTool = mcp.NewTool("plateau_spec_list",
+	mcp.WithDescription("Navigate PLATEAU 3D City Model specification documents. Browse chapters, sections, and subsections of both Standard Product Specification and Standard Work Procedures."),
+	mcp.WithReadOnlyHintAnnotation(true),
+	mcp.WithString("path",
+		mcp.Description("Navigation path (e.g., '' for root, 'toc4' for chapter, '/toc4/toc4_02' for section)"),
+	),
+	mcp.WithBoolean("recursive",
+		mcp.Description("Show all subsections at once. Default false for step-by-step navigation."),
+	),
+	mcp.WithString("document_type",
+		mcp.Description("Document type: 'standard' (default) or 'procedure'"),
+	),
+	mcp.WithString("format",
+		mcp.Description("Output format: 'tree' (default) or 'json'"),
+	),
+	mcp.WithNumber("offset",
+		mcp.Description("Pagination offset (default: 0)"),
+	),
+	mcp.WithNumber("limit",
+		mcp.Description("Maximum results (default: 100)"),
+	),
+)
+
+var specGetContentTool = mcp.NewTool("plateau_spec_get_content",
+	mcp.WithDescription("Retrieve the actual content of a specific section from PLATEAU specification documents."),
+	mcp.WithReadOnlyHintAnnotation(true),
+	mcp.WithString("path",
+		mcp.Required(),
+		mcp.Description("Exact path from list results (e.g., '/plateaudocument/toc4/toc4_03/toc4_03_01')"),
+	),
+	mcp.WithString("format",
+		mcp.Description("Output format: 'markdown' (default), 'json', or 'html'"),
+	),
+	mcp.WithString("document_type",
+		mcp.Description("Document type: 'standard' (default) or 'procedure'"),
+	),
+)
+
+var specGetContentsBatchTool = mcp.NewTool("plateau_spec_get_contents_batch",
+	mcp.WithDescription("Efficiently retrieve multiple content sections at once from PLATEAU specification documents."),
+	mcp.WithReadOnlyHintAnnotation(true),
+	mcp.WithString("paths",
+		mcp.Required(),
+		mcp.Description("JSON array of paths or comma-separated string"),
+	),
+	mcp.WithString("format",
+		mcp.Description("Output format: 'markdown' (default), 'json', or 'html'"),
+	),
+	mcp.WithString("document_type",
+		mcp.Description("Document type: 'standard' (default) or 'procedure'"),
+	),
+	mcp.WithNumber("offset",
+		mcp.Description("Starting offset for pagination (default: 0)"),
+	),
+	mcp.WithNumber("limit",
+		mcp.Description("Maximum paths to process (default: 10)"),
+	),
+)
+
+var specSearchTool = mcp.NewTool("plateau_spec_search",
+	mcp.WithDescription("Search for specific terms or topics across PLATEAU specification documents."),
+	mcp.WithReadOnlyHintAnnotation(true),
+	mcp.WithString("query",
+		mcp.Required(),
+		mcp.Description("Search query text"),
+	),
+	mcp.WithString("document_type",
+		mcp.Description("Document type: 'standard' (default), 'procedure', or 'all'"),
+	),
+	mcp.WithString("scope",
+		mcp.Description("Search scope: 'titles' (default), 'content', or 'all'"),
+	),
+	mcp.WithNumber("limit",
+		mcp.Description("Maximum results (default: 20)"),
+	),
 )
 
 // HandleSpecList handles the plateau_spec_list tool
-func HandleSpecList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecList(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments
 	path := request.GetString("path", "")
 	recursive := request.GetBool("recursive", false)
@@ -89,7 +176,7 @@ func HandleSpecList(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 }
 
 // HandleSpecGetContent handles the plateau_spec_get_content tool
-func HandleSpecGetContent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecGetContent(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments
 	path := request.GetString("path", "")
 	format := request.GetString("format", "markdown")
@@ -112,16 +199,16 @@ func HandleSpecGetContent(ctx context.Context, request mcp.CallToolRequest) (*mc
 		data, _ := json.MarshalIndent(doc, "", "  ")
 		content = string(data)
 	case "html":
-		content = formatAsHTML(doc)
+		content = FormatAsHTML(doc)
 	default: // markdown
-		content = formatAsMarkdown(doc)
+		content = FormatAsMarkdown(doc)
 	}
 
 	return mcp.NewToolResultText(content), nil
 }
 
 // HandleSpecGetContentsBatch handles the plateau_spec_get_contents_batch tool
-func HandleSpecGetContentsBatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecGetContentsBatch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments
 	pathsArg := request.GetString("paths", "")
 	format := request.GetString("format", "markdown")
@@ -178,9 +265,9 @@ func HandleSpecGetContentsBatch(ctx context.Context, request mcp.CallToolRequest
 		case "json":
 			content = "json content" // Simplified for batch
 		case "html":
-			content = formatAsHTML(doc)
+			content = FormatAsHTML(doc)
 		default:
-			content = formatAsMarkdown(doc)
+			content = FormatAsMarkdown(doc)
 		}
 
 		results = append(results, map[string]interface{}{
@@ -195,7 +282,7 @@ func HandleSpecGetContentsBatch(ctx context.Context, request mcp.CallToolRequest
 }
 
 // HandleSpecSearch handles the plateau_spec_search tool
-func HandleSpecSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecSearch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments
 	query := request.GetString("query", "")
 	docType := request.GetString("document_type", "standard")
@@ -252,13 +339,6 @@ func HandleSpecSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 				}
 			}
 		}
-
-		// Note: Content search would require fetching and searching actual document content
-		// This is expensive and should be implemented with caching/indexing in production
-		// if scope == "content" || scope == "all" {
-		// Simplified implementation - would need proper text search
-		// This is a placeholder that indicates where content search would go
-		// }
 	}
 
 	// Sort by score and apply limit
@@ -295,7 +375,8 @@ func formatSectionsAsTree(sections []Section, basePath string) string {
 	return sb.String()
 }
 
-func formatAsMarkdown(doc *PlateauDocument) string {
+// FormatAsMarkdown formats a document as markdown
+func FormatAsMarkdown(doc *PlateauDocument) string {
 	var sb strings.Builder
 
 	// Title
@@ -333,7 +414,8 @@ func formatAsMarkdown(doc *PlateauDocument) string {
 	return sb.String()
 }
 
-func formatAsHTML(doc *PlateauDocument) string {
+// FormatAsHTML formats a document as HTML
+func FormatAsHTML(doc *PlateauDocument) string {
 	var sb strings.Builder
 
 	sb.WriteString("<html><body>\n")

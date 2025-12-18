@@ -1,4 +1,4 @@
-package mcp
+package plateauspecmcp
 
 // Types for PLATEAU specification documents
 
@@ -46,12 +46,4 @@ type SearchResult struct {
 	Score     float64 `json:"score"`
 	DocType   string  `json:"doc_type"`
 	Highlight string  `json:"highlight,omitempty"`
-}
-
-// Resource represents an MCP resource for specification access
-type Resource struct {
-	URI         string `json:"uri"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	MimeType    string `json:"mimeType"`
 }

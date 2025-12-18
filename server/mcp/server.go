@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogmcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp/plateauspecmcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -36,7 +37,7 @@ func RegisterTools(s *server.MCPServer) {
 // RegisterToolsWithConfig registers all PLATEAU MCP tools with configuration
 func RegisterToolsWithConfig(s *server.MCPServer, cfg *Config) {
 	// Specification reading tools (always registered)
-	RegisterSpecificationTools(s)
+	plateauspecmcp.RegisterTools(s)
 
 	// Data catalog tools (only if configured)
 	if cfg != nil && cfg.DataCatalogReposHandler != nil {
@@ -48,5 +49,5 @@ func RegisterToolsWithConfig(s *server.MCPServer, cfg *Config) {
 // RegisterResources registers all PLATEAU MCP resources
 func RegisterResources(s *server.MCPServer) {
 	// Register specification resources
-	RegisterSpecificationResources(s)
+	plateauspecmcp.RegisterResources(s)
 }

@@ -1,4 +1,4 @@
-package mcp
+package plateauspecmcp
 
 import (
 	"encoding/json"
@@ -35,7 +35,7 @@ func NewClient(documentType string) *PlateauClient {
 // ListChapters retrieves the list of chapters
 func (c *PlateauClient) ListChapters() ([]Chapter, error) {
 	url := fmt.Sprintf("%s/resource-nav.json", c.BaseURL)
-	
+
 	resp, err := c.HTTPClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch navigation: %w", err)
@@ -74,7 +74,7 @@ func (c *PlateauClient) ListSectionsByPath(path string) ([]Section, error) {
 	}
 
 	url := fmt.Sprintf("%s%s/resource-nav.json", c.BaseURL, path)
-	
+
 	resp, err := c.HTTPClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch navigation from path %s: %w", path, err)
@@ -189,15 +189,15 @@ func (c *PlateauClient) GetContentByPath(path string) (*PlateauDocument, error) 
 // ListRecursive recursively lists all sections under a path
 func (c *PlateauClient) ListRecursive(path string, maxDepth int) ([]Section, error) {
 	var allSections []Section
-	
+
 	// Get immediate children
 	sections, err := c.ListSectionsByPath(path)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	allSections = append(allSections, sections...)
-	
+
 	// Recursively get subsections if depth allows
 	if maxDepth > 1 {
 		for _, section := range sections {
@@ -209,6 +209,6 @@ func (c *PlateauClient) ListRecursive(path string, maxDepth int) ([]Section, err
 			allSections = append(allSections, subSections...)
 		}
 	}
-	
+
 	return allSections, nil
 }

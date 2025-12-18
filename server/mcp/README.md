@@ -1,6 +1,6 @@
-# PLATEAU Data Catalog MCP Server
+# PLATEAU MCP Server
 
-このパッケージは、PLATEAU（プラトー）の3D都市モデルデータカタログをAIクライアントから簡単にアクセスできるようにするMCP（Model Context Protocol）サーバーを提供します。
+このパッケージは、PLATEAU（プラトー）の3D都市モデルに関する情報をAIクライアントから簡単にアクセスできるようにするMCP（Model Context Protocol）サーバーを提供します。
 
 > [!WARNING]
 > **試験的な提供 - 利用上の注意**
@@ -16,12 +16,18 @@
 
 ## 概要
 
-PLATEAU Data Catalog MCP Serverは、PLATEAUの都市モデルデータへのアクセスを提供するHTTPベースのMCPサーバーです。以下の情報にアクセスできます：
+PLATEAU MCP Serverは、PLATEAUの都市モデルデータおよび仕様書へのアクセスを提供するHTTPベースのMCPサーバーです。以下の情報にアクセスできます：
 
+### データカタログ
 - **地域情報**: 都道府県、市区町村などの地域データ
 - **データセット情報**: 建物、道路、土地利用などの3D都市モデルデータセット
 - **データセット種類**: 利用可能なデータセットの種類と分類
 - **メタデータ**: PLATEAU全体の統計情報や仕様バージョン
+- **CityGMLデータ**: 空間ID・メッシュコードによるCityGMLファイルの検索と属性取得
+
+### 仕様書
+- **3D都市モデル標準製品仕様書**: PLATEAUの3D都市モデルに関する標準仕様
+- **3D都市モデル標準作業手順書**: 3D都市モデル作成の標準手順
 
 ## AIクライアントでの設定方法
 
@@ -33,7 +39,7 @@ PLATEAU Data Catalog MCP Serverは、PLATEAUの都市モデルデータへのア
 Claude Code では、以下のコマンドで MCP サーバーを追加できます：
 
 ```bash
-claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.jp/datacatalog/mcp
+claude mcp add --transport http plateau https://api.plateauview.mlit.go.jp/mcp
 ```
 
 **参考**: 設定手順の詳細は [Claude Code MCP 公式ドキュメント](https://docs.anthropic.com/en/docs/claude-code/mcp) をご確認ください。
@@ -47,7 +53,7 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 3. 「+ Add Custom Integration」をクリック
 4. 以下の情報を入力：
    - **名前**: `PLATEAU MCP`
-   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **URL**: `https://api.plateauview.mlit.go.jp/mcp`
    - **詳細設定 → 認証（OAuth）**: 空欄のまま
 5. 設定を保存
 
@@ -60,7 +66,7 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 3. 「カスタムコネクタを追加」をクリック
 4. 以下の情報を入力：
    - **名前**: `PLATEAU MCP`
-   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **URL**: `https://api.plateauview.mlit.go.jp/mcp`
    - **詳細設定 → 認証（OAuth）**: 空欄のまま
 5. 設定を保存
 
@@ -76,15 +82,15 @@ Claude Desktop 無料版はHTTP MCPに対応していないため、HTTP-to-Stdi
 ```json
 {
   "mcpServers": {
-    "plateau-catalog": {
+    "plateau": {
       "command": "npx",
       "args": [
         "-y",
         "@pyroprompts/mcp-stdio-to-streamable-http-adapter"
       ],
       "env": {
-        "URI": "https://api.plateauview.mlit.go.jp/datacatalog/mcp",
-        "MCP_NAME": "plateau-catalog"
+        "URI": "https://api.plateauview.mlit.go.jp/mcp",
+        "MCP_NAME": "plateau"
       }
     }
   }
@@ -106,9 +112,9 @@ ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバー�
 3. 「アプリを作成する」をクリック
 4. 以下の情報を入力：
    - **名前**: `PLATEAU MCP`
-   - **説明**: 任意（例: `日本の3D都市モデル（PLATEAU）のデータカタログにアクセスできます`）
+   - **説明**: 任意（例: `日本の3D都市モデル（PLATEAU）のデータカタログと仕様書にアクセスできます`）
    - **アイコン**: 任意
-   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **URL**: `https://api.plateauview.mlit.go.jp/mcp`
    - **認証**: `認証なし` を選択
 5. 「カスタムMCPサーバーのリスク警告」で「理解したうえで続行」にチェック
 6. 設定を保存
@@ -121,10 +127,16 @@ ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバー�
 HTTP MCPをサポートする他のAIクライアントでも、同様にサーバーURLを設定することで利用できます：
 
 ```
-https://api.plateauview.mlit.go.jp/datacatalog/mcp
+https://api.plateauview.mlit.go.jp/mcp
 ```
 
-設定後、以下の11個のツールが利用可能になります：
+設定後、以下の15個のツールが利用可能になります：
+
+**仕様書ツール:**
+- `plateau_spec_list` - 仕様書の章・節をナビゲート
+- `plateau_spec_get_content` - 特定の節の内容を取得
+- `plateau_spec_get_contents_batch` - 複数の節の内容を一括取得
+- `plateau_spec_search` - 仕様書内を検索
 
 **データカタログツール:**
 - `plateau_get_metadata` - PLATEAU全体のメタデータ取得
@@ -143,9 +155,139 @@ https://api.plateauview.mlit.go.jp/datacatalog/mcp
 **ヘルパーツール:**
 - `plateau_explain_spatial_id` - 空間ID（Spatial ID）の仕様解説
 
-## 利用可能なツール
+## 仕様書ツール
 
-### 1. `plateau_get_metadata`
+PLATEAU 3D都市モデルの公式仕様書にアクセスするためのツールです。
+
+### 1. `plateau_spec_list`
+仕様書の章・節をナビゲートします。
+
+**パラメータ**:
+- `path` (optional): ナビゲーションパス（例: '' で目次、'toc4' で章4）
+- `recursive` (optional): 全サブセクションを一度に表示するか（デフォルト: false）
+- `document_type` (optional): ドキュメント種類 - 'standard'（標準製品仕様書、デフォルト）または 'procedure'（標準作業手順書）
+- `format` (optional): 出力形式 - 'tree'（デフォルト）または 'json'
+- `offset` (optional): ページネーションオフセット（デフォルト: 0）
+- `limit` (optional): 最大結果数（デフォルト: 100）
+
+**レスポンス例**:
+```
+PLATEAU Specification Chapters:
+
+📁 toc1 - はじめに
+   Path: /plateaudocument/toc1
+📁 toc2 - 適用範囲
+   Path: /plateaudocument/toc2
+📁 toc3 - 引用規格
+   Path: /plateaudocument/toc3
+📁 toc4 - 地物型
+   Path: /plateaudocument/toc4
+...
+```
+
+### 2. `plateau_spec_get_content`
+特定の節の内容を取得します。
+
+**パラメータ**:
+- `path` (required): 節のパス（例: '/plateaudocument/toc4/toc4_03/toc4_03_01'）
+- `format` (optional): 出力形式 - 'markdown'（デフォルト）, 'json', または 'html'
+- `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）または 'procedure'
+
+**レスポンス例**:
+```markdown
+# 道路
+
+**Path:** `/plateaudocument/toc4/toc4_03/toc4_03_01`
+
+道路モデルは、道路法に基づく道路の形状及び道路に関する情報を記述したデータです。
+...
+```
+
+### 3. `plateau_spec_get_contents_batch`
+複数の節の内容を効率的に一括取得します。
+
+**パラメータ**:
+- `paths` (required): パスのJSON配列またはカンマ区切り文字列
+- `format` (optional): 出力形式 - 'markdown'（デフォルト）, 'json', または 'html'
+- `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）または 'procedure'
+- `offset` (optional): 開始オフセット（デフォルト: 0）
+- `limit` (optional): 最大処理パス数（デフォルト: 10）
+
+**レスポンス例**:
+```json
+[
+  {
+    "path": "/plateaudocument/toc4/toc4_03/toc4_03_01",
+    "title": "道路",
+    "content": "# 道路\n\n道路モデルは..."
+  },
+  {
+    "path": "/plateaudocument/toc4/toc4_03/toc4_03_02",
+    "title": "鉄道",
+    "content": "# 鉄道\n\n鉄道モデルは..."
+  }
+]
+```
+
+### 4. `plateau_spec_search`
+仕様書内で特定の用語やトピックを検索します。
+
+**パラメータ**:
+- `query` (required): 検索クエリテキスト
+- `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）, 'procedure', または 'all'
+- `scope` (optional): 検索範囲 - 'titles'（タイトルのみ、デフォルト）, 'content', または 'all'
+- `limit` (optional): 最大結果数（デフォルト: 20）
+
+**レスポンス例**:
+```json
+[
+  {
+    "path": "/plateaudocument/toc4/toc4_02",
+    "title": "建築物",
+    "snippet": "建築物",
+    "score": 1.0,
+    "doc_type": "standard"
+  },
+  {
+    "path": "/plateaudocument/toc4/toc4_02/toc4_02_01",
+    "title": "建築物の基本構造",
+    "snippet": "建築物の基本構造",
+    "score": 0.5,
+    "doc_type": "standard"
+  }
+]
+```
+
+### 仕様書ツールの使用例
+
+#### 建築物モデルの仕様を調べる
+
+```
+1. 仕様書の章一覧を取得:
+   plateau_spec_list(path="")
+
+2. 地物型の章を展開:
+   plateau_spec_list(path="toc4")
+
+3. 建築物の仕様を取得:
+   plateau_spec_get_content(path="/plateaudocument/toc4/toc4_02")
+```
+
+#### LODに関する情報を検索
+
+```
+plateau_spec_search(query="LOD", scope="all")
+```
+
+#### 作業手順書を参照
+
+```
+plateau_spec_list(path="", document_type="procedure")
+```
+
+## データカタログツール
+
+### 5. `plateau_get_metadata`
 PLATEAU全体のメタデータを取得します。
 
 **パラメータ**: なし
@@ -167,7 +309,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 2. `plateau_search_areas`
+### 6. `plateau_search_areas`
 地域（都道府県、市区町村）を検索します。
 
 **パラメータ**:
@@ -202,7 +344,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 3. `plateau_get_area`
+### 7. `plateau_get_area`
 特定の地域の詳細情報を取得します。
 
 **パラメータ**:
@@ -225,7 +367,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 4. `plateau_search_datasets`
+### 8. `plateau_search_datasets`
 データセットを検索します。
 
 **パラメータ**:
@@ -274,7 +416,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 5. `plateau_get_dataset`
+### 9. `plateau_get_dataset`
 特定のデータセットの詳細情報を取得します。
 
 **パラメータ**:
@@ -326,7 +468,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 6. `plateau_list_dataset_types`
+### 10. `plateau_list_dataset_types`
 データセット種類の一覧を取得します。
 
 **パラメータ**:
@@ -358,77 +500,11 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-## 使用例
-
-### 東京都内の市区町村を検索
-
-```json
-{
-  "tool": "plateau_search_areas",
-  "parameters": {
-    "parent_code": "13",
-    "area_types": ["CITY", "WARD"]
-  }
-}
-```
-
-### 千代田区の建築物モデルを検索
-
-```json
-{
-  "tool": "plateau_search_datasets",
-  "parameters": {
-    "area_codes": ["13101"],
-    "dataset_types": ["bldg"]
-  }
-}
-```
-
-### 2023年度のPLATEAUデータセットを検索
-
-```json
-{
-  "tool": "plateau_search_datasets",
-  "parameters": {
-    "year": 2023,
-    "categories": ["PLATEAU"]
-  }
-}
-```
-
-## 制限事項
-
-- 検索結果は最大100件までに制限されています
-- 100件を超える場合、`metadata.has_more` が `true` となり、`refinement_suggestions` に絞り込み方法が提示されます
-- より詳細な検索を行う場合は、パラメータを追加して絞り込んでください
-
-## 技術仕様
-
-- プロトコル: MCP (Model Context Protocol) v1.0
-- トランスポート: HTTP (単一JSONレスポンス、SSE非使用)
-- メッセージ形式: JSON-RPC 2.0
-- レスポンス形式: JSON
-- 認証: なし（公開データのため）
-- レート制限: なし
-
-### MCP 仕様準拠
-
-このサーバーは [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io/) の公式仕様に準拠しています：
-
-- **JSON-RPC 2.0**: すべての通信は JSON-RPC 2.0 メッセージ形式で行われます
-- **HTTP トランスポート**: 単一JSONレスポンス形式（`Content-Type: application/json`）
-- **SSE非使用**: Server-Sent Eventsは使用せず、通常のHTTPリクエスト/レスポンスで動作
-- **自動エンドポイント**: `/` エンドポイントで以下が自動的に提供されます：
-  - `tools/list`: 利用可能なツールの一覧取得
-  - `tools/call`: ツールの実行
-- **ステートレスモード**: セッション管理なしでシンプルに利用可能
-- **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.43.0 を使用
-
 ## CityGML ツール
 
 データカタログツールに加えて、CityGMLファイルから直接属性情報を取得するツールも提供しています。
 
-### 7. `plateau_citygml_get_attributes`
+### 11. `plateau_citygml_get_attributes`
 CityGMLファイルから指定した建物IDの属性情報を取得します。
 
 **使い方の流れ:**
@@ -460,7 +536,7 @@ CityGMLファイルから指定した建物IDの属性情報を取得します�
 }
 ```
 
-### 8. `plateau_citygml_get_features`
+### 12. `plateau_citygml_get_features`
 CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。
 
 **使い方の流れ:**
@@ -484,7 +560,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 }
 ```
 
-### 9. `plateau_citygml_get_geoid_height`
+### 13. `plateau_citygml_get_geoid_height`
 指定した緯度経度のジオイド高を取得します。日本のジオイド2011に基づいています。標高の楕円体高と正標高の変換に使用できます。
 
 **パラメータ**:
@@ -501,7 +577,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 }
 ```
 
-### 10. `plateau_get_citygml_files`
+### 14. `plateau_get_citygml_files`
 指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。
 
 **条件フォーマット**:
@@ -617,7 +693,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 
 ## ヘルパーツール
 
-### 11. `plateau_explain_spatial_id`
+### 15. `plateau_explain_spatial_id`
 空間ID（Spatial ID）の仕様と使い方を解説するマークダウンを返します。
 
 空間IDは3次元空間を一意に識別するための規格で、`{z}/{f}/{x}/{y}` 形式で表現されます。このツールを呼び出すと、以下の情報を含む解説が返されます：
@@ -633,7 +709,75 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 **使用例**:
 空間IDを使った検索を行う前に、このツールを呼び出して空間IDの仕様を理解してから操作することを推奨します。
 
+## 使用例
+
+### 東京都内の市区町村を検索
+
+```json
+{
+  "tool": "plateau_search_areas",
+  "parameters": {
+    "parent_code": "13",
+    "area_types": ["CITY", "WARD"]
+  }
+}
+```
+
+### 千代田区の建築物モデルを検索
+
+```json
+{
+  "tool": "plateau_search_datasets",
+  "parameters": {
+    "area_codes": ["13101"],
+    "dataset_types": ["bldg"]
+  }
+}
+```
+
+### 2023年度のPLATEAUデータセットを検索
+
+```json
+{
+  "tool": "plateau_search_datasets",
+  "parameters": {
+    "year": 2023,
+    "categories": ["PLATEAU"]
+  }
+}
+```
+
+## 制限事項
+
+- 検索結果は最大100件までに制限されています
+- 100件を超える場合、`metadata.has_more` が `true` となり、`refinement_suggestions` に絞り込み方法が提示されます
+- より詳細な検索を行う場合は、パラメータを追加して絞り込んでください
+
+## 技術仕様
+
+- プロトコル: MCP (Model Context Protocol) v1.0
+- トランスポート: HTTP (単一JSONレスポンス、SSE非使用)
+- メッセージ形式: JSON-RPC 2.0
+- レスポンス形式: JSON
+- 認証: なし（公開データのため）
+- レート制限: なし
+
+### MCP 仕様準拠
+
+このサーバーは [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io/) の公式仕様に準拠しています：
+
+- **JSON-RPC 2.0**: すべての通信は JSON-RPC 2.0 メッセージ形式で行われます
+- **HTTP トランスポート**: 単一JSONレスポンス形式（`Content-Type: application/json`）
+- **SSE非使用**: Server-Sent Eventsは使用せず、通常のHTTPリクエスト/レスポンスで動作
+- **自動エンドポイント**: `/` エンドポイントで以下が自動的に提供されます：
+  - `tools/list`: 利用可能なツールの一覧取得
+  - `tools/call`: ツールの実行
+- **ステートレスモード**: セッション管理なしでシンプルに利用可能
+- **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.43.0 を使用
+
 ## 関連リンク
 
 - [PLATEAU 公式サイト](https://www.mlit.go.jp/plateau/)
+- [3D都市モデル標準製品仕様書](https://www.mlit.go.jp/plateaudocument/)
+- [3D都市モデル標準作業手順書](https://www.mlit.go.jp/plateaudocument02/)
 - [Model Context Protocol (MCP) 仕様](https://spec.modelcontextprotocol.io/)
