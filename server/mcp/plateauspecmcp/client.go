@@ -267,49 +267,6 @@ func (c *PlateauClient) flattenPathTree(root *pathNode) []string {
 	return paths
 }
 
-// fetchChildPathsParallel fetches child paths for multiple parents in parallel
-func (c *PlateauClient) fetchChildPathsParallel(parentPaths []string) []string {
-	type result struct {
-		childPaths []string
-	}
-
-	results := make([]result, len(parentPaths))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, MaxConcurrentRequests)
-
-	for i, parentPath := range parentPaths {
-		wg.Add(1)
-		go func(idx int, p string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			nav, err := c.fetchNavigation(p)
-			if err != nil || nav == nil {
-				return
-			}
-
-			var childPaths []string
-			for _, child := range nav.Children {
-				if child.Path != "" {
-					childPaths = append(childPaths, child.Path)
-				}
-			}
-			results[idx] = result{childPaths: childPaths}
-		}(i, parentPath)
-	}
-
-	wg.Wait()
-
-	// Collect all child paths
-	var allChildPaths []string
-	for _, r := range results {
-		allChildPaths = append(allChildPaths, r.childPaths...)
-	}
-
-	return allChildPaths
-}
-
 // fetchContentsParallel fetches multiple paths in parallel with semaphore
 func (c *PlateauClient) fetchContentsParallel(paths []string) []*PlateauDocument {
 	results := make([]*PlateauDocument, len(paths))
