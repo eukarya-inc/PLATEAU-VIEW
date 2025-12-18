@@ -12,7 +12,7 @@ func TestFormatTermWithDefinition_Basic(t *testing.T) {
 	content := map[string]any{
 		"content": []any{
 			map[string]any{
-				"type": "termLabel",
+				"type": "termXrefLabel",
 				"content": []any{
 					map[string]any{"type": "text", "text": "1.5.1"},
 				},
@@ -29,7 +29,7 @@ func TestFormatTermWithDefinition_Basic(t *testing.T) {
 				},
 			},
 			map[string]any{
-				"type": "termDefinition",
+				"type": "definition",
 				"content": []any{
 					map[string]any{
 						"type": "paragraph",
@@ -45,7 +45,7 @@ func TestFormatTermWithDefinition_Basic(t *testing.T) {
 	formatTermWithDefinition(&sb, content)
 	result := sb.String()
 
-	assert.Contains(t, result, "**1.5.1 3D都市モデル**")
+	assert.Contains(t, result, "### 1.5.1 3D都市モデル")
 	assert.Contains(t, result, "都市の3Dモデルを表現したデータ。")
 }
 
@@ -68,7 +68,7 @@ func TestFormatTermWithDefinition_TermOnly(t *testing.T) {
 	}
 
 	formatTermWithDefinition(&sb, content)
-	assert.Contains(t, sb.String(), "**用語のみ**")
+	assert.Contains(t, sb.String(), "### 用語のみ")
 }
 
 func TestFormatTermWithDefinition_Nil(t *testing.T) {
@@ -88,7 +88,7 @@ func TestFormatTermWithDefinition_WithLink(t *testing.T) {
 	content := map[string]any{
 		"content": []any{
 			map[string]any{
-				"type": "termLabel",
+				"type": "termXrefLabel",
 				"content": []any{
 					map[string]any{"type": "text", "text": "2.1"},
 				},
@@ -100,7 +100,7 @@ func TestFormatTermWithDefinition_WithLink(t *testing.T) {
 				},
 			},
 			map[string]any{
-				"type": "termDefinition",
+				"type": "definition",
 				"content": []any{
 					map[string]any{
 						"type": "paragraph",
@@ -126,8 +126,57 @@ func TestFormatTermWithDefinition_WithLink(t *testing.T) {
 	formatTermWithDefinition(&sb, content)
 	result := sb.String()
 
-	assert.Contains(t, result, "**2.1 参照用語**")
+	assert.Contains(t, result, "### 2.1 参照用語")
 	assert.Contains(t, result, "[こちら](https://example.com)")
+}
+
+func TestFormatTermWithDefinition_WithSource(t *testing.T) {
+	var sb strings.Builder
+	content := map[string]any{
+		"content": []any{
+			map[string]any{
+				"type": "termXrefLabel",
+				"content": []any{
+					map[string]any{"type": "text", "text": "1.5.2"},
+				},
+			},
+			map[string]any{
+				"type": "term",
+				"content": []any{
+					map[string]any{
+						"type": "strong",
+						"content": []any{
+							map[string]any{"type": "text", "text": "BIM（Building Information Modeling）"},
+						},
+					},
+				},
+			},
+			map[string]any{
+				"type": "definition",
+				"content": []any{
+					map[string]any{
+						"type": "paragraph",
+						"content": []any{
+							map[string]any{"type": "text", "text": "コンピュータ上に作成した建築物情報モデルを構築するもの。"},
+						},
+					},
+					map[string]any{
+						"type": "paragraph",
+						"content": []any{
+							map[string]any{"type": "text", "text": "［出典： PLATEAU Handbook #03-1]"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	formatTermWithDefinition(&sb, content)
+	result := sb.String()
+
+	assert.Contains(t, result, "### 1.5.2 BIM（Building Information Modeling）")
+	assert.Contains(t, result, "コンピュータ上に作成した建築物情報モデルを構築するもの。")
+	assert.Contains(t, result, "［出典： PLATEAU Handbook #03-1]")
 }
 
 func TestExtractTermText(t *testing.T) {
@@ -197,14 +246,14 @@ func TestExtractTermText(t *testing.T) {
 	}
 }
 
-func TestExtractTermDefinition(t *testing.T) {
+func TestExtractDefinitionParagraphs(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  map[string]any
-		expected string
+		expected []string
 	}{
 		{
-			name: "simple paragraph",
+			name: "single paragraph",
 			content: map[string]any{
 				"content": []any{
 					map[string]any{
@@ -215,27 +264,40 @@ func TestExtractTermDefinition(t *testing.T) {
 					},
 				},
 			},
-			expected: "Definition text.",
+			expected: []string{"Definition text."},
 		},
 		{
-			name: "with whitespace",
+			name: "multiple paragraphs",
 			content: map[string]any{
 				"content": []any{
 					map[string]any{
 						"type": "paragraph",
 						"content": []any{
-							map[string]any{"type": "text", "text": "Text  with   spaces"},
+							map[string]any{"type": "text", "text": "First paragraph."},
+						},
+					},
+					map[string]any{
+						"type": "paragraph",
+						"content": []any{
+							map[string]any{"type": "text", "text": "Second paragraph."},
 						},
 					},
 				},
 			},
-			expected: "Text with spaces",
+			expected: []string{"First paragraph.", "Second paragraph."},
+		},
+		{
+			name: "empty content",
+			content: map[string]any{
+				"content": []any{},
+			},
+			expected: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractTermDefinition(tt.content)
+			result := extractDefinitionParagraphs(tt.content)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

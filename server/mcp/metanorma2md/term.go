@@ -2,7 +2,6 @@ package metanorma2md
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -19,7 +18,8 @@ func formatTermWithDefinition(sb *strings.Builder, content any) {
 		return
 	}
 
-	var label, term, definition string
+	var label, term string
+	var definitionParagraphs []string
 
 	for _, c := range contents {
 		cMap, ok := c.(map[string]any)
@@ -30,30 +30,29 @@ func formatTermWithDefinition(sb *strings.Builder, content any) {
 		cType, _ := cMap["type"].(string)
 
 		switch cType {
-		case "termLabel":
+		case "termXrefLabel":
 			// Extract label like "1.5.1"
 			label = extractTermText(cMap)
 		case "term":
 			// Extract term like "3D都市モデル"
 			term = extractTermText(cMap)
-		case "termDefinition":
-			// Extract definition text
-			definition = extractTermDefinition(cMap)
+		case "definition":
+			// Extract definition paragraphs
+			definitionParagraphs = extractDefinitionParagraphs(cMap)
 		}
 	}
 
-	// Format as bold header with definition
+	// Format as heading with definition
 	if label != "" && term != "" {
-		_, _ = fmt.Fprintf(sb, "**%s %s**\n", label, term)
+		_, _ = fmt.Fprintf(sb, "### %s %s\n\n", label, term)
 	} else if term != "" {
-		_, _ = fmt.Fprintf(sb, "**%s**\n", term)
+		_, _ = fmt.Fprintf(sb, "### %s\n\n", term)
 	}
 
-	if definition != "" {
-		sb.WriteString(definition)
-		sb.WriteString("\n")
+	for _, para := range definitionParagraphs {
+		sb.WriteString(para)
+		sb.WriteString("\n\n")
 	}
-	sb.WriteString("\n")
 }
 
 // extractTermText extracts text from term or termLabel elements
@@ -87,9 +86,9 @@ func extractTermText(contentMap map[string]any) string {
 	return strings.TrimSpace(sb.String())
 }
 
-// extractTermDefinition extracts definition text from termDefinition element
-func extractTermDefinition(contentMap map[string]any) string {
-	var sb strings.Builder
+// extractDefinitionParagraphs extracts definition paragraphs from definition element
+func extractDefinitionParagraphs(contentMap map[string]any) []string {
+	var paragraphs []string
 
 	if contents, ok := contentMap["content"].([]any); ok {
 		for _, c := range contents {
@@ -97,35 +96,22 @@ func extractTermDefinition(contentMap map[string]any) string {
 				cType, _ := cMap["type"].(string)
 				if cType == "paragraph" {
 					// Extract paragraph content
+					var sb strings.Builder
 					if innerContents, ok := cMap["content"].([]any); ok {
 						for _, inner := range innerContents {
 							if innerMap, ok := inner.(map[string]any); ok {
-								innerType, _ := innerMap["type"].(string)
-								switch innerType {
-								case "text":
-									if text, ok := innerMap["text"].(string); ok {
-										sb.WriteString(text)
-									}
-								case "external_link":
-									// Handle links in definition
-									var linkSb strings.Builder
-									formatExternalLinkContent(&linkSb, innerMap)
-									sb.WriteString(linkSb.String())
-								default:
-									// Recursively extract other content
-									sb.WriteString(extractTextRecursive(innerMap))
-								}
+								formatInlineContent(&sb, innerMap)
 							}
 						}
+					}
+					result := strings.TrimSpace(sb.String())
+					if result != "" {
+						paragraphs = append(paragraphs, result)
 					}
 				}
 			}
 		}
 	}
 
-	result := strings.TrimSpace(sb.String())
-	// Clean up extra whitespace
-	re := regexp.MustCompile(`\s+`)
-	result = re.ReplaceAllString(result, " ")
-	return result
+	return paragraphs
 }

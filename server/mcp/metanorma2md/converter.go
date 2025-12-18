@@ -57,6 +57,17 @@ func Convert(doc *Document, opts *Options) string {
 func normalizeTitle(title string) string {
 	// Replace tabs with spaces
 	title = strings.ReplaceAll(title, "\t", " ")
+	// Replace various Unicode space characters with regular space
+	// U+3000 (IDEOGRAPHIC SPACE - 全角スペース)
+	title = strings.ReplaceAll(title, "\u3000", " ")
+	// U+2004 (THREE-PER-EM SPACE)
+	title = strings.ReplaceAll(title, "\u2004", " ")
+	// U+2003 (EM SPACE)
+	title = strings.ReplaceAll(title, "\u2003", " ")
+	// U+2002 (EN SPACE)
+	title = strings.ReplaceAll(title, "\u2002", " ")
+	// U+00A0 (NO-BREAK SPACE)
+	title = strings.ReplaceAll(title, "\u00A0", " ")
 	// Collapse multiple spaces
 	re := regexp.MustCompile(`\s+`)
 	title = re.ReplaceAllString(title, " ")
@@ -71,9 +82,9 @@ func formatContent(sb *strings.Builder, content Content, opts *Options) {
 	case "paragraph":
 		formatParagraphContent(sb, content.Content)
 	case "table":
-		formatTableContent(sb, content.Content)
+		formatTableContentWithOpts(sb, content.Content, opts)
 	case "tableFigure":
-		formatTableFigureContent(sb, content.Content)
+		formatTableFigureContentWithOpts(sb, content.Content, opts)
 	case "bullet_list", "ordered_list":
 		formatListContent(sb, content.Content)
 	case "figure":
@@ -88,6 +99,8 @@ func formatContent(sb *strings.Builder, content Content, opts *Options) {
 		formatExternalLinkContent(sb, content.Content)
 	case "termWithDefinition":
 		formatTermWithDefinition(sb, content.Content)
+	case "bibitem":
+		formatBibitemContent(sb, content.Content)
 	default:
 		// Try to extract text from unknown types
 		formatGenericContent(sb, content.Content, opts)

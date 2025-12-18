@@ -166,6 +166,21 @@ func formatGenericContent(sb *strings.Builder, content any, opts *Options) {
 	}
 }
 
+// formatBibitemContent handles bibliography item elements
+// Each bibitem is treated like a paragraph with text content and a trailing newline
+func formatBibitemContent(sb *strings.Builder, content any) {
+	if contentMap, ok := content.(map[string]any); ok {
+		if children, ok := contentMap["content"].([]any); ok {
+			for _, child := range children {
+				if childMap, ok := child.(map[string]any); ok {
+					formatInlineContent(sb, childMap)
+				}
+			}
+		}
+	}
+	sb.WriteString("\n\n")
+}
+
 // extractTextRecursive extracts all text from a nested content structure
 func extractTextRecursive(contentMap map[string]any) string {
 	var sb strings.Builder
