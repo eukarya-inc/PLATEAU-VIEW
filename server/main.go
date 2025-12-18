@@ -116,6 +116,14 @@ func main() {
 			effectiveUpdateCacheKey = conf.DataCatalog_CacheUpdateKey
 		}
 
+		if !*outputToStdout {
+			if effectiveUpdateCacheURL != "" {
+				log.Infof("Update-cache API URL configured: %s", effectiveUpdateCacheURL)
+			} else {
+				log.Infof("Update-cache API URL not configured")
+			}
+		}
+
 		var failedProjects []string
 		var generator *DatacatalogGenerator
 		var anyGenerated bool
@@ -157,6 +165,12 @@ func main() {
 			defer cancel()
 			if err := generator.NotifyUpdateCache(ctx); err != nil {
 				log.Errorf("Failed to call update-cache API: %v", err)
+			}
+		} else if !*outputToStdout {
+			if effectiveUpdateCacheURL == "" {
+				log.Infof("Skipping update-cache API call: URL not configured")
+			} else if !anyGenerated {
+				log.Infof("Skipping update-cache API call: no projects were regenerated (all skipped or failed)")
 			}
 		}
 
