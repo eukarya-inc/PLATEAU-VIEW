@@ -101,6 +101,7 @@ func (s *Service) createGetMetadataTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_metadata",
 		mcp.WithDescription("PLATEAU全体のメタデータを取得します。利用可能な年度、PLATEAU仕様バージョン、地域数、データセット数などの統計情報を返します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -127,6 +128,7 @@ func (s *Service) createSearchAreasTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_search_areas",
 		mcp.WithDescription("地域（都道府県、市区町村）を検索します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("parent_code",
 			mcp.Description("親地域コード（例: \"13\" で東京都）"),
 		),
@@ -213,6 +215,7 @@ func (s *Service) createGetAreaTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_area",
 		mcp.WithDescription("特定の地域の詳細情報を取得します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("code",
 			mcp.Required(),
 			mcp.Description("地域コード（例: \"13101\"）"),
@@ -255,6 +258,7 @@ func (s *Service) createSearchDatasetsTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_search_datasets",
 		mcp.WithDescription("データセットを検索します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithArray("area_codes",
 			mcp.Description("地域コードのリスト"),
 			mcp.WithStringItems(),
@@ -341,6 +345,7 @@ func (s *Service) createGetDatasetTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_dataset",
 		mcp.WithDescription("特定のデータセットの詳細情報を取得します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("データセットID"),
@@ -385,6 +390,7 @@ func (s *Service) createListDatasetTypesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_list_dataset_types",
 		mcp.WithDescription("データセット種類の一覧を取得します。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("category",
 			mcp.Description("カテゴリ（PLATEAU, RELATED, GENERIC）"),
 		),

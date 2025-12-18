@@ -34,6 +34,7 @@ func (s *Service) createCityGMLGetAttributesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_citygml_get_attributes",
 		mcp.WithDescription("CityGMLファイルから指定した建物IDの属性情報を取得します。\n\n使い方の流れ:\n1. plateau_get_citygml_filesでメッシュコードや空間IDを指定してCityGML URLを取得\n2. レスポンスのcities[].files[type][].urlからCityGML URLを取得（typeは'bldg', 'tran'など）\n3. そのURLと建物IDをこのツールに渡す"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("url",
 			mcp.Required(),
 			mcp.Description("CityGMLファイルのURL"),
@@ -124,6 +125,7 @@ func (s *Service) createCityGMLGetFeaturesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_citygml_get_features",
 		mcp.WithDescription("CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。\n\n使い方の流れ:\n1. plateau_get_citygml_filesでメッシュコードや空間IDを指定してCityGML URLを取得\n2. レスポンスのcities[].files[type][].urlからCityGML URLを取得（typeは'bldg', 'tran'など）\n3. そのURLと空間IDをこのツールに渡す\n4. 返ってきた地物IDをplateau_citygml_get_attributesで使用できる"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("url",
 			mcp.Required(),
 			mcp.Description("CityGMLファイルのURL"),
@@ -209,7 +211,8 @@ func (s *Service) handleCityGMLGetFeatures(ctx context.Context, request mcp.Call
 func (s *Service) createCityGMLGetGeoidHeightTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_citygml_get_geoid_height",
-		mcp.WithDescription("指定した緯度経度のジオイド高を取得します。標高の楕円体高と正標高の変換に使用できます。"),
+		mcp.WithDescription("指定した緯度経度のジオイド高を取得します。日本のジオイド2011に基づいています。標高の楕円体高と正標高の変換に使用できます。"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("latitude",
 			mcp.Required(),
 			mcp.Description("緯度（度）"),
@@ -297,6 +300,7 @@ func (s *Service) createGetCityGMLFilesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_citygml_files",
 		mcp.WithDescription("指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。\\n\\n条件フォーマット:\\n- メッシュコード: m:53393580,53393581 (カンマ区切りで複数指定可)\\n- 空間ID: s:15/0/29134/12950,15/0/29134/12951 (カンマ区切りで複数指定可)\\n- 矩形範囲: r:139.7,35.6,139.8,35.7 (西経度,南緯度,東経度,北緯度)\\n\\n地物型フィルタ:\\nfeature_typesパラメータで地物型を絞り込むことができます（例: [\\\"bldg\\\", \\\"tran\\\"]）\\n主な地物型: bldg(建築物), tran(交通), luse(土地利用), dem(地形), fld(洪水), lsld(土砂災害), urf(都市計画)\\n利用可能な全ての地物型はplateau_list_dataset_typesツールで取得できます。\\n\\n使い方の流れ:\\n1. このツールでCityGMLファイルURLを取得\\n2. 取得したURLをplateau_citygml_get_featuresまたはplateau_citygml_get_attributesで使用"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("condition",
 			mcp.Required(),
 			mcp.Description("検索条件 (例: \\\"m:53393580\\\", \\\"s:15/0/29134/12950\\\", \\\"r:139.7,35.6,139.8,35.7\\\")"),

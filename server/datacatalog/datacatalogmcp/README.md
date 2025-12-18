@@ -7,8 +7,8 @@
 >
 > このMCPサーバーは試験的な提供です。以下の点にご注意ください：
 >
-> - **動作保証はありません** - 予告なく仕様変更や停止が行われる可能性があります
-> - **SLA（サービスレベル保証）はありません** - 可用性やパフォーマンスの保証は一切行いません
+> - **動作保証・SLA（サービスレベル保証）はありません** - 可用性やパフォーマンスの保証は一切行いません
+> - **予告なく変更されることがあります** - ツールの追加・削除・変更、レスポンス形式の変更などが事前告知なく行われることがあります
 > - **本番環境での利用は推奨しません** - 検証・評価目的での利用を想定しています
 > - **サポートは限定的です** - 問い合わせへの対応は保証されません
 >
@@ -25,6 +25,9 @@ PLATEAU Data Catalog MCP Serverは、PLATEAUの都市モデルデータへのア
 
 ## AIクライアントでの設定方法
 
+> [!NOTE]
+> 以下のセットアップ手順は各AIクライアントの仕様変更により変わる可能性があります。最新の情報は各公式ドキュメントをご確認ください。（2025/12/18 時点の情報）
+
 ### Claude Code での設定
 
 Claude Code では、以下のコマンドで MCP サーバーを追加できます：
@@ -37,15 +40,28 @@ claude mcp add --transport http plateau-catalog https://api.plateauview.mlit.go.
 
 ### Claude Desktop での設定
 
-#### 有料プラン (Pro/Team/Enterprise) の場合
+#### 有料プラン (Pro/Business/Enterprise) の場合
 
 1. Claude Desktop を開く
 2. Settings → Integrations を選択
 3. 「+ Add Custom Integration」をクリック
-4. MCP サーバーの URL を入力：
-   ```
-   https://api.plateauview.mlit.go.jp/datacatalog/mcp
-   ```
+4. 以下の情報を入力：
+   - **名前**: `PLATEAU MCP`
+   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **詳細設定 → 認証（OAuth）**: 空欄のまま
+5. 設定を保存
+
+#### 組織プラン（Enterprise/Business）で管理者が設定する場合
+
+組織の管理者がメンバー全員に MCP サーバーを提供する場合は、以下の手順で設定できます：
+
+1. Claude の管理コンソールにログイン
+2. 管理者設定 → コネクタ を選択
+3. 「カスタムコネクタを追加」をクリック
+4. 以下の情報を入力：
+   - **名前**: `PLATEAU MCP`
+   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **詳細設定 → 認証（OAuth）**: 空欄のまま
 5. 設定を保存
 
 #### 無料プランの場合
@@ -86,13 +102,17 @@ Claude Desktop 無料版はHTTP MCPに対応していないため、HTTP-to-Stdi
 ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバーを追加できます：
 
 1. ChatGPT の Settings で Developer Mode（開発者モード）を有効化
-2. Settings → Connectors → Create を選択
-3. 以下の情報を入力：
-   - **Connector name**: `PLATEAU Data Catalog`
-   - **Description**: `日本の3D都市モデル（PLATEAU）のデータカタログにアクセスできます。地域情報、建築物・道路・土地利用などのデータセット情報を検索・取得できます。`
-   - **Connector URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
-4. 設定を保存
-5. チャットで「+」ボタン → 「More」→ PLATEAU Data Catalog を選択して利用
+2. Settings → Apps を選択
+3. 「アプリを作成する」をクリック
+4. 以下の情報を入力：
+   - **名前**: `PLATEAU MCP`
+   - **説明**: 任意（例: `日本の3D都市モデル（PLATEAU）のデータカタログにアクセスできます`）
+   - **アイコン**: 任意
+   - **URL**: `https://api.plateauview.mlit.go.jp/datacatalog/mcp`
+   - **認証**: `認証なし` を選択
+5. 「カスタムMCPサーバーのリスク警告」で「理解したうえで続行」にチェック
+6. 設定を保存
+7. チャットで「+」ボタン → 「More」→ PLATEAU MCP を選択して利用
 
 **参考**: 設定手順の詳細は [ChatGPT MCP 公式ドキュメント](https://platform.openai.com/docs/mcp) をご確認ください。
 
@@ -462,7 +482,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 ```
 
 ### 9. `plateau_citygml_get_geoid_height`
-指定した緯度経度のジオイド高を取得します。標高の楕円体高と正標高の変換に使用できます。
+指定した緯度経度のジオイド高を取得します。日本のジオイド2011に基づいています。標高の楕円体高と正標高の変換に使用できます。
 
 **パラメータ**:
 - `latitude` (required): 緯度（度）
