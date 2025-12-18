@@ -124,7 +124,7 @@ HTTP MCPをサポートする他のAIクライアントでも、同様にサー�
 https://api.plateauview.mlit.go.jp/datacatalog/mcp
 ```
 
-設定後、以下の10個のツールが利用可能になります：
+設定後、以下の11個のツールが利用可能になります：
 
 **データカタログツール:**
 - `plateau_get_metadata` - PLATEAU全体のメタデータ取得
@@ -139,6 +139,9 @@ https://api.plateauview.mlit.go.jp/datacatalog/mcp
 - `plateau_citygml_get_attributes` - CityGMLファイルから建物属性情報を取得
 - `plateau_citygml_get_features` - 空間IDに交差する地物IDリストを取得
 - `plateau_citygml_get_geoid_height` - 緯度経度からジオイド高を取得
+
+**ヘルパーツール:**
+- `plateau_explain_spatial_id` - 空間ID（Spatial ID）の仕様解説
 
 ## 利用可能なツール
 
@@ -611,6 +614,24 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 
 3. 必要な市区町村のファイルを選択して属性を取得
 ```
+
+## ヘルパーツール
+
+### 11. `plateau_explain_spatial_id`
+空間ID（Spatial ID）の仕様と使い方を解説するマークダウンを返します。
+
+空間IDは3次元空間を一意に識別するための規格で、`{z}/{f}/{x}/{y}` 形式で表現されます。このツールを呼び出すと、以下の情報を含む解説が返されます：
+
+- 空間IDのフォーマットと各要素の意味
+- ズームレベルごとの解像度一覧
+- 座標計算式
+- PLATEAUツールでの使い方
+- 参考リンク
+
+**パラメータ**: なし
+
+**使用例**:
+空間IDを使った検索を行う前に、このツールを呼び出して空間IDの仕様を理解してから操作することを推奨します。
 
 ## 関連リンク
 
