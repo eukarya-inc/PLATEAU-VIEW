@@ -4,9 +4,9 @@ package datacatalogmcp
 
 // GetCityGMLAttributesInput represents input for plateau_citygml_get_attributes tool
 type GetCityGMLAttributesInput struct {
-	URL           string   `json:"url"`
-	BuildingIDs   []string `json:"building_ids"`
-	SkipCodeList  *bool    `json:"skip_code_list,omitempty"`
+	URL          string   `json:"url"`
+	BuildingIDs  []string `json:"building_ids"`
+	SkipCodeList *bool    `json:"skip_code_list,omitempty"`
 }
 
 // GetCityGMLAttributesResponse represents response from plateau_citygml_get_attributes tool
@@ -33,10 +33,10 @@ type GetGeoidHeightInput struct {
 
 // GetGeoidHeightResponse represents response from plateau_citygml_get_geoid_height tool
 type GetGeoidHeightResponse struct {
-	Latitude     float64 `json:"latitude"`
-	Longitude    float64 `json:"longitude"`
-	GeoidHeight  float64 `json:"geoid_height"`
-	Geoid        string  `json:"geoid"` // Formatted string for compatibility
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	GeoidHeight float64 `json:"geoid_height"`
+	Geoid       string  `json:"geoid"` // Formatted string for compatibility
 }
 
 // GetCityGMLFilesInput represents input for plateau_get_citygml_files tool

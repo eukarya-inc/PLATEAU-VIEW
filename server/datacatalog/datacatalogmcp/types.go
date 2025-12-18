@@ -60,13 +60,13 @@ type AreaChild struct {
 }
 
 type GetAreaResponse struct {
-	ID                string       `json:"id"`
-	Type              string       `json:"type"`
-	Code              string       `json:"code"`
-	Name              string       `json:"name"`
-	Parent            *AreaParent  `json:"parent,omitempty"`
-	Children          []AreaChild  `json:"children"`
-	PlanarCrsEpsgCode *string      `json:"planar_crs_epsg_code,omitempty"` // City only
+	ID                string      `json:"id"`
+	Type              string      `json:"type"`
+	Code              string      `json:"code"`
+	Name              string      `json:"name"`
+	Parent            *AreaParent `json:"parent,omitempty"`
+	Children          []AreaChild `json:"children"`
+	PlanarCrsEpsgCode *string     `json:"planar_crs_epsg_code,omitempty"` // City only
 }
 
 // Dataset types
@@ -177,7 +177,7 @@ type DatasetTypeListInfo struct {
 }
 
 type ListDatasetTypesInput struct {
-	Category    *string `json:"category,omitempty"`    // PLATEAU, RELATED, GENERIC
+	Category    *string `json:"category,omitempty"` // PLATEAU, RELATED, GENERIC
 	PlateauSpec *string `json:"plateau_spec,omitempty"`
 	Year        *int    `json:"year,omitempty"`
 }

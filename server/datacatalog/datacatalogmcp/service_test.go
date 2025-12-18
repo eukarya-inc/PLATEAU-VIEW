@@ -128,7 +128,7 @@ func createTestContext() context.Context {
 func TestService_HandleGetMetadata(t *testing.T) {
 	repo := createTestRepo()
 	mockHandler := &mockReposHandler{repo: repo}
-		service := NewService(mockHandler, "")
+	service := NewService(mockHandler, "")
 
 	ctx := createTestContext()
 	request := mcp.CallToolRequest{

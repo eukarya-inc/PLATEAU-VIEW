@@ -367,6 +367,50 @@ func AdminFrom(a any) (admin Admin) {
 		return admin
 	}
 
+	// Handle map[string]any from JSON unmarshaling (e.g., when loading from cache)
+	if m, ok := a.(map[string]any); ok {
+		if v, ok := m["stage"].(string); ok {
+			admin.Stage = v
+		}
+		if v, ok := m["cmsUrl"].(string); ok {
+			admin.CMSURL = v
+		}
+		if v, ok := m["cmsItemId"].(string); ok {
+			admin.CMSItemID = v
+		}
+		if v, ok := m["subAreaCode"].(string); ok {
+			admin.SubAreaCode = v
+		}
+		if v, ok := m["cityGmlAssetId"].(string); ok {
+			admin.CityGMLAssetID = v
+		}
+		if v, ok := m["cityGmlUrls"].([]any); ok {
+			for _, u := range v {
+				if s, ok := u.(string); ok {
+					admin.CityGMLURLs = append(admin.CityGMLURLs, s)
+				}
+			}
+		}
+		if v, ok := m["maxLodUrls"].([]any); ok {
+			for _, u := range v {
+				if s, ok := u.(string); ok {
+					admin.MaxLODURLs = append(admin.MaxLODURLs, s)
+				}
+			}
+		}
+		if v, ok := m["createdAt"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				admin.CreatedAt = &t
+			}
+		}
+		if v, ok := m["updatedAt"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				admin.UpdatedAt = &t
+			}
+		}
+		return admin
+	}
+
 	return
 }
 

@@ -29,7 +29,7 @@ func (w *FileRepoWriter) GetWriter(project string) (io.WriteCloser, error) {
 	if err := os.MkdirAll(w.basedir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	path := filepath.Join(w.basedir, fmt.Sprintf("repo_%s.json", project))
 	return os.Create(path)
 }
@@ -39,7 +39,7 @@ func (w *FileRepoWriter) GetWarningWriter(project string) (io.WriteCloser, error
 	if err := os.MkdirAll(w.basedir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	path := filepath.Join(w.basedir, fmt.Sprintf("repo_%s_warnings.txt", project))
 	return os.Create(path)
 }
@@ -61,7 +61,7 @@ func NewMemRepoWriter() *MemRepoWriter {
 func (w *MemRepoWriter) GetWriter(project string) (io.WriteCloser, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	buf := new(bytes.Buffer)
 	w.data[project] = buf
 	return &nopCloser{Writer: buf}, nil
@@ -70,7 +70,7 @@ func (w *MemRepoWriter) GetWriter(project string) (io.WriteCloser, error) {
 func (w *MemRepoWriter) GetWarningWriter(project string) (io.WriteCloser, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	buf := new(bytes.Buffer)
 	w.warnings[project] = buf
 	return &nopCloser{Writer: buf}, nil
@@ -80,7 +80,7 @@ func (w *MemRepoWriter) GetWarningWriter(project string) (io.WriteCloser, error)
 func (w *MemRepoWriter) GetData(project string) ([]byte, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	
+
 	buf, ok := w.data[project]
 	if !ok {
 		return nil, false
@@ -92,7 +92,7 @@ func (w *MemRepoWriter) GetData(project string) ([]byte, bool) {
 func (w *MemRepoWriter) GetWarnings(project string) ([]byte, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	
+
 	buf, ok := w.warnings[project]
 	if !ok {
 		return nil, false
