@@ -10,14 +10,14 @@ import (
 
 func TestGenerateRelatedIndexItem(t *testing.T) {
 	f := afero.NewMemMapFs()
-	lo.Must(f.Create("xxx_border.geojson")).Close()
-	lo.Must(f.Create("xxx_shelter.geojson")).Close()
-	lo.Must(f.Create("xxx_landmark_.geojson")).Close()
-	lo.Must(f.Create("xxx_emergency_route_.geojson")).Close()
-	lo.Must(f.Create("xxx_station.geojson")).Close()
-	lo.Must(f.Create("xxx_station_2.geojson")).Close()
-	lo.Must(f.Create("xxx_park.geojson")).Close()
-	lo.Must(f.Create("xxx_railway.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_border.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_shelter.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_landmark_.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_emergency_route_.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_station.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_station_2.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_park.geojson")).Close()
+	_ = lo.Must(f.Create("xxx_railway.geojson")).Close()
 	ff := afero.NewIOFS(f)
 
 	seed := &IndexSeed{V: 1}

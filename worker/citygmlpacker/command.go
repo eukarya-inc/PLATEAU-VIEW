@@ -96,7 +96,7 @@ func Run(conf Config) (err error) {
 
 		if err != nil {
 			var gErr *googleapi.Error
-			if !(errors.As(err, &gErr) && gErr.Code == http.StatusPreconditionFailed) {
+			if !errors.As(err, &gErr) || gErr.Code != http.StatusPreconditionFailed {
 				log.Printf("SKIPPED: someone else is processing")
 				return nil
 			}
@@ -107,8 +107,8 @@ func Run(conf Config) (err error) {
 	w := obj.NewWriter(bgctx)
 	completedMetadata := status(PackStatusSucceeded)
 	completedMetadata["startedAt"] = startedAt
-	w.ObjectAttrs.Metadata = completedMetadata
-	defer w.Close()
+	w.Metadata = completedMetadata
+	defer func() { _ = w.Close() }()
 
 	ctx, cancel := context.WithTimeout(bgctx, conf.Timeout)
 	defer cancel()
@@ -169,7 +169,7 @@ func resolveURLs(ctx context.Context, gcs *storage.Client, urls []string, source
 		return nil, fmt.Errorf("open source file: %w", err)
 	}
 
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	var resolved []string
 	sc := bufio.NewScanner(r)

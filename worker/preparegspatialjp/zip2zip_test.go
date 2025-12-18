@@ -63,12 +63,12 @@ func TestZip2zip(t *testing.T) {
 	zf, _ := destReader.Open("test1")
 	buf := bytes.NewBuffer(nil)
 	_, _ = buf.ReadFrom(zf)
-	zf.Close()
+	_ = zf.Close()
 	assert.Equal(t, "test1", buf.String())
 
 	zf, _ = destReader.Open("test2/test3/test4")
 	buf = bytes.NewBuffer(nil)
 	_, _ = buf.ReadFrom(zf)
-	zf.Close()
+	_ = zf.Close()
 	assert.Equal(t, "test2", buf.String())
 }

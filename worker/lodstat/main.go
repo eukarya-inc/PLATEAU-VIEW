@@ -124,7 +124,7 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 					return fmt.Errorf("open remote file: %w", err)
 				}
 				eg.Go(func() error {
-					defer rc.Close()
+					defer func() { _ = rc.Close() }()
 					defer sem.Release(1)
 					features, lod, err := collectLOD(rc)
 					if err != nil {
@@ -228,7 +228,7 @@ type remoteZipFile struct {
 }
 
 func (r *remoteZipFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	dataOffset, err := r.File.DataOffset()
+	dataOffset, err := r.DataOffset()
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ type bufferedReaderAt struct {
 func (r *bufferedReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.buf) == 0 || !(r.base <= off && off+int64(len(p)) <= r.base+int64(len(r.buf))) {
+	if len(r.buf) == 0 || r.base > off || off+int64(len(p)) > r.base+int64(len(r.buf)) {
 		readLen := int64(len(p))
 		// optimization for bufio.Reader
 		if readLen == 4096 { // bufio default buf size
@@ -291,7 +291,7 @@ func (r *httpRangeBytesReaderAt) ReadAt(p []byte, off int64) (n int, err error) 
 	if err != nil {
 		return 0, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	n, err = io.ReadFull(rc, p)
 	if err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
 		err = nil
@@ -413,7 +413,7 @@ func httpHead(client *http.Client, req *http.Request) (int64, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusMethodNotAllowed {
 		return 0, false, nil

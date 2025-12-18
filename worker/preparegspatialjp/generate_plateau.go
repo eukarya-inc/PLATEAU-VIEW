@@ -64,10 +64,10 @@ func mergePlateau(ctx context.Context, m MergeContext) (string, []string, error)
 		return "", nil, fmt.Errorf("failed to create file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	cz := NewZip2zip(zip.NewWriter(f))
-	defer cz.Close()
+	defer func() { _ = cz.Close() }()
 
 	for _, ft := range m.FeatureTypes {
 		fi, ok := allFeatureItems[ft]

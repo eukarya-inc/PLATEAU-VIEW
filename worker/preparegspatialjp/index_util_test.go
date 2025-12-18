@@ -22,7 +22,7 @@ func TestWalk(t *testing.T) {
 	_, _ = w.Write([]byte("ddd"))
 	w, _ = zw.Create("ccc.txt")
 	_, _ = w.Write([]byte("ccc"))
-	zw.Close()
+	_ = zw.Close()
 
 	bufr := bytes.NewReader(buf.Bytes())
 	zr, _ := zip.NewReader(bufr, int64(buf.Len()))

@@ -61,10 +61,10 @@ func mergeCityGML(ctx context.Context, c MergeContext) (string, error) {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zw := zip.NewWriter(f)
 	cz := NewCityGMLZipWriter(zw, rootName)
-	defer cz.Close()
+	defer func() { _ = cz.Close() }()
 
 	// copy files
 	for _, ty := range citygmlFiles {

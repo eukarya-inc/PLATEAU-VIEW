@@ -125,7 +125,7 @@ func (c *CMSWrapper) UploadFile(ctx context.Context, path string) (string, error
 		return "", err
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return c.Upload(ctx, name, f)
 }
 
