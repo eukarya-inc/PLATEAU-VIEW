@@ -41,6 +41,7 @@ func (s *Service) createCityGMLGetAttributesTool() mcp.Tool {
 		mcp.WithArray("building_ids",
 			mcp.Required(),
 			mcp.Description("取得する建物IDのリスト"),
+			mcp.WithStringItems(),
 		),
 		mcp.WithBoolean("skip_code_list",
 			mcp.Description("コードリストの取得をスキップするか（デフォルト: false）"),
@@ -130,6 +131,7 @@ func (s *Service) createCityGMLGetFeaturesTool() mcp.Tool {
 		mcp.WithArray("spatial_ids",
 			mcp.Required(),
 			mcp.Description("検索する空間IDのリスト"),
+			mcp.WithStringItems(),
 		),
 	)
 }
@@ -301,6 +303,7 @@ func (s *Service) createGetCityGMLFilesTool() mcp.Tool {
 		),
 		mcp.WithArray("feature_types",
 			mcp.Description("取得する地物型のリスト (例: [\\\"bldg\\\", \\\"tran\\\"])。指定しない場合は全ての地物型を取得"),
+			mcp.WithStringItems(),
 		),
 	)
 }
