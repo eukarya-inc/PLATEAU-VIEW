@@ -25,51 +25,15 @@ func RegisterResources(s *server.MCPServer) {
 func HandleResourceList(_ context.Context) ([]mcp.Resource, error) {
 	resources := []mcp.Resource{
 		{
-			URI:         "plateau://standard/overview",
-			Name:        "PLATEAU Standard Product Specification Overview",
-			Description: "Overview and introduction to PLATEAU 3D city model standard specifications",
+			URI:         "plateau://standard/outline",
+			Name:        "PLATEAU Standard Product Specification - Table of Contents",
+			Description: "Complete table of contents of the 3D City Model Standard Product Specification",
 			MIMEType:    "text/markdown",
 		},
 		{
-			URI:         "plateau://standard/building",
-			Name:        "Building Model Specification",
-			Description: "Detailed specifications for building models (LOD1-LOD4)",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://standard/transportation",
-			Name:        "Transportation Model Specification",
-			Description: "Specifications for roads, railways, and transportation infrastructure",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://standard/landuse",
-			Name:        "Land Use Model Specification",
-			Description: "Urban planning and land use classification specifications",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://standard/disaster",
-			Name:        "Disaster Prevention Model Specification",
-			Description: "Flood, tsunami, and disaster risk assessment model specifications",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://procedure/overview",
-			Name:        "Standard Work Procedures Overview",
-			Description: "Overview of 3D city model creation procedures and workflows",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://procedure/data-preparation",
-			Name:        "Data Preparation Procedures",
-			Description: "Procedures for preparing source data for 3D city model creation",
-			MIMEType:    "text/markdown",
-		},
-		{
-			URI:         "plateau://procedure/quality-control",
-			Name:        "Quality Control Procedures",
-			Description: "Quality assurance and validation procedures for 3D city models",
+			URI:         "plateau://procedure/outline",
+			Name:        "PLATEAU Standard Work Procedures - Table of Contents",
+			Description: "Complete table of contents of the 3D City Model Standard Work Procedures",
 			MIMEType:    "text/markdown",
 		},
 		{
@@ -96,56 +60,11 @@ func HandleResourceRead(_ context.Context, request mcp.ReadResourceRequest) ([]m
 		return nil, fmt.Errorf("invalid resource URI format: %s", uri)
 	}
 
-	docType := "standard"
 	category := parts[0]
-	topic := ""
 
-	if category == "procedure" && len(parts) > 1 {
-		docType = "procedure"
-		topic = parts[1]
-	} else if category == "standard" && len(parts) > 1 {
-		topic = parts[1]
-	} else if category == "glossary" {
-		content, err := getGlossaryContent()
-		if err != nil {
-			return nil, err
-		}
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      uri,
-				MIMEType: "text/markdown",
-				Text:     content,
-			},
-		}, nil
-	} else {
-		topic = category
-	}
-
-	// Map topics to actual document paths
-	pathMap := map[string]string{
-		"overview":         "",
-		"building":         "/toc4/toc4_02",
-		"transportation":   "/toc4/toc4_03",
-		"landuse":          "/toc4/toc4_01",
-		"disaster":         "/toc4/toc4_05",
-		"data-preparation": "/toc_03",
-		"quality-control":  "/toc_06",
-	}
-
-	path, ok := pathMap[topic]
-	if !ok {
-		return nil, fmt.Errorf("unknown resource topic: %s", topic)
-	}
-
-	client := NewClient(docType)
-
-	// For overview, get chapter listing
-	if path == "" {
-		chapters, err := client.ListChapters()
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch overview: %w", err)
-		}
-		content := formatOverview(chapters, docType)
+	// Handle glossary
+	if category == "glossary" {
+		content := getGlossaryContent()
 		return []mcp.ResourceContents{
 			mcp.TextResourceContents{
 				URI:      uri,
@@ -155,141 +74,58 @@ func HandleResourceRead(_ context.Context, request mcp.ReadResourceRequest) ([]m
 		}, nil
 	}
 
-	// Get sections for the specified path
-	sections, err := client.ListSectionsByPath(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch sections: %w", err)
-	}
-
-	// Get content for first few sections
-	var content strings.Builder
-	content.WriteString(fmt.Sprintf("# %s\n\n", getTopicTitle(topic)))
-
-	maxSections := 3 // Limit to first 3 sections for summary
-	for i, section := range sections {
-		if i >= maxSections {
-			break
+	// Handle outline requests
+	if len(parts) >= 2 && parts[1] == "outline" {
+		docType := "standard"
+		if category == "procedure" {
+			docType = "procedure"
 		}
 
-		doc, err := client.GetContentByPath(section.Path)
+		client := NewClient(docType)
+		outline, err := client.GetOutlineWithDepth(2)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to get outline: %w", err)
 		}
 
-		content.WriteString(fmt.Sprintf("\n## %s\n\n", section.Title))
-		content.WriteString(FormatAsMarkdown(doc))
-		content.WriteString("\n---\n")
+		content := formatOutlineAsMarkdown(outline, docType)
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      uri,
+				MIMEType: "text/markdown",
+				Text:     content,
+			},
+		}, nil
 	}
 
-	if len(sections) > maxSections {
-		content.WriteString(fmt.Sprintf("\n*Note: Showing first %d sections. Total sections available: %d*\n", maxSections, len(sections)))
-	}
-
-	return []mcp.ResourceContents{
-		mcp.TextResourceContents{
-			URI:      uri,
-			MIMEType: "text/markdown",
-			Text:     content.String(),
-		},
-	}, nil
+	return nil, fmt.Errorf("unknown resource: %s", uri)
 }
 
-func formatOverview(chapters []Chapter, docType string) string {
-	var sb strings.Builder
-
-	title := "PLATEAU Standard Product Specification"
-	if docType == "procedure" {
-		title = "3D City Model Standard Work Procedures"
-	}
-
-	sb.WriteString(fmt.Sprintf("# %s Overview\n\n", title))
-	sb.WriteString("## Document Structure\n\n")
-
-	for _, chapter := range chapters {
-		sb.WriteString(fmt.Sprintf("### %s\n", chapter.Title))
-		sb.WriteString(fmt.Sprintf("- **ID**: %s\n", chapter.ID))
-		sb.WriteString(fmt.Sprintf("- **Path**: `%s`\n", chapter.Path))
-		sb.WriteString("\n")
-
-		// Add brief description based on chapter ID
-		desc := getChapterDescription(chapter.ID)
-		if desc != "" {
-			sb.WriteString(desc + "\n\n")
-		}
-	}
-
-	sb.WriteString("\n## How to Navigate\n\n")
-	sb.WriteString("Use the following tools to explore the specification:\n\n")
-	sb.WriteString("- `plateau_spec_list`: Browse chapters and sections\n")
-	sb.WriteString("- `plateau_spec_get_content`: Read specific section content\n")
-	sb.WriteString("- `plateau_spec_search`: Search for specific topics\n")
-
-	return sb.String()
-}
-
-func getGlossaryContent() (string, error) {
-	// This would typically fetch from a glossary endpoint
-	// For now, return a static glossary of common terms
+func getGlossaryContent() string {
 	glossary := map[string]string{
-		"LOD":             "Level of Detail - Describes the granularity of 3D model representation",
-		"CityGML":         "Open data model and XML-based format for storage and exchange of 3D city models",
-		"建築物モデル":         "Building Model - 3D representation of buildings and structures",
-		"道路モデル":          "Road Model - 3D representation of transportation infrastructure",
-		"土地利用モデル":        "Land Use Model - Classification and representation of urban land use",
-		"災害リスク":          "Disaster Risk - Assessment of natural disaster probabilities and impacts",
-		"洪水浸水想定":         "Flood Inundation Assumption - Predicted flood depths and areas",
-		"都市計画決定情報":       "Urban Planning Decision Information - Official urban planning designations",
+		"LOD":        "Level of Detail - 3Dモデルの表現の詳細度を示す。LOD0からLOD4まであり、数字が大きいほど詳細。",
+		"CityGML":    "3D都市モデルの保存と交換のためのオープンデータモデルおよびXMLベースのフォーマット。",
+		"建築物モデル":    "建物や構造物の3D表現。bldgモジュールで定義される。",
+		"道路モデル":     "道路などの交通インフラの3D表現。tranモジュールで定義される。",
+		"土地利用モデル":   "都市の土地利用の分類と表現。luseモジュールで定義される。",
+		"災害リスク":     "自然災害の確率と影響の評価。洪水、土砂災害などのリスク情報。",
+		"洪水浸水想定":    "洪水時の予想浸水深と浸水範囲。fldモジュールで定義される。",
+		"都市計画決定情報":  "都市計画法に基づく区域区分や用途地域等の情報。urfモジュールで定義される。",
+		"メッシュコード":   "日本の標準地域メッシュを識別するコード。CityGMLファイルの分割単位として使用。",
+		"空間ID":      "3次元空間を一意に識別するためのID。z/f/x/y形式で表現される。",
+		"PLATEAU仕様":  "国土交通省が定める3D都市モデルの標準仕様。年度ごとにバージョンが更新される。",
 	}
 
 	var sb strings.Builder
-	sb.WriteString("# PLATEAU Glossary\n\n")
+	sb.WriteString("# PLATEAU 用語集\n\n")
 
 	for term, definition := range glossary {
 		sb.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", term, definition))
 	}
 
 	data, _ := json.MarshalIndent(glossary, "", "  ")
-	sb.WriteString("\n## Full Glossary (JSON)\n\n```json\n")
+	sb.WriteString("\n## JSON形式\n\n```json\n")
 	sb.WriteString(string(data))
 	sb.WriteString("\n```\n")
 
-	return sb.String(), nil
-}
-
-func getTopicTitle(topic string) string {
-	titles := map[string]string{
-		"building":         "Building Model Specification",
-		"transportation":   "Transportation Model Specification",
-		"landuse":          "Land Use Model Specification",
-		"disaster":         "Disaster Prevention Model Specification",
-		"data-preparation": "Data Preparation Procedures",
-		"quality-control":  "Quality Control Procedures",
-	}
-
-	if title, ok := titles[topic]; ok {
-		return title
-	}
-	return "PLATEAU Specification"
-}
-
-func getChapterDescription(chapterID string) string {
-	descriptions := map[string]string{
-		"toc1":   "Introduction and overview of PLATEAU specifications",
-		"toc2":   "Basic concepts and terminology definitions",
-		"toc3":   "Data product specifications and requirements",
-		"toc4":   "Detailed model specifications for various urban features",
-		"toc5":   "Quality requirements and validation procedures",
-		"toc6":   "Metadata specifications and documentation standards",
-		"toc_01": "Overview of standard work procedures",
-		"toc_02": "Planning and preparation phase procedures",
-		"toc_03": "Data collection and preparation procedures",
-		"toc_04": "3D modeling and conversion procedures",
-		"toc_05": "Quality assurance and validation procedures",
-		"toc_06": "Delivery and documentation procedures",
-	}
-
-	if desc, ok := descriptions[chapterID]; ok {
-		return desc
-	}
-	return ""
+	return sb.String()
 }

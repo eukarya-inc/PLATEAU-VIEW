@@ -34,16 +34,6 @@ PLATEAU MCP Serverは、PLATEAUの都市モデルデータおよび仕様書へ�
 > [!NOTE]
 > 以下のセットアップ手順は各AIクライアントの仕様変更により変わる可能性があります。最新の情報は各公式ドキュメントをご確認ください。（2025/12/18 時点の情報）
 
-### Claude Code での設定
-
-Claude Code では、以下のコマンドで MCP サーバーを追加できます：
-
-```bash
-claude mcp add --transport http plateau https://api.plateauview.mlit.go.jp/mcp
-```
-
-**参考**: 設定手順の詳細は [Claude Code MCP 公式ドキュメント](https://docs.anthropic.com/en/docs/claude-code/mcp) をご確認ください。
-
 ### Claude Desktop での設定
 
 #### 有料プラン (Pro/Business/Enterprise) の場合
@@ -99,6 +89,12 @@ Claude Desktop 無料版はHTTP MCPに対応していないため、HTTP-to-Stdi
 
 5. ファイルを保存して Claude Desktop を再起動
 
+> [!IMPORTANT]
+> **Node.js のセットアップが必要です**
+>
+> この方法では `npx` コマンドを使用するため、事前に Node.js をインストールする必要があります。
+> [Node.js 公式サイト](https://nodejs.org/) から LTS 版をダウンロードしてインストールしてください。
+
 **参考**:
 - 設定手順の詳細は [Claude Desktop ヘルプセンター](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) をご確認ください
 - HTTP-to-Stdioアダプタの詳細は [@pyroprompts/mcp-stdio-to-streamable-http-adapter](https://www.npmjs.com/package/@pyroprompts/mcp-stdio-to-streamable-http-adapter) を参照
@@ -122,6 +118,16 @@ ChatGPT (Pro/Team/Enterprise/Edu) では、以下の手順で MCP サーバー�
 
 **参考**: 設定手順の詳細は [ChatGPT MCP 公式ドキュメント](https://platform.openai.com/docs/mcp) をご確認ください。
 
+### Claude Code での設定
+
+Claude Code では、以下のコマンドで MCP サーバーを追加できます：
+
+```bash
+claude mcp add --transport http plateau https://api.plateauview.mlit.go.jp/mcp
+```
+
+**参考**: 設定手順の詳細は [Claude Code MCP 公式ドキュメント](https://docs.anthropic.com/en/docs/claude-code/mcp) をご確認ください。
+
 ### その他のMCP対応AIクライアント
 
 HTTP MCPをサポートする他のAIクライアントでも、同様にサーバーURLを設定することで利用できます：
@@ -130,164 +136,92 @@ HTTP MCPをサポートする他のAIクライアントでも、同様にサー�
 https://api.plateauview.mlit.go.jp/mcp
 ```
 
-設定後、以下の15個のツールが利用可能になります：
-
-**仕様書ツール:**
-- `plateau_spec_list` - 仕様書の章・節をナビゲート
-- `plateau_spec_get_content` - 特定の節の内容を取得
-- `plateau_spec_get_contents_batch` - 複数の節の内容を一括取得
-- `plateau_spec_search` - 仕様書内を検索
-
-**データカタログツール:**
-- `plateau_get_metadata` - PLATEAU全体のメタデータ取得
-- `plateau_search_areas` - 地域検索
-- `plateau_get_area` - 地域詳細取得
-- `plateau_search_datasets` - データセット検索
-- `plateau_get_dataset` - データセット詳細取得
-- `plateau_list_dataset_types` - データセット種類一覧
-
-**CityGMLツール:**
-- `plateau_get_citygml_files` - メッシュコード/空間ID/矩形範囲でCityGMLファイルを検索
-- `plateau_citygml_get_attributes` - CityGMLファイルから建物属性情報を取得
-- `plateau_citygml_get_features` - 空間IDに交差する地物IDリストを取得
-- `plateau_citygml_get_geoid_height` - 緯度経度からジオイド高を取得
-
-**ヘルパーツール:**
-- `plateau_explain_spatial_id` - 空間ID（Spatial ID）の仕様解説
+# 各ツールの説明
 
 ## 仕様書ツール
 
 PLATEAU 3D都市モデルの公式仕様書にアクセスするためのツールです。
 
-### 1. `plateau_spec_list`
-仕様書の章・節をナビゲートします。
+### 1. `plateau_spec_outline`
+仕様書の目次（アウトライン）を取得します。
 
 **パラメータ**:
-- `path` (optional): ナビゲーションパス（例: '' で目次、'toc4' で章4）
-- `recursive` (optional): 全サブセクションを一度に表示するか（デフォルト: false）
 - `document_type` (optional): ドキュメント種類 - 'standard'（標準製品仕様書、デフォルト）または 'procedure'（標準作業手順書）
-- `format` (optional): 出力形式 - 'tree'（デフォルト）または 'json'
-- `offset` (optional): ページネーションオフセット（デフォルト: 0）
-- `limit` (optional): 最大結果数（デフォルト: 100）
-
-**レスポンス例**:
-```
-PLATEAU Specification Chapters:
-
-📁 toc1 - はじめに
-   Path: /plateaudocument/toc1
-📁 toc2 - 適用範囲
-   Path: /plateaudocument/toc2
-📁 toc3 - 引用規格
-   Path: /plateaudocument/toc3
-📁 toc4 - 地物型
-   Path: /plateaudocument/toc4
-...
-```
-
-### 2. `plateau_spec_get_content`
-特定の節の内容を取得します。
-
-**パラメータ**:
-- `path` (required): 節のパス（例: '/plateaudocument/toc4/toc4_03/toc4_03_01'）
-- `format` (optional): 出力形式 - 'markdown'（デフォルト）, 'json', または 'html'
-- `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）または 'procedure'
+- `depth` (optional): 取得する階層の深さ（1=章のみ、2=章+節、3=より深く）。デフォルト: 2。1を指定するとより高速
+- `chapter` (optional): 特定の章のみ取得（例: 'toc4' でデータ構造の章）。全体を取得するより高速
+- `format` (optional): 出力形式 - 'markdown'（デフォルト）または 'json'
 
 **レスポンス例**:
 ```markdown
-# 道路
+# 3D都市モデル標準製品仕様書 目次
 
-**Path:** `/plateaudocument/toc4/toc4_03/toc4_03_01`
+以下のパスを `plateau_spec_read` ツールで指定すると、その節の内容を読むことができます。
 
-道路モデルは、道路法に基づく道路の形状及び道路に関する情報を記述したデータです。
-...
+- **1 概覧** `/plateaudocument/toc1`
+  - **1.1 製品仕様の作成情報** `/plateaudocument/toc1/toc1_01`
+  - **1.2 目的** `/plateaudocument/toc1/toc1_02`
+  ...
+- **4 データ構造** `/plateaudocument/toc4`
+  - **4.1 概要** `/plateaudocument/toc4/toc4_01`
+  - **4.2 建築物** `/plateaudocument/toc4/toc4_02`
+  ...
 ```
 
-### 3. `plateau_spec_get_contents_batch`
-複数の節の内容を効率的に一括取得します。
+### 2. `plateau_spec_read`
+特定の節の内容を取得します。デフォルトで子ページの内容も含めて取得します。
 
 **パラメータ**:
-- `paths` (required): パスのJSON配列またはカンマ区切り文字列
-- `format` (optional): 出力形式 - 'markdown'（デフォルト）, 'json', または 'html'
+- `path` (required): 読み込むパス（例: '/plateaudocument/toc1' で第1章全体、'/plateaudocument/toc4' で第4章全体）。`plateau_spec_outline` で取得可能なパスを確認できます
 - `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）または 'procedure'
-- `offset` (optional): 開始オフセット（デフォルト: 0）
-- `limit` (optional): 最大処理パス数（デフォルト: 10）
+- `single_page` (optional): trueの場合、子ページを含めず指定したページのみ取得。デフォルト: false（子ページ含む）
+- `include_images` (optional): trueの場合、base64エンコードされた画像をマークダウンに含める。デフォルト: false（プレースホルダーのみ表示）
+
+**特徴**:
+- 子ページを含む全内容を**並列で高速取得**（セマフォで同時リクエスト数を制限）
+- 出力が長すぎる場合は**自動的にトランケート**され、より細かい節ごとに取得するためのヒントが表示されます
 
 **レスポンス例**:
-```json
-[
-  {
-    "path": "/plateaudocument/toc4/toc4_03/toc4_03_01",
-    "title": "道路",
-    "content": "# 道路\n\n道路モデルは..."
-  },
-  {
-    "path": "/plateaudocument/toc4/toc4_03/toc4_03_02",
-    "title": "鉄道",
-    "content": "# 鉄道\n\n鉄道モデルは..."
-  }
-]
+```markdown
+# 1 概覧
+
+## 1.1 製品仕様の作成情報
+
+| 製品仕様の題名 | 3D都市モデル標準製品仕様書 第5.0版 |
+| --- | --- |
+| 日付 | 2025/03/21 |
+| 作成者 | 国土交通省 |
+...
+
+## 1.5 用語と定義
+
+**1.5.1 3D都市モデル**
+都市空間の地物及び属性を都市スケールで3次元的に再現したCityGML形式のデータ。
+
+**1.5.2 BIM（Building Information Modeling）**
+コンピュータ上に作成した主に三次元の形状情報に加え、...
 ```
 
-### 4. `plateau_spec_search`
-仕様書内で特定の用語やトピックを検索します。
+**トランケート時のレスポンス例**:
+```markdown
+（内容が長い場合、途中でカットされ以下のヒントが表示されます）
 
-**パラメータ**:
-- `query` (required): 検索クエリテキスト
-- `document_type` (optional): ドキュメント種類 - 'standard'（デフォルト）, 'procedure', または 'all'
-- `scope` (optional): 検索範囲 - 'titles'（タイトルのみ、デフォルト）, 'content', または 'all'
-- `limit` (optional): 最大結果数（デフォルト: 20）
+---
+⚠️ **Output truncated due to length.**
 
-**レスポンス例**:
-```json
-[
-  {
-    "path": "/plateaudocument/toc4/toc4_02",
-    "title": "建築物",
-    "snippet": "建築物",
-    "score": 1.0,
-    "doc_type": "standard"
-  },
-  {
-    "path": "/plateaudocument/toc4/toc4_02/toc4_02_01",
-    "title": "建築物の基本構造",
-    "snippet": "建築物の基本構造",
-    "score": 0.5,
-    "doc_type": "standard"
-  }
-]
-```
+To get the full content, please request smaller sections individually.
 
-### 仕様書ツールの使用例
+Available sub-sections:
+- `/plateaudocument/toc4/toc4_01`
+- `/plateaudocument/toc4/toc4_02`
+- `/plateaudocument/toc4/toc4_03`
+...
 
-#### 建築物モデルの仕様を調べる
-
-```
-1. 仕様書の章一覧を取得:
-   plateau_spec_list(path="")
-
-2. 地物型の章を展開:
-   plateau_spec_list(path="toc4")
-
-3. 建築物の仕様を取得:
-   plateau_spec_get_content(path="/plateaudocument/toc4/toc4_02")
-```
-
-#### LODに関する情報を検索
-
-```
-plateau_spec_search(query="LOD", scope="all")
-```
-
-#### 作業手順書を参照
-
-```
-plateau_spec_list(path="", document_type="procedure")
+Use `plateau_spec_read` with these paths to get each section's content.
 ```
 
 ## データカタログツール
 
-### 5. `plateau_get_metadata`
+### 3. `plateau_get_metadata`
 PLATEAU全体のメタデータを取得します。
 
 **パラメータ**: なし
@@ -309,7 +243,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 6. `plateau_search_areas`
+### 4. `plateau_search_areas`
 地域（都道府県、市区町村）を検索します。
 
 **パラメータ**:
@@ -344,7 +278,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 7. `plateau_get_area`
+### 5. `plateau_get_area`
 特定の地域の詳細情報を取得します。
 
 **パラメータ**:
@@ -367,7 +301,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 8. `plateau_search_datasets`
+### 6. `plateau_search_datasets`
 データセットを検索します。
 
 **パラメータ**:
@@ -416,7 +350,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 9. `plateau_get_dataset`
+### 7. `plateau_get_dataset`
 特定のデータセットの詳細情報を取得します。
 
 **パラメータ**:
@@ -468,7 +402,7 @@ PLATEAU全体のメタデータを取得します。
 }
 ```
 
-### 10. `plateau_list_dataset_types`
+### 8. `plateau_list_dataset_types`
 データセット種類の一覧を取得します。
 
 **パラメータ**:
@@ -504,7 +438,7 @@ PLATEAU全体のメタデータを取得します。
 
 データカタログツールに加えて、CityGMLファイルから直接属性情報を取得するツールも提供しています。
 
-### 11. `plateau_citygml_get_attributes`
+### 9. `plateau_citygml_get_attributes`
 CityGMLファイルから指定した建物IDの属性情報を取得します。
 
 **使い方の流れ:**
@@ -536,7 +470,7 @@ CityGMLファイルから指定した建物IDの属性情報を取得します�
 }
 ```
 
-### 12. `plateau_citygml_get_features`
+### 10. `plateau_citygml_get_features`
 CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。
 
 **使い方の流れ:**
@@ -560,7 +494,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 }
 ```
 
-### 13. `plateau_citygml_get_geoid_height`
+### 11. `plateau_citygml_get_geoid_height`
 指定した緯度経度のジオイド高を取得します。日本のジオイド2011に基づいています。標高の楕円体高と正標高の変換に使用できます。
 
 **パラメータ**:
@@ -577,7 +511,7 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 }
 ```
 
-### 14. `plateau_get_citygml_files`
+### 12. `plateau_get_citygml_files`
 指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。
 
 **条件フォーマット**:
@@ -647,53 +581,9 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 }
 ```
 
-### CityGML ツールの使用例
-
-#### 特定地域の建物属性を取得
-
-```
-1. まず、世田谷区のメッシュコードで建物データのみ取得（コンテキスト節約）:
-   plateau_get_citygml_files(condition="m:53393580", feature_types=["bldg"])
-
-2. レスポンスのcities[0].files.bldg[0].urlから建物のCityGML URLを取得
-
-3. 空間IDで地物を検索:
-   plateau_citygml_get_features(url="取得したURL", spatial_ids=["15/0/29134/12950"])
-
-4. 返ってきた建物IDで属性を取得:
-   plateau_citygml_get_attributes(url="取得したURL", building_ids=["BLD_12345", "BLD_12346"])
-```
-
-#### 空間IDで特定の地物型のみ取得（コンテキスト節約）
-
-```
-1. 空間IDで建物と道路データのみ検索:
-   plateau_get_citygml_files(condition="s:15/0/29134/12950", feature_types=["bldg", "tran"])
-
-2. レスポンスから必要な種類のファイルのみ取得:
-   - cities[0].files.bldg[].url: 建築物モデル
-   - cities[0].files.tran[].url: 交通（道路）モデル
-
-3. 各URLから必要な属性を取得
-```
-
-#### 矩形範囲で広域検索
-
-```
-1. 矩形範囲でCityGMLファイルを検索（東京駅周辺）:
-   plateau_get_citygml_files(condition="r:139.7,35.6,139.8,35.7")
-
-2. 複数の市区町村のデータが返ってくる:
-   - cities[0]: 千代田区のデータ
-   - cities[1]: 中央区のデータ
-   ...
-
-3. 必要な市区町村のファイルを選択して属性を取得
-```
-
 ## ヘルパーツール
 
-### 15. `plateau_explain_spatial_id`
+### 13. `plateau_explain_spatial_id`
 空間ID（Spatial ID）の仕様と使い方を解説するマークダウンを返します。
 
 空間IDは3次元空間を一意に識別するための規格で、`{z}/{f}/{x}/{y}` 形式で表現されます。このツールを呼び出すと、以下の情報を含む解説が返されます：
@@ -709,44 +599,6 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 **使用例**:
 空間IDを使った検索を行う前に、このツールを呼び出して空間IDの仕様を理解してから操作することを推奨します。
 
-## 使用例
-
-### 東京都内の市区町村を検索
-
-```json
-{
-  "tool": "plateau_search_areas",
-  "parameters": {
-    "parent_code": "13",
-    "area_types": ["CITY", "WARD"]
-  }
-}
-```
-
-### 千代田区の建築物モデルを検索
-
-```json
-{
-  "tool": "plateau_search_datasets",
-  "parameters": {
-    "area_codes": ["13101"],
-    "dataset_types": ["bldg"]
-  }
-}
-```
-
-### 2023年度のPLATEAUデータセットを検索
-
-```json
-{
-  "tool": "plateau_search_datasets",
-  "parameters": {
-    "year": 2023,
-    "categories": ["PLATEAU"]
-  }
-}
-```
-
 ## 制限事項
 
 - 検索結果は最大100件までに制限されています
@@ -755,25 +607,13 @@ CityGMLファイルから指定した空間ID（SpatialID）に交差する地�
 
 ## 技術仕様
 
+このサーバーは [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io/) の公式仕様に準拠しています。
+
 - プロトコル: MCP (Model Context Protocol) v1.0
-- トランスポート: HTTP (単一JSONレスポンス、SSE非使用)
+- トランスポート: HTTP（単一JSONレスポンス形式、SSE非使用）
 - メッセージ形式: JSON-RPC 2.0
-- レスポンス形式: JSON
 - 認証: なし（公開データのため）
-- レート制限: なし
-
-### MCP 仕様準拠
-
-このサーバーは [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io/) の公式仕様に準拠しています：
-
-- **JSON-RPC 2.0**: すべての通信は JSON-RPC 2.0 メッセージ形式で行われます
-- **HTTP トランスポート**: 単一JSONレスポンス形式（`Content-Type: application/json`）
-- **SSE非使用**: Server-Sent Eventsは使用せず、通常のHTTPリクエスト/レスポンスで動作
-- **自動エンドポイント**: `/` エンドポイントで以下が自動的に提供されます：
-  - `tools/list`: 利用可能なツールの一覧取得
-  - `tools/call`: ツールの実行
-- **ステートレスモード**: セッション管理なしでシンプルに利用可能
-- **実装ライブラリ**: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) v0.43.0 を使用
+- 実装ライブラリ: [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go)
 
 ## 関連リンク
 

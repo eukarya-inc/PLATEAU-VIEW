@@ -23,27 +23,10 @@ type PlateauContent struct {
 	Content interface{} `json:"content"` // Actual content varies by type
 }
 
-// Chapter represents a top-level chapter in the document
-type Chapter struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Path  string `json:"path"`
-}
-
-// Section represents a section within a chapter
-type Section struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Path    string `json:"path"`
-	Chapter string `json:"chapter"`
-}
-
-// SearchResult represents a search result from the specification
-type SearchResult struct {
-	Path      string  `json:"path"`
-	Title     string  `json:"title"`
-	Snippet   string  `json:"snippet"`
-	Score     float64 `json:"score"`
-	DocType   string  `json:"doc_type"`
-	Highlight string  `json:"highlight,omitempty"`
+// OutlineItem represents a hierarchical outline item
+type OutlineItem struct {
+	ID       string        `json:"id"`
+	Title    string        `json:"title"`
+	Path     string        `json:"path"`
+	Children []OutlineItem `json:"children,omitempty"`
 }
