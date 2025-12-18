@@ -124,7 +124,7 @@ func (s *Service) handleCityGMLGetAttributes(ctx context.Context, request mcp.Ca
 func (s *Service) createCityGMLGetFeaturesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_citygml_get_features",
-		mcp.WithDescription("CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。\n\n使い方の流れ:\n1. plateau_get_citygml_filesでメッシュコードや空間IDを指定してCityGML URLを取得\n2. レスポンスのcities[].files[type][].urlからCityGML URLを取得（typeは'bldg', 'tran'など）\n3. そのURLと空間IDをこのツールに渡す\n4. 返ってきた地物IDをplateau_citygml_get_attributesで使用できる"),
+		mcp.WithDescription("CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。\n\n**重要**: 空間IDの仕様と推奨設定については、まずplateau_explain_spatial_idツールを参照してください。建築物検索ではz=17〜19、f=0を推奨します。\n\n使い方の流れ:\n1. plateau_get_citygml_filesでメッシュコードや空間IDを指定してCityGML URLを取得\n2. レスポンスのcities[].files[type][].urlからCityGML URLを取得（typeは'bldg', 'tran'など）\n3. そのURLと空間IDをこのツールに渡す\n4. 返ってきた地物IDをplateau_citygml_get_attributesで使用できる"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("url",
 			mcp.Required(),
@@ -202,6 +202,15 @@ func (s *Service) handleCityGMLGetFeatures(ctx context.Context, request mcp.Call
 	}
 	if response.FeatureIDs == nil {
 		response.FeatureIDs = []string{}
+	}
+
+	// Add hint when no features found
+	if len(response.FeatureIDs) == 0 {
+		response.Reason = "NO_FEATURES_IN_AREA"
+		response.Hint = &GetCityGMLFeaturesHint{
+			Message:         "指定した空間IDの範囲に地物が見つかりませんでした。ズームレベル(z)を17〜19に、fインデックスを0にして再試行してください。詳細はplateau_explain_spatial_idツールを参照してください。",
+			RecommendedZoom: []int{17, 18, 19},
+		}
 	}
 
 	return convertToToolResult(response)
@@ -299,7 +308,7 @@ func (s *Service) handleCityGMLGetGeoidHeight(ctx context.Context, request mcp.C
 func (s *Service) createGetCityGMLFilesTool() mcp.Tool {
 	return mcp.NewTool(
 		"plateau_get_citygml_files",
-		mcp.WithDescription("指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。\\n\\n条件フォーマット:\\n- メッシュコード: m:53393580,53393581 (カンマ区切りで複数指定可)\\n- 空間ID: s:15/0/29134/12950,15/0/29134/12951 (カンマ区切りで複数指定可)\\n- 矩形範囲: r:139.7,35.6,139.8,35.7 (西経度,南緯度,東経度,北緯度)\\n\\n地物型フィルタ:\\nfeature_typesパラメータで地物型を絞り込むことができます（例: [\\\"bldg\\\", \\\"tran\\\"]）\\n主な地物型: bldg(建築物), tran(交通), luse(土地利用), dem(地形), fld(洪水), lsld(土砂災害), urf(都市計画)\\n利用可能な全ての地物型はplateau_list_dataset_typesツールで取得できます。\\n\\n使い方の流れ:\\n1. このツールでCityGMLファイルURLを取得\\n2. 取得したURLをplateau_citygml_get_featuresまたはplateau_citygml_get_attributesで使用"),
+		mcp.WithDescription("指定した条件でCityGMLファイルを検索します。メッシュコード、空間ID、または矩形範囲で検索できます。\\n\\n**重要**: 空間IDを使用する場合は、まずplateau_explain_spatial_idツールで仕様と推奨設定を確認してください。\\n\\n条件フォーマット:\\n- メッシュコード: m:53393580,53393581 (カンマ区切りで複数指定可)\\n- 空間ID: s:15/0/29134/12950,15/0/29134/12951 (カンマ区切りで複数指定可)\\n- 矩形範囲: r:139.7,35.6,139.8,35.7 (西経度,南緯度,東経度,北緯度)\\n\\n地物型フィルタ:\\nfeature_typesパラメータで地物型を絞り込むことができます（例: [\\\"bldg\\\", \\\"tran\\\"]）\\n主な地物型: bldg(建築物), tran(交通), luse(土地利用), dem(地形), fld(洪水), lsld(土砂災害), urf(都市計画)\\n利用可能な全ての地物型はplateau_list_dataset_typesツールで取得できます。\\n\\n使い方の流れ:\\n1. このツールでCityGMLファイルURLを取得\\n2. 取得したURLをplateau_citygml_get_featuresまたはplateau_citygml_get_attributesで使用"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("condition",
 			mcp.Required(),
@@ -378,6 +387,14 @@ func (s *Service) handleGetCityGMLFiles(ctx context.Context, request mcp.CallToo
 	// Ensure Cities is not nil
 	if result.Cities == nil {
 		result.Cities = []CityGMLFilesCity{}
+	}
+
+	// Add hint when no cities found
+	if len(result.Cities) == 0 {
+		result.Reason = "NO_DATA_IN_AREA"
+		result.Hint = &GetCityGMLFilesHint{
+			Message: "指定した条件に該当するCityGMLファイルが見つかりませんでした。PLATEAUデータは整備済み都市のみ利用可能です。plateau_search_areasで対象都市を確認するか、メッシュコード(m:)での直接指定を試してください。詳細はplateau_explain_spatial_idツールを参照してください。",
+		}
 	}
 
 	return convertToToolResult(result)

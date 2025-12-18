@@ -50,4 +50,7 @@ func RegisterToolsWithConfig(s *server.MCPServer, cfg *Config) {
 func RegisterResources(s *server.MCPServer) {
 	// Register specification resources
 	plateauspecmcp.RegisterResources(s)
+
+	// Register datacatalog resources (spatial ID documentation, etc.)
+	datacatalogmcp.RegisterResources(s)
 }

@@ -22,7 +22,15 @@ type GetCityGMLFeaturesInput struct {
 
 // GetCityGMLFeaturesResponse represents response from plateau_citygml_get_features tool
 type GetCityGMLFeaturesResponse struct {
-	FeatureIDs []string `json:"feature_ids"`
+	FeatureIDs []string                   `json:"feature_ids"`
+	Reason     string                     `json:"reason,omitempty"`
+	Hint       *GetCityGMLFeaturesHint    `json:"hint,omitempty"`
+}
+
+// GetCityGMLFeaturesHint provides guidance when results are empty
+type GetCityGMLFeaturesHint struct {
+	Message         string `json:"message,omitempty"`
+	RecommendedZoom []int  `json:"recommended_zoom,omitempty"`
 }
 
 // GetGeoidHeightInput represents input for plateau_citygml_get_geoid_height tool
@@ -49,6 +57,13 @@ type GetCityGMLFilesInput struct {
 type GetCityGMLFilesResponse struct {
 	Cities       []CityGMLFilesCity            `json:"cities"`
 	FeatureTypes map[string]CityGMLFeatureType `json:"featureTypes,omitempty"`
+	Reason       string                        `json:"reason,omitempty"`
+	Hint         *GetCityGMLFilesHint          `json:"hint,omitempty"`
+}
+
+// GetCityGMLFilesHint provides guidance when results are empty
+type GetCityGMLFilesHint struct {
+	Message string `json:"message,omitempty"`
 }
 
 // CityGMLFilesCity represents a city with CityGML files
