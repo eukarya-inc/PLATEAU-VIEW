@@ -13,6 +13,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/openapi"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/proxy"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
@@ -20,6 +21,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
+	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
 )
 
@@ -217,9 +219,53 @@ func CityGML(conf *Config) (*Service, error) {
 }
 
 func MCP(conf *Config) (*Service, error) {
+	dcConf := conf.DataCatalog()
+
 	return &Service{
 		Name: "mcp",
 		Echo: func(g *echo.Group) error {
+			// Create MCP handler with datacatalog integration if configured
+			mcpCfg := &mcp.Config{
+				Host: dcConf.Host,
+			}
+
+			// If datacatalog is fully configured, create reposHandler for data catalog tools
+			if dcConf.CMSBaseURL != "" {
+				pcms, err := plateaucms.New(dcConf.Config)
+				if err != nil {
+					// Log error but continue with spec-only MCP
+					log.Errorf("mcp: failed to initialize plateaucms, datacatalog tools will not be available: %v", err)
+				} else {
+					reposHandler, err := datacatalog.NewReposHandler(dcConf, pcms)
+					if err != nil {
+						log.Errorf("mcp: failed to create repos handler, datacatalog tools will not be available: %v", err)
+					} else {
+						mcpCfg.DataCatalogReposHandler = reposHandler
+
+						// Initialize repos in background
+						go func() {
+							ctx := context.Background()
+							if dcConf.CacheURL != "" {
+								if err := reposHandler.InitFromCache(ctx, dcConf.CacheURL); err != nil {
+									log.Errorf("mcp: failed to initialize repos from cache: %v", err)
+								}
+							} else {
+								if err := reposHandler.Init(ctx); err != nil {
+									log.Errorf("mcp: failed to initialize repos: %v", err)
+								}
+							}
+						}()
+
+						// Create handler with CMS middleware
+						handler := mcp.NewHTTPHandler(mcpCfg)
+						handler.SetCMSMiddleware(reposHandler.Middleware())
+						handler.RegisterRoutes(g.Group("/mcp"))
+						return nil
+					}
+				}
+			}
+
+			// Fallback: register with spec tools only
 			mcp.RegisterHTTPEndpoint(g.Group("/mcp"))
 			return nil
 		},

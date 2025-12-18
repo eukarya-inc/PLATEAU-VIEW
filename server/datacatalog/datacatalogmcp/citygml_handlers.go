@@ -382,3 +382,256 @@ func (s *Service) handleGetCityGMLFiles(ctx context.Context, request mcp.CallToo
 
 	return convertToToolResult(result)
 }
+
+// Shared handler functions that can be used by both Service and ToolRegistrar
+
+// handleCityGMLGetAttributesWithHost handles plateau_citygml_get_attributes with a specific host
+func handleCityGMLGetAttributesWithHost(ctx context.Context, request mcp.CallToolRequest, citygmlAPIBase string) (*mcp.CallToolResult, error) {
+	citygmlURL, err := request.RequireString("url")
+	if err != nil {
+		return mcp.NewToolResultError("url parameter is required"), nil
+	}
+
+	u, err := url.Parse(citygmlURL)
+	if err != nil {
+		return mcp.NewToolResultError("invalid url format"), nil
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return mcp.NewToolResultError("url must be http or https"), nil
+	}
+
+	buildingIDs := request.GetStringSlice("building_ids", nil)
+	if len(buildingIDs) == 0 {
+		return mcp.NewToolResultError("building_ids parameter is required and must not be empty"), nil
+	}
+
+	skipCodeList := request.GetBool("skip_code_list", false)
+
+	apiURL := fmt.Sprintf("%s/attributes?url=%s&id=%s",
+		citygmlAPIBase,
+		url.QueryEscape(citygmlURL),
+		url.QueryEscape(strings.Join(buildingIDs, ",")),
+	)
+	if skipCodeList {
+		apiURL += "&skip_code_list_fetch=1"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
+		return mcp.NewToolResultError("failed to create request"), nil
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
+		return mcp.NewToolResultError("failed to call citygml API"), nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
+	}
+
+	var attrs []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&attrs); err != nil {
+		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
+		return mcp.NewToolResultError("failed to decode citygml API response"), nil
+	}
+
+	response := &GetCityGMLAttributesResponse{
+		Attributes: attrs,
+	}
+
+	return convertToToolResult(response)
+}
+
+// handleCityGMLGetFeaturesWithHost handles plateau_citygml_get_features with a specific host
+func handleCityGMLGetFeaturesWithHost(ctx context.Context, request mcp.CallToolRequest, citygmlAPIBase string) (*mcp.CallToolResult, error) {
+	citygmlURL, err := request.RequireString("url")
+	if err != nil {
+		return mcp.NewToolResultError("url parameter is required"), nil
+	}
+
+	u, err := url.Parse(citygmlURL)
+	if err != nil {
+		return mcp.NewToolResultError("invalid url format"), nil
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return mcp.NewToolResultError("url must be http or https"), nil
+	}
+
+	spatialIDs := request.GetStringSlice("spatial_ids", nil)
+	if len(spatialIDs) == 0 {
+		return mcp.NewToolResultError("spatial_ids parameter is required and must not be empty"), nil
+	}
+
+	apiURL := fmt.Sprintf("%s/features?url=%s&sid=%s",
+		citygmlAPIBase,
+		url.QueryEscape(citygmlURL),
+		url.QueryEscape(strings.Join(spatialIDs, ",")),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
+		return mcp.NewToolResultError("failed to create request"), nil
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
+		return mcp.NewToolResultError("failed to call citygml API"), nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
+	}
+
+	var result struct {
+		FeatureIDs []string `json:"featureIds"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
+		return mcp.NewToolResultError("failed to decode citygml API response"), nil
+	}
+
+	response := &GetCityGMLFeaturesResponse{
+		FeatureIDs: result.FeatureIDs,
+	}
+	if response.FeatureIDs == nil {
+		response.FeatureIDs = []string{}
+	}
+
+	return convertToToolResult(response)
+}
+
+// handleCityGMLGetGeoidHeightWithHost handles plateau_citygml_get_geoid_height with a specific host
+func handleCityGMLGetGeoidHeightWithHost(ctx context.Context, request mcp.CallToolRequest, citygmlAPIBase string) (*mcp.CallToolResult, error) {
+	lat, err := request.RequireFloat("latitude")
+	if err != nil {
+		return mcp.NewToolResultError("latitude parameter is required"), nil
+	}
+
+	lng, err := request.RequireFloat("longitude")
+	if err != nil {
+		return mcp.NewToolResultError("longitude parameter is required"), nil
+	}
+
+	if lat < -90 || lat > 90 {
+		return mcp.NewToolResultError("latitude must be between -90 and 90"), nil
+	}
+	if lng < -180 || lng > 180 {
+		return mcp.NewToolResultError("longitude must be between -180 and 180"), nil
+	}
+
+	apiURL := fmt.Sprintf("%s/geoid_height?lat=%s&lng=%s",
+		citygmlAPIBase,
+		strconv.FormatFloat(lat, 'f', -1, 64),
+		strconv.FormatFloat(lng, 'f', -1, 64),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
+		return mcp.NewToolResultError("failed to create request"), nil
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
+		return mcp.NewToolResultError("failed to call citygml API"), nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
+	}
+
+	var result struct {
+		Lat         float64 `json:"lat"`
+		Lng         float64 `json:"lng"`
+		GeoidHeight float64 `json:"geoid_height"`
+		Geoid       string  `json:"geoid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
+		return mcp.NewToolResultError("failed to decode citygml API response"), nil
+	}
+
+	response := &GetGeoidHeightResponse{
+		Latitude:    result.Lat,
+		Longitude:   result.Lng,
+		GeoidHeight: result.GeoidHeight,
+		Geoid:       result.Geoid,
+	}
+
+	return convertToToolResult(response)
+}
+
+// handleGetCityGMLFilesWithHost handles plateau_get_citygml_files with a specific host
+func handleGetCityGMLFilesWithHost(ctx context.Context, request mcp.CallToolRequest, host string) (*mcp.CallToolResult, error) {
+	condition, err := request.RequireString("condition")
+	if err != nil {
+		return mcp.NewToolResultError("condition parameter is required"), nil
+	}
+
+	if condition == "" {
+		return mcp.NewToolResultError("condition must not be empty"), nil
+	}
+	if !strings.HasPrefix(condition, "m:") && !strings.HasPrefix(condition, "s:") && !strings.HasPrefix(condition, "r:") {
+		return mcp.NewToolResultError("condition must start with m:, s:, or r:"), nil
+	}
+
+	featureTypes := request.GetStringSlice("feature_types", nil)
+
+	if host == "" {
+		host = "http://localhost:8080"
+	}
+	apiURL := fmt.Sprintf("%s/datacatalog/citygml/%s",
+		host,
+		url.PathEscape(condition),
+	)
+
+	if len(featureTypes) > 0 {
+		apiURL += "?types=" + url.QueryEscape(strings.Join(featureTypes, ","))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
+		return mcp.NewToolResultError("failed to create request"), nil
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
+		return mcp.NewToolResultError("failed to call citygml API"), nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
+	}
+
+	var result GetCityGMLFilesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
+		return mcp.NewToolResultError("failed to decode citygml API response"), nil
+	}
+
+	if result.Cities == nil {
+		result.Cities = []CityGMLFilesCity{}
+	}
+
+	return convertToToolResult(result)
+}

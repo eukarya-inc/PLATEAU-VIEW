@@ -50,7 +50,8 @@ const cmsSchemaVersion = "v3"
 const cmsSchemaVersionV2 = "v2"
 const defaultCityConcurrency = 10
 
-func newReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
+// NewReposHandler creates a new ReposHandler
+func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 	reposv3 := datacatalogv3.NewRepos(pcms)
 	reposv2 := datacatalogv2adapter.NewRepos()
 

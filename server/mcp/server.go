@@ -1,11 +1,18 @@
 package mcp
 
 import (
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogmcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 // NewServer creates and configures a new comprehensive PLATEAU MCP server
+// This creates a basic server with only specification tools
 func NewServer() *server.MCPServer {
+	return NewServerWithConfig(nil)
+}
+
+// NewServerWithConfig creates a new comprehensive PLATEAU MCP server with configuration
+func NewServerWithConfig(cfg *Config) *server.MCPServer {
 	s := server.NewMCPServer(
 		"plateau-mcp",
 		"1.0.0",
@@ -15,16 +22,27 @@ func NewServer() *server.MCPServer {
 	)
 
 	// Register all PLATEAU tools and resources
-	RegisterTools(s)
+	RegisterToolsWithConfig(s, cfg)
 	RegisterResources(s)
 
 	return s
 }
 
-// RegisterTools registers all PLATEAU MCP tools
+// RegisterTools registers all PLATEAU MCP tools (for backward compatibility)
 func RegisterTools(s *server.MCPServer) {
-	// Specification reading tools
+	RegisterToolsWithConfig(s, nil)
+}
+
+// RegisterToolsWithConfig registers all PLATEAU MCP tools with configuration
+func RegisterToolsWithConfig(s *server.MCPServer, cfg *Config) {
+	// Specification reading tools (always registered)
 	RegisterSpecificationTools(s)
+
+	// Data catalog tools (only if configured)
+	if cfg != nil && cfg.DataCatalogReposHandler != nil {
+		registrar := datacatalogmcp.NewToolRegistrar(cfg.DataCatalogReposHandler, cfg.Host)
+		registrar.RegisterAllTools(s)
+	}
 }
 
 // RegisterResources registers all PLATEAU MCP resources

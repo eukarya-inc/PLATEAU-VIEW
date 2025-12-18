@@ -12,7 +12,7 @@ import (
 )
 
 func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.Context) error, error) {
-	h, err := newReposHandler(conf, pcms)
+	h, err := NewReposHandler(conf, pcms)
 	if err != nil {
 		return nil, err
 	}
