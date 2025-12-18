@@ -11,10 +11,10 @@ jobs:
           go-version-file: server/go.mod
           cache: false
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v9
         with:
           # Don't forget to update ci-worker.yml also
-          version: v1.64
+          version: v2.7
           working-directory: server
           args: --timeout=5m
   ci-server-test:
