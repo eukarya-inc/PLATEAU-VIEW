@@ -601,9 +601,6 @@ paths:
   /citygml/features:
     get:
       summary: 空間ID内の地物IDリストを取得
-      description: |
-        CityGMLファイルから指定した空間ID（SpatialID）に交差する地物のIDリストを取得します。
-        地物の検索にはLOD1Solidのジオメトリが使用されます。
       tags:
         - CityGML API
       parameters:

@@ -140,80 +140,7 @@ func (s *Service) createCityGMLGetFeaturesTool() mcp.Tool {
 
 // handleCityGMLGetFeatures handles plateau_citygml_get_features tool calls
 func (s *Service) handleCityGMLGetFeatures(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Get URL parameter (required)
-	citygmlURL, err := request.RequireString("url")
-	if err != nil {
-		return mcp.NewToolResultError("url parameter is required"), nil
-	}
-
-	// Validate URL
-	u, err := url.Parse(citygmlURL)
-	if err != nil {
-		return mcp.NewToolResultError("invalid url format"), nil
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return mcp.NewToolResultError("url must be http or https"), nil
-	}
-
-	// Get spatial_ids parameter (required)
-	spatialIDs := request.GetStringSlice("spatial_ids", nil)
-	if len(spatialIDs) == 0 {
-		return mcp.NewToolResultError("spatial_ids parameter is required and must not be empty"), nil
-	}
-
-	// Call internal citygml API
-	apiURL := fmt.Sprintf("%s/features?url=%s&sid=%s",
-		s.getCityGMLAPIBaseURL(),
-		url.QueryEscape(citygmlURL),
-		url.QueryEscape(strings.Join(spatialIDs, ",")),
-	)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
-		return mcp.NewToolResultError("failed to create request"), nil
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
-		return mcp.NewToolResultError("failed to call citygml API"), nil
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
-	}
-
-	// Parse response
-	var result struct {
-		FeatureIDs []string `json:"featureIds"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
-		return mcp.NewToolResultError("failed to decode citygml API response"), nil
-	}
-
-	// Convert to response
-	response := &GetCityGMLFeaturesResponse{
-		FeatureIDs: result.FeatureIDs,
-	}
-	if response.FeatureIDs == nil {
-		response.FeatureIDs = []string{}
-	}
-
-	// Add hint when no features found
-	if len(response.FeatureIDs) == 0 {
-		response.Reason = "NO_FEATURES_IN_AREA"
-		response.Hint = &GetCityGMLFeaturesHint{
-			Message:         "指定した空間IDの範囲に地物が見つかりませんでした。ズームレベル(z)を17〜19に、fインデックスを0にして再試行してください。詳細はplateau_explain_spatial_idツールを参照してください。",
-			RecommendedZoom: []int{17, 18, 19},
-		}
-	}
-
-	return convertToToolResult(response)
+	return handleCityGMLGetFeaturesWithHost(ctx, request, s.getCityGMLAPIBaseURL())
 }
 
 // createCityGMLGetGeoidHeightTool creates the plateau_citygml_get_geoid_height tool definition
@@ -323,81 +250,7 @@ func (s *Service) createGetCityGMLFilesTool() mcp.Tool {
 
 // handleGetCityGMLFiles handles plateau_get_citygml_files tool calls
 func (s *Service) handleGetCityGMLFiles(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Get condition parameter (required)
-	condition, err := request.RequireString("condition")
-	if err != nil {
-		return mcp.NewToolResultError("condition parameter is required"), nil
-	}
-
-	// Validate condition format
-	if condition == "" {
-		return mcp.NewToolResultError("condition must not be empty"), nil
-	}
-	// Check if condition starts with m:, s:, or r:
-	if !strings.HasPrefix(condition, "m:") && !strings.HasPrefix(condition, "s:") && !strings.HasPrefix(condition, "r:") {
-		return mcp.NewToolResultError("condition must start with m:, s:, or r:"), nil
-	}
-
-	// Get feature_types parameter (optional)
-	featureTypes := request.GetStringSlice("feature_types", nil)
-
-	// Call internal datacatalog citygml API
-	// Note: This endpoint is different from other citygml endpoints
-	// It's mounted at /datacatalog/citygml/:conditions instead of /citygml
-	host := s.host
-	if host == "" {
-		host = "http://localhost:8080"
-	}
-	apiURL := fmt.Sprintf("%s/datacatalog/citygml/%s",
-		host,
-		url.PathEscape(condition),
-	)
-
-	// Add feature_types query parameter if specified
-	if len(featureTypes) > 0 {
-		apiURL += "?types=" + url.QueryEscape(strings.Join(featureTypes, ","))
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		log.Errorfc(ctx, "citygml: failed to create request: %v", err)
-		return mcp.NewToolResultError("failed to create request"), nil
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Errorfc(ctx, "citygml: failed to call API: %v", err)
-		return mcp.NewToolResultError("failed to call citygml API"), nil
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return mcp.NewToolResultError(fmt.Sprintf("citygml API returned status %d", resp.StatusCode)), nil
-	}
-
-	// Parse response
-	var result GetCityGMLFilesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Errorfc(ctx, "citygml: failed to decode response: %v", err)
-		return mcp.NewToolResultError("failed to decode citygml API response"), nil
-	}
-
-	// Ensure Cities is not nil
-	if result.Cities == nil {
-		result.Cities = []CityGMLFilesCity{}
-	}
-
-	// Add hint when no cities found
-	if len(result.Cities) == 0 {
-		result.Reason = "NO_DATA_IN_AREA"
-		result.Hint = &GetCityGMLFilesHint{
-			Message: "指定した条件に該当するCityGMLファイルが見つかりませんでした。PLATEAUデータは整備済み都市のみ利用可能です。plateau_search_areasで対象都市を確認するか、メッシュコード(m:)での直接指定を試してください。詳細はplateau_explain_spatial_idツールを参照してください。",
-		}
-	}
-
-	return convertToToolResult(result)
+	return handleGetCityGMLFilesWithHost(ctx, request, s.host)
 }
 
 // Shared handler functions that can be used by both Service and ToolRegistrar
@@ -525,6 +378,15 @@ func handleCityGMLGetFeaturesWithHost(ctx context.Context, request mcp.CallToolR
 		response.FeatureIDs = []string{}
 	}
 
+	// Add hint when no features found
+	if len(response.FeatureIDs) == 0 {
+		response.Reason = "NO_FEATURES_IN_AREA"
+		response.Hint = &GetCityGMLFeaturesHint{
+			Message:         "指定した空間IDの範囲に地物が見つかりませんでした。ズームレベル(z)を17〜19に、fインデックスを0にして再試行してください。詳細はplateau_explain_spatial_idツールを参照してください。",
+			RecommendedZoom: []int{17, 18, 19},
+		}
+	}
+
 	return convertToToolResult(response)
 }
 
@@ -648,6 +510,14 @@ func handleGetCityGMLFilesWithHost(ctx context.Context, request mcp.CallToolRequ
 
 	if result.Cities == nil {
 		result.Cities = []CityGMLFilesCity{}
+	}
+
+	// Add hint when no cities found
+	if len(result.Cities) == 0 {
+		result.Reason = "NO_DATA_IN_AREA"
+		result.Hint = &GetCityGMLFilesHint{
+			Message: "指定した条件に該当するCityGMLファイルが見つかりませんでした。PLATEAUデータは整備済み都市のみ利用可能です。plateau_search_areasで対象都市を確認するか、メッシュコード(m:)での直接指定を試してください。詳細はplateau_explain_spatial_idツールを参照してください。",
+		}
 	}
 
 	return convertToToolResult(result)
