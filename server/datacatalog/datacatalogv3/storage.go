@@ -100,11 +100,13 @@ func NewGCSStorageWithClient(client *storage.Client, bucket, prefix string) *GCS
 }
 
 func (s *GCSStorage) objectName(project string) string {
-	return path.Join(s.prefix, fmt.Sprintf("repo_%s.json", project))
+	// Cache files are stored in project subdirectories: {prefix}/{project}/repo_{project}.json
+	return path.Join(s.prefix, project, fmt.Sprintf("repo_%s.json", project))
 }
 
 func (s *GCSStorage) warningObjectName(project string) string {
-	return path.Join(s.prefix, fmt.Sprintf("repo_%s_warnings.txt", project))
+	// Warning files are stored in project subdirectories: {prefix}/{project}/repo_{project}_warnings.txt
+	return path.Join(s.prefix, project, fmt.Sprintf("repo_%s_warnings.txt", project))
 }
 
 // GetWriter implements RepoWriter (returns gzip-compressed writer)
@@ -164,13 +166,28 @@ func (s *GCSStorage) List(ctx context.Context) ([]string, error) {
 			return nil, fmt.Errorf("failed to list objects: %w", err)
 		}
 
-		// Extract project name from object name (repo_{project}.json)
+		// Extract project name from object path
+		// Expected format: {prefix}/{project}/repo_{project}.json
 		name := strings.TrimPrefix(attrs.Name, s.prefix)
 		name = strings.TrimPrefix(name, "/")
-		if strings.HasPrefix(name, "repo_") && strings.HasSuffix(name, ".json") && !strings.Contains(name, "_warnings") {
-			project := strings.TrimPrefix(name, "repo_")
+
+		// Split path to get directory and filename
+		parts := strings.Split(name, "/")
+		if len(parts) != 2 {
+			continue
+		}
+
+		dirName := parts[0]
+		fileName := parts[1]
+
+		// Check if filename matches repo_{project}.json pattern (not warnings)
+		if strings.HasPrefix(fileName, "repo_") && strings.HasSuffix(fileName, ".json") && !strings.Contains(fileName, "_warnings") {
+			project := strings.TrimPrefix(fileName, "repo_")
 			project = strings.TrimSuffix(project, ".json")
-			projects = append(projects, project)
+			// Verify directory name matches project name
+			if dirName == project {
+				projects = append(projects, project)
+			}
 		}
 	}
 
