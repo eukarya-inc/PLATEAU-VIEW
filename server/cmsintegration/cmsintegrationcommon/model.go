@@ -200,6 +200,7 @@ type FeatureItem struct {
 	ConvertionStatus *cms.Tag `json:"conv_status,omitempty" cms:"conv_status,tag,metadata"`
 	QCStatus         *cms.Tag `json:"qc_status,omitempty" cms:"qc_status,tag,metadata"`
 	LODStatStatus    *cms.Tag `json:"lodstat_status,omitempty" cms:"lodstat_status,tag,metadata"`
+	MaxLODStatus     *cms.Tag `json:"maxlod_status,omitempty" cms:"maxlod_status,tag,metadata"`
 
 	// compat
 	SkipQC      bool `json:"skip_qc,omitempty" cms:"skip_qc,bool,metadata"`

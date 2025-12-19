@@ -316,7 +316,9 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	var maxlodAssetID string
 	if assets.MaxLOD != "" {
 		// check existing maxlod file name contains _lodstat
-		alreadyHasLODStat := baseFeatureItem.LODStatStatus != nil && baseFeatureItem.LODStatStatus.Name != ""
+		// check lodstat_status first, then fallback to maxlod_status
+		alreadyHasLODStat := (baseFeatureItem.LODStatStatus != nil && baseFeatureItem.LODStatStatus.Name != "") ||
+			(baseFeatureItem.MaxLODStatus != nil && baseFeatureItem.MaxLODStatus.Name != "")
 		if !alreadyHasLODStat && baseFeatureItem.MaxLOD != "" {
 			maxlodAsset, err := s.CMS.Asset(ctx, baseFeatureItem.MaxLOD)
 			if err != nil {
