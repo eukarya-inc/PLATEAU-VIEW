@@ -1,6 +1,6 @@
 module github.com/eukarya-inc/PLATEAU-VIEW/server
 
-go 1.25
+go 1.25.5
 
 require (
 	cloud.google.com/go/batch v1.12.2
@@ -11,6 +11,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eukarya-inc/japan-geoid-go v1.0.0
 	github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a
+	github.com/eukarya-inc/plateau-spec/cmd v0.0.0-20251219122109-3dc0a1e79805
 	github.com/go-openapi/runtime v0.28.0
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
@@ -33,7 +34,7 @@ require (
 	github.com/sendgrid/sendgrid-go v3.16.0+incompatible
 	github.com/spf13/afero v1.14.0
 	github.com/spkg/bom v1.0.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tdewolff/canvas v0.0.0-20250508181010-75987a1ae9cc
 	github.com/thanhpk/randstr v1.0.6
 	github.com/vektah/gqlparser/v2 v2.5.27

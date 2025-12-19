@@ -41,7 +41,7 @@ func HandleResourceList(_ context.Context) ([]mcp.Resource, error) {
 }
 
 // HandleResourceRead reads the content of a specific resource
-func HandleResourceRead(_ context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	uri := request.Params.URI
 	// Parse URI
 	if !strings.HasPrefix(uri, "plateau://") {
@@ -62,11 +62,14 @@ func HandleResourceRead(_ context.Context, request mcp.ReadResourceRequest) ([]m
 			docType = "procedure"
 		}
 
-		client := NewClient(docType)
-		outline, err := client.GetOutlineWithDepth(2)
+		client := NewClient()
+		outline, err := client.GetOutline(ctx, docType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get outline: %w", err)
 		}
+
+		// Apply depth limit
+		outline = limitDepth(outline, 2)
 
 		content := formatOutlineAsMarkdown(outline, docType)
 		return []mcp.ResourceContents{

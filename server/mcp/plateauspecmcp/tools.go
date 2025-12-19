@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp/metanorma2md"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// newClientFunc allows overriding NewClient for testing
-var newClientFunc = NewClient
+// clientFactory allows overriding NewClient for testing
+var clientFactory = func() *Client {
+	return NewClient()
+}
 
 // RegisterTools registers PLATEAU specification reading tools
 func RegisterTools(s *server.MCPServer) {
@@ -51,12 +52,12 @@ var specReadTool = mcp.NewTool("plateau_spec_read",
 		mcp.Description("If true, only read the specified page without child pages. Default: false (includes children)"),
 	),
 	mcp.WithBoolean("include_images",
-		mcp.Description("If true, include base64-encoded images in markdown output. Default: false (shows placeholder only)"),
+		mcp.Description("If true, include base64-encoded images in markdown output. Default: false (shows placeholder only). Note: This option is currently ignored as images are handled by the source."),
 	),
 )
 
 // HandleSpecOutline handles the plateau_spec_outline tool
-func HandleSpecOutline(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecOutline(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	docType := request.GetString("document_type", "standard")
 	format := request.GetString("format", "markdown")
 	depth := request.GetInt("depth", 2)
@@ -69,22 +70,23 @@ func HandleSpecOutline(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 		depth = 4
 	}
 
-	client := newClientFunc(docType)
+	client := clientFactory()
 
 	var outline []OutlineItem
 	var err error
 
 	if chapter != "" {
-		// Fetch outline for specific chapter only
-		outline, err = client.GetChapterOutline(chapter, depth)
+		outline, err = client.GetChapterOutline(ctx, docType, chapter)
 	} else {
-		// Fetch full outline with specified depth
-		outline, err = client.GetOutlineWithDepth(depth)
+		outline, err = client.GetOutline(ctx, docType)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outline: %w", err)
 	}
+
+	// Apply depth limit
+	outline = limitDepth(outline, depth)
 
 	var content string
 	if format == "json" {
@@ -104,32 +106,29 @@ func HandleSpecOutline(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 const DefaultMaxOutputLength = 50000
 
 // HandleSpecRead handles the plateau_spec_read tool
-func HandleSpecRead(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func HandleSpecRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	path := request.GetString("path", "")
 	docType := request.GetString("document_type", "standard")
 	singlePage := request.GetBool("single_page", false)
-	includeImages := request.GetBool("include_images", false)
 
 	if path == "" {
 		return nil, fmt.Errorf("path is required")
 	}
 
-	client := newClientFunc(docType)
+	client := clientFactory()
 
-	var doc *PlateauDocument
+	var content string
 	var err error
 
 	if singlePage {
-		doc, err = client.GetContentByPath(path)
+		content, err = client.GetMarkdown(ctx, docType, path)
 	} else {
-		doc, err = client.GetContentWithChildren(path)
+		content, err = client.GetMarkdownWithChildren(ctx, docType, path)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to read content: %w", err)
 	}
-
-	content := FormatDocumentAsMarkdown(doc, includeImages)
 
 	// Check if content exceeds the maximum length
 	if len(content) > DefaultMaxOutputLength {
@@ -141,7 +140,7 @@ func HandleSpecRead(_ context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		}
 
 		// Get child paths for hint
-		childPaths := getChildPaths(client, path)
+		childPaths, _ := client.GetChildPaths(ctx, docType, path)
 		hint := formatTruncationHint(path, childPaths)
 
 		content = truncated + "\n\n" + hint
@@ -150,20 +149,24 @@ func HandleSpecRead(_ context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	return mcp.NewToolResultText(content), nil
 }
 
-// getChildPaths retrieves child paths for a given path
-func getChildPaths(client *PlateauClient, path string) []string {
-	nav, err := client.fetchNavigation(path)
-	if err != nil || nav == nil {
+// limitDepth limits the outline depth
+func limitDepth(items []OutlineItem, depth int) []OutlineItem {
+	if depth <= 0 {
 		return nil
 	}
 
-	var paths []string
-	for _, child := range nav.Children {
-		if child.Path != "" {
-			paths = append(paths, child.Path)
+	result := make([]OutlineItem, len(items))
+	for i, item := range items {
+		result[i] = OutlineItem{
+			ID:    item.ID,
+			Title: item.Title,
+			Path:  item.Path,
+		}
+		if depth > 1 {
+			result[i].Children = limitDepth(item.Children, depth-1)
 		}
 	}
-	return paths
+	return result
 }
 
 // formatTruncationHint creates a hint message for truncated output
@@ -213,32 +216,4 @@ func formatOutlineItems(sb *strings.Builder, items []OutlineItem, depth int) {
 			formatOutlineItems(sb, item.Children, depth+1)
 		}
 	}
-}
-
-// FormatDocumentAsMarkdown formats a document as clean markdown using the metanorma2md package
-func FormatDocumentAsMarkdown(doc *PlateauDocument, includeImages bool) string {
-	if doc == nil {
-		return ""
-	}
-
-	// Convert PlateauDocument to metanorma2md.Document
-	mdDoc := &metanorma2md.Document{
-		Title:    doc.Title,
-		Path:     doc.Path,
-		Metadata: doc.Metadata,
-		Content:  make([]metanorma2md.Content, len(doc.Content)),
-	}
-
-	for i, c := range doc.Content {
-		mdDoc.Content[i] = metanorma2md.Content{
-			Type:    c.Type,
-			Content: c.Content,
-		}
-	}
-
-	opts := &metanorma2md.Options{
-		IncludeImages: includeImages,
-	}
-
-	return metanorma2md.Convert(mdDoc, opts)
 }
