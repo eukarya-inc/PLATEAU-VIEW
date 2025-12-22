@@ -128,16 +128,9 @@ func main() {
 		var generator *DatacatalogGenerator
 		var anyGenerated bool
 		for _, project := range projects {
-			// 出力先URLの決定（常にプロジェクト名をサフィックスとして付加）
-			projectOutputURL := *outputURL
-			if projectOutputURL != "" {
-				// outputURLの末尾にプロジェクト名を追加
-				projectOutputURL = strings.TrimSuffix(projectOutputURL, "/") + "/" + project
-			}
-
 			generator = NewDatacatalogGenerator(conf, DatacatalogGeneratorOptions{
 				OutputToStdout: *outputToStdout,
-				OutputURL:      projectOutputURL,
+				OutputURL:      *outputURL,
 				UpdateCacheURL: effectiveUpdateCacheURL,
 				UpdateCacheKey: effectiveUpdateCacheKey,
 			})

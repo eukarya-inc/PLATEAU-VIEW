@@ -116,6 +116,7 @@ func (s *GCSStorage) GetWriter(project string) (io.WriteCloser, error) {
 	w := obj.NewWriter(ctx)
 	w.ContentType = "application/json"
 	w.ContentEncoding = "gzip"
+	w.CacheControl = "no-store"
 	gw := gzip.NewWriter(w)
 	return &gzipWriteCloser{gw: gw, underlying: w}, nil
 }
@@ -127,6 +128,7 @@ func (s *GCSStorage) GetWarningWriter(project string) (io.WriteCloser, error) {
 	w := obj.NewWriter(ctx)
 	w.ContentType = "text/plain"
 	w.ContentEncoding = "gzip"
+	w.CacheControl = "no-store"
 	gw := gzip.NewWriter(w)
 	return &gzipWriteCloser{gw: gw, underlying: w}, nil
 }
@@ -196,13 +198,22 @@ func (s *GCSStorage) List(ctx context.Context) ([]string, error) {
 
 // Load implements RepoReader (reads gzip-compressed data)
 func (s *GCSStorage) Load(ctx context.Context, project string) (*plateauapi.InMemoryRepoContext, error) {
-	obj := s.client.Bucket(s.bucket).Object(s.objectName(project))
-	// ReadCompressed(true) prevents GCS from auto-decompressing, keeping transfer size small
-	r, err := obj.ReadCompressed(true).NewReader(ctx)
+	objectName := s.objectName(project)
+	obj := s.client.Bucket(s.bucket).Object(objectName)
+
+	// Get object attributes for logging
+	attrs, err := obj.Attrs(ctx)
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
 			return nil, fmt.Errorf("cache not found for project %s: %w", project, err)
 		}
+		return nil, fmt.Errorf("failed to get object attrs for project %s: %w", project, err)
+	}
+	log.Infofc(ctx, "datacatalogv3: loading cache gs://%s/%s (updated: %s)", s.bucket, objectName, attrs.Updated.Format(time.RFC3339))
+
+	// ReadCompressed(true) prevents GCS from auto-decompressing, keeping transfer size small
+	r, err := obj.ReadCompressed(true).NewReader(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to open cache for project %s: %w", project, err)
 	}
 	defer func() {
