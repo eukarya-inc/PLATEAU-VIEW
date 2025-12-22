@@ -249,7 +249,11 @@ fi
 echo ""
 echo "Dispatching '$DISPATCH_WORKFLOW_FILE'..."
 
-gh workflow run "$DISPATCH_WORKFLOW_FILE" --ref "$TARGET_BRANCH"
+# Use the specific build tag for this commit to avoid caching issues with :latest
+BUILD_TAG="build-$LATEST_COMMIT_SHA"
+echo "Using image tag: $BUILD_TAG"
+
+gh workflow run "$DISPATCH_WORKFLOW_FILE" --ref "$TARGET_BRANCH" -f "image_tag=$BUILD_TAG"
 
 echo ""
 echo "Production deployment has been triggered. Now watching for its completion..."
