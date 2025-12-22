@@ -42,6 +42,8 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
       - name: Pull docker image from GHCR
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
@@ -49,21 +51,35 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 10
           command: docker pull $IMAGE
-      - name: docker push
+      - name: Get pulled image digest
+        id: digest
         run: |
-          docker tag $IMAGE $IMAGE_GCP
-          docker push $IMAGE_GCP
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Pulled image digest: $DIGEST"
+      - name: Push image to GCP Artifact Registry
+        run: |
+          # Use buildx imagetools to copy image directly between registries
+          # This avoids local Docker daemon caching issues
+          docker buildx imagetools create -t $IMAGE_GCP "$IMAGE"
+          echo "Pushed to GCP: $IMAGE_GCP"
       - name: Deploy server to Cloud Run
         run: |
+          # Use the digest to ensure we deploy the exact image we pulled
+          IMAGE_WITH_DIGEST="${IMAGE_GCP%:*}@${{ steps.digest.outputs.digest }}"
+          echo "Deploying image: $IMAGE_WITH_DIGEST"
           gcloud run deploy plateauview-api \
-            --image $IMAGE_GCP \
+            --image "$IMAGE_WITH_DIGEST" \
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet
       - name: Deploy server job to Cloud Run
         run: |
+          # Use the digest to ensure we deploy the exact image we pulled
+          IMAGE_WITH_DIGEST="${IMAGE_GCP%:*}@${{ steps.digest.outputs.digest }}"
+          echo "Deploying job image: $IMAGE_WITH_DIGEST"
           gcloud run jobs deploy plateauview-server-job \
-            --image $IMAGE_GCP \
+            --image "$IMAGE_WITH_DIGEST" \
             --region ${{ vars.GCP_REGION }} \
             --quiet
 
