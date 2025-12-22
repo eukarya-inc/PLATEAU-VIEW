@@ -24,10 +24,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Pull, retag and push image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Create latest tag from build tag
         run: |
           BUILD_TAG="${{ inputs.build_tag }}"
           LATEST_TAG="${{ inputs.latest_tag }}"
-          docker pull "$BUILD_TAG"
-          docker tag "$BUILD_TAG" "$LATEST_TAG"
-          docker push "$LATEST_TAG"
+          # Use buildx imagetools to create the tag directly in the registry
+          # This avoids local Docker daemon caching issues
+          docker buildx imagetools create -t "$LATEST_TAG" "$BUILD_TAG"
+          # Verify the tag was created correctly
+          echo "Verifying created tag..."
+          docker buildx imagetools inspect "$LATEST_TAG"
