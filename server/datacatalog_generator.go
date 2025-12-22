@@ -270,8 +270,13 @@ func (g *DatacatalogGenerator) getCMSInterface(allMetadata plateaucms.MetadataLi
 	return cmsClient, nil
 }
 
+// forceUpdateDuration is the duration after which cache is force-updated
+// regardless of CMS model updates.
+const forceUpdateDuration = 5 * time.Minute
+
 // shouldSkipGeneration checks if cache generation can be skipped.
-// Returns true if the GCS cache is newer than the latest CMS model update.
+// Returns true if the GCS cache is newer than the latest CMS model update
+// AND the cache is less than forceUpdateDuration old.
 func (g *DatacatalogGenerator) shouldSkipGeneration(ctx context.Context, gcsStorage *datacatalogv3.GCSStorage, cmsInterface cms.Interface, projectName string) (bool, error) {
 	// GCSキャッシュのタイムスタンプを取得
 	cacheTimestamp, err := gcsStorage.GetCacheTimestamp(ctx, projectName)
@@ -283,6 +288,16 @@ func (g *DatacatalogGenerator) shouldSkipGeneration(ctx context.Context, gcsStor
 	if cacheTimestamp.IsZero() {
 		if !g.outputToStdout {
 			log.Infof("No existing cache found for %s, generation required", projectName)
+		}
+		return false, nil
+	}
+
+	// 前回更新から5分以上経過していたら強制的に更新
+	cacheAge := time.Since(cacheTimestamp)
+	if cacheAge >= forceUpdateDuration {
+		if !g.outputToStdout {
+			log.Infof("Cache for %s is %.1f minutes old (>= %.1f minutes), forcing update",
+				projectName, cacheAge.Minutes(), forceUpdateDuration.Minutes())
 		}
 		return false, nil
 	}
@@ -307,7 +322,8 @@ func (g *DatacatalogGenerator) shouldSkipGeneration(ctx context.Context, gcsStor
 	}
 
 	if !g.outputToStdout {
-		log.Infof("Cache timestamp: %s, Latest CMS update: %s", cacheTimestamp.Format(time.RFC3339), latestModified.Format(time.RFC3339))
+		log.Infof("Cache timestamp: %s, Latest CMS update: %s, Cache age: %.1f minutes",
+			cacheTimestamp.Format(time.RFC3339), latestModified.Format(time.RFC3339), cacheAge.Minutes())
 	}
 
 	// キャッシュがCMSの最新更新より新しければスキップ
