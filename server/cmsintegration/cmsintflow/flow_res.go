@@ -31,6 +31,23 @@ func (r FlowResult) IsFailed() bool {
 	return r.Status == "failed"
 }
 
+func (r FlowResult) IDsMessage() string {
+	var ids []string
+	if r.RunID != "" {
+		ids = append(ids, "RunID: "+r.RunID)
+	}
+	if r.DeploymentID != "" {
+		ids = append(ids, "DeploymentID: "+r.DeploymentID)
+	}
+	if r.TriggerID != "" {
+		ids = append(ids, "TriggerID: "+r.TriggerID)
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	return "（" + strings.Join(ids, ", ") + "）"
+}
+
 func (r FlowResult) Internal() (res FlowInternalResult) {
 	for _, output := range r.Outputs {
 		base := path.Base(output)

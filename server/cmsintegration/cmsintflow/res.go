@@ -37,7 +37,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// handle error
 	if res.IsFailed() {
 		log.Infofc(ctx, "early return: flow result is failed: status=%s, logs=%v", res.Status, res.Logs)
-		_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s", cmsintegrationcommon.ReqType(id.Type).Title(), logurls)
+		_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s%s", cmsintegrationcommon.ReqType(id.Type).Title(), res.IDsMessage(), logurls)
 		return nil
 	}
 
@@ -93,7 +93,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// check if conversion has no assets
 	if id.Type == cmsintegrationcommon.ReqTypeConv && len(dataAssets) == 0 {
 		log.Infofc(ctx, "no assets returned from flow for conversion")
-		_ = s.CMS.CommentToItem(ctx, id.ItemID, "Flowから変換結果のアセットが返されませんでした。Flowのログを確認してください。")
+		_ = s.CMS.CommentToItem(ctx, id.ItemID, fmt.Sprintf("Flowから変換結果のアセットが返されませんでした。%sFlowのログを確認してください。", res.IDsMessage()))
 		return nil
 	}
 
