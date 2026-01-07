@@ -60,32 +60,41 @@ func newFME(url, resultURL string) *fme {
 func (s *fme) Request(ctx context.Context, r fmeRequest) error {
 	b, err := json.Marshal(r)
 	if err != nil {
+		log.Errorfc(ctx, "fme: failed to marshal request: %v", err)
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.url, strings.NewReader(string(b)))
 	if err != nil {
+		log.Errorfc(ctx, "fme: failed to init request: %v", err)
 		return fmt.Errorf("failed to init request: %w", err)
 	}
 
-	log.Infofc(ctx, "fme: request: %s %s", req.Method, req.URL.String())
+	log.Infofc(ctx, "fme: request: %s %s (id=%s, type=%s)", req.Method, req.URL.String(), r.ID, r.Type)
 	log.Debugfc(ctx, "fme: request body: %s", b)
 
 	req.Header.Set("Content-Type", "application/json")
 	res, err := s.client.Do(req)
 	if err != nil {
+		log.Errorfc(ctx, "fme: failed to send request: url=%s, err=%v", s.url, err)
 		return fmt.Errorf("failed to send: %w", err)
 	}
 	defer func() {
 		_ = res.Body.Close()
 	}()
 
-	if res.StatusCode >= 300 {
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read body: %w", err)
-		}
+	// 成功の場合もレスポンスボディを読んでログに出力
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Errorfc(ctx, "fme: failed to read response body: %v", err)
+		return fmt.Errorf("failed to read body: %w", err)
+	}
 
+	log.Infofc(ctx, "fme: response: status=%d", res.StatusCode)
+	log.Debugfc(ctx, "fme: response body: %s", body)
+
+	if res.StatusCode >= 300 {
+		log.Errorfc(ctx, "fme: request failed: status=%d, body=%s", res.StatusCode, body)
 		return fmt.Errorf("failed to request: code=%d, body=%s", res.StatusCode, body)
 	}
 

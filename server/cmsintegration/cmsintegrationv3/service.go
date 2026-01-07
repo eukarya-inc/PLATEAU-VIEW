@@ -75,7 +75,13 @@ func (s *Services) GetFME(url string) fmeInterface {
 	if s.mockFME != nil {
 		return s.mockFME
 	}
-	return newFME(url, s.FMEResultURL)
+	// newFME returns *fme(nil) when url or resultURL is empty.
+	// We need to return nil explicitly to avoid interface nil check issue.
+	f := newFME(url, s.FMEResultURL)
+	if f == nil {
+		return nil
+	}
+	return f
 }
 
 func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, convType fmeRequestType, status cmsintegrationcommon.ConvertionStatus) error {

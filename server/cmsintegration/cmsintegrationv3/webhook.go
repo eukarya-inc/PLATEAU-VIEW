@@ -19,20 +19,24 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		ctx := req.Context()
 		ctx = log.WithPrefixMessage(ctx, "cmsintegrationv3 webhook: ")
 
-		log.Debugfc(ctx, "incoming: %+v", w)
+		log.Infofc(ctx, "incoming: type=%s, project=%s, model=%s, item=%s",
+			w.Type, w.ProjectID(), w.ItemData.Model.Key, w.ItemData.Item.ID)
+		log.Debugfc(ctx, "incoming payload: %+v", w)
 
 		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf.CMSIntegration) {
+			log.Infofc(ctx, "validation failed, skipping")
 			return nil
 		}
 
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
+		log.Infofc(ctx, "processing: model=%s, item=%s", modelName, w.ItemData.Item.ID)
 
 		err := sendRequestToFME(ctx, s, &conf, w)
 		if err != nil {
-			log.Errorfc(ctx, "failed to process event: %v", err)
+			log.Errorfc(ctx, "failed to process event: model=%s, item=%s, err=%v", modelName, w.ItemData.Item.ID, err)
 		}
 
-		log.Debugfc(ctx, "done: %s", modelName)
+		log.Infofc(ctx, "done: model=%s, item=%s", modelName, w.ItemData.Item.ID)
 		return nil
 	}, nil
 }

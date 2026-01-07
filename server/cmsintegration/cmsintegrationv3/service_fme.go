@@ -31,13 +31,17 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 
 	// if event type is "item.create" and payload is metadata, skip it
 	if w.Type == cmswebhook.EventItemCreate && (w.ItemData.Item.OriginalItemID != nil || w.ItemData.Item.IsMetadata) {
+		log.Infofc(ctx, "skip: metadata item creation event")
 		return nil
 	}
 
+	log.Debugfc(ctx, "getting main item with metadata")
 	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
 	if err != nil {
+		log.Errorfc(ctx, "failed to get main item with metadata: %v", err)
 		return err
 	}
+	log.Infofc(ctx, "main item: id=%s", mainItem.ID)
 
 	// metadata
 	md, _, err := s.PCMS.Metadata(ctx, w.ProjectID(), false, false)
@@ -46,7 +50,7 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		return nil
 	}
 	if !md.IsFMEEnabled() {
-		log.Debugfc(ctx, "fme is disabled")
+		log.Infofc(ctx, "skip: fme is disabled for project %s", w.ProjectID())
 		return nil
 	}
 
@@ -55,7 +59,7 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 
 	featureTypeCode := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
 	if featureTypeCode == flowTestModel {
-		log.Debugfc(ctx, "skip model: %s", featureTypeCode)
+		log.Infofc(ctx, "skip: model is flow test model: %s", featureTypeCode)
 		return nil
 	}
 	if ft := item.FeatureTypeCode(); ft != "" {
@@ -75,24 +79,24 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		return ft.Code == featureTypeCode
 	})
 	if !ok {
-		log.Debugfc(ctx, "invalid feature item: %s", featureTypeCode)
+		log.Infofc(ctx, "skip: invalid feature type: %s, available=%v", featureTypeCode, featureTypeCodes)
 		return nil
 	}
 
 	log.Debugfc(ctx, "featureType: %s", pp.Sprint(featureType))
 	if !featureType.QC && !featureType.Conv {
-		log.Debugfc(ctx, "skip qc and convert by feature type")
+		log.Infofc(ctx, "skip: feature type does not support qc or convert: code=%s, qc=%v, conv=%v", featureType.Code, featureType.QC, featureType.Conv)
 		return nil
 	}
 
 	skipQC, skipConv := item.IsQCAndConvSkipped()
 	if skipQC && skipConv {
-		log.Debugfc(ctx, "skip qc and convert by item")
+		log.Infofc(ctx, "skip: qc and convert are skipped by item setting")
 		return nil
 	}
 
 	if item.CityGML == "" || item.City == "" {
-		log.Debugfc(ctx, "no city or no citygml")
+		log.Infofc(ctx, "skip: no city or no citygml: city=%s, citygml=%s", item.City, item.CityGML)
 		return nil
 	}
 
@@ -103,26 +107,32 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		ty = fmeTypeQC
 	}
 
-	log.Debugfc(ctx, "itemID=%s featureType=%s", mainItem.ID, featureTypeCode)
+	log.Infofc(ctx, "processing: item=%s, featureType=%s, type=%s", mainItem.ID, featureTypeCode, ty)
 	log.Debugfc(ctx, "raw item: %s", pp.Sprint(mainItem))
 	log.Debugfc(ctx, "item: %s", pp.Sprint(item))
 
 	// update convertion status
 	err = s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning)
 	if err != nil {
+		log.Errorfc(ctx, "failed to update item status: %v", err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}
 
 	// get CityGML asset
+	log.Debugfc(ctx, "getting citygml asset: %s", item.CityGML)
 	cityGMLAsset, err := s.CMS.Asset(ctx, item.CityGML)
 	if err != nil {
+		log.Errorfc(ctx, "failed to get citygml asset: id=%s, err=%v", item.CityGML, err)
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "CityGMLが見つかりません。")
 		return fmt.Errorf("failed to get citygml asset: %w", err)
 	}
+	log.Debugfc(ctx, "citygml asset url: %s", cityGMLAsset.URL)
 
 	// get city item
+	log.Debugfc(ctx, "getting city item: %s", item.City)
 	cityItemRaw, err := s.CMS.GetItem(ctx, item.City, true)
 	if err != nil {
+		log.Errorfc(ctx, "failed to get city item: id=%s, err=%v", item.City, err)
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "都市アイテムが見つかりません。")
 		return fmt.Errorf("failed to get city item: %w", err)
 	}
@@ -151,13 +161,20 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	if specVersion == 0 {
 		specVersion = cityItem.SpecMajorVersionInt()
 	}
-	fme := s.GetFME(s.GetFMEURL(ctx, specVersion))
+	log.Debugfc(ctx, "specVersion: item=%d, city=%d, final=%d", item.SpecMajorVersionInt(), cityItem.SpecMajorVersionInt(), specVersion)
+
+	fmeURL := s.GetFMEURL(ctx, specVersion)
+	log.Debugfc(ctx, "fme url: %s (specVersion=%d)", fmeURL, specVersion)
+	fme := s.GetFME(fmeURL)
 	if fme == nil {
+		log.Errorfc(ctx, "fme url is not set: specVersion=%d", specVersion)
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "FMEのURLが設定されていません。")
 		return fmt.Errorf("fme url is not set")
 	}
 
 	// request to fme
+	fmeReqURL := resultURL(conf)
+	log.Infofc(ctx, "requesting to fme: target=%s, resultURL=%s, type=%s", cityGMLAsset.URL, fmeReqURL, ty)
 	err = fme.Request(ctx, fmeRequest{
 		ID: fmeID{
 			ItemID:      mainItem.ID,
@@ -169,10 +186,11 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		PRCS:        cityItem.PRCS.EPSGCode(),
 		Codelists:   cityItem.CodeLists.URL,
 		ObjectLists: objectListsAssetURL,
-		ResultURL:   resultURL(conf),
+		ResultURL:   fmeReqURL,
 		Type:        ty,
 	})
 	if err != nil {
+		log.Errorfc(ctx, "failed to request to fme: %v", err)
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "FMEへのリクエストに失敗しました。%v", err)
 		return fmt.Errorf("failed to request to fme: %w", err)
 	}
@@ -180,10 +198,11 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	// post a comment to the item
 	err = s.CMS.CommentToItem(ctx, mainItem.ID, fmt.Sprintf("%sを開始しました。", ty.Title()))
 	if err != nil {
+		log.Errorfc(ctx, "failed to add comment: %v", err)
 		return fmt.Errorf("failed to add comment: %w", err)
 	}
 
-	log.Infofc(ctx, "sendRequestToFME: success")
+	log.Infofc(ctx, "success: item=%s, featureType=%s, type=%s", mainItem.ID, featureTypeCode, ty)
 	return nil
 }
 

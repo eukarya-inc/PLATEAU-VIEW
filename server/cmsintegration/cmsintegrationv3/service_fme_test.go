@@ -149,7 +149,7 @@ func TestSendRequestToFME(t *testing.T) {
 
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("skip qc and convert", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestSendRequestToFME(t *testing.T) {
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
 
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("skip qc and convert with tags", func(t *testing.T) {
@@ -223,7 +223,7 @@ func TestSendRequestToFME(t *testing.T) {
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
 
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("failed to get citygml asset", func(t *testing.T) {
