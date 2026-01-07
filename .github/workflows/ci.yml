@@ -14,6 +14,7 @@ on:
           - extension
           - geo
           - server
+          - tile
           - tools
           - worker
 
@@ -29,6 +30,7 @@ jobs:
       server: ${{ steps.server.outputs.any_changed }}
       tools: ${{ steps.tools.outputs.any_changed }}
       worker: ${{ steps.worker.outputs.any_changed }}
+      tile: ${{ steps.tile.outputs.any_changed }}
       cms-server: ${{ steps.cms-server.outputs.any_changed }}
       cms-worker: ${{ steps.cms-worker.outputs.any_changed }}
       cms-web: ${{ steps.cms-web.outputs.any_changed }}
@@ -81,6 +83,16 @@ jobs:
             .github/workflows/ci-worker.yml
             .github/workflows/build-worker.yml
             .github/workflows/deploy-worker-*.yml
+      - name: changed files for tile
+        id: tile
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        with:
+          since_last_remote_commit: true
+          files: |
+            tile/**
+            .github/workflows/ci-tile.yml
+            .github/workflows/build-tile.yml
+            .github/workflows/deploy-tile-*.yml
       - name: changed files for editor - core
         id: editor-core
         uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
@@ -202,6 +214,11 @@ jobs:
     if: ${{ needs.prepare.outputs.worker == 'true' || inputs.action_type == 'worker' }}
     uses: ./.github/workflows/ci-worker.yml
 
+  ci-tile:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.tile == 'true' || inputs.action_type == 'tile' }}
+    uses: ./.github/workflows/ci-tile.yml
+
   ci-cms-server:
     needs: prepare
     if: ${{ needs.prepare.outputs.cms-server == 'true' }}
@@ -225,6 +242,7 @@ jobs:
       - ci-server
       - ci-tools
       - ci-worker
+      - ci-tile
       - ci-cms-server
       - ci-cms-worker
       - ci-cms-web
@@ -320,6 +338,29 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           event-type: deploy-worker-dev
+
+  build-tile:
+    needs: [prepare]
+    if: ${{ !failure() && needs.prepare.outputs.tile == 'true' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-tile.yml
+
+  push-tile:
+    needs: [prepare, ci-tile, build-tile]
+    if: ${{ !failure() && needs.ci-tile.result == 'success' && needs.build-tile.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/push-image.yml
+    with:
+      build_tag: ${{ needs.build-tile.outputs.image }}
+      latest_tag: ${{ needs.build-tile.outputs.latest_tag }}
+
+  deploy-tile-dev:
+    needs: push-tile
+    if: ${{ always() && needs.push-tile.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-tile-dev
 
   build-editor-core:
     needs:

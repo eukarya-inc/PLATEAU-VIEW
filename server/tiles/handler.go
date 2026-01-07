@@ -106,6 +106,7 @@ func (h *Handler) Route(g *echo.Group) {
 	g = g.Group("/tiles")
 	g.GET("/:id/:z/:x/:y", h.GetTile)
 	g.GET("/styles/:id", styleHandler)
+	g.GET("/config.json", h.GetConfig)
 	g.POST("/update", h.UpdateCache)
 }
 
@@ -113,6 +114,39 @@ func (h *Handler) UpdateCache(c echo.Context) error {
 	ctx := c.Request().Context()
 	h.Init(ctx)
 	return c.String(http.StatusOK, "ok")
+}
+
+// GetConfig returns the tile server configuration in JSON format
+func (h *Handler) GetConfig(c echo.Context) error {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	// Determine base URL from request or config
+	baseURL := h.getBaseURL(c)
+
+	if h.tiles == nil {
+		return c.JSON(http.StatusOK, Tiles{}.ToTileServerConfig(baseURL))
+	}
+
+	config := h.tiles.ToTileServerConfig(baseURL)
+	return c.JSON(http.StatusOK, config)
+}
+
+func (h *Handler) getBaseURL(c echo.Context) string {
+	if h.host != nil {
+		return h.host.String()
+	}
+
+	// Fallback to request URL
+	req := c.Request()
+	scheme := "https"
+	if req.TLS == nil {
+		scheme = req.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			scheme = "http"
+		}
+	}
+	return scheme + "://" + req.Host
 }
 
 func (h *Handler) GetTile(c echo.Context) error {
