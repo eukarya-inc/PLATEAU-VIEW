@@ -168,7 +168,11 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	fme := s.GetFME(fmeURL)
 	if fme == nil {
 		log.Errorfc(ctx, "fme url is not set: specVersion=%d", specVersion)
-		_ = failToConvert(ctx, s, mainItem.ID, ty, "FMEのURLが設定されていません。")
+		if specVersion == 0 {
+			_ = failToConvert(ctx, s, mainItem.ID, ty, "PLATEAU仕様バージョンが設定されていません。アイテムまたは都市アイテムの仕様バージョンを設定してください。")
+		} else {
+			_ = failToConvert(ctx, s, mainItem.ID, ty, "PLATEAU仕様 第%d版のFME URLが設定されていません。システムプロジェクトのplateau-specモデルでfme_urlを設定してください。", specVersion)
+		}
 		return fmt.Errorf("fme url is not set")
 	}
 
