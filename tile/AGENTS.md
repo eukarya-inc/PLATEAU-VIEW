@@ -67,4 +67,49 @@ Available layer types in config JSON:
 
 - `xyz`: XYZ tile proxy (supports URL template `{z}/{x}/{y}`)
 - `cog`: Cloud Optimized GeoTIFF (supports HTTP/GCS/S3)
-- `maplibre`: MapLibre style (planned for future, currently ignored)
+- `maplibre`: MapLibre style.json rendering (requires `maplibre` feature, Linux only)
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| `maplibre` | Enable MapLibre style.json rendering using maplibre-native-rs. Only works on Linux. |
+
+### Building with MapLibre support
+
+```bash
+# Docker build (recommended - includes all dependencies)
+docker build -t tile-server .
+
+# Linux native build with maplibre
+cargo build --release --features maplibre
+```
+
+**Note:** The `maplibre` feature requires:
+- Linux environment (macOS/Windows not supported)
+- Xvfb for headless rendering
+- Mesa OpenGL libraries for software rendering
+
+## Docker
+
+The Dockerfile is configured for headless MapLibre rendering without GPU:
+
+```bash
+# Build
+docker build -t tile-server .
+
+# Run
+docker run -p 8080:8080 \
+  -e CONFIG_URL=https://example.com/config.json \
+  tile-server
+```
+
+### Environment variables for headless rendering
+
+These are pre-configured in the Dockerfile:
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `DISPLAY` | `:99` | Virtual display for Xvfb |
+| `LIBGL_ALWAYS_SOFTWARE` | `1` | Force software rendering (no GPU) |
+| `GALLIUM_DRIVER` | `llvmpipe` | Use LLVMpipe software renderer |

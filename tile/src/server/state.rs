@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 use crate::{
     cache::TileCache,
     config::{ConfigManager, LayerConfig, SourceConfig},
-    tile::{CogTileSource, CompositeTileSource, TileSource, XyzTileSource},
+    tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
 
 /// Application state shared across handlers.
@@ -54,9 +54,10 @@ impl AppState {
     }
 
     fn build_source(config: &SourceConfig) -> Arc<dyn TileSource> {
-        // Separate XYZ (base) and COG (overlay) layers
+        // Separate layers by type
         let mut xyz_layers: Vec<&LayerConfig> = Vec::new();
         let mut cog_layers: Vec<(&LayerConfig, i32)> = Vec::new();
+        let mut maplibre_layers: Vec<&LayerConfig> = Vec::new();
 
         for layer in &config.layers {
             match layer {
@@ -67,7 +68,7 @@ impl AppState {
                     cog_layers.push((layer, *order));
                 }
                 LayerConfig::MapLibre { .. } => {
-                    // MapLibre style layers are not yet implemented, skip
+                    maplibre_layers.push(layer);
                 }
             }
         }
@@ -78,8 +79,13 @@ impl AppState {
         // Build composite source
         let mut composite = CompositeTileSource::new();
 
-        // Add XYZ as base (use first one if multiple)
-        if let Some(LayerConfig::Xyz { url, range }) = xyz_layers.first() {
+        // Add MapLibre as base if present (takes priority over XYZ)
+        if let Some(LayerConfig::MapLibre { url }) = maplibre_layers.first() {
+            let maplibre_source = MaplibreTileSource::new(url.clone(), None);
+            composite = composite.with_base(Box::new(maplibre_source));
+            tracing::info!("Added MapLibre layer as base: {}", url);
+        } else if let Some(LayerConfig::Xyz { url, range }) = xyz_layers.first() {
+            // Add XYZ as base if no MapLibre
             let xyz_source = XyzTileSource::new(url.clone(), range.clone());
             composite = composite.with_base(Box::new(xyz_source));
         }

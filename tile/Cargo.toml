@@ -47,6 +47,13 @@ moka = { version = "0.12", features = ["future"] }
 # URL parsing
 url = "2"
 
+# MapLibre style rendering (optional, requires Linux)
+maplibre_native = { version = "0.4", features = ["pool", "opengl"], optional = true }
+
+[features]
+default = []
+maplibre = ["maplibre_native"]
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"

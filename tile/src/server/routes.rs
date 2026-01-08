@@ -41,6 +41,7 @@ fn create_cors_layer(origins: Option<&str>) -> CorsLayer {
 /// Create the application router.
 pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router {
     Router::new()
+        .route("/", get(handlers::viewer))
         .route("/tiles/{name}/{z}/{x}/{y}", get(handlers::get_tile))
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
