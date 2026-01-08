@@ -180,9 +180,8 @@ impl TileSource for MaplibreTileSource {
 
     #[cfg(not(feature = "maplibre"))]
     async fn get_tile(&self, _z: u32, _x: u32, _y: u32) -> Result<Option<RgbaImage>, TileError> {
-        Err(TileError::Internal(
-            "MapLibre support is not enabled. Build with --features maplibre".to_string(),
-        ))
+        // Return NotFound (404) when maplibre feature is not enabled
+        Err(TileError::NotFound)
     }
 
     fn covers(&self, z: u32, x: u32, y: u32) -> bool {

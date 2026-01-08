@@ -137,7 +137,6 @@ impl AppState {
         if let Some(LayerConfig::MapLibre { url, .. }) = maplibre_layers.first() {
             let maplibre_source = MaplibreTileSource::new(url.clone(), None);
             composite = composite.with_base(Box::new(maplibre_source));
-            tracing::info!("Added MapLibre layer as base: {}", url);
         } else if let Some(LayerConfig::Xyz { url, range, .. }) = xyz_layers.first() {
             // Add XYZ as base if no MapLibre
             let xyz_source = XyzTileSource::new(url.clone(), range.clone());
