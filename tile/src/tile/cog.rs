@@ -145,7 +145,39 @@ impl CogTileSource {
 #[async_trait]
 impl TileSource for CogTileSource {
     async fn preload(&self) -> Result<(), TileError> {
-        self.ensure_reader().await
+        // Check if bounds already loaded
+        {
+            let bounds = self.bounds.read().await;
+            if bounds.is_some() {
+                return Ok(());
+            }
+        }
+
+        tracing::info!("Preloading COG bounds: {}", self.url);
+
+        let (store, path) = self.create_object_store().await?;
+
+        // Use read_bounds_only for fast bounds extraction (reads only first IFD)
+        let bounds = CogReader::read_bounds_only(store, path).await?;
+
+        // Cache bounds
+        let mut bounds_guard = self.bounds.write().await;
+        *bounds_guard = bounds;
+
+        if let Some(b) = bounds {
+            tracing::info!(
+                "Preloaded COG bounds: {} -> west={}, east={}, south={}, north={}",
+                self.url,
+                b.west,
+                b.east,
+                b.south,
+                b.north
+            );
+        } else {
+            tracing::warn!("COG has no bounds: {}", self.url);
+        }
+
+        Ok(())
     }
 
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError> {

@@ -34,10 +34,10 @@ async fn main() -> Result<()> {
     // CORS origins: comma-separated list or "*" for permissive
     let cors_origins = env::var("CORS_ORIGINS").ok();
 
-    // Preload mode: "sync", "background" (default), or "lazy"
+    // Preload mode: "sync" (default), "background", or "lazy"
     let preload_mode = env::var("PRELOAD_MODE")
         .map(|v| v.to_lowercase())
-        .unwrap_or_else(|_| "background".to_string());
+        .unwrap_or_else(|_| "sync".to_string());
 
     tracing::info!("Loading configuration from {}", config_url);
 

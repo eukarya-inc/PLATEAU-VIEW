@@ -2,7 +2,13 @@
 
 use std::sync::Arc;
 
-use async_tiff::{TIFF, decoder::DecoderRegistry, reader::ObjectReader, tiff::tags::SampleFormat};
+use async_tiff::{
+    ImageFileDirectory, TIFF,
+    decoder::DecoderRegistry,
+    metadata::{TiffMetadataReader, cache::ReadaheadMetadataCache},
+    reader::ObjectReader,
+    tags::SampleFormat,
+};
 use object_store::{ObjectStore, path::Path as ObjectPath};
 use thiserror::Error;
 
@@ -44,10 +50,17 @@ pub struct CogReader {
 
 impl CogReader {
     /// Open a COG file from an object store (HTTP, GCS, S3, local).
+    /// This reads all IFDs (required for tile rendering with overview selection).
     pub async fn open(store: Arc<dyn ObjectStore>, path: ObjectPath) -> Result<Self, CogError> {
         let reader = ObjectReader::new(store.clone(), path.clone());
+        let cached_reader = ReadaheadMetadataCache::new(reader);
 
-        let tiff = TIFF::try_open(Box::new(reader))
+        let mut metadata_reader = TiffMetadataReader::try_open(&cached_reader)
+            .await
+            .map_err(|e| CogError::OpenError(format!("{e:?}")))?;
+
+        let tiff = metadata_reader
+            .read(&cached_reader)
             .await
             .map_err(|e| CogError::OpenError(format!("{e:?}")))?;
 
@@ -60,15 +73,14 @@ impl CogReader {
         // Get samples per pixel
         let samples_per_pixel = tiff
             .ifds()
-            .as_ref()
             .first()
             .map(|ifd| ifd.samples_per_pixel())
             .unwrap_or(1);
 
         // Log IFD info
         let ifds = tiff.ifds();
-        tracing::info!("COG has {} IFD(s)", ifds.as_ref().len());
-        for (idx, ifd) in ifds.as_ref().iter().enumerate() {
+        tracing::info!("COG has {} IFD(s)", ifds.len());
+        for (idx, ifd) in ifds.iter().enumerate() {
             tracing::debug!(
                 "  IFD {}: {}x{}, samples_per_pixel={}, bits_per_sample={:?}, tile={}x{}",
                 idx,
@@ -90,9 +102,42 @@ impl CogReader {
         })
     }
 
-    fn check_crs(tiff: &TIFF) -> Result<(), CogError> {
-        let ifd = tiff.ifds().as_ref().first().ok_or(CogError::NoIfd)?;
+    /// Read only the first IFD to extract bounds (much faster than reading all IFDs).
+    /// Use this for preloading bounds without reading the entire metadata.
+    pub async fn read_bounds_only(
+        store: Arc<dyn ObjectStore>,
+        path: ObjectPath,
+    ) -> Result<Option<TileBounds>, CogError> {
+        let reader = ObjectReader::new(store, path);
+        let cached_reader = ReadaheadMetadataCache::new(reader);
 
+        let mut metadata_reader = TiffMetadataReader::try_open(&cached_reader)
+            .await
+            .map_err(|e| CogError::OpenError(format!("{e:?}")))?;
+
+        // Read only the first IFD
+        let first_ifd = metadata_reader
+            .read_next_ifd(&cached_reader)
+            .await
+            .map_err(|e| CogError::OpenError(format!("{e:?}")))?;
+
+        let Some(ifd) = first_ifd else {
+            return Err(CogError::NoIfd);
+        };
+
+        // Check CRS
+        Self::check_crs_ifd(&ifd)?;
+
+        // Extract bounds
+        Ok(Self::extract_bounds_from_ifd(&ifd))
+    }
+
+    fn check_crs(tiff: &TIFF) -> Result<(), CogError> {
+        let ifd = tiff.ifds().first().ok_or(CogError::NoIfd)?;
+        Self::check_crs_ifd(ifd)
+    }
+
+    fn check_crs_ifd(ifd: &ImageFileDirectory) -> Result<(), CogError> {
         if let Some(geo_keys) = ifd.geo_key_directory()
             && let Some(epsg) = geo_keys.epsg_code()
         {
@@ -108,7 +153,11 @@ impl CogReader {
     }
 
     fn extract_bounds(tiff: &TIFF) -> Option<TileBounds> {
-        let ifd = tiff.ifds().as_ref().first()?;
+        let ifd = tiff.ifds().first()?;
+        Self::extract_bounds_from_ifd(ifd)
+    }
+
+    fn extract_bounds_from_ifd(ifd: &ImageFileDirectory) -> Option<TileBounds> {
         let tiepoint = ifd.model_tiepoint()?;
         let pixel_scale = ifd.model_pixel_scale()?;
 
@@ -141,7 +190,6 @@ impl CogReader {
     pub fn dimensions(&self) -> Option<(u32, u32)> {
         self.tiff
             .ifds()
-            .as_ref()
             .first()
             .map(|ifd| (ifd.image_width(), ifd.image_height()))
     }
@@ -167,7 +215,7 @@ impl CogReader {
         };
 
         let ifds = self.tiff.ifds();
-        let ifd_count = ifds.as_ref().len();
+        let ifd_count = ifds.len();
 
         if ifd_count <= 1 {
             return 0;
@@ -186,7 +234,7 @@ impl CogReader {
 
         // Find the smallest IFD with sufficient resolution
         let mut best_ifd = 0;
-        for (idx, ifd) in ifds.as_ref().iter().enumerate() {
+        for (idx, ifd) in ifds.iter().enumerate() {
             let ifd_res_x = ifd.image_width() as f64 / cog_width_deg;
             let ifd_res_y = ifd.image_height() as f64 / cog_height_deg;
             let ifd_res = ifd_res_x.max(ifd_res_y);
@@ -216,12 +264,7 @@ impl CogReader {
 
         // Select best IFD
         let ifd_idx = self.select_best_ifd(bounds, tile_size);
-        let ifd = self
-            .tiff
-            .ifds()
-            .as_ref()
-            .get(ifd_idx)
-            .ok_or(CogError::NoIfd)?;
+        let ifd = self.tiff.ifds().get(ifd_idx).ok_or(CogError::NoIfd)?;
 
         let img_width = ifd.image_width();
         let img_height = ifd.image_height();
@@ -277,12 +320,11 @@ impl CogReader {
 
         // Fetch and decode tiles
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let mut boxed_reader: Box<dyn async_tiff::reader::AsyncFileReader> = Box::new(reader);
         let decoder_registry = DecoderRegistry::default();
 
         for ty in tile_y_start..tile_y_end {
             for tx in tile_x_start..tile_x_end {
-                match ifd.fetch_tile(tx, ty, boxed_reader.as_mut()).await {
+                match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
                         Ok(decoded_bytes) => {
                             let mut rgba = decode_rgba(
@@ -389,12 +431,7 @@ impl CogReader {
             .ok_or_else(|| CogError::ReadError("COG has no geographic bounds".to_string()))?;
 
         let ifd_idx = self.select_best_ifd(bounds, tile_size);
-        let ifd = self
-            .tiff
-            .ifds()
-            .as_ref()
-            .get(ifd_idx)
-            .ok_or(CogError::NoIfd)?;
+        let ifd = self.tiff.ifds().get(ifd_idx).ok_or(CogError::NoIfd)?;
 
         let img_width = ifd.image_width();
         let img_height = ifd.image_height();
@@ -441,12 +478,11 @@ impl CogReader {
         let mut pixel_buffer: Vec<f64> = vec![f64::NAN; buffer_width * buffer_height];
 
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let mut boxed_reader: Box<dyn async_tiff::reader::AsyncFileReader> = Box::new(reader);
         let decoder_registry = DecoderRegistry::default();
 
         for ty in tile_y_start..tile_y_end {
             for tx in tile_x_start..tile_x_end {
-                match ifd.fetch_tile(tx, ty, boxed_reader.as_mut()).await {
+                match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
                         Ok(decoded_bytes) => {
                             let mut elevations = decode_elevation(

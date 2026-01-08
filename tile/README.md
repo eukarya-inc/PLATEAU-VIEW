@@ -43,6 +43,8 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | `PORT` | No | `8080` | HTTP server port |
 | `CACHE_SIZE_MB` | No | `512` | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret token for `/reload` endpoint (if set, requires `Authorization: Bearer <token>`) |
+| `CORS_ORIGINS` | No | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
+| `PRELOAD_MODE` | No | `sync` | COG metadata preload mode: `sync` (blocking), `background` (non-blocking), or `lazy` (on first request) |
 | `RUST_LOG` | No | `info` | Log level (trace, debug, info, warn, error) |
 
 ## API Endpoints

@@ -16,7 +16,8 @@ http = "1"
 hyper-util = { version = "0.1", features = ["server", "server-auto", "tokio"] }
 
 # COG reading (async-cog style)
-async-tiff = "0.1"
+# Using git commit for read_next_ifd support (faster metadata loading)
+async-tiff = { git = "https://github.com/developmentseed/async-tiff", rev = "dd8f2d0f" }
 object_store = { version = "0.12", default-features = false, features = ["http", "gcp", "aws"] }
 
 # Image processing

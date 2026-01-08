@@ -1,6 +1,6 @@
 //! Pixel data decoding utilities.
 
-use async_tiff::tiff::tags::SampleFormat;
+use async_tiff::tags::SampleFormat;
 
 /// Decode raw bytes to RGBA pixel data.
 ///

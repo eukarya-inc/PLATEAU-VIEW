@@ -42,7 +42,7 @@ impl MockCogServer {
         };
 
         let app = Router::new()
-            .route("/{filename}", get(serve_file))
+            .route("/{filename}", get(serve_file).head(head_file))
             .with_state(Arc::new(state));
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -93,6 +93,43 @@ impl Drop for MockCogServer {
             let _ = tx.send(());
         }
     }
+}
+
+/// Handler for HEAD requests - returns file metadata without body.
+#[allow(dead_code)]
+async fn head_file(
+    State(state): State<Arc<ServerState>>,
+    Path(filename): Path<String>,
+) -> Response {
+    let file_path = state.fixtures_dir.join(&filename);
+
+    if !file_path.exists() {
+        return (StatusCode::NOT_FOUND, "File not found").into_response();
+    }
+
+    let file = match File::open(&file_path).await {
+        Ok(f) => f,
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to open file").into_response();
+        }
+    };
+
+    let metadata = match file.metadata().await {
+        Ok(m) => m,
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get metadata").into_response();
+        }
+    };
+
+    let file_size = metadata.len();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/tiff")
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CONTENT_LENGTH, file_size)
+        .body(axum::body::Body::empty())
+        .unwrap()
 }
 
 /// Handler for serving files with range request support.
