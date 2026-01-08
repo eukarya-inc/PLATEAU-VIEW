@@ -61,6 +61,7 @@ pub async fn run(
     preload_mode: &str,
     tile_cache_url: Option<String>,
     cache_mode: CacheMode,
+    cache_control: Option<String>,
 ) -> Result<()> {
     let state = Arc::new(
         AppState::new(
@@ -70,6 +71,7 @@ pub async fn run(
             preload_mode,
             tile_cache_url.as_deref(),
             cache_mode,
+            cache_control,
         )
         .await,
     );

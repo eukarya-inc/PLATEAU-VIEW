@@ -4,13 +4,39 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
 use image::ImageFormat;
+use xxhash_rust::xxh64::xxh64;
 
 use super::state::AppState;
 use crate::tile::TileError;
+
+/// Compute ETag from version (optional) and tile coordinates.
+fn compute_etag(version: Option<&str>, source: &str, z: u32, x: u32, y: u32) -> String {
+    let input = match version {
+        Some(v) => format!("{v}/{source}/{z}/{x}/{y}"),
+        None => format!("{source}/{z}/{x}/{y}"),
+    };
+    let hash = xxh64(input.as_bytes(), 0);
+    // Use weak ETag (W/) since the representation might vary
+    format!("W/\"{hash:x}\"")
+}
+
+/// Check if the request's If-None-Match header matches the ETag.
+fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+        && let Ok(value) = if_none_match.to_str()
+    {
+        // Handle multiple ETags (comma-separated) and "*"
+        if value == "*" {
+            return true;
+        }
+        return value.split(',').any(|v| v.trim() == etag);
+    }
+    false
+}
 
 /// Health check handler.
 pub async fn health() -> impl IntoResponse {
@@ -201,6 +227,7 @@ pub async fn viewer(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 /// Get tile handler.
 pub async fn get_tile(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path((name, z, x, y_ext)): Path<(String, u32, u32, String)>,
 ) -> Response {
     // Parse y from "123.png" format
@@ -213,11 +240,21 @@ pub async fn get_tile(
 
     tracing::debug!(source = %name, z = z, x = x, y = y, "Tile request received");
 
+    // Get version for ETag calculation (per-source or global)
+    let version = state.get_source_version(&name).await;
+    let etag = compute_etag(version.as_deref(), &name, z, x, y);
+
+    // Check If-None-Match header
+    if etag_matches(&headers, &etag) {
+        tracing::debug!(source = %name, z = z, x = x, y = y, "ETag match, returning 304");
+        return not_modified_response(&etag, state.cache_control.as_deref());
+    }
+
     // Check cache first
     let cache_key = format!("{name}/{z}/{x}/{y}");
     if let Some(cached) = state.cache.get(&cache_key).await {
         tracing::debug!(source = %name, z = z, x = x, y = y, "Cache hit");
-        return png_response(cached);
+        return png_response(cached, Some(&etag), state.cache_control.as_deref());
     }
     tracing::debug!(source = %name, z = z, x = x, y = y, "Cache miss");
 
@@ -252,7 +289,7 @@ pub async fn get_tile(
     // Store in cache
     state.cache.put(&cache_key, png_bytes.clone()).await;
 
-    png_response(png_bytes)
+    png_response(png_bytes, Some(&etag), state.cache_control.as_deref())
 }
 
 /// Reload configuration handler.
@@ -296,15 +333,39 @@ pub async fn reload(
     }
 }
 
-fn png_response(data: Vec<u8>) -> Response {
-    (
-        StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, "image/png"),
-            (header::CACHE_CONTROL, "public, max-age=86400"),
-        ],
-        data,
-    )
+/// Build a 304 Not Modified response with ETag.
+fn not_modified_response(etag: &str, cache_control: Option<&str>) -> Response {
+    let mut builder = Response::builder()
+        .status(StatusCode::NOT_MODIFIED)
+        .header(header::ETAG, etag);
+
+    if let Some(cc) = cache_control {
+        builder = builder.header(header::CACHE_CONTROL, cc);
+    }
+
+    builder
+        .body(axum::body::Body::empty())
+        .unwrap()
+        .into_response()
+}
+
+/// Build a PNG response with optional ETag and Cache-Control headers.
+fn png_response(data: Vec<u8>, etag: Option<&str>, cache_control: Option<&str>) -> Response {
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/png");
+
+    if let Some(etag) = etag {
+        builder = builder.header(header::ETAG, etag);
+    }
+
+    if let Some(cc) = cache_control {
+        builder = builder.header(header::CACHE_CONTROL, cc);
+    }
+
+    builder
+        .body(axum::body::Body::from(data))
+        .unwrap()
         .into_response()
 }
 

@@ -184,7 +184,8 @@ async fn test_xyz_proxy_cache_header() {
     mock_xyz.mock_all_red_tiles().await;
 
     let config = xyz_config("test-xyz", &mock_xyz.xyz_url_template());
-    let server = TestServer::start(config).await;
+    let server =
+        TestServer::start_with_cache_control(config, "public, max-age=3600, s-maxage=86400").await;
     let client = server.client();
 
     let response = client

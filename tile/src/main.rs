@@ -47,6 +47,9 @@ async fn main() -> Result<()> {
         .map(|v| CacheMode::parse(&v))
         .unwrap_or_default();
 
+    // Cache-Control header (optional, no default)
+    let cache_control = env::var("CACHE_CONTROL").ok();
+
     tracing::info!("Loading configuration from {}", config_url);
 
     let config_manager = Arc::new(
@@ -69,6 +72,10 @@ async fn main() -> Result<()> {
         tracing::info!("Persistent cache: {} (mode: {:?})", url, cache_mode);
     }
 
+    if let Some(ref cc) = cache_control {
+        tracing::info!("Cache-Control: {}", cc);
+    }
+
     server::run(
         config_manager,
         &addr,
@@ -78,6 +85,7 @@ async fn main() -> Result<()> {
         &preload_mode,
         tile_cache_url,
         cache_mode,
+        cache_control,
     )
     .await?;
 

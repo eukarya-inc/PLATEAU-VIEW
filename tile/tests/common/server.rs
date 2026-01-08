@@ -50,7 +50,16 @@ impl TestServer {
 
         // Create app state (sync preload for tests)
         let state = Arc::new(
-            AppState::new(config_manager, 64, None, "sync", None, CacheMode::default()).await,
+            AppState::new(
+                config_manager,
+                64,
+                None,
+                "sync",
+                None,
+                CacheMode::default(),
+                None,
+            )
+            .await,
         );
         let app = create_router(state, None);
 
@@ -131,6 +140,85 @@ impl TestServer {
                 "sync",
                 None,
                 CacheMode::default(),
+                None,
+            )
+            .await,
+        );
+        let app = create_router(state, None);
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+        let listener = TcpListener::bind(&addr)
+            .await
+            .expect("Failed to bind listener");
+
+        tokio::spawn(async move {
+            use hyper_util::rt::{TokioExecutor, TokioIo};
+            use hyper_util::server::conn::auto::Builder;
+            use tower::Service;
+
+            let builder = Builder::new(TokioExecutor::new());
+
+            tokio::select! {
+                _ = async {
+                    loop {
+                        if let Ok((socket, _)) = listener.accept().await {
+                            let tower_service = app.clone();
+                            let builder = builder.clone();
+
+                            tokio::spawn(async move {
+                                let socket = TokioIo::new(socket);
+                                let hyper_service = hyper::service::service_fn(move |request| {
+                                    tower_service.clone().call(request)
+                                });
+                                let _ = builder.serve_connection(socket, hyper_service).await;
+                            });
+                        }
+                    }
+                } => {}
+                _ = shutdown_rx => {}
+            }
+        });
+
+        Self::wait_for_server(&base_url).await;
+
+        Self {
+            port,
+            base_url,
+            config_dir,
+            shutdown_tx: Some(shutdown_tx),
+        }
+    }
+
+    /// Start a test server with a cache-control header.
+    pub async fn start_with_cache_control(config: serde_json::Value, cache_control: &str) -> Self {
+        let config_dir = TempDir::new().expect("Failed to create temp dir");
+        let config_path = config_dir.path().join("config.json");
+
+        fs::write(&config_path, config.to_string())
+            .await
+            .expect("Failed to write config");
+
+        let port = portpicker::pick_unused_port().expect("No available port");
+        let addr = format!("127.0.0.1:{port}");
+        let base_url = format!("http://{addr}");
+
+        let config_url = format!("file://{}", config_path.display());
+        let config_manager = Arc::new(
+            ConfigManager::new(&config_url)
+                .await
+                .expect("Failed to create config manager"),
+        );
+
+        let state = Arc::new(
+            AppState::new(
+                config_manager,
+                64,
+                None,
+                "sync",
+                None,
+                CacheMode::default(),
+                Some(cache_control.to_string()),
             )
             .await,
         );

@@ -49,6 +49,9 @@ moka = { version = "0.12", features = ["future"] }
 # URL parsing
 url = "2"
 
+# Hashing
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
 # MapLibre style rendering (optional, requires Linux)
 maplibre_native = { version = "0.4", features = ["pool", "opengl"], optional = true }
 

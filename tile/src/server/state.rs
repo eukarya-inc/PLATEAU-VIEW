@@ -4,6 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::future::join_all;
 use tokio::sync::RwLock;
+use xxhash_rust::xxh64::xxh64;
 
 use crate::{
     cache::{CacheMode, TileCache},
@@ -19,9 +20,12 @@ pub struct AppState {
     sources: Arc<RwLock<HashMap<String, Arc<dyn TileSource>>>>,
     /// Secret for reload endpoint authorization
     pub reload_secret: Option<String>,
+    /// Cache-Control header value (optional)
+    pub cache_control: Option<String>,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config_manager: Arc<ConfigManager>,
         cache_size_mb: u64,
@@ -29,6 +33,7 @@ impl AppState {
         preload_mode: &str,
         persistent_cache_url: Option<&str>,
         cache_mode: CacheMode,
+        cache_control: Option<String>,
     ) -> Self {
         let config = config_manager.get().await;
 
@@ -64,6 +69,7 @@ impl AppState {
             cache,
             sources: Arc::new(RwLock::new(sources)),
             reload_secret,
+            cache_control,
         }
     }
 
@@ -128,11 +134,11 @@ impl AppState {
         let mut composite = CompositeTileSource::new();
 
         // Add MapLibre as base if present (takes priority over XYZ)
-        if let Some(LayerConfig::MapLibre { url }) = maplibre_layers.first() {
+        if let Some(LayerConfig::MapLibre { url, .. }) = maplibre_layers.first() {
             let maplibre_source = MaplibreTileSource::new(url.clone(), None);
             composite = composite.with_base(Box::new(maplibre_source));
             tracing::info!("Added MapLibre layer as base: {}", url);
-        } else if let Some(LayerConfig::Xyz { url, range }) = xyz_layers.first() {
+        } else if let Some(LayerConfig::Xyz { url, range, .. }) = xyz_layers.first() {
             // Add XYZ as base if no MapLibre
             let xyz_source = XyzTileSource::new(url.clone(), range.clone());
             composite = composite.with_base(Box::new(xyz_source));
@@ -172,5 +178,47 @@ impl AppState {
     pub async fn list_sources(&self) -> Vec<String> {
         let sources = self.sources.read().await;
         sources.keys().cloned().collect()
+    }
+
+    /// Get the version string for a source.
+    /// Priority: per-source version > global version > computed from layers.
+    pub async fn get_source_version(&self, source_name: &str) -> Option<String> {
+        let config = self.config_manager.get().await;
+
+        let source_config = config.sources.get(source_name)?;
+
+        // Check per-source version first
+        if let Some(version) = &source_config.version {
+            return Some(version.clone());
+        }
+
+        // Fall back to global version
+        if let Some(version) = &config.version {
+            return Some(version.clone());
+        }
+
+        // Compute version from layers (type/url/version sorted by order)
+        Some(Self::compute_layers_version(&source_config.layers))
+    }
+
+    /// Compute a version string from layers' type/url/version sorted by order.
+    fn compute_layers_version(layers: &[LayerConfig]) -> String {
+        // Sort layers by order
+        let mut sorted_layers: Vec<_> = layers.iter().collect();
+        sorted_layers.sort_by_key(|l| l.order());
+
+        // Build string: "type:url:version|type:url:version|..."
+        let input: String = sorted_layers
+            .iter()
+            .map(|layer| {
+                let version = layer.version().unwrap_or("");
+                format!("{}:{}:{}", layer.layer_type(), layer.url(), version)
+            })
+            .collect::<Vec<_>>()
+            .join("|");
+
+        // Hash and return as hex string prefixed with "layers-"
+        let hash = xxh64(input.as_bytes(), 0);
+        format!("layers-{hash:x}")
     }
 }

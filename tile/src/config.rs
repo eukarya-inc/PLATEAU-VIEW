@@ -19,6 +19,9 @@ pub enum ConfigError {
 /// Root configuration structure
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    /// Global version string for ETag calculation (optional)
+    #[serde(default)]
+    pub version: Option<String>,
     pub sources: HashMap<String, SourceConfig>,
     #[serde(default)]
     pub cache: Option<CacheConfig>,
@@ -27,6 +30,9 @@ pub struct Config {
 /// Configuration for a named tile source
 #[derive(Debug, Clone, Deserialize)]
 pub struct SourceConfig {
+    /// Per-source version string for ETag calculation (overrides global version)
+    #[serde(default)]
+    pub version: Option<String>,
     pub layers: Vec<LayerConfig>,
 }
 
@@ -41,6 +47,9 @@ pub enum LayerConfig {
         /// Optional zoom range restriction
         #[serde(default)]
         range: Option<RangeConfig>,
+        /// Layer version for ETag calculation
+        #[serde(default)]
+        version: Option<String>,
     },
     #[serde(rename = "cog")]
     Cog {
@@ -52,10 +61,56 @@ pub enum LayerConfig {
         /// Layer order (higher = on top)
         #[serde(default)]
         order: i32,
+        /// Layer version for ETag calculation
+        #[serde(default)]
+        version: Option<String>,
     },
     /// MapLibre style (not yet implemented, ignored)
     #[serde(rename = "maplibre")]
-    MapLibre { url: String },
+    MapLibre {
+        url: String,
+        /// Layer version for ETag calculation
+        #[serde(default)]
+        version: Option<String>,
+    },
+}
+
+impl LayerConfig {
+    /// Get the layer type as a string.
+    pub fn layer_type(&self) -> &'static str {
+        match self {
+            LayerConfig::Xyz { .. } => "xyz",
+            LayerConfig::Cog { .. } => "cog",
+            LayerConfig::MapLibre { .. } => "maplibre",
+        }
+    }
+
+    /// Get the layer URL.
+    pub fn url(&self) -> &str {
+        match self {
+            LayerConfig::Xyz { url, .. } => url,
+            LayerConfig::Cog { url, .. } => url,
+            LayerConfig::MapLibre { url, .. } => url,
+        }
+    }
+
+    /// Get the layer version.
+    pub fn version(&self) -> Option<&str> {
+        match self {
+            LayerConfig::Xyz { version, .. } => version.as_deref(),
+            LayerConfig::Cog { version, .. } => version.as_deref(),
+            LayerConfig::MapLibre { version, .. } => version.as_deref(),
+        }
+    }
+
+    /// Get the layer order (for sorting).
+    pub fn order(&self) -> i32 {
+        match self {
+            LayerConfig::Xyz { .. } => 0,
+            LayerConfig::Cog { order, .. } => *order,
+            LayerConfig::MapLibre { .. } => 0,
+        }
+    }
 }
 
 /// Zoom/coordinate range configuration

@@ -64,6 +64,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 | `PRELOAD_MODE` | No | sync | Preload mode: "sync" (blocking, default), "background" (non-blocking), or "lazy" (on first request) |
 | `TILE_CACHE_URL` | No | - | Persistent cache URL (file://, gs://, s3://, r2://) |
 | `TILE_CACHE_MODE` | No | read-write | Cache mode: "read-write", "read-only", "write-only", or "none" |
+| `CACHE_CONTROL` | No | - | Cache-Control header value (e.g., "public, max-age=3600") |
 | `R2_ACCOUNT_ID` | For R2 | - | Cloudflare R2 account ID |
 | `R2_ACCESS_KEY_ID` | For R2 | - | Cloudflare R2 access key ID |
 | `R2_SECRET_ACCESS_KEY` | For R2 | - | Cloudflare R2 secret access key |

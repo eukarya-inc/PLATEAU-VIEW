@@ -13,6 +13,8 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Memory Caching**: Fast in-memory tile cache using moka
 - **Remote Configuration**: Load configuration from remote URL with manual reload
 - **HTTP/2 (h2c)**: Support for HTTP/2 cleartext connections (auto-detects HTTP/1.1 and HTTP/2)
+- **ETag Support**: Version-based ETag calculation with If-None-Match support for 304 responses
+- **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
 
 ## Quick Start
 
@@ -46,6 +48,7 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | `CORS_ORIGINS` | No | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
 | `PRELOAD_MODE` | No | `sync` | COG metadata preload mode: `sync` (blocking), `background` (non-blocking), or `lazy` (on first request) |
 | `TILE_CACHE_URL` | No | - | Persistent tile cache URL (see below) |
+| `CACHE_CONTROL` | No | - | Cache-Control header value for tile responses (e.g., `public, max-age=3600`) |
 | `RUST_LOG` | No | `info` | Log level (trace, debug, info, warn, error) |
 
 ### Persistent Cache Configuration
@@ -103,8 +106,10 @@ Configuration is loaded from a remote JSON file specified by `CONFIG_URL`.
 
 ```json
 {
+  "version": "v1.0.0",
   "sources": {
     "plateau-ortho": {
+      "version": "v1.0.1",
       "layers": [
         {
           "type": "xyz",
@@ -201,6 +206,68 @@ NoData values can be specified in multiple formats:
 ```
 
 Pixels matching any nodata pattern will be rendered as transparent.
+
+### ETag and Cache Control
+
+The tile server supports HTTP caching through ETag headers and configurable Cache-Control.
+
+#### Version Configuration
+
+ETags are always computed for tile responses. You can control cache invalidation using `version` at multiple levels:
+
+```json
+{
+  "version": "v1.0.0",
+  "sources": {
+    "ortho": {
+      "version": "v1.0.1",
+      "layers": [
+        {
+          "type": "xyz",
+          "url": "https://example.com/{z}/{x}/{y}.png",
+          "version": "v1.0.0"
+        },
+        {
+          "type": "cog",
+          "url": "https://example.com/overlay.tif",
+          "version": "v2.0.0",
+          "order": 1
+        }
+      ]
+    }
+  }
+}
+```
+
+| Field | Scope | Description |
+|-------|-------|-------------|
+| `version` (root) | Global | Default version for all sources |
+| `version` (source) | Per-source | Overrides global version |
+| `version` (layer) | Per-layer | Used when computing auto-version from layers |
+
+**Version priority:**
+1. Per-source `version` (if set)
+2. Global `version` (if set)
+3. Auto-computed from layers: hash of `type:url:version` for each layer sorted by order
+
+ETag calculation:
+- `W/"xxhash64(version/source/z/x/y)"`
+- Clients can send `If-None-Match` header to receive `304 Not Modified` if cache is valid
+- Changing any layer's URL or version invalidates the cache (when using auto-computed version)
+
+#### Cache-Control Header
+
+Set the `CACHE_CONTROL` environment variable to add Cache-Control headers:
+
+```bash
+# CDN-friendly caching
+CACHE_CONTROL="public, max-age=3600, s-maxage=86400"
+
+# No caching
+CACHE_CONTROL="no-cache, no-store"
+```
+
+If not set, no Cache-Control header is added.
 
 ### Supported COG URL Schemes
 
