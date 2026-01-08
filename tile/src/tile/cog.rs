@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use image::RgbaImage;
 use object_store::{
-    client::ClientConfigKey, http::HttpBuilder, path::Path as ObjectPath, ObjectStore,
+    ObjectStore, client::ClientConfigKey, http::HttpBuilder, path::Path as ObjectPath,
 };
 use tokio::sync::RwLock;
 use url::Url;

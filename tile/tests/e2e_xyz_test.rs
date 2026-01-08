@@ -4,7 +4,7 @@ mod common;
 
 use common::fixtures;
 use common::mock_xyz::MockXyzServer;
-use common::server::{xyz_config, xyz_config_with_range, TestServer};
+use common::server::{TestServer, xyz_config, xyz_config_with_range};
 
 #[tokio::test]
 async fn test_xyz_proxy_success() {

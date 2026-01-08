@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::server::{minimal_config, TestServer};
+use common::server::{TestServer, minimal_config};
 
 #[tokio::test]
 async fn test_health_endpoint() {

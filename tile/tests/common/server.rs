@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use tile::config::ConfigManager;
-use tile::server::{create_router, AppState};
+use tile::server::{AppState, create_router};
 
 /// A test server instance.
 pub struct TestServer {
@@ -49,7 +49,7 @@ impl TestServer {
 
         // Create app state
         let state = Arc::new(AppState::new(config_manager, 64, None).await);
-        let app = create_router(state);
+        let app = create_router(state, None);
 
         // Create shutdown channel
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -121,7 +121,7 @@ impl TestServer {
         );
 
         let state = Arc::new(AppState::new(config_manager, 64, Some(secret.to_string())).await);
-        let app = create_router(state);
+        let app = create_router(state, None);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 

@@ -31,6 +31,9 @@ async fn main() -> Result<()> {
 
     let reload_secret = env::var("RELOAD_SECRET").ok();
 
+    // CORS origins: comma-separated list or "*" for permissive
+    let cors_origins = env::var("CORS_ORIGINS").ok();
+
     tracing::info!("Loading configuration from {}", config_url);
 
     let config_manager = Arc::new(
@@ -43,8 +46,20 @@ async fn main() -> Result<()> {
     let addr = format!("0.0.0.0:{port}");
     tracing::info!("Starting tile server on {}", addr);
     tracing::info!("Cache size: {}MB", cache_size_mb);
+    if let Some(ref origins) = cors_origins {
+        tracing::info!("CORS origins: {}", origins);
+    } else {
+        tracing::info!("CORS: permissive (all origins allowed)");
+    }
 
-    server::run(config_manager, &addr, cache_size_mb, reload_secret).await?;
+    server::run(
+        config_manager,
+        &addr,
+        cache_size_mb,
+        reload_secret,
+        cors_origins,
+    )
+    .await?;
 
     Ok(())
 }

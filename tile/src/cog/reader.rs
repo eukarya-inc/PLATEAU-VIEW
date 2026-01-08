@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use async_tiff::{decoder::DecoderRegistry, reader::ObjectReader, tiff::tags::SampleFormat, TIFF};
-use object_store::{path::Path as ObjectPath, ObjectStore};
+use async_tiff::{TIFF, decoder::DecoderRegistry, reader::ObjectReader, tiff::tags::SampleFormat};
+use object_store::{ObjectStore, path::Path as ObjectPath};
 use thiserror::Error;
 
 use super::{
-    bounds::{geo_to_pixel_x, geo_to_pixel_y, TileBounds},
+    bounds::{TileBounds, geo_to_pixel_x, geo_to_pixel_y},
     decode::{decode_elevation, decode_rgba, get_pixel_values},
     interpolate::{bilinear_f64, bilinear_rgba},
 };

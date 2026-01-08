@@ -19,11 +19,7 @@ pub fn bilinear_f64(buffer: &[f64], width: usize, height: usize, x: f64, y: f64)
         let idx = py * width + px;
         if idx < buffer.len() {
             let v = buffer[idx];
-            if v.is_nan() {
-                None
-            } else {
-                Some(v)
-            }
+            if v.is_nan() { None } else { Some(v) }
         } else {
             None
         }

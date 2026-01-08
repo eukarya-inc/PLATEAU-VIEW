@@ -59,6 +59,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 | `PORT` | No | 8080 | Server port |
 | `CACHE_SIZE_MB` | No | 512 | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret for config reload endpoint |
+| `CORS_ORIGINS` | No | * (all) | Allowed CORS origins (comma-separated, or "*" for all) |
 
 ## Layer Types
 

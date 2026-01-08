@@ -3,11 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use axum::Router;
 use axum::extract::{Path, State};
-use axum::http::{header, HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::net::TcpListener;
@@ -111,14 +111,14 @@ async fn serve_file(
     let mut file = match File::open(&file_path).await {
         Ok(f) => f,
         Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to open file").into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to open file").into_response();
         }
     };
 
     let metadata = match file.metadata().await {
         Ok(m) => m,
         Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get metadata").into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get metadata").into_response();
         }
     };
 

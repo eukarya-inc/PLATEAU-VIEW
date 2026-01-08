@@ -1,7 +1,7 @@
 //! Composite tile source implementation.
 
 use async_trait::async_trait;
-use image::{imageops, RgbaImage};
+use image::{RgbaImage, imageops};
 
 use super::source::{TileError, TileSource};
 

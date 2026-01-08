@@ -9,7 +9,7 @@ mod common;
 
 use common::fixtures;
 use common::mock_cog::MockCogServer;
-use common::server::{cog_config, cog_config_with_nodata, TestServer};
+use common::server::{TestServer, cog_config, cog_config_with_nodata};
 
 /// Check if COG fixtures exist, skip test if not.
 macro_rules! require_cog_fixtures {

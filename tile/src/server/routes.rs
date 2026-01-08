@@ -4,26 +4,47 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
+use http::HeaderValue;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
 use tokio::net::TcpListener;
 use tower::Service;
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use super::{handlers, state::AppState};
 use crate::ConfigManager;
 
+/// Create CORS layer from origins configuration.
+/// - None or "*" -> permissive (allow all origins)
+/// - Comma-separated list -> only allow specified origins
+fn create_cors_layer(origins: Option<&str>) -> CorsLayer {
+    match origins {
+        None | Some("*") => CorsLayer::permissive(),
+        Some(origins_str) => {
+            let origins: Vec<HeaderValue> = origins_str
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(tower_http::cors::Any)
+                .allow_headers(tower_http::cors::Any)
+        }
+    }
+}
+
 /// Create the application router.
-pub fn create_router(state: Arc<AppState>) -> Router {
+pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router {
     Router::new()
         .route("/tiles/{name}/{z}/{x}/{y}", get(handlers::get_tile))
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
+        .layer(create_cors_layer(cors_origins))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -34,9 +55,10 @@ pub async fn run(
     addr: &str,
     cache_size_mb: u64,
     reload_secret: Option<String>,
+    cors_origins: Option<String>,
 ) -> Result<()> {
     let state = Arc::new(AppState::new(config_manager, cache_size_mb, reload_secret).await);
-    let app = create_router(state);
+    let app = create_router(state, cors_origins.as_deref());
 
     let listener = TcpListener::bind(addr).await?;
     tracing::info!("Listening on {} (HTTP/1.1 and h2c supported)", addr);

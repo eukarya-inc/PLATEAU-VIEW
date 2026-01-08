@@ -8,6 +8,6 @@ mod xyz;
 
 pub use self::cog::CogTileSource;
 pub use composite::CompositeTileSource;
-pub use coord::{xyz_to_bounds, TileCoord};
+pub use coord::{TileCoord, xyz_to_bounds};
 pub use source::{TileError, TileSource};
 pub use xyz::XyzTileSource;

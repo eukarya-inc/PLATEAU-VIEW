@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use image::ImageFormat;
