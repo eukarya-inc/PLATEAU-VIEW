@@ -93,13 +93,13 @@ impl CogReader {
     fn check_crs(tiff: &TIFF) -> Result<(), CogError> {
         let ifd = tiff.ifds().as_ref().first().ok_or(CogError::NoIfd)?;
 
-        if let Some(geo_keys) = ifd.geo_key_directory() {
-            if let Some(epsg) = geo_keys.epsg_code() {
-                if epsg == 4326 {
-                    return Ok(());
-                }
-                return Err(CogError::UnsupportedCrs(epsg));
+        if let Some(geo_keys) = ifd.geo_key_directory()
+            && let Some(epsg) = geo_keys.epsg_code()
+        {
+            if epsg == 4326 {
+                return Ok(());
             }
+            return Err(CogError::UnsupportedCrs(epsg));
         }
 
         // If no EPSG code found, assume WGS84

@@ -148,15 +148,15 @@ impl TileSource for CogTileSource {
         // Check if tile intersects COG bounds
         {
             let bounds = self.bounds.read().await;
-            if let Some(cog_bounds) = &*bounds {
-                if !cog_bounds.intersects(&tile_bounds) {
-                    tracing::debug!(
-                        url = %self.url,
-                        z = z, x = x, y = y,
-                        "COG tile outside bounds, skipping"
-                    );
-                    return Ok(None);
-                }
+            if let Some(cog_bounds) = &*bounds
+                && !cog_bounds.intersects(&tile_bounds)
+            {
+                tracing::debug!(
+                    url = %self.url,
+                    z = z, x = x, y = y,
+                    "COG tile outside bounds, skipping"
+                );
+                return Ok(None);
             }
         }
 

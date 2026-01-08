@@ -125,36 +125,35 @@ async fn serve_file(
     let file_size = metadata.len();
 
     // Check for Range header
-    if let Some(range_header) = headers.get(header::RANGE) {
-        if let Ok(range_str) = range_header.to_str() {
-            if let Some(range) = parse_range(range_str, file_size) {
-                let (start, end) = range;
-                let length = end - start + 1;
+    if let Some(range_header) = headers.get(header::RANGE)
+        && let Ok(range_str) = range_header.to_str()
+        && let Some(range) = parse_range(range_str, file_size)
+    {
+        let (start, end) = range;
+        let length = end - start + 1;
 
-                if file.seek(std::io::SeekFrom::Start(start)).await.is_err() {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to seek").into_response();
-                }
-
-                let mut buffer = vec![0u8; length as usize];
-                if file.read_exact(&mut buffer).await.is_err() {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read").into_response();
-                }
-
-                return (
-                    StatusCode::PARTIAL_CONTENT,
-                    [
-                        (header::CONTENT_TYPE, "image/tiff"),
-                        (header::ACCEPT_RANGES, "bytes"),
-                        (
-                            header::CONTENT_RANGE,
-                            &format!("bytes {start}-{end}/{file_size}"),
-                        ),
-                    ],
-                    buffer,
-                )
-                    .into_response();
-            }
+        if file.seek(std::io::SeekFrom::Start(start)).await.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to seek").into_response();
         }
+
+        let mut buffer = vec![0u8; length as usize];
+        if file.read_exact(&mut buffer).await.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read").into_response();
+        }
+
+        return (
+            StatusCode::PARTIAL_CONTENT,
+            [
+                (header::CONTENT_TYPE, "image/tiff"),
+                (header::ACCEPT_RANGES, "bytes"),
+                (
+                    header::CONTENT_RANGE,
+                    &format!("bytes {start}-{end}/{file_size}"),
+                ),
+            ],
+            buffer,
+        )
+            .into_response();
     }
 
     // No range header - return full file

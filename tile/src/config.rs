@@ -77,35 +77,35 @@ pub struct RangeConfig {
 
 impl RangeConfig {
     pub fn contains(&self, z: u32, x: u32, y: u32) -> bool {
-        if let Some(z_min) = self.z_min {
-            if z < z_min {
-                return false;
-            }
+        if let Some(z_min) = self.z_min
+            && z < z_min
+        {
+            return false;
         }
-        if let Some(z_max) = self.z_max {
-            if z > z_max {
-                return false;
-            }
+        if let Some(z_max) = self.z_max
+            && z > z_max
+        {
+            return false;
         }
-        if let Some(x_min) = self.x_min {
-            if x < x_min {
-                return false;
-            }
+        if let Some(x_min) = self.x_min
+            && x < x_min
+        {
+            return false;
         }
-        if let Some(x_max) = self.x_max {
-            if x > x_max {
-                return false;
-            }
+        if let Some(x_max) = self.x_max
+            && x > x_max
+        {
+            return false;
         }
-        if let Some(y_min) = self.y_min {
-            if y < y_min {
-                return false;
-            }
+        if let Some(y_min) = self.y_min
+            && y < y_min
+        {
+            return false;
         }
-        if let Some(y_max) = self.y_max {
-            if y > y_max {
-                return false;
-            }
+        if let Some(y_max) = self.y_max
+            && y > y_max
+        {
+            return false;
         }
         true
     }
