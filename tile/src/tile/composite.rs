@@ -1,6 +1,7 @@
 //! Composite tile source implementation.
 
 use async_trait::async_trait;
+use futures::future::join_all;
 use image::{RgbaImage, imageops};
 
 use super::source::{TileError, TileSource};
@@ -53,6 +54,24 @@ impl Default for CompositeTileSource {
 
 #[async_trait]
 impl TileSource for CompositeTileSource {
+    async fn preload(&self) -> Result<(), TileError> {
+        // Preload all sources in parallel
+        let mut futures: Vec<_> = self.overlays.iter().map(|o| o.preload()).collect();
+
+        if let Some(base) = &self.base {
+            futures.push(base.preload());
+        }
+
+        let results = join_all(futures).await;
+
+        // Return first error if any
+        for result in results {
+            result?;
+        }
+
+        Ok(())
+    }
+
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError> {
         // Start with base layer
         let mut result: Option<RgbaImage> = match &self.base {

@@ -41,6 +41,13 @@ impl From<crate::cog::CogError> for TileError {
 /// Trait for tile sources.
 #[async_trait]
 pub trait TileSource: Send + Sync {
+    /// Preload metadata for this source (e.g., bounds).
+    /// Called during initialization to enable fast rejection in `covers()`.
+    /// Default implementation does nothing.
+    async fn preload(&self) -> Result<(), TileError> {
+        Ok(())
+    }
+
     /// Get a tile at the specified coordinates.
     /// Returns None if the tile is not available (e.g., out of bounds).
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError>;

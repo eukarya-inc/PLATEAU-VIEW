@@ -60,6 +60,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 | `CACHE_SIZE_MB` | No | 512 | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret for config reload endpoint |
 | `CORS_ORIGINS` | No | * (all) | Allowed CORS origins (comma-separated, or "*" for all) |
+| `PRELOAD_MODE` | No | background | Preload mode: "sync" (blocking), "background" (non-blocking), or "lazy" (on first request) |
 
 ## Layer Types
 

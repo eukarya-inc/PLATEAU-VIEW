@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use futures::future::join_all;
 use tokio::sync::RwLock;
 
 use crate::{
@@ -25,6 +26,7 @@ impl AppState {
         config_manager: Arc<ConfigManager>,
         cache_size_mb: u64,
         reload_secret: Option<String>,
+        preload_mode: &str,
     ) -> Self {
         let config = config_manager.get().await;
 
@@ -32,12 +34,52 @@ impl AppState {
 
         let sources = Self::build_sources(&config.sources);
 
+        // Preload sources based on mode
+        match preload_mode {
+            "sync" => {
+                // Sync preload (block until complete - better for Cloud Run)
+                Self::preload_sources(&sources).await;
+            }
+            "lazy" => {
+                // Lazy mode: don't preload, metadata will be loaded on first request
+                tracing::info!("Preload mode: lazy (metadata loaded on first request)");
+            }
+            _ => {
+                // Background preload (default - don't block startup)
+                let sources_for_preload = sources.clone();
+                tokio::spawn(async move {
+                    Self::preload_sources(&sources_for_preload).await;
+                });
+            }
+        }
+
         Self {
             config_manager,
             cache,
             sources: Arc::new(RwLock::new(sources)),
             reload_secret,
         }
+    }
+
+    /// Preload all sources in parallel (e.g., COG metadata).
+    async fn preload_sources(sources: &HashMap<String, Arc<dyn TileSource>>) {
+        let preload_futures: Vec<_> = sources
+            .iter()
+            .map(|(name, source)| {
+                let name = name.clone();
+                let source = source.clone();
+                async move {
+                    if let Err(e) = source.preload().await {
+                        tracing::warn!(source = %name, error = %e, "Failed to preload source");
+                    } else {
+                        tracing::debug!(source = %name, "Source preloaded");
+                    }
+                }
+            })
+            .collect();
+
+        join_all(preload_futures).await;
+        tracing::info!("Preloaded {} sources", sources.len());
     }
 
     fn build_sources(
@@ -111,6 +153,10 @@ impl AppState {
     pub async fn reload_sources(&self) {
         let config = self.config_manager.get().await;
         let new_sources = Self::build_sources(&config.sources);
+
+        // Preload new sources in parallel
+        Self::preload_sources(&new_sources).await;
+
         let mut sources = self.sources.write().await;
         *sources = new_sources;
         tracing::info!("Rebuilt {} tile sources", sources.len());

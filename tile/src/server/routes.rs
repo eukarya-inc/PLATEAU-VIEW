@@ -57,8 +57,10 @@ pub async fn run(
     cache_size_mb: u64,
     reload_secret: Option<String>,
     cors_origins: Option<String>,
+    preload_mode: &str,
 ) -> Result<()> {
-    let state = Arc::new(AppState::new(config_manager, cache_size_mb, reload_secret).await);
+    let state =
+        Arc::new(AppState::new(config_manager, cache_size_mb, reload_secret, preload_mode).await);
     let app = create_router(state, cors_origins.as_deref());
 
     let listener = TcpListener::bind(addr).await?;

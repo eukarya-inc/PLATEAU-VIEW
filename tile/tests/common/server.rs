@@ -47,8 +47,8 @@ impl TestServer {
                 .expect("Failed to create config manager"),
         );
 
-        // Create app state
-        let state = Arc::new(AppState::new(config_manager, 64, None).await);
+        // Create app state (sync preload for tests)
+        let state = Arc::new(AppState::new(config_manager, 64, None, "sync").await);
         let app = create_router(state, None);
 
         // Create shutdown channel
@@ -120,7 +120,8 @@ impl TestServer {
                 .expect("Failed to create config manager"),
         );
 
-        let state = Arc::new(AppState::new(config_manager, 64, Some(secret.to_string())).await);
+        let state =
+            Arc::new(AppState::new(config_manager, 64, Some(secret.to_string()), "sync").await);
         let app = create_router(state, None);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

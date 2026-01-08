@@ -49,6 +49,11 @@ impl CogTileSource {
         self
     }
 
+    /// Get cached bounds if available.
+    pub async fn get_bounds(&self) -> Option<TileBounds> {
+        *self.bounds.read().await
+    }
+
     /// Initialize the COG reader if not already done.
     async fn ensure_reader(&self) -> Result<(), TileError> {
         let mut reader_guard = self.reader.write().await;
@@ -139,6 +144,10 @@ impl CogTileSource {
 
 #[async_trait]
 impl TileSource for CogTileSource {
+    async fn preload(&self) -> Result<(), TileError> {
+        self.ensure_reader().await
+    }
+
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError> {
         // Ensure reader is initialized
         self.ensure_reader().await?;
@@ -203,8 +212,16 @@ impl TileSource for CogTileSource {
         Ok(Some(img))
     }
 
-    fn covers(&self, _z: u32, _x: u32, _y: u32) -> bool {
-        // COG bounds are checked in get_tile after lazy initialization
+    fn covers(&self, z: u32, x: u32, y: u32) -> bool {
+        // Try to check cached bounds (non-blocking)
+        // If bounds aren't loaded yet or lock is busy, assume it covers
+        if let Ok(bounds_guard) = self.bounds.try_read()
+            && let Some(cog_bounds) = &*bounds_guard
+        {
+            let tile_bounds = xyz_to_bounds(z, x, y);
+            return cog_bounds.intersects(&tile_bounds);
+        }
+        // Bounds not yet loaded - assume it covers
         true
     }
 }
