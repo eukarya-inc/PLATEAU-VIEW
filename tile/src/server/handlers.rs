@@ -10,12 +10,13 @@ use axum::{
 use serde::Serialize;
 use xxhash_rust::xxh64::xxh64;
 
-use super::format::{encode_image, parse_y_and_format};
+use super::format::{TileFormat, encode_image, parse_y_and_format};
 use super::response::{
     compute_etag, error_response, etag_matches, not_modified_response, tile_response,
 };
 use super::state::AppState;
 use crate::cache::CacheObjectMeta;
+use crate::tile::{TileError, TileSource};
 
 /// Compute a hash from etag_keys for cache validation.
 fn compute_etag_hash(keys: &[String]) -> String {
@@ -39,6 +40,21 @@ pub async fn viewer(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let sources_json = serde_json::to_string(&sources).unwrap_or_else(|_| "[]".to_string());
 
     Html(VIEWER_HTML.replace("{{SOURCES_JSON}}", &sources_json))
+}
+
+/// Generate tile bytes from source (used in single-flight closure).
+async fn generate_tile(
+    source: Arc<dyn TileSource>,
+    z: u32,
+    x: u32,
+    y: u32,
+    format: TileFormat,
+) -> Result<Vec<u8>, TileError> {
+    // Get tile from source
+    let tile = source.get_tile(z, x, y).await?.ok_or(TileError::NotFound)?;
+
+    // Encode to requested format
+    encode_image(&tile, format).map_err(TileError::from)
 }
 
 /// Get tile handler.
@@ -76,20 +92,7 @@ pub async fn get_tile(
         return not_modified_response(&etag, state.cache_control.as_deref());
     }
 
-    // Check cache first (includes format in path)
-    // Validate etag_hash to ensure cache is fresh after config changes
-    let cache_key = format!("{name}/{fmt}/{z}/{x}/{y}.{fmt}");
-    if let Some(cached) = state
-        .cache
-        .get_validated(&cache_key, Some(&etag_hash))
-        .await
-    {
-        tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Cache hit");
-        return tile_response(cached, format, Some(&etag), state.cache_control.as_deref());
-    }
-    tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Cache miss");
-
-    // Get source
+    // Get source (needed for generation)
     let source = match state.get_source(&name).await {
         Some(s) => s,
         None => {
@@ -97,42 +100,37 @@ pub async fn get_tile(
         }
     };
 
-    // Generate tile
-    let tile = match source.get_tile(z, x, y).await {
-        Ok(Some(img)) => img,
-        Ok(None) => {
-            return (StatusCode::NOT_FOUND, "Tile not found").into_response();
-        }
-        Err(e) => {
-            return error_response(e);
-        }
-    };
+    // Cache key includes format for format-specific caching
+    let cache_key = format!("{name}/{fmt}/{z}/{x}/{y}.{fmt}");
 
-    // Encode to requested format
-    let encoded_bytes = match encode_image(&tile, format) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            tracing::error!(format = fmt, "Failed to encode image: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode image").into_response();
-        }
-    };
-
-    // Store in cache with metadata (content-type and etag_hash for validation)
+    // Metadata for persistent cache
     let meta = CacheObjectMeta {
         content_type: Some(format.content_type().to_string()),
-        etag_hash: Some(etag_hash),
+        etag_hash: Some(etag_hash.clone()),
     };
-    state
+
+    // Get from cache or generate with single-flight deduplication
+    // Multiple concurrent requests for the same tile will share the same generation
+    let result = state
         .cache
-        .put(&cache_key, encoded_bytes.clone(), Some(meta))
+        .get_or_generate(&cache_key, Some(&etag_hash), Some(meta), || {
+            generate_tile(source.clone(), z, x, y, format)
+        })
         .await;
 
-    tile_response(
-        encoded_bytes,
-        format,
-        Some(&etag),
-        state.cache_control.as_deref(),
-    )
+    match result {
+        Ok(bytes) => {
+            tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Tile served");
+            tile_response(bytes, format, Some(&etag), state.cache_control.as_deref())
+        }
+        Err(e) => {
+            // Unwrap Arc to get the actual error
+            match e.as_ref() {
+                TileError::NotFound => (StatusCode::NOT_FOUND, "Tile not found").into_response(),
+                _ => error_response(e.as_ref().clone()),
+            }
+        }
+    }
 }
 
 /// Reload configuration handler.

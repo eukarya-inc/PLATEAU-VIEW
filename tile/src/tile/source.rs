@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use image::RgbaImage;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum TileError {
     #[error("Tile not found")]
     NotFound,

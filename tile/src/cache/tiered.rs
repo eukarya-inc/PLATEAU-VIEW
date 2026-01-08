@@ -1,5 +1,8 @@
 //! Tiered cache combining memory and persistent storage.
 
+use std::future::Future;
+use std::sync::Arc;
+
 use super::memory::{CacheStats, MemoryCache};
 use super::persistent::{CacheObjectMeta, PersistentCache};
 
@@ -245,6 +248,110 @@ impl TieredCache {
     pub fn has_persistent(&self) -> bool {
         self.persistent.is_some()
     }
+
+    /// Get a tile from cache or generate it with single-flight deduplication.
+    ///
+    /// If multiple concurrent requests come in for the same key, only one will
+    /// execute the generate closure and others will wait for the result.
+    ///
+    /// Flow:
+    /// 1. Check memory cache (moka handles single-flight here)
+    /// 2. On miss, check persistent cache (with etag validation)
+    /// 3. If still miss, call generate closure
+    /// 4. Store result to both caches
+    ///
+    /// # Arguments
+    /// * `key` - Cache key
+    /// * `expected_etag_hash` - Expected etag hash for cache validation
+    /// * `meta` - Metadata to store with persistent cache
+    /// * `generate` - Closure to generate the tile if not cached
+    pub async fn get_or_generate<F, Fut, E>(
+        &self,
+        key: &str,
+        expected_etag_hash: Option<&str>,
+        meta: Option<CacheObjectMeta>,
+        generate: F,
+    ) -> Result<Vec<u8>, Arc<E>>
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<Vec<u8>, E>> + Send,
+        E: Send + Sync + 'static,
+    {
+        // Capture values for use in closure
+        let persistent = self.persistent.clone();
+        let mode = self.mode;
+        let expected_hash = expected_etag_hash.map(|s| s.to_string());
+        let key_owned = key.to_string();
+
+        self.memory
+            .get_or_try_insert_with(key, || async move {
+                // 1. Check persistent cache (if mode allows reading)
+                if mode.allows_read()
+                    && let Some(ref persistent) = persistent
+                {
+                    match persistent.get_with_meta(&key_owned).await {
+                        Ok(Some((data, stored_meta))) => {
+                            // Validate etag_hash if expected
+                            let is_valid = match &expected_hash {
+                                Some(expected) => {
+                                    let stored_hash =
+                                        stored_meta.as_ref().and_then(|m| m.etag_hash.as_deref());
+                                    stored_hash == Some(expected.as_str())
+                                }
+                                None => true,
+                            };
+
+                            if is_valid {
+                                tracing::trace!(key = %key_owned, "Persistent cache hit (single-flight)");
+                                return Ok(data);
+                            } else {
+                                tracing::debug!(
+                                    key = %key_owned,
+                                    "Persistent cache stale (single-flight)"
+                                );
+                            }
+                        }
+                        Ok(None) => {
+                            tracing::trace!(key = %key_owned, "Persistent cache miss (single-flight)");
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                key = %key_owned,
+                                error = %e,
+                                "Persistent cache read failed (single-flight)"
+                            );
+                        }
+                    }
+                }
+
+                // 2. Generate tile
+                tracing::trace!(key = %key_owned, "Generating tile (single-flight)");
+                let data = generate().await?;
+
+                // 3. Write to persistent cache (background, only if mode allows writing)
+                if mode.allows_write()
+                    && let Some(ref persistent) = persistent
+                {
+                    let persistent = persistent.clone();
+                    let key = key_owned.clone();
+                    let data = data.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = persistent.put(&key, data, meta).await {
+                            tracing::warn!(
+                                key = %key,
+                                error = %e,
+                                "Failed to write to persistent cache (single-flight)"
+                            );
+                        } else {
+                            tracing::trace!(key = %key, "Written to persistent cache (single-flight)");
+                        }
+                    });
+                }
+
+                Ok(data)
+            })
+            .await
+    }
 }
 
 #[cfg(test)]
@@ -442,5 +549,97 @@ mod tests {
 
         assert!(!CacheMode::None.allows_read());
         assert!(!CacheMode::None.allows_write());
+    }
+
+    #[tokio::test]
+    async fn test_single_flight_deduplication() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = TieredCache::new(64, None, CacheMode::default(), None);
+        let key = "single-flight/test";
+
+        // Counter to track how many times the generate function is called
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        // Spawn 10 concurrent requests for the same key
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let cache = &cache;
+            let call_count = call_count.clone();
+            handles.push(async move {
+                cache
+                    .get_or_generate::<_, _, std::io::Error>(key, None, None, || {
+                        let call_count = call_count.clone();
+                        async move {
+                            // Increment counter
+                            call_count.fetch_add(1, Ordering::SeqCst);
+                            // Simulate slow generation
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                            Ok(vec![1, 2, 3, 4, 5])
+                        }
+                    })
+                    .await
+            });
+        }
+
+        // Wait for all requests to complete
+        let results: Vec<_> = futures::future::join_all(handles).await;
+
+        // All requests should succeed with the same data
+        for result in &results {
+            assert!(result.is_ok());
+            assert_eq!(result.as_ref().unwrap(), &vec![1, 2, 3, 4, 5]);
+        }
+
+        // The generate function should only be called once due to single-flight
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            1,
+            "Generate function should only be called once"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_or_generate_basic() {
+        let cache = TieredCache::new(64, None, CacheMode::default(), None);
+        let key = "gen/test";
+
+        // First call generates
+        let result = cache
+            .get_or_generate::<_, _, std::io::Error>(key, None, None, || async {
+                Ok(vec![1, 2, 3])
+            })
+            .await;
+        assert_eq!(result.unwrap(), vec![1, 2, 3]);
+
+        // Second call returns cached value (doesn't call generate)
+        let result = cache
+            .get_or_generate::<_, _, std::io::Error>(key, None, None, || async {
+                Ok(vec![9, 9, 9]) // Different data, but shouldn't be used
+            })
+            .await;
+        assert_eq!(result.unwrap(), vec![1, 2, 3]); // Still returns original
+    }
+
+    #[tokio::test]
+    async fn test_get_or_generate_with_error() {
+        let cache = TieredCache::new(64, None, CacheMode::default(), None);
+        let key = "gen/error";
+
+        // Generate returns error
+        let result = cache
+            .get_or_generate::<_, _, std::io::Error>(key, None, None, || async {
+                Err(std::io::Error::other("test error"))
+            })
+            .await;
+        assert!(result.is_err());
+
+        // Error should not be cached - next call tries again
+        let result = cache
+            .get_or_generate::<_, _, std::io::Error>(key, None, None, || async {
+                Ok(vec![1, 2, 3])
+            })
+            .await;
+        assert_eq!(result.unwrap(), vec![1, 2, 3]);
     }
 }

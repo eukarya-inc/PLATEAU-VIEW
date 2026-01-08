@@ -1,5 +1,8 @@
 //! In-memory tile cache using moka.
 
+use std::future::Future;
+use std::sync::Arc;
+
 use moka::future::Cache;
 
 /// In-memory tile cache using moka for fast access.
@@ -33,6 +36,25 @@ impl MemoryCache {
     /// Put a tile in the cache.
     pub async fn put(&self, key: &str, data: Vec<u8>) {
         self.cache.insert(key.to_string(), data).await;
+    }
+
+    /// Get or generate a tile with single-flight deduplication.
+    ///
+    /// If multiple concurrent requests come in for the same key,
+    /// only one will execute the init closure and others will wait.
+    pub async fn get_or_try_insert_with<F, Fut, E>(
+        &self,
+        key: &str,
+        init: F,
+    ) -> Result<Vec<u8>, Arc<E>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Vec<u8>, E>>,
+        E: Send + Sync + 'static,
+    {
+        self.cache
+            .try_get_with(key.to_string(), async { init().await })
+            .await
     }
 
     /// Remove a tile from the cache.
