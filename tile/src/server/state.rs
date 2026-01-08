@@ -66,6 +66,9 @@ impl AppState {
                 LayerConfig::Cog { order, .. } => {
                     cog_layers.push((layer, *order));
                 }
+                LayerConfig::MapLibre { .. } => {
+                    // MapLibre style layers are not yet implemented, skip
+                }
             }
         }
 

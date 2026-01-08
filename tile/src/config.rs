@@ -30,7 +30,7 @@ pub struct SourceConfig {
     pub layers: Vec<LayerConfig>,
 }
 
-/// Layer configuration (XYZ or COG)
+/// Layer configuration (XYZ, COG, or other types)
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum LayerConfig {
@@ -53,6 +53,9 @@ pub enum LayerConfig {
         #[serde(default)]
         order: i32,
     },
+    /// MapLibre style (not yet implemented, ignored)
+    #[serde(rename = "maplibre")]
+    MapLibre { url: String },
 }
 
 /// Zoom/coordinate range configuration
