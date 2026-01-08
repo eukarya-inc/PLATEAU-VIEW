@@ -18,7 +18,7 @@ tile/
 │   ├── main.rs          # Entry point
 │   ├── lib.rs           # Library root
 │   ├── config.rs        # Configuration management (remote loading)
-│   ├── cache/           # In-memory cache
+│   ├── cache/           # Two-tier cache (memory + persistent storage)
 │   ├── cog/             # COG reading and rendering
 │   ├── tile/            # Tile sources (XYZ, COG, Composite)
 │   └── server/          # HTTP server and handlers
@@ -62,6 +62,11 @@ CONFIG_URL=file://path/to/config.json cargo run
 | `RELOAD_SECRET` | No | - | Secret for config reload endpoint |
 | `CORS_ORIGINS` | No | * (all) | Allowed CORS origins (comma-separated, or "*" for all) |
 | `PRELOAD_MODE` | No | sync | Preload mode: "sync" (blocking, default), "background" (non-blocking), or "lazy" (on first request) |
+| `TILE_CACHE_URL` | No | - | Persistent cache URL (file://, gs://, s3://, r2://) |
+| `TILE_CACHE_MODE` | No | read-write | Cache mode: "read-write", "read-only", "write-only", or "none" |
+| `R2_ACCOUNT_ID` | For R2 | - | Cloudflare R2 account ID |
+| `R2_ACCESS_KEY_ID` | For R2 | - | Cloudflare R2 access key ID |
+| `R2_SECRET_ACCESS_KEY` | For R2 | - | Cloudflare R2 secret access key |
 
 ## Layer Types
 

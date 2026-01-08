@@ -9,6 +9,7 @@ use tokio::fs;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
+use tile::cache::CacheMode;
 use tile::config::ConfigManager;
 use tile::server::{AppState, create_router};
 
@@ -48,7 +49,9 @@ impl TestServer {
         );
 
         // Create app state (sync preload for tests)
-        let state = Arc::new(AppState::new(config_manager, 64, None, "sync").await);
+        let state = Arc::new(
+            AppState::new(config_manager, 64, None, "sync", None, CacheMode::default()).await,
+        );
         let app = create_router(state, None);
 
         // Create shutdown channel
@@ -120,8 +123,17 @@ impl TestServer {
                 .expect("Failed to create config manager"),
         );
 
-        let state =
-            Arc::new(AppState::new(config_manager, 64, Some(secret.to_string()), "sync").await);
+        let state = Arc::new(
+            AppState::new(
+                config_manager,
+                64,
+                Some(secret.to_string()),
+                "sync",
+                None,
+                CacheMode::default(),
+            )
+            .await,
+        );
         let app = create_router(state, None);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

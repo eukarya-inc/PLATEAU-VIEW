@@ -1,7 +1,7 @@
 use std::{env, sync::Arc};
 
 use anyhow::{Context, Result};
-use tile::{ConfigManager, server};
+use tile::{ConfigManager, cache::CacheMode, server};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -39,6 +39,14 @@ async fn main() -> Result<()> {
         .map(|v| v.to_lowercase())
         .unwrap_or_else(|_| "sync".to_string());
 
+    // Persistent cache URL (optional): file://, gs://, s3://, r2://
+    let tile_cache_url = env::var("TILE_CACHE_URL").ok();
+
+    // Cache mode: "read-write" (default) or "write-only"
+    let cache_mode = env::var("TILE_CACHE_MODE")
+        .map(|v| CacheMode::parse(&v))
+        .unwrap_or_default();
+
     tracing::info!("Loading configuration from {}", config_url);
 
     let config_manager = Arc::new(
@@ -57,6 +65,10 @@ async fn main() -> Result<()> {
         tracing::info!("CORS: permissive (all origins allowed)");
     }
 
+    if let Some(ref url) = tile_cache_url {
+        tracing::info!("Persistent cache: {} (mode: {:?})", url, cache_mode);
+    }
+
     server::run(
         config_manager,
         &addr,
@@ -64,6 +76,8 @@ async fn main() -> Result<()> {
         reload_secret,
         cors_origins,
         &preload_mode,
+        tile_cache_url,
+        cache_mode,
     )
     .await?;
 

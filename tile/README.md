@@ -45,7 +45,47 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | `RELOAD_SECRET` | No | - | Secret token for `/reload` endpoint (if set, requires `Authorization: Bearer <token>`) |
 | `CORS_ORIGINS` | No | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
 | `PRELOAD_MODE` | No | `sync` | COG metadata preload mode: `sync` (blocking), `background` (non-blocking), or `lazy` (on first request) |
+| `TILE_CACHE_URL` | No | - | Persistent tile cache URL (see below) |
 | `RUST_LOG` | No | `info` | Log level (trace, debug, info, warn, error) |
+
+### Persistent Cache Configuration
+
+The tile server supports two-tier caching: fast in-memory cache (moka) + optional persistent storage.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TILE_CACHE_URL` | No | - | Persistent cache URL (`file://`, `gs://`, `s3://`, `r2://`) |
+| `TILE_CACHE_MODE` | No | `read-write` | Cache mode: `read-write`, `read-only`, `write-only`, or `none` |
+| `R2_ACCOUNT_ID` | For R2 | - | Cloudflare R2 account ID |
+| `R2_ACCESS_KEY_ID` | For R2 | - | Cloudflare R2 access key ID |
+| `R2_SECRET_ACCESS_KEY` | For R2 | - | Cloudflare R2 secret access key |
+
+#### Cache URL Examples
+
+```bash
+# Local file cache
+TILE_CACHE_URL=file:///var/cache/tiles
+
+# Google Cloud Storage
+TILE_CACHE_URL=gs://my-bucket/tiles
+
+# Amazon S3
+TILE_CACHE_URL=s3://my-bucket/tiles
+
+# Cloudflare R2 (requires R2_* env vars)
+TILE_CACHE_URL=r2://my-bucket/tiles
+```
+
+#### Cache Modes
+
+| Mode | Read Persistent | Write Persistent | Use Case |
+|------|-----------------|------------------|----------|
+| `read-write` | Yes | Yes | Default. Server is primary cache source |
+| `read-only` | Yes | No | Persistent storage is managed externally |
+| `write-only` | No | Yes | CDN/Worker handles reads (e.g., Cloudflare Worker + R2) |
+| `none` | No | No | Disable persistent cache entirely |
+
+All modes always use the in-memory cache (moka). Persistent failures don't block tile serving (fail-safe).
 
 ## API Endpoints
 
@@ -180,8 +220,13 @@ Pixels matching any nodata pattern will be rendered as transparent.
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      Cache Check                            │
-│                   (moka in-memory)                          │
+│                   Memory Cache (moka)                       │
+└─────────────────────────────────────────────────────────────┘
+                              │ miss
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Persistent Cache (optional)                    │
+│            (file:// / gs:// / s3:// / r2://)               │
 └─────────────────────────────────────────────────────────────┘
                               │ miss
                               ▼

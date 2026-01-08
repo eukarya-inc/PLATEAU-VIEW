@@ -6,7 +6,7 @@ use futures::future::join_all;
 use tokio::sync::RwLock;
 
 use crate::{
-    cache::TileCache,
+    cache::{CacheMode, TileCache},
     config::{ConfigManager, LayerConfig, SourceConfig},
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
@@ -27,10 +27,16 @@ impl AppState {
         cache_size_mb: u64,
         reload_secret: Option<String>,
         preload_mode: &str,
+        persistent_cache_url: Option<&str>,
+        cache_mode: CacheMode,
     ) -> Self {
         let config = config_manager.get().await;
 
-        let cache = Arc::new(TileCache::new(cache_size_mb));
+        let cache = Arc::new(TileCache::new(
+            cache_size_mb,
+            persistent_cache_url,
+            cache_mode,
+        ));
 
         let sources = Self::build_sources(&config.sources);
 

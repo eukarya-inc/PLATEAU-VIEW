@@ -17,7 +17,7 @@ use tower::Service;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use super::{handlers, state::AppState};
-use crate::ConfigManager;
+use crate::{ConfigManager, cache::CacheMode};
 
 /// Create CORS layer from origins configuration.
 /// - None or "*" -> permissive (allow all origins)
@@ -51,6 +51,7 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
 }
 
 /// Run the HTTP server with h2c (HTTP/2 cleartext) support.
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     config_manager: Arc<ConfigManager>,
     addr: &str,
@@ -58,9 +59,20 @@ pub async fn run(
     reload_secret: Option<String>,
     cors_origins: Option<String>,
     preload_mode: &str,
+    tile_cache_url: Option<String>,
+    cache_mode: CacheMode,
 ) -> Result<()> {
-    let state =
-        Arc::new(AppState::new(config_manager, cache_size_mb, reload_secret, preload_mode).await);
+    let state = Arc::new(
+        AppState::new(
+            config_manager,
+            cache_size_mb,
+            reload_secret,
+            preload_mode,
+            tile_cache_url.as_deref(),
+            cache_mode,
+        )
+        .await,
+    );
     let app = create_router(state, cors_origins.as_deref());
 
     let listener = TcpListener::bind(addr).await?;
