@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use object_store::{ObjectStore, path::Path as ObjectPath};
+use object_store::{Attribute, Attributes, ObjectStore, PutOptions, path::Path as ObjectPath};
 use thiserror::Error;
 
 use super::store::{CacheStoreError, CacheStoreFactory};
@@ -19,11 +19,20 @@ pub enum PersistentCacheError {
     WriteError(String),
 }
 
+/// Metadata to attach to cached objects.
+#[derive(Debug, Clone, Default)]
+pub struct CacheObjectMeta {
+    /// Content-Type for the object (e.g., "image/png")
+    pub content_type: Option<String>,
+}
+
 /// Persistent tile cache backed by object storage.
 #[derive(Clone)]
 pub struct PersistentCache {
     store: Arc<dyn ObjectStore>,
     prefix: ObjectPath,
+    /// Cache-Control header to set on stored objects
+    cache_control: Option<String>,
 }
 
 impl PersistentCache {
@@ -34,9 +43,17 @@ impl PersistentCache {
     /// - `gs://bucket/prefix` - Google Cloud Storage
     /// - `s3://bucket/prefix` - Amazon S3
     /// - `r2://bucket/prefix` - Cloudflare R2
-    pub fn new(url: &str) -> Result<Self, PersistentCacheError> {
+    ///
+    /// # Arguments
+    /// * `url` - Storage URL
+    /// * `cache_control` - Optional Cache-Control header to set on stored objects
+    pub fn new(url: &str, cache_control: Option<String>) -> Result<Self, PersistentCacheError> {
         let (store, prefix) = CacheStoreFactory::create(url)?;
-        Ok(Self { store, prefix })
+        Ok(Self {
+            store,
+            prefix,
+            cache_control,
+        })
     }
 
     /// Convert a cache key to an object path.
@@ -67,11 +84,48 @@ impl PersistentCache {
         }
     }
 
-    /// Put a tile in the cache.
-    pub async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), PersistentCacheError> {
+    /// Put a tile in the cache with optional metadata.
+    pub async fn put(
+        &self,
+        key: &str,
+        data: Vec<u8>,
+        meta: Option<CacheObjectMeta>,
+    ) -> Result<(), PersistentCacheError> {
         let path = self.key_to_path(key);
         let bytes = Bytes::from(data);
 
+        // Build attributes from cache_control and metadata
+        let mut attrs = Attributes::new();
+
+        if let Some(ref cc) = self.cache_control {
+            attrs.insert(Attribute::CacheControl, cc.clone().into());
+        }
+
+        if let Some(ref meta) = meta
+            && let Some(ref ct) = meta.content_type
+        {
+            attrs.insert(Attribute::ContentType, ct.clone().into());
+        }
+
+        // Try put_opts with attributes first; fallback to regular put if not supported
+        // (LocalFileSystem doesn't support attributes)
+        if !attrs.is_empty() {
+            let opts = PutOptions {
+                attributes: attrs,
+                ..Default::default()
+            };
+
+            match self.store.put_opts(&path, bytes.clone().into(), opts).await {
+                Ok(_) => return Ok(()),
+                Err(e) if e.to_string().contains("not yet implemented") => {
+                    // Fallback to regular put for stores that don't support attributes
+                    tracing::debug!("put_opts not supported, falling back to put");
+                }
+                Err(e) => return Err(PersistentCacheError::WriteError(e.to_string())),
+            }
+        }
+
+        // Regular put without attributes
         self.store
             .put(&path, bytes.into())
             .await
@@ -103,13 +157,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let url = format!("file://{}", temp_dir.path().display());
 
-        let cache = PersistentCache::new(&url).unwrap();
+        let cache = PersistentCache::new(&url, None).unwrap();
 
         // Test put and get (key includes format and extension)
         let key = "test-source/png/10/100/200.png";
         let data = vec![1, 2, 3, 4, 5];
 
-        cache.put(key, data.clone()).await.unwrap();
+        cache.put(key, data.clone(), None).await.unwrap();
 
         let result = cache.get(key).await.unwrap();
         assert_eq!(result, Some(data));
@@ -120,11 +174,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_persistent_cache_with_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        let url = format!("file://{}", temp_dir.path().display());
+
+        let cache =
+            PersistentCache::new(&url, Some("public, max-age=31536000".to_string())).unwrap();
+
+        let key = "test-source/png/10/100/200.png";
+        let data = vec![1, 2, 3, 4, 5];
+        let meta = CacheObjectMeta {
+            content_type: Some("image/png".to_string()),
+        };
+
+        cache.put(key, data.clone(), Some(meta)).await.unwrap();
+
+        let result = cache.get(key).await.unwrap();
+        assert_eq!(result, Some(data));
+    }
+
+    #[tokio::test]
     async fn test_key_to_path() {
         let temp_dir = TempDir::new().unwrap();
         let url = format!("file://{}", temp_dir.path().display());
 
-        let cache = PersistentCache::new(&url).unwrap();
+        let cache = PersistentCache::new(&url, None).unwrap();
 
         // Key now includes format and extension
         let path = cache.key_to_path("source/webp/10/100/200.webp");

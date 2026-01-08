@@ -58,6 +58,7 @@ impl TestServer {
                 None,
                 CacheMode::default(),
                 None,
+                None, // object_cache_control
             )
             .await,
         );
@@ -141,6 +142,7 @@ impl TestServer {
                 None,
                 CacheMode::default(),
                 None,
+                None, // object_cache_control
             )
             .await,
         );
@@ -219,6 +221,7 @@ impl TestServer {
                 None,
                 CacheMode::default(),
                 Some(cache_control.to_string()),
+                None, // object_cache_control
             )
             .await,
         );

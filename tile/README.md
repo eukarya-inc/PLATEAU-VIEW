@@ -60,6 +60,7 @@ The tile server supports two-tier caching: fast in-memory cache (moka) + optiona
 |----------|----------|---------|-------------|
 | `TILE_CACHE_URL` | No | - | Persistent cache URL (`file://`, `gs://`, `s3://`, `r2://`) |
 | `TILE_CACHE_MODE` | No | `read-write` | Cache mode: `read-write`, `read-only`, `write-only`, or `none` |
+| `TILE_CACHE_CONTROL` | No | - | Cache-Control header for objects stored in persistent cache (e.g., `public, max-age=31536000`) |
 | `R2_ACCOUNT_ID` | For R2 | - | Cloudflare R2 account ID |
 | `R2_ACCESS_KEY_ID` | For R2 | - | Cloudflare R2 access key ID |
 | `R2_SECRET_ACCESS_KEY` | For R2 | - | Cloudflare R2 secret access key |

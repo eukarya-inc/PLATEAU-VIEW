@@ -34,6 +34,7 @@ impl AppState {
         persistent_cache_url: Option<&str>,
         cache_mode: CacheMode,
         cache_control: Option<String>,
+        object_cache_control: Option<String>,
     ) -> Self {
         let config = config_manager.get().await;
 
@@ -41,6 +42,7 @@ impl AppState {
             cache_size_mb,
             persistent_cache_url,
             cache_mode,
+            object_cache_control,
         ));
 
         let sources = Self::build_sources(&config.sources);

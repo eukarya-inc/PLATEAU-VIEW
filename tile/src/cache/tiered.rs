@@ -1,7 +1,7 @@
 //! Tiered cache combining memory and persistent storage.
 
 use super::memory::{CacheStats, MemoryCache};
-use super::persistent::PersistentCache;
+use super::persistent::{CacheObjectMeta, PersistentCache};
 
 /// Cache mode for persistent storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -70,27 +70,34 @@ impl TieredCache {
     /// * `memory_size_mb` - Size of in-memory cache in MB
     /// * `persistent_url` - Optional URL for persistent storage (file://, gs://, s3://, r2://)
     /// * `mode` - Cache mode (ReadWrite or WriteOnly)
-    pub fn new(memory_size_mb: u64, persistent_url: Option<&str>, mode: CacheMode) -> Self {
+    /// * `object_cache_control` - Optional Cache-Control header to set on stored objects
+    pub fn new(
+        memory_size_mb: u64,
+        persistent_url: Option<&str>,
+        mode: CacheMode,
+        object_cache_control: Option<String>,
+    ) -> Self {
         let memory = MemoryCache::new(memory_size_mb);
 
-        let persistent = persistent_url.and_then(|url| match PersistentCache::new(url) {
-            Ok(cache) => {
-                tracing::info!(
-                    url = %url,
-                    mode = ?mode,
-                    "Persistent cache enabled"
-                );
-                Some(cache)
-            }
-            Err(e) => {
-                tracing::error!(
-                    error = %e,
-                    url = %url,
-                    "Failed to initialize persistent cache, continuing with memory only"
-                );
-                None
-            }
-        });
+        let persistent =
+            persistent_url.and_then(|url| match PersistentCache::new(url, object_cache_control) {
+                Ok(cache) => {
+                    tracing::info!(
+                        url = %url,
+                        mode = ?mode,
+                        "Persistent cache enabled"
+                    );
+                    Some(cache)
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        url = %url,
+                        "Failed to initialize persistent cache, continuing with memory only"
+                    );
+                    None
+                }
+            });
 
         Self {
             memory,
@@ -142,7 +149,12 @@ impl TieredCache {
     ///
     /// Writes to memory synchronously, then writes to persistent storage
     /// in the background (fire-and-forget) if mode allows writing.
-    pub async fn put(&self, key: &str, data: Vec<u8>) {
+    ///
+    /// # Arguments
+    /// * `key` - Cache key
+    /// * `data` - Tile data
+    /// * `meta` - Optional metadata (etag, content_type) to store with the object
+    pub async fn put(&self, key: &str, data: Vec<u8>, meta: Option<CacheObjectMeta>) {
         // 1. Write to memory (synchronous)
         self.memory.put(key, data.clone()).await;
 
@@ -153,7 +165,7 @@ impl TieredCache {
             let persistent = persistent.clone();
             let key = key.to_string();
             tokio::spawn(async move {
-                if let Err(e) = persistent.put(&key, data).await {
+                if let Err(e) = persistent.put(&key, data, meta).await {
                     tracing::warn!(
                         key = %key,
                         error = %e,
@@ -211,13 +223,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_tiered_cache_memory_only() {
-        let cache = TieredCache::new(64, None, CacheMode::default());
+        let cache = TieredCache::new(64, None, CacheMode::default(), None);
 
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
 
         // Put and get
-        cache.put(key, data.clone()).await;
+        cache.put(key, data.clone(), None).await;
         let result = cache.get(key).await;
         assert_eq!(result, Some(data));
 
@@ -233,20 +245,20 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let url = format!("file://{}", temp_dir.path().display());
 
-        let cache = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         assert!(cache.has_persistent());
 
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
 
         // Put to both caches
-        cache.put(key, data.clone()).await;
+        cache.put(key, data.clone(), None).await;
 
         // Wait for background write
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Create new cache (simulating restart)
-        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
 
         // Should get from persistent cache
         let result = cache2.get(key).await;
@@ -259,14 +271,14 @@ mod tests {
         let url = format!("file://{}", temp_dir.path().display());
 
         // First cache: write to persistent
-        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
-        cache1.put(key, data.clone()).await;
+        cache1.put(key, data.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Second cache: should read from persistent and write back to memory
-        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
 
         // First get: from persistent
         let result = cache2.get(key).await;
@@ -283,19 +295,19 @@ mod tests {
         let url = format!("file://{}", temp_dir.path().display());
 
         // First cache: write to persistent (in any mode, writes go to persistent)
-        let cache1 = TieredCache::new(64, Some(&url), CacheMode::WriteOnly);
+        let cache1 = TieredCache::new(64, Some(&url), CacheMode::WriteOnly, None);
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
-        cache1.put(key, data.clone()).await;
+        cache1.put(key, data.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Second cache in WriteOnly mode: should NOT read from persistent
-        let cache2 = TieredCache::new(64, Some(&url), CacheMode::WriteOnly);
+        let cache2 = TieredCache::new(64, Some(&url), CacheMode::WriteOnly, None);
         let result = cache2.get(key).await;
         assert_eq!(result, None); // Miss because WriteOnly skips persistent read
 
         // Third cache in ReadWrite mode: should read from persistent
-        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let result = cache3.get(key).await;
         assert_eq!(result, Some(data)); // Hit because ReadWrite checks persistent
     }
@@ -306,25 +318,25 @@ mod tests {
         let url = format!("file://{}", temp_dir.path().display());
 
         // First, write data using ReadWrite mode
-        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
-        cache1.put(key, data.clone()).await;
+        cache1.put(key, data.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Second cache in ReadOnly mode: should read from persistent
-        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadOnly);
+        let cache2 = TieredCache::new(64, Some(&url), CacheMode::ReadOnly, None);
         let result = cache2.get(key).await;
         assert_eq!(result, Some(data.clone())); // Hit because ReadOnly reads persistent
 
         // Try to write with ReadOnly mode
         let key2 = "test/10/100/201";
         let data2 = vec![6, 7, 8, 9, 10];
-        cache2.put(key2, data2.clone()).await;
+        cache2.put(key2, data2.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // New cache should NOT find key2 in persistent (ReadOnly doesn't write)
-        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let result = cache3.get(key2).await;
         assert_eq!(result, None); // Miss because ReadOnly didn't write to persistent
     }
@@ -335,25 +347,25 @@ mod tests {
         let url = format!("file://{}", temp_dir.path().display());
 
         // First, write data using ReadWrite mode
-        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache1 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let key = "test/10/100/200";
         let data = vec![1, 2, 3, 4, 5];
-        cache1.put(key, data.clone()).await;
+        cache1.put(key, data.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Cache with None mode: should NOT read from persistent
-        let cache2 = TieredCache::new(64, Some(&url), CacheMode::None);
+        let cache2 = TieredCache::new(64, Some(&url), CacheMode::None, None);
         let result = cache2.get(key).await;
         assert_eq!(result, None); // Miss because None mode skips persistent
 
         // Write with None mode
         let key2 = "test/10/100/201";
         let data2 = vec![6, 7, 8, 9, 10];
-        cache2.put(key2, data2.clone()).await;
+        cache2.put(key2, data2.clone(), None).await;
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // New cache should NOT find key2 in persistent (None mode doesn't write)
-        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite);
+        let cache3 = TieredCache::new(64, Some(&url), CacheMode::ReadWrite, None);
         let result = cache3.get(key2).await;
         assert_eq!(result, None); // Miss because None mode didn't write to persistent
 

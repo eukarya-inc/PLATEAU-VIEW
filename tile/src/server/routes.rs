@@ -62,6 +62,7 @@ pub async fn run(
     tile_cache_url: Option<String>,
     cache_mode: CacheMode,
     cache_control: Option<String>,
+    object_cache_control: Option<String>,
 ) -> Result<()> {
     let state = Arc::new(
         AppState::new(
@@ -72,6 +73,7 @@ pub async fn run(
             tile_cache_url.as_deref(),
             cache_mode,
             cache_control,
+            object_cache_control,
         )
         .await,
     );

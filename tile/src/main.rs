@@ -47,8 +47,11 @@ async fn main() -> Result<()> {
         .map(|v| CacheMode::parse(&v))
         .unwrap_or_default();
 
-    // Cache-Control header (optional, no default)
+    // Cache-Control header for HTTP responses (optional, no default)
     let cache_control = env::var("CACHE_CONTROL").ok();
+
+    // Cache-Control header for stored objects in persistent cache (optional)
+    let object_cache_control = env::var("TILE_CACHE_CONTROL").ok();
 
     tracing::info!("Loading configuration from {}", config_url);
 
@@ -73,7 +76,11 @@ async fn main() -> Result<()> {
     }
 
     if let Some(ref cc) = cache_control {
-        tracing::info!("Cache-Control: {}", cc);
+        tracing::info!("Cache-Control (HTTP): {}", cc);
+    }
+
+    if let Some(ref cc) = object_cache_control {
+        tracing::info!("Cache-Control (objects): {}", cc);
     }
 
     server::run(
@@ -86,6 +93,7 @@ async fn main() -> Result<()> {
         tile_cache_url,
         cache_mode,
         cache_control,
+        object_cache_control,
     )
     .await?;
 

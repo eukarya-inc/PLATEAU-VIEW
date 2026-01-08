@@ -11,6 +11,7 @@ use image::ImageFormat;
 use xxhash_rust::xxh64::xxh64;
 
 use super::state::AppState;
+use crate::cache::CacheObjectMeta;
 use crate::tile::TileError;
 
 /// Supported tile image formats.
@@ -184,8 +185,14 @@ pub async fn get_tile(
         }
     };
 
-    // Store in cache
-    state.cache.put(&cache_key, encoded_bytes.clone()).await;
+    // Store in cache with metadata (content-type for GCS/S3)
+    let meta = CacheObjectMeta {
+        content_type: Some(format.content_type().to_string()),
+    };
+    state
+        .cache
+        .put(&cache_key, encoded_bytes.clone(), Some(meta))
+        .await;
 
     tile_response(
         encoded_bytes,
