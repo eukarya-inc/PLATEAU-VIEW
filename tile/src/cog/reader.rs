@@ -10,34 +10,15 @@ use async_tiff::{
     tags::SampleFormat,
 };
 use object_store::{ObjectStore, path::Path as ObjectPath};
-use thiserror::Error;
 
 use super::{
-    bounds::{TileBounds, geo_to_pixel_x, geo_to_pixel_y},
+    bounds::TileBounds,
     decode::{decode_elevation, decode_rgba, get_pixel_values},
+    error::CogError,
     interpolate::{bilinear_f64, bilinear_rgba},
+    resample::{TileRange, resample_to_tile},
 };
 use crate::config::NoDataConfig;
-
-#[derive(Error, Debug)]
-pub enum CogError {
-    #[error("Failed to open COG file: {0}")]
-    OpenError(String),
-    #[error("Failed to read COG data: {0}")]
-    ReadError(String),
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("TIFF error: {0}")]
-    TiffError(String),
-    #[error("No IFD available")]
-    NoIfd,
-    #[error("Unsupported CRS: expected WGS84 (EPSG:4326), got EPSG:{0}")]
-    UnsupportedCrs(u16),
-    #[error("Invalid URL: {0}")]
-    InvalidUrl(String),
-    #[error("Object store error: {0}")]
-    ObjectStoreError(String),
-}
 
 /// Cloud Optimized GeoTIFF reader with HTTP range request support.
 pub struct CogReader {
@@ -282,48 +263,32 @@ impl CogReader {
             "Selected IFD for tile generation"
         );
 
-        // Convert geo bounds to pixel coordinates
-        let px_west = geo_to_pixel_x(bounds.west, cog_bounds, img_width);
-        let px_east = geo_to_pixel_x(bounds.east, cog_bounds, img_width);
-        let px_north = geo_to_pixel_y(bounds.north, cog_bounds, img_height);
-        let px_south = geo_to_pixel_y(bounds.south, cog_bounds, img_height);
-
-        let (tile_count_x, tile_count_y) = ifd.tile_count().unwrap_or((1, 1));
-
         // Calculate tile range
-        let tile_x_start = (px_west / cog_tile_w as f64)
-            .floor()
-            .max(0.0)
-            .min(tile_count_x as f64) as usize;
-        let tile_x_end = (px_east / cog_tile_w as f64)
-            .ceil()
-            .max(0.0)
-            .min(tile_count_x as f64) as usize;
-        let tile_y_start = (px_north / cog_tile_h as f64)
-            .floor()
-            .max(0.0)
-            .min(tile_count_y as f64) as usize;
-        let tile_y_end = (px_south / cog_tile_h as f64)
-            .ceil()
-            .max(0.0)
-            .min(tile_count_y as f64) as usize;
+        let tile_range = TileRange::from_bounds(
+            bounds,
+            cog_bounds,
+            img_width,
+            img_height,
+            cog_tile_w,
+            cog_tile_h,
+            ifd.tile_count().unwrap_or((1, 1)),
+        );
 
         // No intersection
-        if tile_x_end <= tile_x_start || tile_y_end <= tile_y_start {
+        if tile_range.is_empty() {
             return Ok(vec![0; (tile_size * tile_size * 4) as usize]);
         }
 
         // Allocate pixel buffer
-        let buffer_width = (tile_x_end - tile_x_start) * cog_tile_w as usize;
-        let buffer_height = (tile_y_end - tile_y_start) * cog_tile_h as usize;
+        let (buffer_width, buffer_height) = tile_range.buffer_size(cog_tile_w, cog_tile_h);
         let mut pixel_buffer: Vec<u8> = vec![0; buffer_width * buffer_height * 4];
 
         // Fetch and decode tiles
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
         let decoder_registry = DecoderRegistry::default();
 
-        for ty in tile_y_start..tile_y_end {
-            for tx in tile_x_start..tile_x_end {
+        for ty in tile_range.y_start..tile_range.y_end {
+            for tx in tile_range.x_start..tile_range.x_end {
                 match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
                         Ok(decoded_bytes) => {
@@ -347,8 +312,8 @@ impl CogReader {
                             }
 
                             // Copy to buffer
-                            let buf_x_offset = (tx - tile_x_start) * cog_tile_w as usize;
-                            let buf_y_offset = (ty - tile_y_start) * cog_tile_h as usize;
+                            let buf_x_offset = (tx - tile_range.x_start) * cog_tile_w as usize;
+                            let buf_y_offset = (ty - tile_range.y_start) * cog_tile_h as usize;
                             let tile_px_x_start = tx * cog_tile_w as usize;
                             let tile_px_y_start = ty * cog_tile_h as usize;
 
@@ -389,31 +354,23 @@ impl CogReader {
         }
 
         // Resample to output tile size with bilinear interpolation
-        let buffer_origin_x = tile_x_start as f64 * cog_tile_w as f64;
-        let buffer_origin_y = tile_y_start as f64 * cog_tile_h as f64;
-        let mut output = Vec::with_capacity((tile_size * tile_size * 4) as usize);
+        let buffer_origin = (
+            tile_range.x_start as f64 * cog_tile_w as f64,
+            tile_range.y_start as f64 * cog_tile_h as f64,
+        );
 
-        for out_y in 0..tile_size {
-            for out_x in 0..tile_size {
-                // Convert output pixel to geo coordinate
-                let geo_x = bounds.west
-                    + (out_x as f64 + 0.5) / tile_size as f64 * (bounds.east - bounds.west);
-                let geo_y = bounds.north
-                    - (out_y as f64 + 0.5) / tile_size as f64 * (bounds.north - bounds.south);
+        let pixels: Vec<[u8; 4]> = resample_to_tile(
+            bounds,
+            cog_bounds,
+            img_width,
+            img_height,
+            tile_size,
+            buffer_origin,
+            |buf_x, buf_y| bilinear_rgba(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y),
+        );
 
-                // Convert to COG pixel coordinate
-                let px_x = geo_to_pixel_x(geo_x, cog_bounds, img_width);
-                let px_y = geo_to_pixel_y(geo_y, cog_bounds, img_height);
-
-                // Convert to buffer coordinate
-                let buf_x = px_x - buffer_origin_x;
-                let buf_y = px_y - buffer_origin_y;
-
-                // Bilinear interpolation
-                let pixel = bilinear_rgba(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y);
-                output.extend_from_slice(&pixel);
-            }
-        }
+        // Flatten [u8; 4] to Vec<u8>
+        let output: Vec<u8> = pixels.into_iter().flatten().collect();
 
         Ok(output)
     }
@@ -444,44 +401,30 @@ impl CogReader {
             .unwrap_or(SampleFormat::Uint);
         let bits_per_sample = ifd.bits_per_sample().first().copied().unwrap_or(32);
 
-        // Convert geo bounds to pixel coordinates
-        let px_west = geo_to_pixel_x(bounds.west, cog_bounds, img_width);
-        let px_east = geo_to_pixel_x(bounds.east, cog_bounds, img_width);
-        let px_north = geo_to_pixel_y(bounds.north, cog_bounds, img_height);
-        let px_south = geo_to_pixel_y(bounds.south, cog_bounds, img_height);
+        // Calculate tile range
+        let tile_range = TileRange::from_bounds(
+            bounds,
+            cog_bounds,
+            img_width,
+            img_height,
+            cog_tile_w,
+            cog_tile_h,
+            ifd.tile_count().unwrap_or((1, 1)),
+        );
 
-        let (tile_count_x, tile_count_y) = ifd.tile_count().unwrap_or((1, 1));
-
-        let tile_x_start = (px_west / cog_tile_w as f64)
-            .floor()
-            .max(0.0)
-            .min(tile_count_x as f64) as usize;
-        let tile_x_end = (px_east / cog_tile_w as f64)
-            .ceil()
-            .max(0.0)
-            .min(tile_count_x as f64) as usize;
-        let tile_y_start = (px_north / cog_tile_h as f64)
-            .floor()
-            .max(0.0)
-            .min(tile_count_y as f64) as usize;
-        let tile_y_end = (px_south / cog_tile_h as f64)
-            .ceil()
-            .max(0.0)
-            .min(tile_count_y as f64) as usize;
-
-        if tile_x_end <= tile_x_start || tile_y_end <= tile_y_start {
+        // No intersection
+        if tile_range.is_empty() {
             return Ok(vec![f64::NAN; (tile_size * tile_size) as usize]);
         }
 
-        let buffer_width = (tile_x_end - tile_x_start) * cog_tile_w as usize;
-        let buffer_height = (tile_y_end - tile_y_start) * cog_tile_h as usize;
+        let (buffer_width, buffer_height) = tile_range.buffer_size(cog_tile_w, cog_tile_h);
         let mut pixel_buffer: Vec<f64> = vec![f64::NAN; buffer_width * buffer_height];
 
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
         let decoder_registry = DecoderRegistry::default();
 
-        for ty in tile_y_start..tile_y_end {
-            for tx in tile_x_start..tile_x_end {
+        for ty in tile_range.y_start..tile_range.y_end {
+            for tx in tile_range.x_start..tile_range.x_end {
                 match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
                         Ok(decoded_bytes) => {
@@ -503,8 +446,8 @@ impl CogReader {
                             }
 
                             // Copy to buffer
-                            let buf_x_offset = (tx - tile_x_start) * cog_tile_w as usize;
-                            let buf_y_offset = (ty - tile_y_start) * cog_tile_h as usize;
+                            let buf_x_offset = (tx - tile_range.x_start) * cog_tile_w as usize;
+                            let buf_y_offset = (ty - tile_range.y_start) * cog_tile_h as usize;
                             let tile_px_x_start = tx * cog_tile_w as usize;
                             let tile_px_y_start = ty * cog_tile_h as usize;
 
@@ -541,29 +484,21 @@ impl CogReader {
             }
         }
 
-        // Resample
-        let buffer_origin_x = tile_x_start as f64 * cog_tile_w as f64;
-        let buffer_origin_y = tile_y_start as f64 * cog_tile_h as f64;
-        let mut output = Vec::with_capacity((tile_size * tile_size) as usize);
+        // Resample using bilinear interpolation
+        let buffer_origin = (
+            tile_range.x_start as f64 * cog_tile_w as f64,
+            tile_range.y_start as f64 * cog_tile_h as f64,
+        );
 
-        for out_y in 0..tile_size {
-            for out_x in 0..tile_size {
-                let geo_x = bounds.west
-                    + (out_x as f64 + 0.5) / tile_size as f64 * (bounds.east - bounds.west);
-                let geo_y = bounds.north
-                    - (out_y as f64 + 0.5) / tile_size as f64 * (bounds.north - bounds.south);
-
-                let px_x = geo_to_pixel_x(geo_x, cog_bounds, img_width);
-                let px_y = geo_to_pixel_y(geo_y, cog_bounds, img_height);
-
-                let buf_x = px_x - buffer_origin_x;
-                let buf_y = px_y - buffer_origin_y;
-
-                let elevation =
-                    bilinear_f64(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y);
-                output.push(elevation);
-            }
-        }
+        let output = resample_to_tile(
+            bounds,
+            cog_bounds,
+            img_width,
+            img_height,
+            tile_size,
+            buffer_origin,
+            |buf_x, buf_y| bilinear_f64(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y),
+        );
 
         Ok(output)
     }

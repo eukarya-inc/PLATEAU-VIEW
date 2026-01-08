@@ -14,7 +14,7 @@ use image::RgbaImage;
 #[cfg(feature = "maplibre")]
 use tokio::sync::RwLock;
 
-use super::source::{TileError, TileSource};
+use super::source::{TileError, TileSource, single_etag_key};
 use crate::config::RangeConfig;
 
 /// MapLibre style-based tile source that renders tiles from a style.json.
@@ -36,6 +36,14 @@ pub struct MaplibreTileSource {
 }
 
 impl MaplibreTileSource {
+    /// Generate ETag key for MapLibre source.
+    fn make_etag_key(style_url: &str, version: Option<&str>) -> String {
+        match version {
+            Some(v) => format!("maplibre:{}:{}", style_url, v),
+            None => format!("maplibre:{}", style_url),
+        }
+    }
+
     /// Create a new MapLibre tile source.
     ///
     /// # Arguments
@@ -43,7 +51,7 @@ impl MaplibreTileSource {
     /// * `range` - Optional zoom/coordinate range restriction
     #[cfg(feature = "maplibre")]
     pub fn new(style_url: String, range: Option<RangeConfig>) -> Self {
-        let etag_key = format!("maplibre:{}", style_url);
+        let etag_key = Self::make_etag_key(&style_url, None);
         Self {
             style_url,
             cached_style_path: Arc::new(RwLock::new(None)),
@@ -55,7 +63,7 @@ impl MaplibreTileSource {
     /// Create a new MapLibre tile source (stub for non-maplibre builds).
     #[cfg(not(feature = "maplibre"))]
     pub fn new(style_url: String, range: Option<RangeConfig>) -> Self {
-        let etag_key = format!("maplibre:{}", style_url);
+        let etag_key = Self::make_etag_key(&style_url, None);
         Self {
             style_url,
             range,
@@ -70,10 +78,7 @@ impl MaplibreTileSource {
         range: Option<RangeConfig>,
         version: Option<&str>,
     ) -> Self {
-        let etag_key = match version {
-            Some(v) => format!("maplibre:{}:{}", style_url, v),
-            None => format!("maplibre:{}", style_url),
-        };
+        let etag_key = Self::make_etag_key(&style_url, version);
         Self {
             style_url,
             cached_style_path: Arc::new(RwLock::new(None)),
@@ -89,10 +94,7 @@ impl MaplibreTileSource {
         range: Option<RangeConfig>,
         version: Option<&str>,
     ) -> Self {
-        let etag_key = match version {
-            Some(v) => format!("maplibre:{}:{}", style_url, v),
-            None => format!("maplibre:{}", style_url),
-        };
+        let etag_key = Self::make_etag_key(&style_url, version);
         Self {
             style_url,
             range,
@@ -240,11 +242,7 @@ impl TileSource for MaplibreTileSource {
     }
 
     fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
-        if self.covers(z, x, y) {
-            vec![self.etag_key.clone()]
-        } else {
-            vec![]
-        }
+        single_etag_key(&self.etag_key, self.covers(z, x, y))
     }
 }
 

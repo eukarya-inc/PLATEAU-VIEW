@@ -7,107 +7,14 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Json, Response},
 };
-use image::ImageFormat;
 use serde::Serialize;
-use xxhash_rust::xxh64::xxh64;
 
+use super::format::{encode_image, parse_y_and_format};
+use super::response::{
+    compute_etag, error_response, etag_matches, not_modified_response, tile_response,
+};
 use super::state::AppState;
 use crate::cache::CacheObjectMeta;
-use crate::tile::TileError;
-
-/// Supported tile image formats.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileFormat {
-    Png,
-    WebP,
-    Avif,
-}
-
-impl TileFormat {
-    /// Parse format from file extension (e.g., "png", "webp", "avif").
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext.to_lowercase().as_str() {
-            "png" => Some(Self::Png),
-            "webp" => Some(Self::WebP),
-            "avif" => Some(Self::Avif),
-            _ => None,
-        }
-    }
-
-    /// Get the file extension for this format.
-    pub fn extension(&self) -> &'static str {
-        match self {
-            Self::Png => "png",
-            Self::WebP => "webp",
-            Self::Avif => "avif",
-        }
-    }
-
-    /// Get the MIME content type for this format.
-    pub fn content_type(&self) -> &'static str {
-        match self {
-            Self::Png => "image/png",
-            Self::WebP => "image/webp",
-            Self::Avif => "image/avif",
-        }
-    }
-
-    /// Convert to image crate's ImageFormat.
-    pub fn image_format(&self) -> ImageFormat {
-        match self {
-            Self::Png => ImageFormat::Png,
-            Self::WebP => ImageFormat::WebP,
-            Self::Avif => ImageFormat::Avif,
-        }
-    }
-}
-
-/// Parse "123.png" into (123, TileFormat::Png).
-fn parse_y_and_format(y_ext: &str) -> Option<(u32, TileFormat)> {
-    let (y_str, ext) = y_ext.rsplit_once('.')?;
-    let y: u32 = y_str.parse().ok()?;
-    let format = TileFormat::from_extension(ext)?;
-    Some((y, format))
-}
-
-/// Compute ETag from layer keys and tile coordinates.
-/// Keys are sorted to ensure consistent ordering across requests.
-fn compute_etag(
-    keys: &[String],
-    source: &str,
-    format: TileFormat,
-    z: u32,
-    x: u32,
-    y: u32,
-) -> String {
-    let fmt = format.extension();
-
-    // Sort keys for consistent ordering
-    let mut sorted_keys = keys.to_vec();
-    sorted_keys.sort();
-
-    // Build input string: "source/format/z/x/y|key1|key2|..."
-    let keys_str = sorted_keys.join("|");
-    let input = format!("{source}/{fmt}/{z}/{x}/{y}|{keys_str}");
-
-    let hash = xxh64(input.as_bytes(), 0);
-    // Use weak ETag (W/) since the representation might vary
-    format!("W/\"{hash:x}\"")
-}
-
-/// Check if the request's If-None-Match header matches the ETag.
-fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
-    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
-        && let Ok(value) = if_none_match.to_str()
-    {
-        // Handle multiple ETags (comma-separated) and "*"
-        if value == "*" {
-            return true;
-        }
-        return value.split(',').any(|v| v.trim() == etag);
-    }
-    false
-}
 
 /// Health check handler.
 pub async fn health() -> impl IntoResponse {
@@ -332,76 +239,4 @@ pub async fn get_tilejson(
     };
 
     Json(tilejson).into_response()
-}
-
-/// Build a 304 Not Modified response with ETag.
-fn not_modified_response(etag: &str, cache_control: Option<&str>) -> Response {
-    let mut builder = Response::builder()
-        .status(StatusCode::NOT_MODIFIED)
-        .header(header::ETAG, etag);
-
-    if let Some(cc) = cache_control {
-        builder = builder.header(header::CACHE_CONTROL, cc);
-    }
-
-    builder
-        .body(axum::body::Body::empty())
-        .unwrap()
-        .into_response()
-}
-
-/// Build a tile response with the appropriate content type and optional headers.
-fn tile_response(
-    data: Vec<u8>,
-    format: TileFormat,
-    etag: Option<&str>,
-    cache_control: Option<&str>,
-) -> Response {
-    let mut builder = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, format.content_type());
-
-    if let Some(etag) = etag {
-        builder = builder.header(header::ETAG, etag);
-    }
-
-    if let Some(cc) = cache_control {
-        builder = builder.header(header::CACHE_CONTROL, cc);
-    }
-
-    builder
-        .body(axum::body::Body::from(data))
-        .unwrap()
-        .into_response()
-}
-
-fn error_response(e: TileError) -> Response {
-    match e {
-        TileError::NotFound => (StatusCode::NOT_FOUND, "Tile not found").into_response(),
-        TileError::OutOfRange => (StatusCode::NOT_FOUND, "Out of range").into_response(),
-        TileError::HttpError(msg) => {
-            tracing::error!("HTTP error: {}", msg);
-            (StatusCode::BAD_GATEWAY, "Upstream error").into_response()
-        }
-        TileError::CogError(msg) => {
-            tracing::error!("COG error: {}", msg);
-            (StatusCode::INTERNAL_SERVER_ERROR, "COG processing error").into_response()
-        }
-        TileError::ImageError(msg) => {
-            tracing::error!("Image error: {}", msg);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Image processing error").into_response()
-        }
-        TileError::Internal(msg) => {
-            tracing::error!("Internal error: {}", msg);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response()
-        }
-    }
-}
-
-/// Encode an image to the specified format.
-fn encode_image(img: &image::RgbaImage, format: TileFormat) -> Result<Vec<u8>, image::ImageError> {
-    let mut bytes = Vec::new();
-    let mut cursor = std::io::Cursor::new(&mut bytes);
-    img.write_to(&mut cursor, format.image_format())?;
-    Ok(bytes)
 }

@@ -12,7 +12,7 @@ use url::Url;
 
 use super::{
     coord::xyz_to_bounds,
-    source::{TileError, TileSource},
+    source::{TileError, TileSource, single_etag_key},
 };
 use crate::{
     cog::{CogReader, TileBounds},
@@ -277,10 +277,6 @@ impl TileSource for CogTileSource {
     }
 
     fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
-        if self.covers(z, x, y) {
-            vec![self.etag_key.clone()]
-        } else {
-            vec![]
-        }
+        single_etag_key(&self.etag_key, self.covers(z, x, y))
     }
 }

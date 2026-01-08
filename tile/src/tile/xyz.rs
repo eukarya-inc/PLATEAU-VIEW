@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use image::RgbaImage;
 
-use super::source::{TileError, TileSource};
+use super::source::{TileError, TileSource, single_etag_key};
 use crate::config::RangeConfig;
 
 /// XYZ tile source that fetches tiles from a remote URL.
@@ -93,11 +93,7 @@ impl TileSource for XyzTileSource {
     }
 
     fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
-        if self.covers(z, x, y) {
-            vec![self.etag_key.clone()]
-        } else {
-            vec![]
-        }
+        single_etag_key(&self.etag_key, self.covers(z, x, y))
     }
 }
 

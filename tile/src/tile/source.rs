@@ -38,6 +38,17 @@ impl From<crate::cog::CogError> for TileError {
     }
 }
 
+/// Helper function for single-key etag_keys implementation.
+/// Use this in TileSource implementations that have a single etag_key.
+#[inline]
+pub fn single_etag_key(etag_key: &str, covers: bool) -> Vec<String> {
+    if covers {
+        vec![etag_key.to_string()]
+    } else {
+        vec![]
+    }
+}
+
 /// Trait for tile sources.
 #[async_trait]
 pub trait TileSource: Send + Sync {

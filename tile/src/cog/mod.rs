@@ -4,8 +4,11 @@
 
 mod bounds;
 mod decode;
+mod error;
 mod interpolate;
 mod reader;
+mod resample;
 
 pub use bounds::TileBounds;
-pub use reader::{CogError, CogReader};
+pub use error::CogError;
+pub use reader::CogReader;
