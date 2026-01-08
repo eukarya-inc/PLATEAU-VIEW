@@ -127,6 +127,22 @@ impl TileSource for CompositeTileSource {
         let overlay_covers = self.overlays.iter().any(|o| o.covers(z, x, y));
         base_covers || overlay_covers
     }
+
+    fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
+        let mut keys = Vec::new();
+
+        // Collect keys from base layer
+        if let Some(base) = &self.base {
+            keys.extend(base.etag_keys(z, x, y));
+        }
+
+        // Collect keys from overlays
+        for overlay in &self.overlays {
+            keys.extend(overlay.etag_keys(z, x, y));
+        }
+
+        keys
+    }
 }
 
 /// Composite two images, placing overlay on top of base.

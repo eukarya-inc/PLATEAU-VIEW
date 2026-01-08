@@ -55,4 +55,9 @@ pub trait TileSource: Send + Sync {
     /// Check if this source covers the specified coordinates.
     /// Used for fast rejection before attempting to fetch.
     fn covers(&self, z: u32, x: u32, y: u32) -> bool;
+
+    /// Get ETag keys for layers that cover this tile.
+    /// Returns a list of unique keys (e.g., "xyz:url:version") for ETag calculation.
+    /// Only includes layers that actually cover the specified tile coordinates.
+    fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String>;
 }

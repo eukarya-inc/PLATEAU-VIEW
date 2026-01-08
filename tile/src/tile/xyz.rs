@@ -14,14 +14,35 @@ pub struct XyzTileSource {
     range: Option<RangeConfig>,
     /// HTTP client
     client: reqwest::Client,
+    /// Key for ETag calculation (typically "xyz:url:version")
+    etag_key: String,
 }
 
 impl XyzTileSource {
     pub fn new(url_template: String, range: Option<RangeConfig>) -> Self {
+        let etag_key = format!("xyz:{}", url_template);
         Self {
             url_template,
             range,
             client: reqwest::Client::new(),
+            etag_key,
+        }
+    }
+
+    pub fn with_version(
+        url_template: String,
+        range: Option<RangeConfig>,
+        version: Option<&str>,
+    ) -> Self {
+        let etag_key = match version {
+            Some(v) => format!("xyz:{}:{}", url_template, v),
+            None => format!("xyz:{}", url_template),
+        };
+        Self {
+            url_template,
+            range,
+            client: reqwest::Client::new(),
+            etag_key,
         }
     }
 
@@ -68,6 +89,14 @@ impl TileSource for XyzTileSource {
         match &self.range {
             Some(range) => range.contains(z, x, y),
             None => true,
+        }
+    }
+
+    fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
+        if self.covers(z, x, y) {
+            vec![self.etag_key.clone()]
+        } else {
+            vec![]
         }
     }
 }

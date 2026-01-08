@@ -13,7 +13,7 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Memory Caching**: Fast in-memory tile cache using moka
 - **Remote Configuration**: Load configuration from remote URL with manual reload
 - **HTTP/2 (h2c)**: Support for HTTP/2 cleartext connections (auto-detects HTTP/1.1 and HTTP/2)
-- **ETag Support**: Version-based ETag calculation with If-None-Match support for 304 responses
+- **Smart ETag**: Per-tile ETag calculation based on covering layers with If-None-Match support for 304 responses
 - **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
 - **Multi-Format Output**: Support for PNG, WebP, and AVIF image formats
 
@@ -264,16 +264,18 @@ Pixels matching any nodata pattern will be rendered as transparent.
 
 The tile server supports HTTP caching through ETag headers and configurable Cache-Control.
 
-#### Version Configuration
+#### Smart ETag Calculation
 
-ETags are always computed for tile responses. You can control cache invalidation using `version` at multiple levels:
+ETags are calculated per-tile based on which layers actually cover that specific tile. This enables granular cache invalidation:
+
+- **Per-tile calculation**: Each tile's ETag only includes layers that cover it
+- **COG bounds awareness**: Tiles outside a COG's bounds won't be invalidated when the COG changes
+- **Version support**: Each layer can have an optional `version` for cache invalidation
 
 ```json
 {
-  "version": "v1.0.0",
   "sources": {
     "ortho": {
-      "version": "v1.0.1",
       "layers": [
         {
           "type": "xyz",
@@ -292,22 +294,16 @@ ETags are always computed for tile responses. You can control cache invalidation
 }
 ```
 
-| Field | Scope | Description |
-|-------|-------|-------------|
-| `version` (root) | Global | Default version for all sources |
-| `version` (source) | Per-source | Overrides global version |
-| `version` (layer) | Per-layer | Used when computing auto-version from layers |
-
-**Version priority:**
-1. Per-source `version` (if set)
-2. Global `version` (if set)
-3. Auto-computed from layers: hash of `type:url:version` for each layer sorted by order
+| Field | Description |
+|-------|-------------|
+| `version` (layer) | Optional version string for cache invalidation. When changed, invalidates cache for tiles covered by this layer |
 
 ETag calculation:
-- `W/"xxhash64(version/source/format/z/x/y)"`
+- `W/"xxhash64(source/format/z/x/y|key1|key2|...)"` where keys are from covering layers
+- Each layer contributes a key like `type:url:version` (e.g., `xyz:https://example.com/{z}/{x}/{y}.png:v1.0.0`)
 - Format is included in ETag, so different formats have different ETags
 - Clients can send `If-None-Match` header to receive `304 Not Modified` if cache is valid
-- Changing any layer's URL or version invalidates the cache (when using auto-computed version)
+- **Granular invalidation**: Changing a COG layer's version only invalidates tiles within that COG's geographic bounds
 
 #### Cache-Control Header
 

@@ -31,16 +31,35 @@ pub struct CogTileSource {
     tile_size: u32,
     /// Cached bounds
     bounds: Arc<RwLock<Option<TileBounds>>>,
+    /// Key for ETag calculation
+    etag_key: String,
 }
 
 impl CogTileSource {
     pub fn new(url: String, nodata: Option<NoDataConfig>) -> Self {
+        let etag_key = format!("cog:{}", url);
         Self {
             reader: Arc::new(RwLock::new(None)),
             url,
             nodata,
             tile_size: 256,
             bounds: Arc::new(RwLock::new(None)),
+            etag_key,
+        }
+    }
+
+    pub fn with_version(url: String, nodata: Option<NoDataConfig>, version: Option<&str>) -> Self {
+        let etag_key = match version {
+            Some(v) => format!("cog:{}:{}", url, v),
+            None => format!("cog:{}", url),
+        };
+        Self {
+            reader: Arc::new(RwLock::new(None)),
+            url,
+            nodata,
+            tile_size: 256,
+            bounds: Arc::new(RwLock::new(None)),
+            etag_key,
         }
     }
 
@@ -255,5 +274,13 @@ impl TileSource for CogTileSource {
         }
         // Bounds not yet loaded - assume it covers
         true
+    }
+
+    fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
+        if self.covers(z, x, y) {
+            vec![self.etag_key.clone()]
+        } else {
+            vec![]
+        }
     }
 }

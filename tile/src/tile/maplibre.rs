@@ -31,6 +31,8 @@ pub struct MaplibreTileSource {
     #[cfg(not(feature = "maplibre"))]
     #[allow(dead_code)]
     style_url: String,
+    /// Key for ETag calculation
+    etag_key: String,
 }
 
 impl MaplibreTileSource {
@@ -41,17 +43,61 @@ impl MaplibreTileSource {
     /// * `range` - Optional zoom/coordinate range restriction
     #[cfg(feature = "maplibre")]
     pub fn new(style_url: String, range: Option<RangeConfig>) -> Self {
+        let etag_key = format!("maplibre:{}", style_url);
         Self {
             style_url,
             cached_style_path: Arc::new(RwLock::new(None)),
             range,
+            etag_key,
         }
     }
 
     /// Create a new MapLibre tile source (stub for non-maplibre builds).
     #[cfg(not(feature = "maplibre"))]
     pub fn new(style_url: String, range: Option<RangeConfig>) -> Self {
-        Self { style_url, range }
+        let etag_key = format!("maplibre:{}", style_url);
+        Self {
+            style_url,
+            range,
+            etag_key,
+        }
+    }
+
+    /// Create a new MapLibre tile source with version.
+    #[cfg(feature = "maplibre")]
+    pub fn with_version(
+        style_url: String,
+        range: Option<RangeConfig>,
+        version: Option<&str>,
+    ) -> Self {
+        let etag_key = match version {
+            Some(v) => format!("maplibre:{}:{}", style_url, v),
+            None => format!("maplibre:{}", style_url),
+        };
+        Self {
+            style_url,
+            cached_style_path: Arc::new(RwLock::new(None)),
+            range,
+            etag_key,
+        }
+    }
+
+    /// Create a new MapLibre tile source with version (stub for non-maplibre builds).
+    #[cfg(not(feature = "maplibre"))]
+    pub fn with_version(
+        style_url: String,
+        range: Option<RangeConfig>,
+        version: Option<&str>,
+    ) -> Self {
+        let etag_key = match version {
+            Some(v) => format!("maplibre:{}:{}", style_url, v),
+            None => format!("maplibre:{}", style_url),
+        };
+        Self {
+            style_url,
+            range,
+            etag_key,
+        }
     }
 
     /// Ensure style.json is available locally and return the path.
@@ -191,6 +237,14 @@ impl TileSource for MaplibreTileSource {
         }
         // MapLibre styles can render any tile within valid zoom range (0-22)
         z <= 22
+    }
+
+    fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
+        if self.covers(z, x, y) {
+            vec![self.etag_key.clone()]
+        } else {
+            vec![]
+        }
     }
 }
 

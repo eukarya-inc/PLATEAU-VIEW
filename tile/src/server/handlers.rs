@@ -70,9 +70,10 @@ fn parse_y_and_format(y_ext: &str) -> Option<(u32, TileFormat)> {
     Some((y, format))
 }
 
-/// Compute ETag from version (optional), format, and tile coordinates.
+/// Compute ETag from layer keys and tile coordinates.
+/// Keys are sorted to ensure consistent ordering across requests.
 fn compute_etag(
-    version: Option<&str>,
+    keys: &[String],
     source: &str,
     format: TileFormat,
     z: u32,
@@ -80,10 +81,15 @@ fn compute_etag(
     y: u32,
 ) -> String {
     let fmt = format.extension();
-    let input = match version {
-        Some(v) => format!("{v}/{source}/{fmt}/{z}/{x}/{y}"),
-        None => format!("{source}/{fmt}/{z}/{x}/{y}"),
-    };
+
+    // Sort keys for consistent ordering
+    let mut sorted_keys = keys.to_vec();
+    sorted_keys.sort();
+
+    // Build input string: "source/format/z/x/y|key1|key2|..."
+    let keys_str = sorted_keys.join("|");
+    let input = format!("{source}/{fmt}/{z}/{x}/{y}|{keys_str}");
+
     let hash = xxh64(input.as_bytes(), 0);
     // Use weak ETag (W/) since the representation might vary
     format!("W/\"{hash:x}\"")
@@ -140,9 +146,12 @@ pub async fn get_tile(
     let fmt = format.extension();
     tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Tile request received");
 
-    // Get version for ETag calculation (per-source or global)
-    let version = state.get_source_version(&name).await;
-    let etag = compute_etag(version.as_deref(), &name, format, z, x, y);
+    // Get ETag keys for layers that cover this tile
+    let etag_keys = state
+        .get_source_etag_keys(&name, z, x, y)
+        .await
+        .unwrap_or_default();
+    let etag = compute_etag(&etag_keys, &name, format, z, x, y);
 
     // Check If-None-Match header
     if etag_matches(&headers, &etag) {
@@ -314,7 +323,9 @@ pub async fn get_tilejson(
         tilejson: "3.0.0",
         tiles: vec![tile_url],
         name,
-        attribution: Some("<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>"),
+        attribution: Some(
+            "<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>",
+        ),
         scheme: Some("xyz"),
         minzoom: Some(0),
         maxzoom: Some(22),

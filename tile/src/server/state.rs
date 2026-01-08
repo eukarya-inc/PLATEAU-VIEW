@@ -149,19 +149,34 @@ impl AppState {
         let mut composite = CompositeTileSource::new();
 
         // Add MapLibre as base if present (takes priority over XYZ)
-        if let Some(LayerConfig::MapLibre { url, .. }) = maplibre_layers.first() {
-            let maplibre_source = MaplibreTileSource::new(url.clone(), None);
+        if let Some(LayerConfig::MapLibre { url, version, .. }) = maplibre_layers.first() {
+            let maplibre_source =
+                MaplibreTileSource::with_version(url.clone(), None, version.as_deref());
             composite = composite.with_base(Box::new(maplibre_source));
-        } else if let Some(LayerConfig::Xyz { url, range, .. }) = xyz_layers.first() {
+        } else if let Some(LayerConfig::Xyz {
+            url,
+            range,
+            version,
+            ..
+        }) = xyz_layers.first()
+        {
             // Add XYZ as base if no MapLibre
-            let xyz_source = XyzTileSource::new(url.clone(), range.clone());
+            let xyz_source =
+                XyzTileSource::with_version(url.clone(), range.clone(), version.as_deref());
             composite = composite.with_base(Box::new(xyz_source));
         }
 
         // Add COG overlays
         for (layer, _) in cog_layers {
-            if let LayerConfig::Cog { url, nodata, .. } = layer {
-                let cog_source = CogTileSource::new(url.clone(), nodata.clone());
+            if let LayerConfig::Cog {
+                url,
+                nodata,
+                version,
+                ..
+            } = layer
+            {
+                let cog_source =
+                    CogTileSource::with_version(url.clone(), nodata.clone(), version.as_deref());
                 composite = composite.with_overlay(Box::new(cog_source));
             }
         }
@@ -173,6 +188,20 @@ impl AppState {
     pub async fn get_source(&self, name: &str) -> Option<Arc<dyn TileSource>> {
         let sources = self.sources.read().await;
         sources.get(name).cloned()
+    }
+
+    /// Get ETag keys for a tile from a specific source.
+    /// Only includes layers that actually cover the specified tile coordinates.
+    pub async fn get_source_etag_keys(
+        &self,
+        name: &str,
+        z: u32,
+        x: u32,
+        y: u32,
+    ) -> Option<Vec<String>> {
+        let sources = self.sources.read().await;
+        let source = sources.get(name)?;
+        Some(source.etag_keys(z, x, y))
     }
 
     /// Reload sources from config.

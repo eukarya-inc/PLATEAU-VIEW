@@ -80,24 +80,26 @@ impl TieredCache {
         let memory = MemoryCache::new(memory_size_mb);
 
         let persistent =
-            persistent_url.and_then(|url| match PersistentCache::new(url, object_cache_control) {
-                Ok(cache) => {
-                    tracing::info!(
-                        url = %url,
-                        mode = ?mode,
-                        "Persistent cache enabled"
-                    );
-                    Some(cache)
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error = %e,
-                        url = %url,
-                        "Failed to initialize persistent cache, continuing with memory only"
-                    );
-                    None
-                }
-            });
+            persistent_url.and_then(
+                |url| match PersistentCache::new(url, object_cache_control) {
+                    Ok(cache) => {
+                        tracing::info!(
+                            url = %url,
+                            mode = ?mode,
+                            "Persistent cache enabled"
+                        );
+                        Some(cache)
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            url = %url,
+                            "Failed to initialize persistent cache, continuing with memory only"
+                        );
+                        None
+                    }
+                },
+            );
 
         Self {
             memory,
