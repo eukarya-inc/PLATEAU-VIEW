@@ -8,6 +8,7 @@ use axum::{
     response::{Html, IntoResponse, Json, Response},
 };
 use serde::Serialize;
+use xxhash_rust::xxh64::xxh64;
 
 use super::format::{encode_image, parse_y_and_format};
 use super::response::{
@@ -15,6 +16,14 @@ use super::response::{
 };
 use super::state::AppState;
 use crate::cache::CacheObjectMeta;
+
+/// Compute a hash from etag_keys for cache validation.
+fn compute_etag_hash(keys: &[String]) -> String {
+    let mut sorted_keys = keys.to_vec();
+    sorted_keys.sort();
+    let input = sorted_keys.join("|");
+    format!("{:x}", xxh64(input.as_bytes(), 0))
+}
 
 /// Health check handler.
 pub async fn health() -> impl IntoResponse {
@@ -59,6 +68,7 @@ pub async fn get_tile(
         .await
         .unwrap_or_default();
     let etag = compute_etag(&etag_keys, &name, format, z, x, y);
+    let etag_hash = compute_etag_hash(&etag_keys);
 
     // Check If-None-Match header
     if etag_matches(&headers, &etag) {
@@ -67,8 +77,13 @@ pub async fn get_tile(
     }
 
     // Check cache first (includes format in path)
+    // Validate etag_hash to ensure cache is fresh after config changes
     let cache_key = format!("{name}/{fmt}/{z}/{x}/{y}.{fmt}");
-    if let Some(cached) = state.cache.get(&cache_key).await {
+    if let Some(cached) = state
+        .cache
+        .get_validated(&cache_key, Some(&etag_hash))
+        .await
+    {
         tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Cache hit");
         return tile_response(cached, format, Some(&etag), state.cache_control.as_deref());
     }
@@ -102,9 +117,10 @@ pub async fn get_tile(
         }
     };
 
-    // Store in cache with metadata (content-type for GCS/S3)
+    // Store in cache with metadata (content-type and etag_hash for validation)
     let meta = CacheObjectMeta {
         content_type: Some(format.content_type().to_string()),
+        etag_hash: Some(etag_hash),
     };
     state
         .cache

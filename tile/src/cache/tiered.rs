@@ -114,7 +114,22 @@ impl TieredCache {
     /// In WriteOnly/None mode: checks memory only (persistent read is skipped).
     /// On persistent hit, writes back to memory for faster subsequent access.
     pub async fn get(&self, key: &str) -> Option<Vec<u8>> {
-        // 1. Check memory cache
+        self.get_validated(key, None).await
+    }
+
+    /// Get a cached tile with etag_hash validation.
+    ///
+    /// If `expected_etag_hash` is provided, validates the cached data's etag_hash
+    /// against it. Returns None if the hash doesn't match (stale cache).
+    ///
+    /// Memory cache is assumed to be current (volatile, cleared on restart).
+    /// Persistent cache is validated using stored metadata.
+    pub async fn get_validated(
+        &self,
+        key: &str,
+        expected_etag_hash: Option<&str>,
+    ) -> Option<Vec<u8>> {
+        // 1. Check memory cache (no validation needed - volatile)
         if let Some(data) = self.memory.get(key).await {
             tracing::trace!(key = %key, "Memory cache hit");
             return Some(data);
@@ -124,8 +139,22 @@ impl TieredCache {
         if self.mode.allows_read()
             && let Some(ref persistent) = self.persistent
         {
-            match persistent.get(key).await {
-                Ok(Some(data)) => {
+            match persistent.get_with_meta(key).await {
+                Ok(Some((data, meta))) => {
+                    // Validate etag_hash if expected
+                    if let Some(expected) = expected_etag_hash {
+                        let stored_hash = meta.as_ref().and_then(|m| m.etag_hash.as_deref());
+                        if stored_hash != Some(expected) {
+                            tracing::debug!(
+                                key = %key,
+                                expected = %expected,
+                                stored = ?stored_hash,
+                                "Persistent cache stale (etag_hash mismatch)"
+                            );
+                            return None;
+                        }
+                    }
+
                     tracing::trace!(key = %key, "Persistent cache hit");
                     // Write back to memory for faster access
                     self.memory.put(key, data.clone()).await;
