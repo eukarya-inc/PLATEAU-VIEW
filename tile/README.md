@@ -15,6 +15,7 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **HTTP/2 (h2c)**: Support for HTTP/2 cleartext connections (auto-detects HTTP/1.1 and HTTP/2)
 - **ETag Support**: Version-based ETag calculation with If-None-Match support for 304 responses
 - **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
+- **Multi-Format Output**: Support for PNG, WebP, and AVIF image formats
 
 ## Quick Start
 
@@ -94,9 +95,29 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/tiles/:name/:z/:x/:y.png` | Get a tile |
+| GET | `/tiles/:name/:z/:x/:y.{format}` | Get a tile (format: `png`, `webp`, `avif`) |
 | GET | `/health` | Health check |
 | POST | `/reload` | Reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set) |
+
+### Supported Image Formats
+
+| Extension | MIME Type | Description |
+|-----------|-----------|-------------|
+| `.png` | `image/png` | Lossless compression, best for graphics with transparency |
+| `.webp` | `image/webp` | Modern format with good compression and transparency support |
+| `.avif` | `image/avif` | Best compression ratio, newer format with growing browser support |
+
+Example requests:
+```bash
+# PNG (default, widest compatibility)
+curl https://example.com/tiles/ortho/10/909/403.png
+
+# WebP (smaller file size, good browser support)
+curl https://example.com/tiles/ortho/10/909/403.webp
+
+# AVIF (smallest file size, modern browsers)
+curl https://example.com/tiles/ortho/10/909/403.avif
+```
 
 ## Configuration
 
@@ -251,7 +272,8 @@ ETags are always computed for tile responses. You can control cache invalidation
 3. Auto-computed from layers: hash of `type:url:version` for each layer sorted by order
 
 ETag calculation:
-- `W/"xxhash64(version/source/z/x/y)"`
+- `W/"xxhash64(version/source/format/z/x/y)"`
+- Format is included in ETag, so different formats have different ETags
 - Clients can send `If-None-Match` header to receive `304 Not Modified` if cache is valid
 - Changing any layer's URL or version invalidates the cache (when using auto-computed version)
 
@@ -319,8 +341,8 @@ If not set, no Cache-Control header is added.
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     PNG Response                            │
-│              (cached for future requests)                   │
+│                   Image Response                            │
+│            (PNG/WebP/AVIF, cached by format)                │
 └─────────────────────────────────────────────────────────────┘
 ```
 

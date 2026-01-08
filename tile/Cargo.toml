@@ -22,7 +22,7 @@ object_store = { version = "0.12", default-features = false, features = ["http",
 bytes = "1"
 
 # Image processing
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "webp", "avif"] }
 
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }

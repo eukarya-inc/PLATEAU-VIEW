@@ -41,12 +41,12 @@ impl PersistentCache {
 
     /// Convert a cache key to an object path.
     fn key_to_path(&self, key: &str) -> ObjectPath {
-        // Key format: {source}/{z}/{x}/{y}
-        // Path format: {prefix}/{source}/{z}/{x}/{y}.png
+        // Key format: {source}/{format}/{z}/{x}/{y}.{ext}
+        // Path format: {prefix}/{source}/{format}/{z}/{x}/{y}.{ext}
         if self.prefix.as_ref().is_empty() {
-            ObjectPath::from(format!("{key}.png"))
+            ObjectPath::from(key)
         } else {
-            ObjectPath::from(format!("{}/{key}.png", self.prefix.as_ref()))
+            ObjectPath::from(format!("{}/{key}", self.prefix.as_ref()))
         }
     }
 
@@ -105,8 +105,8 @@ mod tests {
 
         let cache = PersistentCache::new(&url).unwrap();
 
-        // Test put and get
-        let key = "test-source/10/100/200";
+        // Test put and get (key includes format and extension)
+        let key = "test-source/png/10/100/200.png";
         let data = vec![1, 2, 3, 4, 5];
 
         cache.put(key, data.clone()).await.unwrap();
@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(result, Some(data));
 
         // Test cache miss
-        let result = cache.get("nonexistent/0/0/0").await.unwrap();
+        let result = cache.get("nonexistent/png/0/0/0.png").await.unwrap();
         assert_eq!(result, None);
     }
 
@@ -126,7 +126,8 @@ mod tests {
 
         let cache = PersistentCache::new(&url).unwrap();
 
-        let path = cache.key_to_path("source/10/100/200");
-        assert_eq!(path.as_ref(), "source/10/100/200.png");
+        // Key now includes format and extension
+        let path = cache.key_to_path("source/webp/10/100/200.webp");
+        assert_eq!(path.as_ref(), "source/webp/10/100/200.webp");
     }
 }
