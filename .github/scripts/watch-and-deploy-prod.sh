@@ -3,18 +3,23 @@ set -euo pipefail
 
 # ===== 引数チェック =====
 if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 <server|worker>"
+  echo "Usage: $0 <target>"
+  echo ""
+  echo "Available targets:"
+  echo "  server    # Watch and deploy PLATEAU Server"
+  echo "  worker    # Watch and deploy PLATEAU Worker"
+  echo "  tile      # Watch and deploy PLATEAU Tile"
   echo ""
   echo "Examples:"
-  echo "  $0 server    # Watch and deploy PLATEAU Server"
-  echo "  $0 worker    # Watch and deploy PLATEAU Worker"
+  echo "  $0 server"
+  echo "  $0 tile"
   exit 1
 fi
 
 TARGET_TYPE="$1"
 
 # ===== 設定 =====
-CI_WORKFLOW_NAME="CI"                              # 最初に待機するCIワークフロー
+CI_WORKFLOW_NAME="ci"                              # 最初に待機するCIワークフロー
 TARGET_BRANCH="main"                               # CIを見るブランチ
 POLL_INTERVAL=10                                   # 何秒おきにチェックするか
 MAX_CHECKS=60                                      # 最大チェック回数 (10秒x60=600秒=10分)
@@ -22,16 +27,20 @@ MAX_CHECKS=60                                      # 最大チェック回数 (1
 # ターゲットタイプに応じて設定を切り替え
 case "$TARGET_TYPE" in
   server)
-    DEV_WORKFLOW_NAME="⭐️ Deploy PLATEAU Server dev"
+    DEV_WORKFLOW_NAME="Deploy PLATEAU Server dev"
     DISPATCH_WORKFLOW_FILE="deploy-server-prod.yml"
     ;;
   worker)
-    DEV_WORKFLOW_NAME="⭐️ Deploy PLATEAU Worker dev"
+    DEV_WORKFLOW_NAME="Deploy PLATEAU Worker dev"
     DISPATCH_WORKFLOW_FILE="deploy-worker-prod.yml"
+    ;;
+  tile)
+    DEV_WORKFLOW_NAME="Deploy PLATEAU Tile dev"
+    DISPATCH_WORKFLOW_FILE="deploy-tile-prod.yml"
     ;;
   *)
     echo "Error: Invalid target type '$TARGET_TYPE'"
-    echo "Must be either 'server' or 'worker'"
+    echo "Must be one of: server, worker, tile"
     exit 1
     ;;
 esac

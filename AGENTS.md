@@ -23,9 +23,11 @@ This is a monorepo containing multiple interconnected services:
   /server       # Editor backend server
 /extension      # PLATEAU VIEW extension widgets
 /geo            # NestJS geo service for address search
+/tile           # Rust-based high-performance tile server (XYZ proxy + COG rendering)
 /worker         # Background worker applications for PLATEAU API server
 /terraform      # Infrastructure as Code (AWS/GCP)
 /tools          # CLI tools for data migration
+/.github        # GitHub Actions workflows and scripts
 ```
 
 ## Common Development Commands
@@ -69,6 +71,15 @@ yarn start:dev         # Development server
 yarn build             # Production build
 yarn test              # Run tests (Jest)
 yarn lint              # Lint code
+```
+
+### Tile Server (Rust) - /tile
+```bash
+cargo build                              # Build
+cargo test                               # Run tests
+cargo fmt                                # Format code
+cargo clippy --all-targets -- -D warnings # Lint (CI treats warnings as errors)
+CONFIG_URL=file://config.json cargo run  # Run dev server
 ```
 
 ## High-Level Architecture
@@ -140,3 +151,15 @@ The core provides an engine-agnostic map abstraction:
 - Mock authentication available for local development
 - Environment variables configured in `.env` files (not committed)
 - **When investigating or modifying `/server`**: Always read `/server/CLAUDE.md` or `/server/AGENTS.md` first before using the Explore tool or making changes. These files contain critical server-specific architecture, patterns, and development guidelines.
+- **When investigating or modifying `/tile`**: Always read `/tile/CLAUDE.md` first. This contains Rust-specific development guidelines, environment variables, and layer type documentation.
+
+## Deployment Scripts
+
+Deployment scripts are located in `/.github/scripts/`:
+
+- **watch-and-deploy-prod.sh**: Watches CI and dev deploy workflows, then triggers production deployment. Supports server, worker, and tile targets.
+  ```bash
+  .github/scripts/watch-and-deploy-prod.sh server  # Deploy PLATEAU Server
+  .github/scripts/watch-and-deploy-prod.sh worker  # Deploy PLATEAU Worker
+  .github/scripts/watch-and-deploy-prod.sh tile    # Deploy PLATEAU Tile
+  ```
