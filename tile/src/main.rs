@@ -1,7 +1,7 @@
 use std::{env, sync::Arc};
 
 use anyhow::{Context, Result};
-use tile::{server, ConfigManager};
+use tile::{ConfigManager, server};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
