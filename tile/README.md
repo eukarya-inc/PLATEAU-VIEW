@@ -96,6 +96,7 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/tiles/:name/tilejson.json` | Get TileJSON metadata for a source |
 | GET | `/tiles/:name/:z/:x/:y.{format}` | Get a tile (format: `png`, `webp`, `avif`) |
 | GET | `/health` | Health check |
 | POST | `/reload` | Reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set) |
@@ -119,6 +120,36 @@ curl https://example.com/tiles/ortho/10/909/403.webp
 # AVIF (smallest file size, modern browsers)
 curl https://example.com/tiles/ortho/10/909/403.avif
 ```
+
+### TileJSON
+
+Each source provides a TileJSON 3.0.0 endpoint for integration with mapping libraries:
+
+```bash
+# Default format (PNG)
+curl https://example.com/tiles/ortho/tilejson.json
+
+# Specify format
+curl https://example.com/tiles/ortho/tilejson.json?format=webp
+```
+
+Response:
+```json
+{
+  "tilejson": "3.0.0",
+  "tiles": ["https://example.com/tiles/ortho/{z}/{x}/{y}.png"],
+  "name": "ortho",
+  "attribution": "<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>",
+  "scheme": "xyz",
+  "minzoom": 0,
+  "maxzoom": 22
+}
+```
+
+Query parameters:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `format` | `png` | Tile format: `png`, `webp`, or `avif` |
 
 ## Configuration
 

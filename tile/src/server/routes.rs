@@ -42,6 +42,7 @@ fn create_cors_layer(origins: Option<&str>) -> CorsLayer {
 pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router {
     Router::new()
         .route("/", get(handlers::viewer))
+        .route("/tiles/{name}/tilejson.json", get(handlers::get_tilejson))
         .route("/tiles/{name}/{z}/{x}/{y}", get(handlers::get_tile))
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))

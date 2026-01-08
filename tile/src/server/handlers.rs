@@ -5,9 +5,10 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Json, Response},
 };
 use image::ImageFormat;
+use serde::Serialize;
 use xxhash_rust::xxh64::xxh64;
 
 use super::state::AppState;
@@ -241,6 +242,85 @@ pub async fn reload(
                 .into_response()
         }
     }
+}
+
+/// TileJSON 3.0.0 response structure.
+#[derive(Debug, Serialize)]
+pub struct TileJson {
+    tilejson: &'static str,
+    tiles: Vec<String>,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    attribution: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scheme: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minzoom: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxzoom: Option<u32>,
+}
+
+/// Query parameters for TileJSON endpoint.
+#[derive(Debug, serde::Deserialize)]
+pub struct TileJsonQuery {
+    /// Output format (png, webp, avif). Defaults to png.
+    #[serde(default = "default_format")]
+    format: String,
+}
+
+fn default_format() -> String {
+    "png".to_string()
+}
+
+/// Get TileJSON metadata for a source.
+pub async fn get_tilejson(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<TileJsonQuery>,
+) -> Response {
+    // Check if source exists
+    if state.get_source(&name).await.is_none() {
+        return (StatusCode::NOT_FOUND, "Source not found").into_response();
+    }
+
+    // Validate format
+    let format = match query.format.as_str() {
+        "png" | "webp" | "avif" => &query.format,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Invalid format (use png, webp, or avif)",
+            )
+                .into_response();
+        }
+    };
+
+    // Get host from header
+    let host = headers
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost");
+
+    // Build tile URL template (use https if host doesn't look like localhost)
+    let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+        "http"
+    } else {
+        "https"
+    };
+    let tile_url = format!("{scheme}://{host}/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
+
+    let tilejson = TileJson {
+        tilejson: "3.0.0",
+        tiles: vec![tile_url],
+        name,
+        attribution: Some("<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>"),
+        scheme: Some("xyz"),
+        minzoom: Some(0),
+        maxzoom: Some(22),
+    };
+
+    Json(tilejson).into_response()
 }
 
 /// Build a 304 Not Modified response with ETag.
