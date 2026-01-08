@@ -73,6 +73,9 @@
         .controls button.active {
             background: #0f4c75;
         }
+        .controls button.copied {
+            background: #2e7d32;
+        }
         .spacer {
             flex: 1;
         }
@@ -171,13 +174,13 @@
     <div class="controls">
         <span class="title"><a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">PLATEAU</a> Tiles</span>
         <select id="source"></select>
-        <label for="format">Format:</label>
         <select id="format">
             <option value="png">PNG</option>
             <option value="webp">WebP</option>
             <option value="avif">AVIF</option>
         </select>
-        <button id="osmToggle" class="active">OSM</button>
+        <button id="copyUrl" title="Copy tile URL template">URL</button>
+        <button id="gsiToggle" class="active">地理院</button>
         <span class="spacer"></span>
         <span class="info" id="coords"></span>
         <button class="help-btn" id="helpBtn">?</button>
@@ -213,12 +216,13 @@
         const sources = {{SOURCES_JSON}};
         const sourceSelect = document.getElementById('source');
         const formatSelect = document.getElementById('format');
-        const osmToggle = document.getElementById('osmToggle');
+        const copyUrlBtn = document.getElementById('copyUrl');
+        const gsiToggle = document.getElementById('gsiToggle');
         const coordsEl = document.getElementById('coords');
         const helpBtn = document.getElementById('helpBtn');
         const modalOverlay = document.getElementById('modalOverlay');
         const modalClose = document.getElementById('modalClose');
-        let osmEnabled = true;
+        let gsiEnabled = true;
 
         // Populate source dropdown
         sources.forEach(name => {
@@ -228,25 +232,25 @@
             sourceSelect.appendChild(option);
         });
 
-        // Initialize map with OSM base
+        // Initialize map with GSI (国土地理院) base
         const map = new maplibregl.Map({
             container: 'map',
             style: {
                 version: 8,
                 sources: {
-                    osm: {
+                    gsi: {
                         type: 'raster',
-                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tiles: ['https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'],
                         tileSize: 256,
-                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
                     }
                 },
                 layers: [{
-                    id: 'osm',
+                    id: 'gsi',
                     type: 'raster',
-                    source: 'osm',
+                    source: 'gsi',
                     minzoom: 0,
-                    maxzoom: 19
+                    maxzoom: 18
                 }]
             },
             center: [139.7, 35.7],
@@ -256,11 +260,11 @@
 
         map.addControl(new maplibregl.NavigationControl());
 
-        function toggleOsm() {
-            osmEnabled = !osmEnabled;
-            osmToggle.classList.toggle('active', osmEnabled);
-            if (map.getLayer('osm')) {
-                map.setLayoutProperty('osm', 'visibility', osmEnabled ? 'visible' : 'none');
+        function toggleGsi() {
+            gsiEnabled = !gsiEnabled;
+            gsiToggle.classList.toggle('active', gsiEnabled);
+            if (map.getLayer('gsi')) {
+                map.setLayoutProperty('gsi', 'visibility', gsiEnabled ? 'visible' : 'none');
             }
         }
 
@@ -300,6 +304,27 @@
             modalOverlay.classList.remove('visible');
         }
 
+        // Copy URL template to clipboard
+        async function copyUrlTemplate() {
+            const sourceName = sourceSelect.value;
+            const format = formatSelect.value;
+            if (!sourceName) return;
+
+            const urlTemplate = `${window.location.origin}/tiles/${sourceName}/{z}/{x}/{y}.${format}`;
+
+            try {
+                await navigator.clipboard.writeText(urlTemplate);
+                copyUrlBtn.textContent = 'Copied!';
+                copyUrlBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyUrlBtn.textContent = 'URL';
+                    copyUrlBtn.classList.remove('copied');
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
         // Update coords display
         map.on('mousemove', (e) => {
             const { lng, lat } = e.lngLat;
@@ -308,9 +333,10 @@
         });
 
         // Event listeners
-        osmToggle.addEventListener('click', toggleOsm);
+        gsiToggle.addEventListener('click', toggleGsi);
         sourceSelect.addEventListener('change', updateSource);
         formatSelect.addEventListener('change', updateSource);
+        copyUrlBtn.addEventListener('click', copyUrlTemplate);
         helpBtn.addEventListener('click', openModal);
         modalClose.addEventListener('click', closeModal);
         modalOverlay.addEventListener('click', (e) => {

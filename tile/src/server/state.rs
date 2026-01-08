@@ -102,6 +102,19 @@ impl AppState {
         let mut sources = HashMap::new();
 
         for (name, config) in source_configs {
+            // Skip sources that only have maplibre layers when feature is off
+            #[cfg(not(feature = "maplibre"))]
+            {
+                let has_non_maplibre = config
+                    .layers
+                    .iter()
+                    .any(|l| !matches!(l, LayerConfig::MapLibre { .. }));
+                if !has_non_maplibre {
+                    tracing::debug!(source = %name, "Skipping maplibre-only source (feature disabled)");
+                    continue;
+                }
+            }
+
             let source = Self::build_source(config);
             sources.insert(name.clone(), source);
         }
