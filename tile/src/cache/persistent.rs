@@ -1,5 +1,6 @@
 //! Persistent tile cache using object_store.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -7,6 +8,9 @@ use object_store::{Attribute, Attributes, ObjectStore, PutOptions, path::Path as
 use thiserror::Error;
 
 use super::store::{CacheStoreError, CacheStoreFactory};
+
+/// Custom metadata key for etag_hash.
+const ETAG_HASH_META_KEY: &str = "etag_hash";
 
 /// Errors related to persistent cache operations.
 #[derive(Error, Debug)]
@@ -69,43 +73,43 @@ impl PersistentCache {
         }
     }
 
-    /// Convert a cache key to metadata sidecar path.
-    fn key_to_meta_path(&self, key: &str) -> ObjectPath {
-        let meta_key = format!("{key}.meta");
-        self.key_to_path(&meta_key)
-    }
-
     /// Get a cached tile with its metadata.
+    ///
+    /// Metadata is read from native object attributes (x-amz-meta-* for S3/R2).
     pub async fn get_with_meta(
         &self,
         key: &str,
     ) -> Result<Option<(Vec<u8>, Option<CacheObjectMeta>)>, PersistentCacheError> {
         let path = self.key_to_path(key);
 
-        // Get the data
-        let data = match self.store.get(&path).await {
-            Ok(result) => {
-                let bytes = result
-                    .bytes()
-                    .await
-                    .map_err(|e| PersistentCacheError::ReadError(e.to_string()))?;
-                bytes.to_vec()
-            }
+        // Get the data and attributes
+        let result = match self.store.get(&path).await {
+            Ok(r) => r,
             Err(object_store::Error::NotFound { .. }) => return Ok(None),
             Err(e) => return Err(PersistentCacheError::ReadError(e.to_string())),
         };
 
-        // Try to get metadata from sidecar file
-        let meta_path = self.key_to_meta_path(key);
-        let meta = match self.store.get(&meta_path).await {
-            Ok(result) => {
-                let bytes = result.bytes().await.ok();
-                bytes.and_then(|b| serde_json::from_slice(&b).ok())
-            }
-            Err(_) => None, // Metadata is optional
+        // Extract metadata from attributes
+        let etag_hash = result
+            .attributes
+            .get(&Attribute::Metadata(Cow::Borrowed(ETAG_HASH_META_KEY)))
+            .map(|v| v.to_string());
+
+        let meta = if etag_hash.is_some() {
+            Some(CacheObjectMeta {
+                content_type: None, // Content-Type is handled by HTTP headers
+                etag_hash,
+            })
+        } else {
+            None
         };
 
-        Ok(Some((data, meta)))
+        let bytes = result
+            .bytes()
+            .await
+            .map_err(|e| PersistentCacheError::ReadError(e.to_string()))?;
+
+        Ok(Some((bytes.to_vec(), meta)))
     }
 
     /// Get a cached tile (without metadata, for backward compatibility).
@@ -114,6 +118,8 @@ impl PersistentCache {
     }
 
     /// Put a tile in the cache with optional metadata.
+    ///
+    /// Metadata is stored as native object attributes (x-amz-meta-* for S3/R2).
     pub async fn put(
         &self,
         key: &str,
@@ -130,10 +136,17 @@ impl PersistentCache {
             attrs.insert(Attribute::CacheControl, cc.clone().into());
         }
 
-        if let Some(ref meta) = meta
-            && let Some(ref ct) = meta.content_type
-        {
-            attrs.insert(Attribute::ContentType, ct.clone().into());
+        if let Some(ref meta) = meta {
+            if let Some(ref ct) = meta.content_type {
+                attrs.insert(Attribute::ContentType, ct.clone().into());
+            }
+            // Store etag_hash as custom metadata (x-amz-meta-etag_hash for S3/R2)
+            if let Some(ref eh) = meta.etag_hash {
+                attrs.insert(
+                    Attribute::Metadata(Cow::Borrowed(ETAG_HASH_META_KEY)),
+                    eh.clone().into(),
+                );
+            }
         }
 
         // Try put_opts with attributes first; fallback to regular put if not supported
@@ -161,19 +174,6 @@ impl PersistentCache {
         if !data_written {
             self.store
                 .put(&path, bytes.into())
-                .await
-                .map_err(|e| PersistentCacheError::WriteError(e.to_string()))?;
-        }
-
-        // Write metadata to sidecar file if etag_hash is present
-        if let Some(ref meta) = meta
-            && meta.etag_hash.is_some()
-        {
-            let meta_path = self.key_to_meta_path(key);
-            let meta_json = serde_json::to_vec(meta)
-                .map_err(|e| PersistentCacheError::WriteError(e.to_string()))?;
-            self.store
-                .put(&meta_path, Bytes::from(meta_json).into())
                 .await
                 .map_err(|e| PersistentCacheError::WriteError(e.to_string()))?;
         }

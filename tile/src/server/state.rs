@@ -217,10 +217,12 @@ impl AppState {
         tracing::info!("Rebuilt {} tile sources", sources.len());
     }
 
-    /// List available source names.
+    /// List available source names (sorted alphabetically).
     pub async fn list_sources(&self) -> Vec<String> {
         let sources = self.sources.read().await;
-        sources.keys().cloned().collect()
+        let mut names: Vec<String> = sources.keys().cloned().collect();
+        names.sort();
+        names
     }
 
     /// Get the version string for a source.

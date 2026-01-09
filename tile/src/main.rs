@@ -7,12 +7,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
+    // Disable ANSI colors if not a TTY (e.g., Cloud Run logs)
+    let use_ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "tile=info,tower_http=info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_ansi(use_ansi))
         .init();
 
     // Load configuration
