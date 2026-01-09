@@ -16,7 +16,7 @@ use tokio::net::TcpListener;
 use tower::Service;
 use tower_http::{
     cors::CorsLayer,
-    trace::{MakeSpan, TraceLayer},
+    trace::{MakeSpan, OnRequest, TraceLayer},
 };
 use tracing::Span;
 
@@ -31,15 +31,29 @@ struct CloudTraceContext {
     sampled: bool,
 }
 
-/// Custom span maker that extracts trace context from various cloud provider headers.
+/// Custom span maker that creates a basic request span.
 #[derive(Clone, Debug)]
 struct TracingMakeSpan;
 
 impl<B> MakeSpan<B> for TracingMakeSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
+        tracing::info_span!(
+            "request",
+            method = %request.method(),
+            uri = %request.uri(),
+        )
+    }
+}
+
+/// Custom on_request handler that logs trace context to jsonPayload.
+#[derive(Clone, Debug)]
+struct TracingOnRequest;
+
+impl<B> OnRequest<B> for TracingOnRequest {
+    fn on_request(&mut self, request: &Request<B>, _span: &Span) {
         let ctx = extract_trace_context(request.headers());
 
-        // Use raw trace_id - tracing-stackdriver will autoformat to projects/[PROJECT-ID]/traces/[V]
+        // Log trace context as event fields (goes to jsonPayload, not span)
         let trace_id = ctx.as_ref().map(|c| c.trace_id.as_str()).unwrap_or("-");
         let span_id = ctx
             .as_ref()
@@ -47,14 +61,12 @@ impl<B> MakeSpan<B> for TracingMakeSpan {
             .unwrap_or("-");
         let trace_sampled = ctx.as_ref().map(|c| c.sampled).unwrap_or(false);
 
-        tracing::info_span!(
-            "request",
-            method = %request.method(),
-            uri = %request.uri(),
+        tracing::info!(
             "logging.googleapis.com/trace" = trace_id,
             "logging.googleapis.com/spanId" = span_id,
             "logging.googleapis.com/trace_sampled" = trace_sampled,
-        )
+            "Request started"
+        );
     }
 }
 
@@ -160,7 +172,11 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
         .layer(create_cors_layer(cors_origins))
-        .layer(TraceLayer::new_for_http().make_span_with(TracingMakeSpan))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(TracingMakeSpan)
+                .on_request(TracingOnRequest),
+        )
         .with_state(state)
 }
 
