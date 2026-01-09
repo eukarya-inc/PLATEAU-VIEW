@@ -66,9 +66,8 @@ async fn main() -> Result<()> {
         .unwrap_or_default();
 
     // Cache-Control header for HTTP responses
-    let cache_control = Some(
-        env::var("CACHE_CONTROL").unwrap_or_else(|_| DEFAULT_CACHE_CONTROL.to_string()),
-    );
+    let cache_control =
+        Some(env::var("CACHE_CONTROL").unwrap_or_else(|_| DEFAULT_CACHE_CONTROL.to_string()));
 
     // Cache-Control header for stored objects in persistent cache (optional)
     let object_cache_control = env::var("TILE_CACHE_CONTROL").ok();
@@ -95,10 +94,7 @@ async fn main() -> Result<()> {
         tracing::info!("Persistent cache: {} (mode: {:?})", url, cache_mode);
     }
 
-    tracing::info!(
-        "Cache-Control (HTTP): {}",
-        cache_control.as_ref().unwrap()
-    );
+    tracing::info!("Cache-Control (HTTP): {}", cache_control.as_ref().unwrap());
 
     if let Some(ref cc) = object_cache_control {
         tracing::info!("Cache-Control (objects): {}", cc);
