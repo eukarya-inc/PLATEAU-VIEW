@@ -1,0 +1,15 @@
+name = "plateau-tile-worker"
+main = "src/index.ts"
+compatibility_date = "2026-01-09"
+
+# Disable preview URLs
+preview_urls = false
+
+# Observability - enable logging
+[observability]
+enabled = true
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "CACHE"
+bucket_name = "plateau-tiles"

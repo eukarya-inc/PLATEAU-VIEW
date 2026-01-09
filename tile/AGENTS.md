@@ -22,6 +22,7 @@ tile/
 │   ├── cog/             # COG reading and rendering
 │   ├── tile/            # Tile sources (XYZ, COG, Composite)
 │   └── server/          # HTTP server and handlers
+├── worker/              # Cloudflare Worker (TypeScript) - R2 cache frontend
 ├── tests/               # E2E tests
 └── fixtures/            # Test COG files
 ```
