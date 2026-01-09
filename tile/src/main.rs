@@ -4,6 +4,10 @@ use anyhow::{Context, Result};
 use tile::{ConfigManager, cache::CacheMode, server};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+/// Default Cache-Control header for HTTP responses.
+/// 1 hour cache with must-revalidate ensures cache invalidation propagates quickly.
+const DEFAULT_CACHE_CONTROL: &str = "public, max-age=3600, must-revalidate";
+
 fn init_tracing() {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| "tile=info,tower_http=info".into());
@@ -61,8 +65,10 @@ async fn main() -> Result<()> {
         .map(|v| CacheMode::parse(&v))
         .unwrap_or_default();
 
-    // Cache-Control header for HTTP responses (optional, no default)
-    let cache_control = env::var("CACHE_CONTROL").ok();
+    // Cache-Control header for HTTP responses
+    let cache_control = Some(
+        env::var("CACHE_CONTROL").unwrap_or_else(|_| DEFAULT_CACHE_CONTROL.to_string()),
+    );
 
     // Cache-Control header for stored objects in persistent cache (optional)
     let object_cache_control = env::var("TILE_CACHE_CONTROL").ok();
@@ -89,9 +95,10 @@ async fn main() -> Result<()> {
         tracing::info!("Persistent cache: {} (mode: {:?})", url, cache_mode);
     }
 
-    if let Some(ref cc) = cache_control {
-        tracing::info!("Cache-Control (HTTP): {}", cc);
-    }
+    tracing::info!(
+        "Cache-Control (HTTP): {}",
+        cache_control.as_ref().unwrap()
+    );
 
     if let Some(ref cc) = object_cache_control {
         tracing::info!("Cache-Control (objects): {}", cc);

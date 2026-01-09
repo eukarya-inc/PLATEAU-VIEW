@@ -49,7 +49,7 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | `CORS_ORIGINS` | No | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
 | `PRELOAD_MODE` | No | `sync` | COG metadata preload mode: `sync` (blocking), `background` (non-blocking), or `lazy` (on first request) |
 | `TILE_CACHE_URL` | No | - | Persistent tile cache URL (see below) |
-| `CACHE_CONTROL` | No | - | Cache-Control header value for tile responses (e.g., `public, max-age=3600`) |
+| `CACHE_CONTROL` | No | `public, max-age=3600, must-revalidate` | Cache-Control header value for tile responses |
 | `RUST_LOG` | No | `info` | Log level (trace, debug, info, warn, error) |
 
 ### Persistent Cache Configuration
@@ -307,17 +307,20 @@ ETag calculation:
 
 #### Cache-Control Header
 
-Set the `CACHE_CONTROL` environment variable to add Cache-Control headers:
+The `CACHE_CONTROL` environment variable controls HTTP caching behavior:
 
 ```bash
-# CDN-friendly caching
+# Default (1 hour with must-revalidate for quick cache invalidation)
+CACHE_CONTROL="public, max-age=3600, must-revalidate"
+
+# CDN-friendly caching with longer edge cache
 CACHE_CONTROL="public, max-age=3600, s-maxage=86400"
 
 # No caching
 CACHE_CONTROL="no-cache, no-store"
 ```
 
-If not set, no Cache-Control header is added.
+The default `must-revalidate` ensures that expired cache entries are always revalidated with the server, enabling quick propagation of cache invalidation.
 
 ### Supported COG URL Schemes
 

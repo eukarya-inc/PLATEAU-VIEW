@@ -7,17 +7,79 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use http::HeaderValue;
+use http::{HeaderValue, Request};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
 use tokio::net::TcpListener;
 use tower::Service;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    cors::CorsLayer,
+    trace::{MakeSpan, TraceLayer},
+};
+use tracing::Span;
 
 use super::{handlers, state::AppState};
 use crate::{ConfigManager, cache::CacheMode};
+
+/// Custom span maker that extracts trace context from various cloud provider headers.
+#[derive(Clone, Debug)]
+struct TracingMakeSpan;
+
+impl<B> MakeSpan<B> for TracingMakeSpan {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        let trace_id = extract_trace_id(request.headers()).unwrap_or("-".to_string());
+
+        tracing::info_span!(
+            "request",
+            method = %request.method(),
+            uri = %request.uri(),
+            trace_id = %trace_id,
+        )
+    }
+}
+
+/// Extract trace ID from various cloud provider headers.
+/// Checks headers in order of priority:
+/// 1. traceparent (W3C standard)
+/// 2. X-Cloud-Trace-Context (Google Cloud)
+/// 3. X-Amzn-Trace-Id (AWS X-Ray)
+/// 4. cf-ray (Cloudflare)
+fn extract_trace_id(headers: &http::HeaderMap) -> Option<String> {
+    // W3C traceparent: 00-{trace_id}-{span_id}-{flags}
+    if let Some(value) = headers.get("traceparent").and_then(|v| v.to_str().ok()) {
+        let parts: Vec<&str> = value.split('-').collect();
+        if parts.len() >= 2 {
+            return Some(parts[1].to_string());
+        }
+    }
+
+    // Google Cloud: X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=TRACE_TRUE
+    if let Some(trace_id) = headers
+        .get("x-cloud-trace-context")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split('/').next())
+    {
+        return Some(trace_id.to_string());
+    }
+
+    // AWS X-Ray: X-Amzn-Trace-Id: Root=1-{timestamp}-{id};Parent=...;Sampled=...
+    if let Some(value) = headers.get("x-amzn-trace-id").and_then(|v| v.to_str().ok()) {
+        for part in value.split(';') {
+            if let Some(root) = part.strip_prefix("Root=") {
+                return Some(root.to_string());
+            }
+        }
+    }
+
+    // Cloudflare: cf-ray: {ray_id}-{colo}
+    if let Some(value) = headers.get("cf-ray").and_then(|v| v.to_str().ok()) {
+        return Some(value.to_string());
+    }
+
+    None
+}
 
 /// Create CORS layer from origins configuration.
 /// - None or "*" -> permissive (allow all origins)
@@ -47,7 +109,7 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
         .layer(create_cors_layer(cors_origins))
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().make_span_with(TracingMakeSpan))
         .with_state(state)
 }
 
