@@ -49,13 +49,13 @@ export const MapEnvironment: FC<MapEnvironmentProps> = ({
         ? {
             id: "gsi_mvt_tile_light",
             tile_type: "url",
-            tile_url: `${gsiTileUrl}/light-map/{z}/{x}/{y}.png`,
+            tile_url: `${gsiTileUrl}/light-map/{z}/{x}/{y}.webp`,
             tile_zoomLevelForURL: [0, 22],
           }
         : {
             id: "gsi_mvt_tile_dark",
             tile_type: "url",
-            tile_url: `${gsiTileUrl}/dark-map/{z}/{x}/{y}.png`,
+            tile_url: `${gsiTileUrl}/dark-map/{z}/{x}/{y}.webp`,
             tile_zoomLevelForURL: [undefined, 22],
           },
     ],
