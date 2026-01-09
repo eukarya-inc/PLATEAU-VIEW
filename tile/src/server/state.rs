@@ -153,17 +153,21 @@ impl AppState {
             let maplibre_source =
                 MaplibreTileSource::with_version(url.clone(), None, version.as_deref());
             composite = composite.with_base(Box::new(maplibre_source));
-        } else if let Some(LayerConfig::Xyz {
-            url,
-            range,
-            version,
-            ..
-        }) = xyz_layers.first()
-        {
-            // Add XYZ as base if no MapLibre
-            let xyz_source =
-                XyzTileSource::with_version(url.clone(), range.clone(), version.as_deref());
-            composite = composite.with_base(Box::new(xyz_source));
+        }
+
+        // Add all XYZ layers as overlays (they have range filters so will only render when in range)
+        for layer in &xyz_layers {
+            if let LayerConfig::Xyz {
+                url,
+                range,
+                version,
+                ..
+            } = layer
+            {
+                let xyz_source =
+                    XyzTileSource::with_version(url.clone(), range.clone(), version.as_deref());
+                composite = composite.with_overlay(Box::new(xyz_source));
+            }
         }
 
         // Add COG overlays
