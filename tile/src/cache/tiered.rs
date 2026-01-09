@@ -134,7 +134,7 @@ impl TieredCache {
     ) -> Option<Vec<u8>> {
         // 1. Check memory cache (no validation needed - volatile)
         if let Some(data) = self.memory.get(key).await {
-            tracing::trace!(key = %key, "Memory cache hit");
+            tracing::info!(key = %key, size = data.len(), "Memory cache hit");
             return Some(data);
         }
 
@@ -148,29 +148,29 @@ impl TieredCache {
                     if let Some(expected) = expected_etag_hash {
                         let stored_hash = meta.as_ref().and_then(|m| m.etag_hash.as_deref());
                         if stored_hash != Some(expected) {
-                            tracing::debug!(
+                            tracing::info!(
                                 key = %key,
                                 expected = %expected,
                                 stored = ?stored_hash,
-                                "Persistent cache stale (etag_hash mismatch)"
+                                "R2 cache stale (etag_hash mismatch)"
                             );
                             return None;
                         }
                     }
 
-                    tracing::trace!(key = %key, "Persistent cache hit");
+                    tracing::info!(key = %key, size = data.len(), "R2 cache hit");
                     // Write back to memory for faster access
                     self.memory.put(key, data.clone()).await;
                     return Some(data);
                 }
                 Ok(None) => {
-                    tracing::trace!(key = %key, "Persistent cache miss");
+                    tracing::info!(key = %key, "R2 cache miss");
                 }
                 Err(e) => {
                     tracing::warn!(
                         key = %key,
                         error = %e,
-                        "Persistent cache read failed"
+                        "R2 cache read failed"
                     );
                 }
             }
@@ -198,15 +198,16 @@ impl TieredCache {
         {
             let persistent = persistent.clone();
             let key = key.to_string();
+            let data_len = data.len();
             tokio::spawn(async move {
                 if let Err(e) = persistent.put(&key, data, meta).await {
                     tracing::warn!(
                         key = %key,
                         error = %e,
-                        "Failed to write to persistent cache"
+                        "R2 cache write failed"
                     );
                 } else {
-                    tracing::trace!(key = %key, "Written to persistent cache");
+                    tracing::info!(key = %key, size = data_len, "R2 cache write");
                 }
             });
         }

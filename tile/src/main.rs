@@ -4,18 +4,30 @@ use anyhow::{Context, Result};
 use tile::{ConfigManager, cache::CacheMode, server};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+fn init_tracing() {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "tile=info,tower_http=info".into());
+
+    // Use tracing-stackdriver on Cloud Run (K_SERVICE is set by Cloud Run)
+    if env::var("K_SERVICE").is_ok() {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_stackdriver::layer())
+            .init();
+    } else {
+        // Local development: use pretty console output
+        let use_ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer().with_ansi(use_ansi))
+            .init();
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
-    // Disable ANSI colors if not a TTY (e.g., Cloud Run logs)
-    let use_ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "tile=info,tower_http=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_ansi(use_ansi))
-        .init();
+    init_tracing();
 
     // Load configuration
     let config_url =

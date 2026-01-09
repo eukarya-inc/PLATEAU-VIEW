@@ -38,6 +38,7 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-stackdriver = "0.10"
 
 # Async utilities
 futures = "0.3"
