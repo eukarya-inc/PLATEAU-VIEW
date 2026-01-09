@@ -225,7 +225,7 @@ PROD_LATEST_RUN=$(gh run list \
   --workflow "$DISPATCH_WORKFLOW_FILE" \
   --branch "$TARGET_BRANCH" \
   -L 1 \
-  --json status,conclusion,url,createdAt \
+  --json status,conclusion,url,createdAt,headSha \
   --jq '.[0]')
 
 if [[ -n "$PROD_LATEST_RUN" && "$PROD_LATEST_RUN" != "null" ]]; then
@@ -233,21 +233,16 @@ if [[ -n "$PROD_LATEST_RUN" && "$PROD_LATEST_RUN" != "null" ]]; then
   PROD_LATEST_STATUS=$(echo "$PROD_LATEST_RUN" | jq -r '.status')
   PROD_LATEST_CONCLUSION=$(echo "$PROD_LATEST_RUN" | jq -r '.conclusion // ""')
   PROD_LATEST_URL=$(echo "$PROD_LATEST_RUN" | jq -r '.url')
+  PROD_LATEST_SHA=$(echo "$PROD_LATEST_RUN" | jq -r '.headSha')
 
-  # UTC タイムスタンプに変換
-  if command -v gdate &> /dev/null; then
-    PROD_LATEST_TIMESTAMP=$(gdate -d "$PROD_LATEST_CREATED_AT" +%s)
-  else
-    PROD_LATEST_TIMESTAMP=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$PROD_LATEST_CREATED_AT" +%s 2>/dev/null || date -d "$PROD_LATEST_CREATED_AT" +%s 2>/dev/null || echo "0")
-  fi
-
-  echo "  Latest production run: $PROD_LATEST_CREATED_AT (timestamp: $PROD_LATEST_TIMESTAMP)"
-  echo "  Latest commit:         $LATEST_COMMIT_DATE (timestamp: $LATEST_COMMIT_TIMESTAMP)"
+  echo "  Latest production run: $PROD_LATEST_CREATED_AT"
+  echo "  Production SHA: $PROD_LATEST_SHA"
+  echo "  Latest commit:  $LATEST_COMMIT_SHA"
   echo "  Status: $PROD_LATEST_STATUS, Conclusion: $PROD_LATEST_CONCLUSION"
   echo "  $PROD_LATEST_URL"
 
-  # 本番デプロイが最新コミット以降に実行されていて、成功している場合
-  if [[ "$PROD_LATEST_TIMESTAMP" -ge "$LATEST_COMMIT_TIMESTAMP" && "$PROD_LATEST_STATUS" == "completed" && "$PROD_LATEST_CONCLUSION" == "success" ]]; then
+  # 本番デプロイが最新コミットと同じSHAで実行されていて、成功している場合
+  if [[ "$PROD_LATEST_SHA" == "$LATEST_COMMIT_SHA" && "$PROD_LATEST_STATUS" == "completed" && "$PROD_LATEST_CONCLUSION" == "success" ]]; then
     echo ""
     echo "🎉 Production deployment is already completed for this commit!"
     echo "  No need to trigger again."
