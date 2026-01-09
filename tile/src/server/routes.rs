@@ -23,59 +23,110 @@ use tracing::Span;
 use super::{handlers, state::AppState};
 use crate::{ConfigManager, cache::CacheMode};
 
+/// Cloud trace context extracted from request headers.
+#[derive(Debug, Clone)]
+struct CloudTraceContext {
+    trace_id: String,
+    span_id: Option<String>,
+    sampled: bool,
+}
+
 /// Custom span maker that extracts trace context from various cloud provider headers.
 #[derive(Clone, Debug)]
 struct TracingMakeSpan;
 
 impl<B> MakeSpan<B> for TracingMakeSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
-        let trace_id = extract_trace_id(request.headers()).unwrap_or("-".to_string());
+        let ctx = extract_trace_context(request.headers());
+
+        // Use raw trace_id - tracing-stackdriver will autoformat to projects/[PROJECT-ID]/traces/[V]
+        let trace_id = ctx.as_ref().map(|c| c.trace_id.as_str()).unwrap_or("-");
+        let span_id = ctx
+            .as_ref()
+            .and_then(|c| c.span_id.as_deref())
+            .unwrap_or("-");
+        let trace_sampled = ctx.as_ref().map(|c| c.sampled).unwrap_or(false);
 
         tracing::info_span!(
             "request",
             method = %request.method(),
             uri = %request.uri(),
-            trace_id = %trace_id,
+            "logging.googleapis.com/trace" = trace_id,
+            "logging.googleapis.com/spanId" = span_id,
+            "logging.googleapis.com/trace_sampled" = trace_sampled,
         )
     }
 }
 
-/// Extract trace ID from various cloud provider headers.
+/// Extract trace context from various cloud provider headers.
 /// Checks headers in order of priority:
 /// 1. traceparent (W3C standard)
 /// 2. X-Cloud-Trace-Context (Google Cloud)
 /// 3. X-Amzn-Trace-Id (AWS X-Ray)
 /// 4. cf-ray (Cloudflare)
-fn extract_trace_id(headers: &http::HeaderMap) -> Option<String> {
+fn extract_trace_context(headers: &http::HeaderMap) -> Option<CloudTraceContext> {
     // W3C traceparent: 00-{trace_id}-{span_id}-{flags}
     if let Some(value) = headers.get("traceparent").and_then(|v| v.to_str().ok()) {
         let parts: Vec<&str> = value.split('-').collect();
-        if parts.len() >= 2 {
-            return Some(parts[1].to_string());
+        if parts.len() >= 4 {
+            let sampled = parts[3].ends_with('1');
+            return Some(CloudTraceContext {
+                trace_id: parts[1].to_string(),
+                span_id: Some(parts[2].to_string()),
+                sampled,
+            });
         }
     }
 
     // Google Cloud: X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=TRACE_TRUE
-    if let Some(trace_id) = headers
+    if let Some(value) = headers
         .get("x-cloud-trace-context")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split('/').next())
     {
-        return Some(trace_id.to_string());
+        let (trace_span, options) = value.split_once(';').unwrap_or((value, ""));
+        let (trace_id, span_id) = trace_span
+            .split_once('/')
+            .map(|(t, s)| (t.to_string(), Some(s.to_string())))
+            .unwrap_or_else(|| (trace_span.to_string(), None));
+        let sampled = options.contains("o=1");
+        return Some(CloudTraceContext {
+            trace_id,
+            span_id,
+            sampled,
+        });
     }
 
     // AWS X-Ray: X-Amzn-Trace-Id: Root=1-{timestamp}-{id};Parent=...;Sampled=...
     if let Some(value) = headers.get("x-amzn-trace-id").and_then(|v| v.to_str().ok()) {
+        let mut trace_id = None;
+        let mut span_id = None;
+        let mut sampled = false;
         for part in value.split(';') {
+            let part = part.trim();
             if let Some(root) = part.strip_prefix("Root=") {
-                return Some(root.to_string());
+                trace_id = Some(root.to_string());
+            } else if let Some(parent) = part.strip_prefix("Parent=") {
+                span_id = Some(parent.to_string());
+            } else if part.strip_prefix("Sampled=") == Some("1") {
+                sampled = true;
             }
+        }
+        if let Some(trace_id) = trace_id {
+            return Some(CloudTraceContext {
+                trace_id,
+                span_id,
+                sampled,
+            });
         }
     }
 
     // Cloudflare: cf-ray: {ray_id}-{colo}
     if let Some(value) = headers.get("cf-ray").and_then(|v| v.to_str().ok()) {
-        return Some(value.to_string());
+        return Some(CloudTraceContext {
+            trace_id: value.to_string(),
+            span_id: None,
+            sampled: false,
+        });
     }
 
     None
