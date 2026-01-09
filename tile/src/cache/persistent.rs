@@ -11,6 +11,8 @@ use super::store::{CacheStoreError, CacheStoreFactory};
 
 /// Custom metadata key for etag_hash.
 const ETAG_HASH_META_KEY: &str = "etag_hash";
+/// Custom metadata key for full ETag.
+const ETAG_META_KEY: &str = "etag";
 
 /// Errors related to persistent cache operations.
 #[derive(Error, Debug)]
@@ -30,6 +32,8 @@ pub struct CacheObjectMeta {
     pub content_type: Option<String>,
     /// Hash of etag_keys for cache invalidation
     pub etag_hash: Option<String>,
+    /// Full ETag for HTTP caching (e.g., W/"abc123")
+    pub etag: Option<String>,
 }
 
 /// Persistent tile cache backed by object storage.
@@ -94,11 +98,16 @@ impl PersistentCache {
             .attributes
             .get(&Attribute::Metadata(Cow::Borrowed(ETAG_HASH_META_KEY)))
             .map(|v| v.to_string());
+        let etag = result
+            .attributes
+            .get(&Attribute::Metadata(Cow::Borrowed(ETAG_META_KEY)))
+            .map(|v| v.to_string());
 
-        let meta = if etag_hash.is_some() {
+        let meta = if etag_hash.is_some() || etag.is_some() {
             Some(CacheObjectMeta {
                 content_type: None, // Content-Type is handled by HTTP headers
                 etag_hash,
+                etag,
             })
         } else {
             None
@@ -145,6 +154,13 @@ impl PersistentCache {
                 attrs.insert(
                     Attribute::Metadata(Cow::Borrowed(ETAG_HASH_META_KEY)),
                     eh.clone().into(),
+                );
+            }
+            // Store full ETag as custom metadata (x-amz-meta-etag for S3/R2)
+            if let Some(ref et) = meta.etag {
+                attrs.insert(
+                    Attribute::Metadata(Cow::Borrowed(ETAG_META_KEY)),
+                    et.clone().into(),
                 );
             }
         }

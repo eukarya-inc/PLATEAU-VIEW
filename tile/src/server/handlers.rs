@@ -107,6 +107,7 @@ pub async fn get_tile(
     let meta = CacheObjectMeta {
         content_type: Some(format.content_type().to_string()),
         etag_hash: Some(etag_hash.clone()),
+        etag: Some(etag.clone()),
     };
 
     // Get from cache or generate with single-flight deduplication
