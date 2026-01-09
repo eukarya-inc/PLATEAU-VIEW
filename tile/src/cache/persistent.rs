@@ -7,7 +7,7 @@ use bytes::Bytes;
 use object_store::{Attribute, Attributes, ObjectStore, PutOptions, path::Path as ObjectPath};
 use thiserror::Error;
 
-use super::store::{CacheStoreError, CacheStoreFactory};
+use super::store::{CacheBackend, CacheStoreError, CacheStoreFactory};
 
 /// Custom metadata key for etag_hash.
 const ETAG_HASH_META_KEY: &str = "etag_hash";
@@ -43,6 +43,8 @@ pub struct PersistentCache {
     prefix: ObjectPath,
     /// Cache-Control header to set on stored objects
     cache_control: Option<String>,
+    /// Backend type (file, gcs, s3, r2)
+    backend: CacheBackend,
 }
 
 impl PersistentCache {
@@ -58,12 +60,18 @@ impl PersistentCache {
     /// * `url` - Storage URL
     /// * `cache_control` - Optional Cache-Control header to set on stored objects
     pub fn new(url: &str, cache_control: Option<String>) -> Result<Self, PersistentCacheError> {
-        let (store, prefix) = CacheStoreFactory::create(url)?;
+        let (store, prefix, backend) = CacheStoreFactory::create(url)?;
         Ok(Self {
             store,
             prefix,
             cache_control,
+            backend,
         })
+    }
+
+    /// Get the backend type.
+    pub fn backend(&self) -> CacheBackend {
+        self.backend
     }
 
     /// Convert a cache key to an object path.

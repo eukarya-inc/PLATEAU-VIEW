@@ -27,15 +27,15 @@ MAX_CHECKS=60                                      # 最大チェック回数 (1
 # ターゲットタイプに応じて設定を切り替え
 case "$TARGET_TYPE" in
   server)
-    DEV_WORKFLOW_NAME="Deploy PLATEAU Server dev"
+    DEV_WORKFLOW_FILE="deploy-server-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-server-prod.yml"
     ;;
   worker)
-    DEV_WORKFLOW_NAME="Deploy PLATEAU Worker dev"
+    DEV_WORKFLOW_FILE="deploy-worker-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-worker-prod.yml"
     ;;
   tile)
-    DEV_WORKFLOW_NAME="Deploy PLATEAU Tile dev"
+    DEV_WORKFLOW_FILE="deploy-tile-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-tile-prod.yml"
     ;;
   *)
@@ -45,7 +45,7 @@ case "$TARGET_TYPE" in
     ;;
 esac
 
-echo "Watching CI workflow '$CI_WORKFLOW_NAME' and Dev workflow '$DEV_WORKFLOW_NAME' on branch '$TARGET_BRANCH'..."
+echo "Watching CI workflow '$CI_WORKFLOW_NAME' and Dev workflow '$DEV_WORKFLOW_FILE' on branch '$TARGET_BRANCH'..."
 echo "On success, will dispatch '$DISPATCH_WORKFLOW_FILE'."
 echo ""
 
@@ -145,7 +145,7 @@ for i in $(seq 1 "$MAX_CHECKS"); do
 
   # 最新の1件を取得
   RUN_INFO=$(gh run list \
-    --workflow "$DEV_WORKFLOW_NAME" \
+    --workflow "$DEV_WORKFLOW_FILE" \
     --branch "$TARGET_BRANCH" \
     -L 1 \
     --json status,conclusion,url,headSha,createdAt \

@@ -88,6 +88,7 @@ impl TieredCache {
                     Ok(cache) => {
                         tracing::info!(
                             url = %url,
+                            backend = %cache.backend(),
                             mode = ?mode,
                             "Persistent cache enabled"
                         );
@@ -142,6 +143,7 @@ impl TieredCache {
         if self.mode.allows_read()
             && let Some(ref persistent) = self.persistent
         {
+            let backend = persistent.backend();
             match persistent.get_with_meta(key).await {
                 Ok(Some((data, meta))) => {
                     // Validate etag_hash if expected
@@ -150,27 +152,29 @@ impl TieredCache {
                         if stored_hash != Some(expected) {
                             tracing::info!(
                                 key = %key,
+                                backend = %backend,
                                 expected = %expected,
                                 stored = ?stored_hash,
-                                "R2 cache stale (etag_hash mismatch)"
+                                "Persistent cache stale (etag_hash mismatch)"
                             );
                             return None;
                         }
                     }
 
-                    tracing::info!(key = %key, size = data.len(), "R2 cache hit");
+                    tracing::info!(key = %key, backend = %backend, size = data.len(), "Persistent cache hit");
                     // Write back to memory for faster access
                     self.memory.put(key, data.clone()).await;
                     return Some(data);
                 }
                 Ok(None) => {
-                    tracing::info!(key = %key, "R2 cache miss");
+                    tracing::info!(key = %key, backend = %backend, "Persistent cache miss");
                 }
                 Err(e) => {
                     tracing::warn!(
                         key = %key,
+                        backend = %backend,
                         error = %e,
-                        "R2 cache read failed"
+                        "Persistent cache read failed"
                     );
                 }
             }
@@ -197,17 +201,19 @@ impl TieredCache {
             && let Some(ref persistent) = self.persistent
         {
             let persistent = persistent.clone();
+            let backend = persistent.backend();
             let key = key.to_string();
             let data_len = data.len();
             tokio::spawn(async move {
                 if let Err(e) = persistent.put(&key, data, meta).await {
                     tracing::warn!(
                         key = %key,
+                        backend = %backend,
                         error = %e,
-                        "R2 cache write failed"
+                        "Persistent cache write failed"
                     );
                 } else {
-                    tracing::info!(key = %key, size = data_len, "R2 cache write");
+                    tracing::info!(key = %key, backend = %backend, size = data_len, "Persistent cache write");
                 }
             });
         }
@@ -280,6 +286,7 @@ impl TieredCache {
     {
         // Capture values for use in closure
         let persistent = self.persistent.clone();
+        let backend = persistent.as_ref().map(|p| p.backend());
         let mode = self.mode;
         let expected_hash = expected_etag_hash.map(|s| s.to_string());
         let key_owned = key.to_string();
@@ -289,6 +296,7 @@ impl TieredCache {
                 // 1. Check persistent cache (if mode allows reading)
                 if mode.allows_read()
                     && let Some(ref persistent) = persistent
+                    && let Some(backend) = backend
                 {
                     match persistent.get_with_meta(&key_owned).await {
                         Ok(Some((data, stored_meta))) => {
@@ -303,23 +311,29 @@ impl TieredCache {
                             };
 
                             if is_valid {
-                                tracing::trace!(key = %key_owned, "Persistent cache hit (single-flight)");
+                                tracing::info!(key = %key_owned, backend = %backend, size = data.len(), "Persistent cache hit");
                                 return Ok(data);
                             } else {
-                                tracing::debug!(
+                                let stored_hash =
+                                    stored_meta.as_ref().and_then(|m| m.etag_hash.as_deref());
+                                tracing::info!(
                                     key = %key_owned,
-                                    "Persistent cache stale (single-flight)"
+                                    backend = %backend,
+                                    expected = ?expected_hash,
+                                    stored = ?stored_hash,
+                                    "Persistent cache stale (etag_hash mismatch)"
                                 );
                             }
                         }
                         Ok(None) => {
-                            tracing::trace!(key = %key_owned, "Persistent cache miss (single-flight)");
+                            tracing::info!(key = %key_owned, backend = %backend, "Persistent cache miss");
                         }
                         Err(e) => {
                             tracing::warn!(
                                 key = %key_owned,
+                                backend = %backend,
                                 error = %e,
-                                "Persistent cache read failed (single-flight)"
+                                "Persistent cache read failed"
                             );
                         }
                     }
@@ -332,19 +346,22 @@ impl TieredCache {
                 // 3. Write to persistent cache (background, only if mode allows writing)
                 if mode.allows_write()
                     && let Some(ref persistent) = persistent
+                    && let Some(backend) = backend
                 {
                     let persistent = persistent.clone();
                     let key = key_owned.clone();
+                    let data_len = data.len();
                     let data = data.clone();
                     tokio::spawn(async move {
                         if let Err(e) = persistent.put(&key, data, meta).await {
                             tracing::warn!(
                                 key = %key,
+                                backend = %backend,
                                 error = %e,
-                                "Failed to write to persistent cache (single-flight)"
+                                "Persistent cache write failed"
                             );
                         } else {
-                            tracing::trace!(key = %key, "Written to persistent cache (single-flight)");
+                            tracing::info!(key = %key, backend = %backend, size = data_len, "Persistent cache write");
                         }
                     });
                 }

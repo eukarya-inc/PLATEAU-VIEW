@@ -22,6 +22,30 @@ pub enum CacheStoreError {
     StorageError(String),
 }
 
+/// Cache storage backend type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheBackend {
+    /// Local filesystem
+    File,
+    /// Google Cloud Storage
+    Gcs,
+    /// Amazon S3
+    S3,
+    /// Cloudflare R2
+    R2,
+}
+
+impl std::fmt::Display for CacheBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CacheBackend::File => write!(f, "file"),
+            CacheBackend::Gcs => write!(f, "gcs"),
+            CacheBackend::S3 => write!(f, "s3"),
+            CacheBackend::R2 => write!(f, "r2"),
+        }
+    }
+}
+
 /// Factory for creating ObjectStore instances from URLs.
 pub struct CacheStoreFactory;
 
@@ -33,14 +57,18 @@ impl CacheStoreFactory {
     /// - `gs://` - Google Cloud Storage
     /// - `s3://` - Amazon S3
     /// - `r2://` - Cloudflare R2 (S3-compatible)
-    pub fn create(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), CacheStoreError> {
+    ///
+    /// Returns (store, path_prefix, backend_type).
+    pub fn create(
+        url: &str,
+    ) -> Result<(Arc<dyn ObjectStore>, ObjectPath, CacheBackend), CacheStoreError> {
         let parsed = Url::parse(url).map_err(|e| CacheStoreError::InvalidUrl(e.to_string()))?;
 
         match parsed.scheme() {
-            "file" => Self::create_local_store(&parsed),
-            "gs" => Self::create_gcs_store(&parsed),
-            "s3" => Self::create_s3_store(&parsed),
-            "r2" => Self::create_r2_store(&parsed),
+            "file" => Self::create_local_store(&parsed).map(|(s, p)| (s, p, CacheBackend::File)),
+            "gs" => Self::create_gcs_store(&parsed).map(|(s, p)| (s, p, CacheBackend::Gcs)),
+            "s3" => Self::create_s3_store(&parsed).map(|(s, p)| (s, p, CacheBackend::S3)),
+            "r2" => Self::create_r2_store(&parsed).map(|(s, p)| (s, p, CacheBackend::R2)),
             scheme => Err(CacheStoreError::UnsupportedScheme(scheme.to_string())),
         }
     }

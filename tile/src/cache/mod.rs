@@ -11,7 +11,7 @@ mod tiered;
 
 pub use memory::{CacheStats, MemoryCache};
 pub use persistent::{CacheObjectMeta, PersistentCache, PersistentCacheError};
-pub use store::{CacheStoreError, CacheStoreFactory};
+pub use store::{CacheBackend, CacheStoreError, CacheStoreFactory};
 pub use tiered::{CacheMode, TieredCache};
 
 // Re-export TieredCache as TileCache for backward compatibility
