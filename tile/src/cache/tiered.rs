@@ -284,6 +284,12 @@ impl TieredCache {
         Fut: Future<Output = Result<Vec<u8>, E>> + Send,
         E: Send + Sync + 'static,
     {
+        // 1. Check memory cache first (for logging - moka handles actual caching)
+        if let Some(data) = self.memory.get(key).await {
+            tracing::info!(key = %key, size = data.len(), "Memory cache hit");
+            return Ok(data);
+        }
+
         // Capture values for use in closure
         let persistent = self.persistent.clone();
         let backend = persistent.as_ref().map(|p| p.backend());
@@ -291,9 +297,11 @@ impl TieredCache {
         let expected_hash = expected_etag_hash.map(|s| s.to_string());
         let key_owned = key.to_string();
 
+        tracing::info!(key = %key, "Memory cache miss");
+
         self.memory
             .get_or_try_insert_with(key, || async move {
-                // 1. Check persistent cache (if mode allows reading)
+                // 2. Check persistent cache (if mode allows reading)
                 if mode.allows_read()
                     && let Some(ref persistent) = persistent
                     && let Some(backend) = backend
@@ -339,11 +347,11 @@ impl TieredCache {
                     }
                 }
 
-                // 2. Generate tile
+                // 3. Generate tile
                 tracing::trace!(key = %key_owned, "Generating tile (single-flight)");
                 let data = generate().await?;
 
-                // 3. Write to persistent cache (background, only if mode allows writing)
+                // 4. Write to persistent cache (background, only if mode allows writing)
                 if mode.allows_write()
                     && let Some(ref persistent) = persistent
                     && let Some(backend) = backend
