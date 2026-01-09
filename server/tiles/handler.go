@@ -2,41 +2,43 @@ package tiles
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
 )
 
-const defaultTimeout = 30 * time.Second
 const modelKey = "tiles"
 
+//go:embed darkStyle.json
+var darkStyle []byte
+
+//go:embed lightStyle.json
+var lightStyle []byte
+
+var styles = map[string][]byte{
+	"dark-map":  darkStyle,
+	"light-map": lightStyle,
+}
+
 type Config struct {
-	CMS                  plateaucms.Config
-	CacheControl         string
-	Host                 string
-	ChiitilerURL         string
-	ChiitilerCacheBucket string
+	CMS     plateaucms.Config
+	Host    string
+	TileURL string // Redirects /tiles/* to this URL (except config.json and styles)
 }
 
 type Handler struct {
-	pcms                 *plateaucms.CMS
-	http                 *http.Client
-	lock                 sync.RWMutex
-	host                 *url.URL
-	chiitilerURL         *url.URL
-	tiles                Tiles
-	conf                 Config
-	chiitilerCacheBucket *storage.BucketHandle
+	pcms    *plateaucms.CMS
+	lock    sync.RWMutex
+	host    *url.URL
+	tileURL *url.URL
+	tiles   Tiles
 }
 
 func New(ctx context.Context, conf Config) (*Handler, error) {
@@ -45,7 +47,7 @@ func New(ctx context.Context, conf Config) (*Handler, error) {
 		return nil, fmt.Errorf("failed to create plateau cms: %w", err)
 	}
 
-	var host, chiitilerURL *url.URL
+	var host, tileURL *url.URL
 
 	if conf.Host != "" {
 		host, err = url.Parse(conf.Host)
@@ -54,32 +56,17 @@ func New(ctx context.Context, conf Config) (*Handler, error) {
 		}
 	}
 
-	if conf.ChiitilerURL != "" {
-		chiitilerURL, err = url.Parse(conf.ChiitilerURL)
+	if conf.TileURL != "" {
+		tileURL, err = url.Parse(conf.TileURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse chiitiler url: %w", err)
+			return nil, fmt.Errorf("failed to parse tile url: %w", err)
 		}
-	}
-
-	var bucket *storage.BucketHandle
-	if conf.ChiitilerCacheBucket != "" {
-		client, err := storage.NewClient(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get chiitiler bucket: %w", err)
-		}
-
-		bucket = client.Bucket(conf.ChiitilerCacheBucket)
 	}
 
 	return &Handler{
-		pcms:                 pcms,
-		conf:                 conf,
-		host:                 host,
-		chiitilerURL:         chiitilerURL,
-		chiitilerCacheBucket: bucket,
-		http: &http.Client{
-			Timeout: defaultTimeout,
-		},
+		pcms:    pcms,
+		host:    host,
+		tileURL: tileURL,
 	}, nil
 }
 
@@ -104,16 +91,25 @@ func (h *Handler) Init(ctx context.Context) {
 
 func (h *Handler) Route(g *echo.Group) {
 	g = g.Group("/tiles")
-	g.GET("/:id/:z/:x/:y", h.GetTile)
-	g.GET("/styles/:id", styleHandler)
 	g.GET("/config.json", h.GetConfig)
-	g.POST("/update", h.UpdateCache)
+	g.GET("/styles/:id", h.GetStyle)
+
+	// Redirect all other requests to the tile server
+	if h.tileURL != nil {
+		g.Any("/*", h.redirectToTileServer)
+	}
 }
 
-func (h *Handler) UpdateCache(c echo.Context) error {
-	ctx := c.Request().Context()
-	h.Init(ctx)
-	return c.String(http.StatusOK, "ok")
+func (h *Handler) redirectToTileServer(c echo.Context) error {
+	reqPath := c.Request().URL.Path
+	subPath := strings.TrimPrefix(reqPath, "/tiles")
+
+	redirectURL := h.tileURL.String() + "/tiles" + subPath
+	if c.Request().URL.RawQuery != "" {
+		redirectURL += "?" + c.Request().URL.RawQuery
+	}
+
+	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 // GetConfig returns the tile server configuration in JSON format
@@ -121,7 +117,6 @@ func (h *Handler) GetConfig(c echo.Context) error {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
-	// Determine base URL from request or config
 	baseURL := h.getBaseURL(c)
 
 	if h.tiles == nil {
@@ -132,12 +127,21 @@ func (h *Handler) GetConfig(c echo.Context) error {
 	return c.JSON(http.StatusOK, config)
 }
 
+// GetStyle returns the MapLibre style JSON for the specified style
+func (h *Handler) GetStyle(c echo.Context) error {
+	id := c.Param("id")
+	style, ok := styles[id]
+	if !ok {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+	}
+	return c.Blob(http.StatusOK, "application/json", style)
+}
+
 func (h *Handler) getBaseURL(c echo.Context) string {
 	if h.host != nil {
 		return h.host.String()
 	}
 
-	// Fallback to request URL
 	req := c.Request()
 	scheme := "https"
 	if req.TLS == nil {
@@ -147,76 +151,6 @@ func (h *Handler) getBaseURL(c echo.Context) string {
 		}
 	}
 	return scheme + "://" + req.Host
-}
-
-func (h *Handler) GetTile(c echo.Context) error {
-	id := c.Param("id")
-	if _, ok := styles[id]; ok {
-		return h.chiitilerHandler(c)
-	}
-
-	ctx := c.Request().Context()
-	z := c.Param("z")
-	x := c.Param("x")
-	y := c.Param("y")
-	y2 := strings.TrimSuffix(y, path.Ext(y))
-	zi, errx := strconv.Atoi(z)
-	xi, erry := strconv.Atoi(x)
-	yi, errz := strconv.Atoi(y2)
-	if errx != nil || erry != nil || errz != nil || zi < 0 || xi < 0 || yi < 0 {
-		log.Debugfc(ctx, "tiles: invalid params: %s/%s/%s", z, x, y2)
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
-	}
-
-	tileURL := h.getTileURL(id, zi, xi, yi)
-	if tileURL == "" {
-		log.Debugfc(ctx, "tiles: not found: %d/%d/%d", zi, xi, yi)
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
-	}
-
-	return h.streamTile(c, tileURL, z, x, y)
-}
-
-func (h *Handler) getTileURL(name string, z, x, y int) string {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
-	if h.tiles == nil {
-		return ""
-	}
-	return h.tiles.Find(name, z, x, y)
-}
-
-func (h *Handler) streamTile(c echo.Context, base, z, x, y string) error {
-	url, err := url.JoinPath(base, z, x, y)
-	if err != nil {
-		return fmt.Errorf("failed to join url: %w", err)
-	}
-
-	resp, err := h.http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to get tile: %w", err)
-	}
-
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Debugfc(c.Request().Context(), "tiles: failed to get tile (status code %d): %s", resp.StatusCode, url)
-	}
-
-	for k, v := range resp.Header {
-		for _, vv := range v {
-			c.Response().Header().Set(k, vv)
-		}
-	}
-
-	if h.conf.CacheControl != "" {
-		c.Response().Header().Set("Cache-Control", h.conf.CacheControl)
-	} else if h := resp.Header.Get("Cache-Control"); h != "" {
-		c.Response().Header().Set("Cache-Control", h)
-	}
-
-	return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
 }
 
 func initTiles(ctx context.Context, pcms *plateaucms.CMS) (Tiles, error) {
