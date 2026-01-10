@@ -1,7 +1,10 @@
 use std::{env, sync::Arc};
 
 use anyhow::{Context, Result};
+use opentelemetry::trace::TracerProvider;
+use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
 use tile::{ConfigManager, cache::CacheMode, server};
+use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Default Cache-Control header for HTTP responses.
@@ -14,9 +17,30 @@ fn init_tracing() {
 
     // Use tracing-stackdriver on Cloud Run (K_SERVICE is set by Cloud Run)
     if env::var("K_SERVICE").is_ok() {
+        // Get GCP project ID for Cloud Trace integration
+        let project_id = env::var("GOOGLE_CLOUD_PROJECT")
+            .or_else(|_| env::var("GCP_PROJECT"))
+            .ok();
+
+        let stackdriver_layer = if let Some(project_id) = project_id {
+            tracing_stackdriver::layer()
+                .with_cloud_trace(tracing_stackdriver::CloudTraceConfiguration { project_id })
+        } else {
+            tracing_stackdriver::layer()
+        };
+
+        // Create OpenTelemetry tracer for context propagation.
+        // We use a no-op tracer (no exporter) since we only need context propagation,
+        // not actual trace export. tracing-stackdriver reads the OpenTelemetry context
+        // to output logging.googleapis.com/trace fields.
+        let provider = SdkTracerProvider::builder().build();
+        let tracer = provider.tracer("tile-server");
+        let otel_layer = OpenTelemetryLayer::new(tracer);
+
         tracing_subscriber::registry()
             .with(env_filter)
-            .with(tracing_stackdriver::layer())
+            .with(otel_layer)
+            .with(stackdriver_layer)
             .init();
     } else {
         // Local development: use pretty console output

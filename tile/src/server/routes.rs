@@ -1,6 +1,11 @@
 //! HTTP routing configuration.
 
-use std::sync::Arc;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context as TaskContext, Poll},
+};
 
 use anyhow::Result;
 use axum::{
@@ -12,8 +17,15 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
+use opentelemetry::{
+    Context,
+    trace::{
+        FutureExt as OtelFutureExt, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId,
+        TraceState,
+    },
+};
 use tokio::net::TcpListener;
-use tower::Service;
+use tower::{Layer, Service};
 use tower_http::{
     cors::CorsLayer,
     trace::{MakeSpan, OnRequest, TraceLayer},
@@ -31,7 +43,7 @@ struct CloudTraceContext {
     sampled: bool,
 }
 
-/// Custom span maker that creates a basic request span.
+/// Custom span maker that creates a request span.
 #[derive(Clone, Debug)]
 struct TracingMakeSpan;
 
@@ -45,28 +57,109 @@ impl<B> MakeSpan<B> for TracingMakeSpan {
     }
 }
 
-/// Custom on_request handler that logs trace context to jsonPayload.
+/// Custom on_request handler that logs when a request starts.
+/// tracing-stackdriver will automatically add logging.googleapis.com/trace fields
+/// from the OpenTelemetry context set by TraceContextLayer.
 #[derive(Clone, Debug)]
 struct TracingOnRequest;
 
 impl<B> OnRequest<B> for TracingOnRequest {
-    fn on_request(&mut self, request: &Request<B>, _span: &Span) {
-        let ctx = extract_trace_context(request.headers());
+    fn on_request(&mut self, _request: &Request<B>, _span: &Span) {
+        tracing::info!("Request started");
+    }
+}
 
-        // Log trace context as event fields (goes to jsonPayload, not span)
-        let trace_id = ctx.as_ref().map(|c| c.trace_id.as_str()).unwrap_or("-");
-        let span_id = ctx
-            .as_ref()
-            .and_then(|c| c.span_id.as_deref())
-            .unwrap_or("-");
-        let trace_sampled = ctx.as_ref().map(|c| c.sampled).unwrap_or(false);
+/// Convert trace ID string to OpenTelemetry TraceId.
+/// Handles variable-length trace IDs by left-padding with zeros to 32 hex chars.
+fn parse_otel_trace_id(s: &str) -> TraceId {
+    let hex: String = s
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .take(32)
+        .collect();
+    let padded = format!("{:0>32}", hex);
+    TraceId::from_hex(&padded).unwrap_or(TraceId::INVALID)
+}
 
-        tracing::info!(
-            "logging.googleapis.com/trace" = trace_id,
-            "logging.googleapis.com/spanId" = span_id,
-            "logging.googleapis.com/trace_sampled" = trace_sampled,
-            "Request started"
-        );
+/// Convert span ID string to OpenTelemetry SpanId.
+/// Handles variable-length span IDs by left-padding with zeros to 16 hex chars.
+fn parse_otel_span_id(s: &str) -> SpanId {
+    let hex: String = s
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .take(16)
+        .collect();
+    let padded = format!("{:0>16}", hex);
+    SpanId::from_hex(&padded).unwrap_or(SpanId::INVALID)
+}
+
+/// Extract OpenTelemetry context from HTTP headers.
+fn extract_otel_context<B>(request: &Request<B>) -> Context {
+    extract_trace_context(request.headers())
+        .map(|ctx| {
+            let trace_id = parse_otel_trace_id(&ctx.trace_id);
+            let span_id = ctx
+                .span_id
+                .as_ref()
+                .map(|s| parse_otel_span_id(s))
+                .unwrap_or(SpanId::INVALID);
+            let flags = if ctx.sampled {
+                TraceFlags::SAMPLED
+            } else {
+                TraceFlags::default()
+            };
+
+            let span_context =
+                SpanContext::new(trace_id, span_id, flags, true, TraceState::default());
+            Context::current().with_remote_span_context(span_context)
+        })
+        .unwrap_or_else(Context::current)
+}
+
+/// Tower layer that propagates trace context from HTTP headers to OpenTelemetry.
+/// This enables tracing-stackdriver to output logging.googleapis.com/trace fields.
+#[derive(Clone)]
+struct TraceContextLayer;
+
+impl<S> Layer<S> for TraceContextLayer {
+    type Service = TraceContextService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        TraceContextService { inner }
+    }
+}
+
+/// Tower service that attaches OpenTelemetry context for the duration of the request.
+#[derive(Clone)]
+struct TraceContextService<S> {
+    inner: S,
+}
+
+impl<S, B> Service<Request<B>> for TraceContextService<S>
+where
+    S: Service<Request<B>> + Clone + Send + 'static,
+    S::Response: Send,
+    S::Error: Send,
+    S::Future: Send,
+    B: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut TaskContext<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        let otel_cx = extract_otel_context(&request);
+        let mut inner = self.inner.clone();
+        // Swap to ensure we use the ready service
+        std::mem::swap(&mut self.inner, &mut inner);
+
+        // Use with_context to attach OpenTelemetry context for the duration of this request.
+        // tracing-stackdriver will read this and output logging.googleapis.com/trace fields.
+        Box::pin(async move { inner.call(request).await }.with_context(otel_cx))
     }
 }
 
@@ -177,6 +270,9 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
                 .make_span_with(TracingMakeSpan)
                 .on_request(TracingOnRequest),
         )
+        // Propagate trace context from HTTP headers to OpenTelemetry.
+        // This must be AFTER TraceLayer so it runs BEFORE (layers are applied in reverse).
+        .layer(TraceContextLayer)
         .with_state(state)
 }
 

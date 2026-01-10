@@ -38,7 +38,10 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-stackdriver = "0.10"
+tracing-stackdriver = { version = "0.10", features = ["opentelemetry"] }
+tracing-opentelemetry = "0.23"
+opentelemetry = "0.22"
+opentelemetry_sdk = { version = "0.22", features = ["rt-tokio"] }
 
 # Async utilities
 futures = "0.3"
