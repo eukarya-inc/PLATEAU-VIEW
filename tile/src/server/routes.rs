@@ -64,8 +64,8 @@ impl<B> MakeSpan<B> for TracingMakeSpan {
 struct TracingOnRequest;
 
 impl<B> OnRequest<B> for TracingOnRequest {
-    fn on_request(&mut self, _request: &Request<B>, _span: &Span) {
-        tracing::info!("Request started");
+    fn on_request(&mut self, request: &Request<B>, _span: &Span) {
+        tracing::info!("<-- {} {}", request.method(), request.uri());
     }
 }
 
@@ -118,6 +118,7 @@ fn extract_otel_context<B>(request: &Request<B>) -> Context {
 
 /// Tower layer that propagates trace context from HTTP headers to OpenTelemetry.
 /// This enables tracing-stackdriver to output logging.googleapis.com/trace fields.
+/// Must be placed OUTSIDE TraceLayer so the context is set before span creation.
 #[derive(Clone)]
 struct TraceContextLayer;
 
@@ -135,13 +136,13 @@ struct TraceContextService<S> {
     inner: S,
 }
 
-impl<S, B> Service<Request<B>> for TraceContextService<S>
+impl<S, B, ResBody> Service<Request<B>> for TraceContextService<S>
 where
-    S: Service<Request<B>> + Clone + Send + 'static,
-    S::Response: Send,
+    S: Service<Request<B>, Response = http::Response<ResBody>> + Clone + Send + 'static,
     S::Error: Send,
     S::Future: Send,
     B: Send + 'static,
+    ResBody: Send,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -153,13 +154,97 @@ where
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
         let otel_cx = extract_otel_context(&request);
+
         let mut inner = self.inner.clone();
-        // Swap to ensure we use the ready service
         std::mem::swap(&mut self.inner, &mut inner);
 
         // Use with_context to attach OpenTelemetry context for the duration of this request.
         // tracing-stackdriver will read this and output logging.googleapis.com/trace fields.
         Box::pin(async move { inner.call(request).await }.with_context(otel_cx))
+    }
+}
+
+/// Tower layer that logs httpRequest on response.
+/// Must be placed INSIDE TraceLayer so logs have trace correlation.
+#[derive(Clone)]
+struct HttpRequestLoggingLayer;
+
+impl<S> Layer<S> for HttpRequestLoggingLayer {
+    type Service = HttpRequestLoggingService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        HttpRequestLoggingService { inner }
+    }
+}
+
+/// Tower service that logs httpRequest fields on response.
+#[derive(Clone)]
+struct HttpRequestLoggingService<S> {
+    inner: S,
+}
+
+impl<S, B, ResBody> Service<Request<B>> for HttpRequestLoggingService<S>
+where
+    S: Service<Request<B>, Response = http::Response<ResBody>> + Clone + Send + 'static,
+    S::Error: Send,
+    S::Future: Send,
+    B: Send + 'static,
+    ResBody: Send,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut TaskContext<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        // Capture request info for httpRequest logging
+        let method = request.method().to_string();
+        let uri = request.uri().to_string();
+
+        let mut inner = self.inner.clone();
+        std::mem::swap(&mut self.inner, &mut inner);
+
+        let start = std::time::Instant::now();
+
+        Box::pin(async move {
+            let response = inner.call(request).await;
+
+            // Log httpRequest on response (success or error)
+            let latency = start.elapsed();
+            let latency_secs = latency.as_secs_f64();
+
+            match &response {
+                Ok(res) => {
+                    let status = res.status().as_u16();
+                    tracing::info!(
+                        http_request.request_method = %method,
+                        http_request.request_url = %uri,
+                        http_request.status = status,
+                        http_request.latency = format!("{:.6}s", latency_secs),
+                        "--> {} {} {}",
+                        method,
+                        uri,
+                        status
+                    );
+                }
+                Err(_) => {
+                    tracing::error!(
+                        http_request.request_method = %method,
+                        http_request.request_url = %uri,
+                        http_request.status = 500_u16,
+                        http_request.latency = format!("{:.6}s", latency_secs),
+                        "--> {} {} 500",
+                        method,
+                        uri
+                    );
+                }
+            }
+
+            response
+        })
     }
 }
 
@@ -265,13 +350,16 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
         .layer(create_cors_layer(cors_origins))
+        // Layer order (from outermost to innermost):
+        // 1. TraceContextLayer - propagates trace context from HTTP headers to OpenTelemetry
+        // 2. TraceLayer - creates tracing spans with the correct trace ID
+        // 3. HttpRequestLoggingLayer - logs httpRequest fields (inside span for trace correlation)
+        .layer(HttpRequestLoggingLayer)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(TracingMakeSpan)
                 .on_request(TracingOnRequest),
         )
-        // Propagate trace context from HTTP headers to OpenTelemetry.
-        // This must be AFTER TraceLayer so it runs BEFORE (layers are applied in reverse).
         .layer(TraceContextLayer)
         .with_state(state)
 }

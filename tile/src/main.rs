@@ -2,7 +2,9 @@ use std::{env, sync::Arc};
 
 use anyhow::{Context, Result};
 use opentelemetry::trace::TracerProvider;
-use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
+use opentelemetry_sdk::trace::{
+    Config as TraceConfig, Sampler, TracerProvider as SdkTracerProvider,
+};
 use tile::{ConfigManager, cache::CacheMode, server};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -30,10 +32,13 @@ fn init_tracing() {
         };
 
         // Create OpenTelemetry tracer for context propagation.
-        // We use a no-op tracer (no exporter) since we only need context propagation,
+        // We use AlwaysOn sampler to ensure spans are created with proper span IDs.
+        // No exporter is configured since we only need context propagation,
         // not actual trace export. tracing-stackdriver reads the OpenTelemetry context
         // to output logging.googleapis.com/trace fields.
-        let provider = SdkTracerProvider::builder().build();
+        let provider = SdkTracerProvider::builder()
+            .with_config(TraceConfig::default().with_sampler(Sampler::AlwaysOn))
+            .build();
         let tracer = provider.tracer("tile-server");
         let otel_layer = OpenTelemetryLayer::new(tracer);
 
