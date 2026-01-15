@@ -68,6 +68,13 @@ func TestSendRequestToFME(t *testing.T) {
 				},
 			},
 			{
+				Key: "schemas",
+				Value: &cms.Asset{
+					ID:  "schemasID",
+					URL: "schemas",
+				},
+			},
+			{
 				Key:   "citygml",
 				Value: "citygmlID",
 			},
@@ -387,6 +394,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)
@@ -460,6 +468,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)
@@ -540,6 +549,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)

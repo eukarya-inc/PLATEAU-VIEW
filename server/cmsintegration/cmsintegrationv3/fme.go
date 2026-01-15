@@ -114,6 +114,8 @@ type fmeRequest struct {
 	Config string `json:"config,omitempty"`
 	// コードリスト
 	Codelists string `json:"codelists,omitempty"`
+	// スキーマ
+	Schemas string `json:"schemas,omitempty"`
 	// 結果を返す先のURL
 	ResultURL string `json:"resultUrl,omitempty"`
 	// オブジェクトリスト

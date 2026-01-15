@@ -156,6 +156,14 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		objectListsAssetURL = cityItem.ObjectLists.URL
 	}
 
+	// get schemas asset (feature item overrides city item)
+	var schemasAssetURL string
+	if item.Schemas != "" {
+		schemasAssetURL = item.Schemas
+	} else if cityItem.Schemas != nil {
+		schemasAssetURL = cityItem.Schemas.URL
+	}
+
 	// get FME URL - prioritize item spec over city spec
 	specVersion := item.SpecMajorVersionInt()
 	if specVersion == 0 {
@@ -189,6 +197,7 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		Target:      cityGMLAsset.URL,
 		PRCS:        cityItem.PRCS.EPSGCode(),
 		Codelists:   cityItem.CodeLists.URL,
+		Schemas:     schemasAssetURL,
 		ObjectLists: objectListsAssetURL,
 		ResultURL:   fmeReqURL,
 		Type:        ty,
