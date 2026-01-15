@@ -130,17 +130,17 @@ resource "google_certificate_manager_certificate" "plateau_reearth" {
   }
 }
 
-resource "google_certificate_manager_certificate" "tile" {
+resource "google_certificate_manager_certificate" "plateauview_tile" {
   project = data.google_project.project.project_id
   name    = "plateau-tile"
 
   managed {
     domains = [
-      google_certificate_manager_dns_authorization.tile.domain,
+      google_certificate_manager_dns_authorization.plateauview_tile.domain,
     ]
 
     dns_authorizations = [
-      google_certificate_manager_dns_authorization.tile.id,
+      google_certificate_manager_dns_authorization.plateauview_tile.id,
     ]
   }
 }

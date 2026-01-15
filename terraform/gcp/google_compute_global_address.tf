@@ -35,7 +35,7 @@ resource "google_compute_global_address" "plateau_geo" {
   name    = "plateau-geo"
 }
 
-resource "google_compute_global_address" "tile" {
+resource "google_compute_global_address" "plateauview_tile" {
   project = data.google_project.project.project_id
   name    = "plateau-tile"
 }

@@ -44,7 +44,7 @@ resource "google_certificate_manager_certificate_map" "plateau_reearth" {
   name    = "plateau-reearth"
 }
 
-resource "google_certificate_manager_certificate_map" "tile" {
+resource "google_certificate_manager_certificate_map" "plateauview_tile" {
   project = data.google_project.project.project_id
   name    = "plateau-tile"
 }

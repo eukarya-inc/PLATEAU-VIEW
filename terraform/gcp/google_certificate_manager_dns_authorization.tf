@@ -52,7 +52,7 @@ resource "google_certificate_manager_dns_authorization" "plateau_flow" {
   name        = "plateau-flow"
 }
 
-resource "google_certificate_manager_dns_authorization" "tile" {
+resource "google_certificate_manager_dns_authorization" "plateauview_tile" {
   project = data.google_project.project.project_id
   name    = "plateau-tile"
   domain  = local.tile_domain
