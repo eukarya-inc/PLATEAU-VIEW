@@ -78,13 +78,13 @@ resource "google_certificate_manager_certificate_map_entry" "plateau_geo" {
   name     = "plateau-geo"
 }
 
-resource "google_certificate_manager_certificate_map_entry" "plateau_tiles" {
+resource "google_certificate_manager_certificate_map_entry" "tile" {
   project = data.google_project.project.project_id
 
   certificates = [
-    google_certificate_manager_certificate.plateau_tiles.id,
+    google_certificate_manager_certificate.tile.id,
   ]
-  hostname = google_certificate_manager_dns_authorization.plateau_tiles.domain
-  map      = google_certificate_manager_certificate_map.plateau_tiles.name
-  name     = "plateau-tiles"
+  hostname = google_certificate_manager_dns_authorization.tile.domain
+  map      = google_certificate_manager_certificate_map.tile.name
+  name     = "tile"
 }

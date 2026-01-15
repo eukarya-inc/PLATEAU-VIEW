@@ -1,5 +1,5 @@
-module "plateauview_tiles" {
-  source = "./modules/plateauview_tiles"
+module "tile" {
+  source = "./modules/tile"
 
   config_url            = "https://${local.plateauview_api_domain}/tiles/config.json"
   cors_origins          = "https://*.${var.domain}"

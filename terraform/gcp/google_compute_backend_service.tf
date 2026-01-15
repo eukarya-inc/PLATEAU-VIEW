@@ -87,14 +87,14 @@ resource "google_compute_backend_service" "plateau_geo" {
   }
 }
 
-resource "google_compute_backend_service" "plateau_tiles" {
+resource "google_compute_backend_service" "tile" {
   project = data.google_project.project.project_id
-  name    = "plateauview-tiles"
+  name    = "tile"
 
   load_balancing_scheme = "EXTERNAL_MANAGED"
 
   backend {
-    group = module.plateauview_tiles.network_endpoint_group.id
+    group = module.tile.network_endpoint_group.id
   }
 }
 

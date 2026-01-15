@@ -1,6 +1,6 @@
-resource "google_cloud_run_v2_service" "plateauview_tiles" {
+resource "google_cloud_run_v2_service" "tile" {
   project  = data.google_project.project.project_id
-  name     = "plateauview-tiles"
+  name     = "tile"
   ingress  = "INGRESS_TRAFFIC_ALL"
   location = var.gcp_region
 
@@ -10,7 +10,7 @@ resource "google_cloud_run_v2_service" "plateauview_tiles" {
     timeout               = "300s"
 
     containers {
-      name  = "plateauview-tiles"
+      name  = "tile"
       image = "eukarya/plateauview-tiles:latest"
 
       resources {

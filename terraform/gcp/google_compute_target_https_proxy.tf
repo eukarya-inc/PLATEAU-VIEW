@@ -38,12 +38,12 @@ resource "google_compute_target_https_proxy" "plateau_geo" {
   url_map         = google_compute_url_map.plateau_geo.id
 }
 
-resource "google_compute_target_https_proxy" "plateau_tiles" {
+resource "google_compute_target_https_proxy" "tile" {
   project = data.google_project.project.project_id
 
-  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.plateau_tiles.id}"
-  name            = "plateau-tiles"
-  url_map         = google_compute_url_map.plateau_tiles.id
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.tile.id}"
+  name            = "tile"
+  url_map         = google_compute_url_map.tile.id
 }
 
 resource "google_compute_target_https_proxy" "plateau_api" {

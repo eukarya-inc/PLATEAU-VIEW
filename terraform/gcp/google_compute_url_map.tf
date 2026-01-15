@@ -239,11 +239,11 @@ resource "google_compute_url_map" "plateau_geo" {
   }
 }
 
-resource "google_compute_url_map" "plateau_tiles" {
+resource "google_compute_url_map" "tile" {
   project = data.google_project.project.project_id
-  name    = "plateau-tiles"
+  name    = "tile"
 
-  default_service = google_compute_backend_service.plateau_tiles.id
+  default_service = google_compute_backend_service.tile.id
 
   host_rule {
     hosts        = [local.tile_domain]
@@ -252,7 +252,7 @@ resource "google_compute_url_map" "plateau_tiles" {
 
   path_matcher {
     name            = "allpaths"
-    default_service = google_compute_backend_service.plateau_tiles.id
+    default_service = google_compute_backend_service.tile.id
   }
 }
 
