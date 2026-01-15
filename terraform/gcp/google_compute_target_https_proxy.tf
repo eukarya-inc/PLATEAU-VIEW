@@ -42,7 +42,7 @@ resource "google_compute_target_https_proxy" "tile" {
   project = data.google_project.project.project_id
 
   certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.tile.id}"
-  name            = "tile"
+  name            = "plateau-tile"
   url_map         = google_compute_url_map.tile.id
 }
 

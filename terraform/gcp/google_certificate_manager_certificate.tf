@@ -132,7 +132,7 @@ resource "google_certificate_manager_certificate" "plateau_reearth" {
 
 resource "google_certificate_manager_certificate" "tile" {
   project = data.google_project.project.project_id
-  name    = "tile"
+  name    = "plateau-tile"
 
   managed {
     domains = [

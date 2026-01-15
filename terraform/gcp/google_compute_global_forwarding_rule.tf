@@ -77,7 +77,7 @@ resource "google_compute_global_forwarding_rule" "plateau_api" {
 resource "google_compute_global_forwarding_rule" "tile" {
   project = data.google_project.project.project_id
 
-  name                  = "tile"
+  name                  = "plateau-tile"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   ip_address            = google_compute_global_address.tile.id
   ip_protocol           = "TCP"

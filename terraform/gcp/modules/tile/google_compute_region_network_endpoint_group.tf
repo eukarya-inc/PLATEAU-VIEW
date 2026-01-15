@@ -1,6 +1,6 @@
 resource "google_compute_region_network_endpoint_group" "tile" {
   project               = data.google_project.project.project_id
-  name                  = "tile-neg"
+  name                  = "plateau-tile-neg"
   network_endpoint_type = "SERVERLESS"
   region                = var.gcp_region
   cloud_run {

@@ -89,7 +89,7 @@ resource "google_compute_backend_service" "plateau_geo" {
 
 resource "google_compute_backend_service" "tile" {
   project = data.google_project.project.project_id
-  name    = "tile"
+  name    = "plateau-tile"
 
   load_balancing_scheme = "EXTERNAL_MANAGED"
 

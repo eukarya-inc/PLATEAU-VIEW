@@ -241,7 +241,7 @@ resource "google_compute_url_map" "plateau_geo" {
 
 resource "google_compute_url_map" "tile" {
   project = data.google_project.project.project_id
-  name    = "tile"
+  name    = "plateau-tile"
 
   default_service = google_compute_backend_service.tile.id
 

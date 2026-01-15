@@ -86,5 +86,5 @@ resource "google_certificate_manager_certificate_map_entry" "tile" {
   ]
   hostname = google_certificate_manager_dns_authorization.tile.domain
   map      = google_certificate_manager_certificate_map.tile.name
-  name     = "tile"
+  name     = "plateau-tile"
 }
