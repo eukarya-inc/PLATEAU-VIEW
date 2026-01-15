@@ -22,12 +22,6 @@ resource "google_service_account" "cerbos" {
   display_name = "cerbos"
 }
 
-resource "google_service_account" "chiitiler" {
-  project      = data.google_project.project.project_id
-  account_id   = "chiitiler"
-  display_name = "chiitiler"
-}
-
 resource "google_service_account" "cms_api" {
   project      = data.google_project.project.project_id
   account_id   = "cms-api"
