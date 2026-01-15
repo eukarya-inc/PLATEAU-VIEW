@@ -239,6 +239,23 @@ resource "google_compute_url_map" "plateau_geo" {
   }
 }
 
+resource "google_compute_url_map" "plateau_tiles" {
+  project = data.google_project.project.project_id
+  name    = "plateau-tiles"
+
+  default_service = google_compute_backend_service.plateau_tiles.id
+
+  host_rule {
+    hosts        = [local.tile_domain]
+    path_matcher = "allpaths"
+  }
+
+  path_matcher {
+    name            = "allpaths"
+    default_service = google_compute_backend_service.plateau_tiles.id
+  }
+}
+
 
 resource "google_compute_url_map" "plateau_api" {
   project = data.google_project.project.project_id

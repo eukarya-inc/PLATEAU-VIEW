@@ -74,6 +74,17 @@ resource "google_compute_global_forwarding_rule" "plateau_api" {
   target                = google_compute_target_https_proxy.plateau_api.id
 }
 
+resource "google_compute_global_forwarding_rule" "plateau_tiles" {
+  project = data.google_project.project.project_id
+
+  name                  = "plateau-tiles"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  ip_address            = google_compute_global_address.plateau_tiles.id
+  ip_protocol           = "TCP"
+  port_range            = "443"
+  target                = google_compute_target_https_proxy.plateau_tiles.id
+}
+
 resource "google_compute_global_forwarding_rule" "plateau_flow" {
   project = data.google_project.project.project_id
 

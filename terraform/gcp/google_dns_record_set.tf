@@ -28,6 +28,16 @@ resource "google_dns_record_set" "plateau_geo_acme_challenge_cname" {
   ttl          = 300
 }
 
+resource "google_dns_record_set" "plateau_tiles_acme_challenge_cname" {
+  project = data.google_project.project.project_id
+
+  name         = google_certificate_manager_dns_authorization.plateau_tiles.dns_resource_record[0].name
+  managed_zone = google_dns_managed_zone.zone.name
+  rrdatas      = [google_certificate_manager_dns_authorization.plateau_tiles.dns_resource_record[0].data]
+  type         = google_certificate_manager_dns_authorization.plateau_tiles.dns_resource_record[0].type
+  ttl          = 300
+}
+
 resource "google_dns_record_set" "plateau_api_acme_challenge_cname" {
   project = data.google_project.project.project_id
 
@@ -95,6 +105,16 @@ resource "google_dns_record_set" "plateauview_geo" {
 
   managed_zone = google_dns_managed_zone.zone.name
   rrdatas      = ["${local.cms_domain}."]
+}
+
+resource "google_dns_record_set" "plateauview_tiles" {
+  project = data.google_project.project.project_id
+  name    = "${local.tile_domain}."
+  type    = "A"
+  ttl     = 60
+
+  managed_zone = google_dns_managed_zone.zone.name
+  rrdatas      = [google_compute_global_address.plateau_tiles.address]
 }
 
 resource "google_dns_record_set" "worker" {
