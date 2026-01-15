@@ -9,11 +9,6 @@ variable "cors_origins" {
   description = "許可するCORSオリジン（カンマ区切りまたは*）"
 }
 
-variable "domain" {
-  type        = string
-  description = "PLATEAU VIEWを提供するドメイン名"
-}
-
 variable "gcp_project_id" {
   type        = string
   description = "GCPプロジェクトのID"
@@ -28,11 +23,6 @@ variable "gcp_region" {
   type        = string
   default     = "asia-northeast1"
   description = "GCPで使用するリージョン"
-}
-
-variable "prefix" {
-  type        = string
-  description = "作成されるリソース名のプレフィックス"
 }
 
 variable "resources" {
