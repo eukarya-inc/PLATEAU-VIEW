@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eukarya-inc/plateau-spec/cmd/plateaudocs"
+	"github.com/eukarya-inc/plateau-spec/plateaudoc"
 )
 
-// plateaudocsClient is an interface for the plateaudocs client (for testing)
+// plateaudocsClient is an interface for the plateaudoc client (for testing)
 type plateaudocsClient interface {
-	GetIndex(ctx context.Context, docType string) (*plateaudocs.Index, error)
+	GetIndex(ctx context.Context, docType string) (*plateaudoc.Index, error)
 	GetMarkdown(ctx context.Context, docType, path string) (string, error)
 }
 
-// Client wraps plateaudocs.Client for MCP usage
+// Client wraps plateaudoc.Client for MCP usage
 type Client struct {
 	client plateaudocsClient
 }
@@ -22,7 +22,7 @@ type Client struct {
 // NewClient creates a new Client
 func NewClient() *Client {
 	return &Client{
-		client: plateaudocs.New(),
+		client: plateaudoc.New(),
 	}
 }
 
@@ -121,8 +121,8 @@ func (c *Client) GetChildPaths(ctx context.Context, docType, path string) ([]str
 	return paths, nil
 }
 
-// convertChaptersToOutline converts plateaudocs.Chapter slice to OutlineItem slice
-func convertChaptersToOutline(chapters []plateaudocs.Chapter) []OutlineItem {
+// convertChaptersToOutline converts plateaudoc.Chapter slice to OutlineItem slice
+func convertChaptersToOutline(chapters []plateaudoc.Chapter) []OutlineItem {
 	items := make([]OutlineItem, 0, len(chapters))
 	for _, ch := range chapters {
 		item := OutlineItem{
@@ -154,11 +154,11 @@ func normalizePath(path string) string {
 }
 
 // collectPaths collects all paths under the given root path (including the root)
-func collectPaths(chapters []plateaudocs.Chapter, rootPath string) []string {
+func collectPaths(chapters []plateaudoc.Chapter, rootPath string) []string {
 	var paths []string
 
-	var collect func(chs []plateaudocs.Chapter, found bool)
-	collect = func(chs []plateaudocs.Chapter, found bool) {
+	var collect func(chs []plateaudoc.Chapter, found bool)
+	collect = func(chs []plateaudoc.Chapter, found bool) {
 		for _, ch := range chs {
 			chPath := getPathID(ch.Path)
 			if found || chPath == rootPath {
@@ -175,7 +175,7 @@ func collectPaths(chapters []plateaudocs.Chapter, rootPath string) []string {
 }
 
 // findChapter finds a chapter by path
-func findChapter(chapters []plateaudocs.Chapter, path string) *plateaudocs.Chapter {
+func findChapter(chapters []plateaudoc.Chapter, path string) *plateaudoc.Chapter {
 	for i := range chapters {
 		ch := &chapters[i]
 		if getPathID(ch.Path) == path {

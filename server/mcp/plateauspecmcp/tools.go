@@ -19,6 +19,7 @@ var clientFactory = func() *Client {
 func RegisterTools(s *server.MCPServer) {
 	s.AddTool(specOutlineTool, HandleSpecOutline)
 	s.AddTool(specReadTool, HandleSpecRead)
+	s.AddTool(specSearchTool, HandleSpecSearch)
 }
 
 var specOutlineTool = mcp.NewTool("plateau_spec_outline",

@@ -95,10 +95,6 @@ func (s *Service) registerTools() {
 
 	// Tool 10: plateau_get_citygml_files
 	s.mcpServer.AddTool(s.createGetCityGMLFilesTool(), s.handleGetCityGMLFiles)
-
-	// Helper Tools
-	// Tool 11: plateau_explain_spatial_id
-	s.mcpServer.AddTool(s.createExplainSpatialIDTool(), s.handleExplainSpatialID)
 }
 
 // createGetMetadataTool creates the plateau_get_metadata tool definition
@@ -470,18 +466,4 @@ func convertToToolResult(data interface{}) (*mcp.CallToolResult, error) {
 		return mcp.NewToolResultError("failed to marshal response"), nil
 	}
 	return mcp.NewToolResultText(string(jsonBytes)), nil
-}
-
-// createExplainSpatialIDTool creates the plateau_explain_spatial_id tool definition
-func (s *Service) createExplainSpatialIDTool() mcp.Tool {
-	return mcp.NewTool(
-		"plateau_explain_spatial_id",
-		mcp.WithDescription("空間ID（Spatial ID）の仕様と使い方を解説します。空間IDは3次元空間を一意に識別するための規格で、PLATEAUのCityGMLツールで使用されます。"),
-		mcp.WithReadOnlyHintAnnotation(true),
-	)
-}
-
-// handleExplainSpatialID handles plateau_explain_spatial_id tool calls
-func (s *Service) handleExplainSpatialID(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return mcp.NewToolResultText(spatialIDExplanation), nil
 }

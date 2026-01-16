@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/eukarya-inc/plateau-spec/cmd/plateaudocs"
+	"github.com/eukarya-inc/plateau-spec/plateaudoc"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
@@ -26,10 +26,10 @@ func TestHandleSpecOutline(t *testing.T) {
 	clientFactory = func() *Client {
 		return &Client{
 			client: &mockPlateaudocsClient{
-				index: &plateaudocs.Index{
+				index: &plateaudoc.Index{
 					DocumentType: "standard",
 					Title:        "3D都市モデル標準製品仕様書",
-					Chapters: []plateaudocs.Chapter{
+					Chapters: []plateaudoc.Chapter{
 						{Path: "toc1", Title: "第1章 概要", Children: nil},
 						{Path: "toc2", Title: "第2章 データ構造", Children: nil},
 					},
@@ -86,10 +86,10 @@ func TestHandleSpecRead(t *testing.T) {
 	clientFactory = func() *Client {
 		return &Client{
 			client: &mockPlateaudocsClient{
-				index: &plateaudocs.Index{
+				index: &plateaudoc.Index{
 					DocumentType: "standard",
 					Title:        "3D都市モデル標準製品仕様書",
-					Chapters: []plateaudocs.Chapter{
+					Chapters: []plateaudoc.Chapter{
 						{Path: "toc1", Title: "Test Chapter", Children: nil},
 					},
 				},
@@ -200,11 +200,11 @@ func TestLimitDepth(t *testing.T) {
 
 // mockPlateaudocsClient is a mock implementation of plateaudocsClient interface
 type mockPlateaudocsClient struct {
-	index           *plateaudocs.Index
+	index           *plateaudoc.Index
 	markdownContent map[string]string
 }
 
-func (c *mockPlateaudocsClient) GetIndex(_ context.Context, _ string) (*plateaudocs.Index, error) {
+func (c *mockPlateaudocsClient) GetIndex(_ context.Context, _ string) (*plateaudoc.Index, error) {
 	return c.index, nil
 }
 
