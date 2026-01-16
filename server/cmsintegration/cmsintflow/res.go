@@ -151,6 +151,22 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),
 	}).CMSItem()
 
+	// Remove empty data/items fields to preserve existing data
+	newitem.Fields = lo.Filter(newitem.Fields, func(f *cms.Field, _ int) bool {
+		if f.Key == "data" {
+			if v, ok := f.Value.([]string); ok && len(v) == 0 {
+				return false
+			}
+		}
+		if f.Key == "items" {
+			// items field uses group type, check if items slice is empty
+			if len(items) == 0 {
+				return false
+			}
+		}
+		return true
+	})
+
 	log.Infofc(ctx, "update item: itemID=%s, newitem=%s", id.ItemID, pp.Sprint(newitem))
 	j1, _ := json.Marshal(newitem.Fields)
 	j2, _ := json.Marshal(newitem.MetadataFields)
