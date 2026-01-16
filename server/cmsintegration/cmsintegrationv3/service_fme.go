@@ -311,6 +311,15 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	// get url from the result
 	assets := f.GetResultURLs(id.FeatureType)
 
+	// check if conversion results are empty (for conv or qc_conv type)
+	ty := fmeRequestType(id.Type)
+	if len(assets.Data) == 0 && (ty == fmeTypeConv || ty == fmeTypeQcConv) {
+		log.Warnfc(ctx, "no assets found in FME result: results=%v", f.Results)
+		resultsJSON, _ := json.Marshal(f.Results)
+		_ = failToConvert(ctx, s, id.ItemID, ty, "FMEからの変換結果が取得できませんでした。FME側の問題の可能性があります。\nFMEからの結果: %s", string(resultsJSON))
+		return nil
+	}
+
 	// upload assets
 	log.Infofc(ctx, "upload assets: %v", assets.Data)
 	var dataAssets []string
