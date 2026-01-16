@@ -191,8 +191,8 @@ type FeatureItem struct {
 	Spec        string `json:"spec,omitempty" cms:"spec,select"`
 	PRCS        string `json:"prcs" cms:"prcs,text"`
 	Schemas     string `json:"schemas" cms:"schemas,asset"`
-	CodeLists   string `json:"codelists" cms:"code_lists,asset"`
-	ObjectLists string `json:"objectLists" cms:"object_lists,asset"`
+	CodeLists   string `json:"codelists" cms:"codelists,asset"`
+	ObjectLists string `json:"objectLists" cms:"objectLists,asset"`
 
 	// metadata
 	SkipQCConv       *cms.Tag `json:"skip_qc_conv,omitempty" cms:"skip_qc_conv,tag,metadata"`
@@ -322,6 +322,19 @@ type FeatureItemDatum struct {
 func FeatureItemFrom(item *cms.Item) (i *FeatureItem) {
 	i = &FeatureItem{}
 	item.Unmarshal(i)
+
+	// fallback for old field keys (code_lists -> codelists, object_lists -> objectLists)
+	if i.CodeLists == "" {
+		if v := item.FieldByKey("code_lists").GetValue().String(); v != nil {
+			i.CodeLists = *v
+		}
+	}
+	if i.ObjectLists == "" {
+		if v := item.FieldByKey("object_lists").GetValue().String(); v != nil {
+			i.ObjectLists = *v
+		}
+	}
+
 	return
 }
 
