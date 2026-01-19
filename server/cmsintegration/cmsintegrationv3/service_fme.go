@@ -158,8 +158,8 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 
 	// get schemas asset (feature item overrides city item)
 	var schemasAssetURL string
-	if item.Schemas != "" {
-		schemasAssetURL = item.Schemas
+	if item.Schemas != nil {
+		schemasAssetURL = item.Schemas.URL
 	} else if cityItem.Schemas != nil {
 		schemasAssetURL = cityItem.Schemas.URL
 	}

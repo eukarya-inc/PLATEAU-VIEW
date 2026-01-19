@@ -188,11 +188,11 @@ type FeatureItem struct {
 	FeatureType string             `json:"featureType,omitempty" cms:"feature_type,select"`
 
 	// override city item's settings
-	Spec        string `json:"spec,omitempty" cms:"spec,select"`
-	PRCS        string `json:"prcs" cms:"prcs,text"`
-	Schemas     string `json:"schemas" cms:"schemas,asset"`
-	CodeLists   string `json:"codelists" cms:"codelists,asset"`
-	ObjectLists string `json:"objectLists" cms:"objectLists,asset"`
+	Spec        string           `json:"spec,omitempty" cms:"spec,select"`
+	PRCS        string           `json:"prcs" cms:"prcs,text"`
+	Schemas     *cms.PublicAsset `json:"schemas" cms:"schemas,asset"`
+	CodeLists   *cms.PublicAsset `json:"codelists" cms:"codelists,asset"`
+	ObjectLists *cms.PublicAsset `json:"objectLists" cms:"objectLists,asset"`
 
 	// metadata
 	SkipQCConv       *cms.Tag `json:"skip_qc_conv,omitempty" cms:"skip_qc_conv,tag,metadata"`
@@ -224,12 +224,22 @@ func (f *FeatureItem) ConvSettings() *ConvSettings {
 	if f == nil {
 		return nil
 	}
+	var schemas, codeLists, objectLists string
+	if f.Schemas != nil {
+		schemas = f.Schemas.URL
+	}
+	if f.CodeLists != nil {
+		codeLists = f.CodeLists.URL
+	}
+	if f.ObjectLists != nil {
+		objectLists = f.ObjectLists.URL
+	}
 	return &ConvSettings{
 		FeatureType: f.FeatureTypeCode(),
 		PRCS:        f.PRCS,
-		Schemas:     f.Schemas,
-		CodeLists:   f.CodeLists,
-		ObjectLists: f.ObjectLists,
+		Schemas:     schemas,
+		CodeLists:   codeLists,
+		ObjectLists: objectLists,
 	}
 }
 
@@ -324,14 +334,14 @@ func FeatureItemFrom(item *cms.Item) (i *FeatureItem) {
 	item.Unmarshal(i)
 
 	// fallback for old field keys (code_lists -> codelists, object_lists -> objectLists)
-	if i.CodeLists == "" {
-		if v := item.FieldByKey("code_lists").GetValue().String(); v != nil {
-			i.CodeLists = *v
+	if i.CodeLists == nil {
+		if a := item.FieldByKey("code_lists").GetValue().Asset(); a != nil {
+			i.CodeLists = a
 		}
 	}
-	if i.ObjectLists == "" {
-		if v := item.FieldByKey("object_lists").GetValue().String(); v != nil {
-			i.ObjectLists = *v
+	if i.ObjectLists == nil {
+		if a := item.FieldByKey("object_lists").GetValue().Asset(); a != nil {
+			i.ObjectLists = a
 		}
 	}
 
