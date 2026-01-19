@@ -64,9 +64,16 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		}
 
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
-		if md.Converter == plateaucms.ConverterFMEFlow && modelName != "flow" { // plateau-flow model for testing Flow
-			log.Infofc(ctx, "skip: model %s is not flow model (converter=%s)", modelName, md.Converter)
-			return nil
+		if md.Converter == plateaucms.ConverterFMEFlow {
+			// In fme_flow mode, check if this feature type should use Flow
+			if modelName == "flow" {
+				// Test model (plateau-flow) always uses Flow
+				log.Infofc(ctx, "flow model detected, proceeding with flow")
+			} else if !md.ShouldUseFlow(modelName) {
+				log.Infofc(ctx, "skip: feature type %s is not enabled for flow (converter=%s, flow_enabled_features=%s)",
+					modelName, md.Converter, md.FlowEnabledFeatures)
+				return nil
+			}
 		}
 
 		log.Debugfc(ctx, "getting feature types")
