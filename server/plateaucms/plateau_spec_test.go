@@ -96,3 +96,240 @@ func mockCMSPlateauSpec(t *testing.T) {
 		}),
 	)
 }
+
+func TestPlateauSpec_IsFMEEnabled(t *testing.T) {
+	tests := []struct {
+		name      string
+		converter string
+		want      bool
+	}{
+		{
+			name:      "empty converter: returns true (default to FME)",
+			converter: "",
+			want:      true,
+		},
+		{
+			name:      "fme converter: returns true",
+			converter: ConverterFME,
+			want:      true,
+		},
+		{
+			name:      "flow converter: returns false",
+			converter: ConverterFlow,
+			want:      false,
+		},
+		{
+			name:      "fme_flow converter: returns true",
+			converter: ConverterFMEFlow,
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := PlateauSpec{
+				Converter: tt.converter,
+			}
+			got := s.IsFMEEnabled()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPlateauSpec_IsFlowEnabled(t *testing.T) {
+	tests := []struct {
+		name      string
+		converter string
+		want      bool
+	}{
+		{
+			name:      "empty converter: returns false",
+			converter: "",
+			want:      false,
+		},
+		{
+			name:      "fme converter: returns false",
+			converter: ConverterFME,
+			want:      false,
+		},
+		{
+			name:      "flow converter: returns true",
+			converter: ConverterFlow,
+			want:      true,
+		},
+		{
+			name:      "fme_flow converter: returns true",
+			converter: ConverterFMEFlow,
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := PlateauSpec{
+				Converter: tt.converter,
+			}
+			got := s.IsFlowEnabled()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPlateauSpec_ShouldUseFlow(t *testing.T) {
+	tests := []struct {
+		name         string
+		converter    string
+		flowTriggers []FlowTrigger
+		featureType  string
+		want         bool
+	}{
+		{
+			name:        "flow mode: always returns true",
+			converter:   ConverterFlow,
+			featureType: "bldg",
+			want:        true,
+		},
+		{
+			name:        "fme mode: always returns false",
+			converter:   ConverterFME,
+			featureType: "bldg",
+			want:        false,
+		},
+		{
+			name:        "empty converter: returns false",
+			converter:   "",
+			featureType: "bldg",
+			want:        false,
+		},
+		{
+			name:        "fme_flow mode: no triggers returns false",
+			converter:   ConverterFMEFlow,
+			featureType: "bldg",
+			want:        false,
+		},
+		{
+			name:      "fme_flow mode: trigger exists and flow not disabled returns true",
+			converter: ConverterFMEFlow,
+			flowTriggers: []FlowTrigger{
+				{FeatureType: "bldg", FlowDisabled: false},
+				{FeatureType: "tran", FlowDisabled: false},
+			},
+			featureType: "bldg",
+			want:        true,
+		},
+		{
+			name:      "fme_flow mode: trigger exists but flow disabled returns false",
+			converter: ConverterFMEFlow,
+			flowTriggers: []FlowTrigger{
+				{FeatureType: "bldg", FlowDisabled: true},
+				{FeatureType: "tran", FlowDisabled: false},
+			},
+			featureType: "bldg",
+			want:        false,
+		},
+		{
+			name:      "fme_flow mode: no trigger for feature type returns false",
+			converter: ConverterFMEFlow,
+			flowTriggers: []FlowTrigger{
+				{FeatureType: "bldg", FlowDisabled: false},
+				{FeatureType: "tran", FlowDisabled: false},
+			},
+			featureType: "fld",
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := PlateauSpec{
+				Converter:    tt.converter,
+				FlowTriggers: tt.flowTriggers,
+			}
+			got := s.ShouldUseFlow(tt.featureType)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPlateauSpec_GetFlowTrigger(t *testing.T) {
+	spec := PlateauSpec{
+		FlowTriggers: []FlowTrigger{
+			{FeatureType: "bldg", FlowQCTrigger: "qc-bldg", FlowConvTrigger: "conv-bldg"},
+			{FeatureType: "tran", FlowQCTrigger: "qc-tran", FlowConvTrigger: "conv-tran"},
+		},
+	}
+
+	// Found
+	trigger := spec.GetFlowTrigger("bldg")
+	assert.NotNil(t, trigger)
+	assert.Equal(t, "bldg", trigger.FeatureType)
+	assert.Equal(t, "qc-bldg", trigger.FlowQCTrigger)
+	assert.Equal(t, "conv-bldg", trigger.FlowConvTrigger)
+
+	// Not found
+	assert.Nil(t, spec.GetFlowTrigger("fld"))
+
+	// Empty triggers
+	emptySpec := PlateauSpec{}
+	assert.Nil(t, emptySpec.GetFlowTrigger("bldg"))
+}
+
+func TestPlateauSpec_GetFlowQCTrigger(t *testing.T) {
+	spec := PlateauSpec{
+		FlowTriggers: []FlowTrigger{
+			{FeatureType: "bldg", FlowQCTrigger: "qc-bldg", FlowConvTrigger: "conv-bldg"},
+		},
+	}
+
+	assert.Equal(t, "qc-bldg", spec.GetFlowQCTrigger("bldg"))
+	assert.Equal(t, "", spec.GetFlowQCTrigger("fld"))
+}
+
+func TestPlateauSpec_GetFlowConvTrigger(t *testing.T) {
+	spec := PlateauSpec{
+		FlowTriggers: []FlowTrigger{
+			{FeatureType: "bldg", FlowQCTrigger: "qc-bldg", FlowConvTrigger: "conv-bldg"},
+		},
+	}
+
+	assert.Equal(t, "conv-bldg", spec.GetFlowConvTrigger("bldg"))
+	assert.Equal(t, "", spec.GetFlowConvTrigger("fld"))
+}
+
+func TestPlateauSpecList_FindByVersion(t *testing.T) {
+	list := PlateauSpecList{
+		{MajorVersion: 3, Year: 2023},
+		{MajorVersion: 4, Year: 2024},
+	}
+
+	// Found
+	spec := list.FindByVersion(4)
+	assert.NotNil(t, spec)
+	assert.Equal(t, 4, spec.MajorVersion)
+
+	// Not found
+	assert.Nil(t, list.FindByVersion(5))
+
+	// Empty list
+	emptyList := PlateauSpecList{}
+	assert.Nil(t, emptyList.FindByVersion(4))
+}
+
+func TestPlateauSpecList_FindByYear(t *testing.T) {
+	list := PlateauSpecList{
+		{MajorVersion: 3, Year: 2023},
+		{MajorVersion: 4, Year: 2024},
+	}
+
+	// Found
+	spec := list.FindByYear(2024)
+	assert.NotNil(t, spec)
+	assert.Equal(t, 2024, spec.Year)
+
+	// Not found
+	assert.Nil(t, list.FindByYear(2025))
+
+	// Empty list
+	emptyList := PlateauSpecList{}
+	assert.Nil(t, emptyList.FindByYear(2024))
+}

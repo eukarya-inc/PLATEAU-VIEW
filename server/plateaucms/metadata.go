@@ -20,12 +20,6 @@ type MetadataStore interface {
 
 var _ MetadataStore = &CMS{}
 
-const (
-	ConverterFME     = "fme"
-	ConverterFlow    = "flow"
-	ConverterFMEFlow = "fme_flow"
-)
-
 type Metadata struct {
 	Name                     string `json:"name" cms:"name,text"`
 	ProjectAlias             string `json:"project_alias" cms:"project_alias,text"`
@@ -38,43 +32,10 @@ type Metadata struct {
 	WorkspaceID              string `json:"workspace_id" cms:"workspace_id,text"`
 	ProjectID                string `json:"project_id" cms:"project_id,text"`
 	MergePlateau             bool   `json:"merge_plateau" cms:"merge_plateau,boolean"`
-	Converter                string `json:"converter" cms:"converter,select"`
-	FlowEnabledFeatures      string `json:"flow_enabled_features" cms:"flow_enabled_features,text"`
 	Disabled                 bool   `json:"disabled" cms:"disabled,boolean"`
 	// whether the request is authenticated with sidebar access token
 	Auth       bool   `json:"-" cms:"-"`
 	CMSBaseURL string `json:"-" cms:"-"`
-}
-
-func (m Metadata) IsFMEEnabled() bool {
-	return m.Converter == ConverterFME || m.Converter == ConverterFMEFlow
-}
-
-func (m Metadata) IsFlowEnabled() bool {
-	return m.Converter == ConverterFlow || m.Converter == ConverterFMEFlow
-}
-
-// ShouldUseFlow returns whether Flow should be used for the given feature type.
-// In fme_flow mode, it checks if the feature type is in the FlowEnabledFeatures list.
-// If FlowEnabledFeatures is empty, only the test model (plateau-flow) should use Flow.
-func (m Metadata) ShouldUseFlow(featureType string) bool {
-	switch m.Converter {
-	case ConverterFlow:
-		return true // Flow-only mode: all feature types use Flow
-	case ConverterFMEFlow:
-		if m.FlowEnabledFeatures == "" {
-			return false // No features specified: only test model (handled separately)
-		}
-		// Check if the feature type is in the enabled list
-		for _, f := range strings.Split(m.FlowEnabledFeatures, ",") {
-			if strings.TrimSpace(f) == featureType {
-				return true
-			}
-		}
-		return false
-	default:
-		return false // FME-only or unset
-	}
 }
 
 func (m Metadata) CMS() (*cms.CMS, error) {

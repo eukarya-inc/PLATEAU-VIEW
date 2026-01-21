@@ -43,17 +43,6 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	}
 	log.Infofc(ctx, "main item: id=%s", mainItem.ID)
 
-	// metadata
-	md, _, err := s.PCMS.Metadata(ctx, w.ProjectID(), false, false)
-	if err != nil {
-		log.Errorfc(ctx, "failed to get metadata: %v", err)
-		return nil
-	}
-	if !md.IsFMEEnabled() {
-		log.Infofc(ctx, "skip: fme is disabled for project %s", w.ProjectID())
-		return nil
-	}
-
 	// feature item
 	item := cmsintegrationcommon.FeatureItemFrom(mainItem)
 
@@ -139,6 +128,52 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 
 	cityItem := cmsintegrationcommon.CityItemFrom(cityItemRaw, featureTypeCodes)
 
+	// get FME URL - prioritize item spec over city spec
+	specVersion := item.SpecMajorVersionInt()
+	if specVersion == 0 {
+		specVersion = cityItem.SpecMajorVersionInt()
+	}
+	log.Debugfc(ctx, "specVersion: item=%d, city=%d, final=%d", item.SpecMajorVersionInt(), cityItem.SpecMajorVersionInt(), specVersion)
+
+	// get plateau specs and check FME enablement
+	specs, err := s.PCMS.PlateauSpecs(ctx)
+	if err != nil {
+		log.Errorfc(ctx, "failed to get plateau specs: %v", err)
+		return nil
+	}
+
+	spec := plateaucms.PlateauSpecList(specs).FindByVersion(specVersion)
+	if spec == nil && specVersion > 0 {
+		log.Errorfc(ctx, "spec not found for version: specVersion=%d", specVersion)
+		_ = failToConvert(ctx, s, mainItem.ID, ty, "PLATEAU仕様 第%d版の設定が見つかりません。", specVersion)
+		return fmt.Errorf("spec not found for version: %d", specVersion)
+	}
+
+	// check effective converter (with override priority)
+	specConverter := ""
+	if spec != nil {
+		specConverter = spec.Converter
+	}
+	effectiveConverter := cmsintegrationcommon.GetEffectiveConverter(item, cityItem, specConverter)
+	log.Debugfc(ctx, "effective converter: %s (item=%s, city=%s, spec=%s)", effectiveConverter, item.Converter, cityItem.Converter, specConverter)
+
+	// check if FME is enabled
+	tempSpec := &plateaucms.PlateauSpec{Converter: effectiveConverter}
+	if !tempSpec.IsFMEEnabled() {
+		log.Infofc(ctx, "skip: fme is disabled (converter=%s)", effectiveConverter)
+		return nil
+	}
+
+	// In fme_flow mode, check if this feature type should use Flow instead
+	if spec != nil && effectiveConverter == plateaucms.ConverterFMEFlow {
+		tempSpec.FlowTriggers = spec.FlowTriggers
+		if tempSpec.ShouldUseFlow(featureType.Code) {
+			log.Infofc(ctx, "skip: feature type %s should use flow instead of fme (converter=%s)",
+				featureType.Code, effectiveConverter)
+			return nil
+		}
+	}
+
 	// validate city item
 	if cityItem.CodeLists == nil {
 		_ = failToConvert(ctx, s, mainItem.ID, ty, "コードリストが都市アイテムに登録されていないため品質検査・変換を開始できません。")
@@ -163,13 +198,6 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	} else if cityItem.Schemas != nil {
 		schemasAssetURL = cityItem.Schemas.URL
 	}
-
-	// get FME URL - prioritize item spec over city spec
-	specVersion := item.SpecMajorVersionInt()
-	if specVersion == 0 {
-		specVersion = cityItem.SpecMajorVersionInt()
-	}
-	log.Debugfc(ctx, "specVersion: item=%d, city=%d, final=%d", item.SpecMajorVersionInt(), cityItem.SpecMajorVersionInt(), specVersion)
 
 	fmeURL := s.GetFMEURL(ctx, specVersion)
 	log.Debugfc(ctx, "fme url: %s (specVersion=%d)", fmeURL, specVersion)

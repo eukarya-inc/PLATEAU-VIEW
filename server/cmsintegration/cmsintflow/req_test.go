@@ -53,10 +53,19 @@ func TestSendRequestToFlow_qc(t *testing.T) {
 
 	featureTypes := plateaucms.PlateauFeatureTypeList{
 		{
-			Code:   "bldg",
-			Name:   "建築物モデル",
-			QC:     true,
-			FlowQC: "qcTriggerID",
+			Code: "bldg",
+			Name: "建築物モデル",
+			QC:   true,
+		},
+	}
+
+	specs := plateaucms.PlateauSpecList{
+		{
+			MajorVersion: 4,
+			Converter:    plateaucms.ConverterFlow,
+			FlowTriggers: []plateaucms.FlowTrigger{
+				{FeatureType: "bldg", FlowQCTrigger: "qcTriggerID", FlowConvTrigger: "convTriggerID"},
+			},
 		},
 	}
 
@@ -90,7 +99,7 @@ func TestSendRequestToFlow_qc(t *testing.T) {
 		CMS:  initMockCMS(items, assets),
 		Flow: NewFlow(nil, "https://flow.example.com", "token"),
 	}
-	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, "")
+	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, "")
 
 	// assert
 	assert.NoError(t, err)
@@ -133,10 +142,19 @@ func TestSendRequestToFlow_conv(t *testing.T) {
 
 	featureTypes := plateaucms.PlateauFeatureTypeList{
 		{
-			Code:     "bldg",
-			Name:     "建築物モデル",
-			Conv:     true,
-			FlowConv: "convTriggerID",
+			Code: "bldg",
+			Name: "建築物モデル",
+			Conv: true,
+		},
+	}
+
+	specs := plateaucms.PlateauSpecList{
+		{
+			MajorVersion: 4,
+			Converter:    plateaucms.ConverterFlow,
+			FlowTriggers: []plateaucms.FlowTrigger{
+				{FeatureType: "bldg", FlowQCTrigger: "qcTriggerID", FlowConvTrigger: "convTriggerID"},
+			},
 		},
 	}
 
@@ -168,7 +186,7 @@ func TestSendRequestToFlow_conv(t *testing.T) {
 		CMS:  initMockCMS(items, assets),
 		Flow: NewFlow(nil, "https://flow.example.com", "token"),
 	}
-	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, cmsintegrationcommon.ReqTypeConv)
+	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, cmsintegrationcommon.ReqTypeConv)
 
 	// assert
 	assert.NoError(t, err)
@@ -201,11 +219,18 @@ func TestSendRequestToFlow_qc_unsupported(t *testing.T) {
 		},
 	}
 
+	specs := plateaucms.PlateauSpecList{
+		{
+			MajorVersion: 4,
+			Converter:    plateaucms.ConverterFlow,
+		},
+	}
+
 	// exec
 	s := &Services{
 		CMS: initMockCMS(nil, nil),
 	}
-	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, "")
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "")
 
 	// assert
 	assert.NoError(t, err)
@@ -241,13 +266,81 @@ func TestSendRequestToFlow_conv_running(t *testing.T) {
 		},
 	}
 
+	specs := plateaucms.PlateauSpecList{
+		{
+			MajorVersion: 4,
+			Converter:    plateaucms.ConverterFlow,
+		},
+	}
+
 	// exec
 	s := &Services{
 		CMS: initMockCMS(nil, nil),
 	}
-	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, "")
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "")
 
 	// assert
+	assert.NoError(t, err)
+	assert.Equal(t, 0, httpmock.GetTotalCallCount())
+}
+
+func TestSendRequestToFlow_flow_disabled(t *testing.T) {
+	ctx := context.Background()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	// cms
+	projectID := "projectID"
+	modelName := "modelName"
+
+	items := map[string]*cms.Item{
+		"main": {
+			Fields: []*cms.Field{
+				{Key: "city", Value: "cityID"},
+				{Key: "citygml", Value: "citygmlID"},
+				{Key: "feature_type", Value: "bldg"},
+			},
+			MetadataFields: []*cms.Field{},
+		},
+		"cityID": {
+			Fields: []*cms.Field{
+				{Key: "spec", Value: "v4.1"},
+				{Key: "schemas", Value: &cms.Asset{URL: "https://example.com/schemas"}},
+				{Key: "codelists", Value: &cms.Asset{URL: "https://example.com/codelists"}},
+			},
+			MetadataFields: []*cms.Field{},
+		},
+	}
+
+	assets := map[string]*cms.Asset{
+		"citygmlID": {
+			URL: "https://example.com/citygml",
+		},
+	}
+
+	featureTypes := plateaucms.PlateauFeatureTypeList{
+		{
+			Code: "bldg",
+			Name: "建築物モデル",
+			QC:   true,
+		},
+	}
+
+	specs := plateaucms.PlateauSpecList{
+		{
+			MajorVersion: 4,
+			Converter:    plateaucms.ConverterFME, // Flow disabled
+		},
+	}
+
+	// exec
+	s := &Services{
+		CMS:  initMockCMS(items, assets),
+		Flow: NewFlow(nil, "https://flow.example.com", "token"),
+	}
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, items["main"], featureTypes, specs, "")
+
+	// assert - should be skipped because Flow is not enabled
 	assert.NoError(t, err)
 	assert.Equal(t, 0, httpmock.GetTotalCallCount())
 }

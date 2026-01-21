@@ -20,6 +20,7 @@ func sendRequestToFlow(
 	modelName string,
 	mainItem *cms.Item,
 	featureTypes plateaucms.PlateauFeatureTypeList,
+	specs plateaucms.PlateauSpecList,
 	overrideReqType cmsintegrationcommon.ReqType,
 ) error {
 	ctx = log.WithPrefixMessage(ctx, "flow: ")
@@ -105,21 +106,52 @@ func sendRequestToFlow(
 		return fmt.Errorf("failed to get specv: specv=%d", specv)
 	}
 
-	// trigger id
+	// get spec for this version
+	spec := specs.FindByVersion(specv)
+	if spec == nil {
+		log.Errorfc(ctx, "spec not found for version: specv=%d", specv)
+		_ = s.Fail(ctx, mainItem.ID, ty, "PLATEAU仕様 第%d版の設定が見つかりません。", specv)
+		return fmt.Errorf("spec not found for version: %d", specv)
+	}
+
+	// check effective converter (with override priority)
+	effectiveConverter := cmsintegrationcommon.GetEffectiveConverter(item, cityItem, spec.Converter)
+	log.Debugfc(ctx, "effective converter: %s (item=%s, city=%s, spec=%s)", effectiveConverter, item.Converter, cityItem.Converter, spec.Converter)
+
+	// check if Flow is enabled
+	tempSpec := &plateaucms.PlateauSpec{Converter: effectiveConverter, FlowTriggers: spec.FlowTriggers}
+	if !tempSpec.IsFlowEnabled() {
+		log.Infofc(ctx, "skip: flow is disabled (converter=%s)", effectiveConverter)
+		return nil
+	}
+
+	// In fme_flow mode, check if this feature type should use Flow
+	if effectiveConverter == plateaucms.ConverterFMEFlow {
+		if modelName == "flow" {
+			// Test model (plateau-flow) always uses Flow
+			log.Infofc(ctx, "flow model detected, proceeding with flow")
+		} else if !tempSpec.ShouldUseFlow(featureType.Code) {
+			log.Infofc(ctx, "skip: feature type %s is not enabled for flow in fme_flow mode (converter=%s)",
+				featureType.Code, effectiveConverter)
+			return nil
+		}
+	}
+
+	// trigger id from PlateauSpec
 	var qc bool
 	log.Debugfc(ctx, "status: ty=%s, overrideReqType=%s, specv=%d", ty, overrideReqType, specv)
 	var triggerID string
 	switch ty {
 	case cmsintegrationcommon.ReqTypeQC:
-		triggerID = featureType.FlowQCTriggerID(specv)
+		triggerID = spec.GetFlowQCTrigger(featureType.Code)
 		qc = true
 	case cmsintegrationcommon.ReqTypeConv:
-		triggerID = featureType.FlowConvTriggerID(specv)
+		triggerID = spec.GetFlowConvTrigger(featureType.Code)
 	}
 	log.Debugfc(ctx, "trigger id: %s (ty=%s, specv=%d, qc=%v)", triggerID, ty, specv, qc)
 	if triggerID == "" {
 		log.Errorfc(ctx, "trigger id is empty: ty=%s, specv=%d, featureType=%s", ty, specv, featureType.Code)
-		_ = s.Fail(ctx, mainItem.ID, ty, "Flowの%s（v%d）用トリガーIDが設定されていません。", ty.Title(), specv)
+		_ = s.Fail(ctx, mainItem.ID, ty, "Flowの%s（v%d）用トリガーIDが設定されていません。plateau-specモデルのflow_triggersで地物型%sのトリガーを設定してください。", ty.Title(), specv, featureType.Code)
 		return fmt.Errorf("failed to get trigger id: ty=%s, v=%d", ty, specv)
 	}
 
