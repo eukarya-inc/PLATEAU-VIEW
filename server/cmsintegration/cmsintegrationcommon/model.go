@@ -63,6 +63,8 @@ type CityItem struct {
 	RelatedDataset    string            `json:"related_dataset,omitempty" cms:"related_dataset,reference"`
 	GeospatialjpIndex string            `json:"geospatialjp-index,omitempty" cms:"geospatialjp-index,reference"`
 	GeospatialjpData  string            `json:"geospatialjp-data,omitempty" cms:"geospatialjp-data,reference"`
+	// FME/Flow converter override (empty means use PlateauSpec setting)
+	Converter string `json:"converter,omitempty" cms:"converter,select"`
 	// meatadata
 	PlateauDataStatus string          `json:"plateau_data_status,omitempty" cms:"plateau_data_status,select,metadata"`
 	CityPublic        bool            `json:"city_public,omitempty" cms:"city_public,bool,metadata"`
@@ -193,6 +195,8 @@ type FeatureItem struct {
 	Schemas     *cms.PublicAsset `json:"schemas" cms:"schemas,asset"`
 	CodeLists   *cms.PublicAsset `json:"codelists" cms:"codelists,asset"`
 	ObjectLists *cms.PublicAsset `json:"objectLists" cms:"objectLists,asset"`
+	// FME/Flow converter override (empty means use CityItem or PlateauSpec setting)
+	Converter string `json:"converter,omitempty" cms:"converter,select"`
 
 	// metadata
 	SkipQCConv       *cms.Tag `json:"skip_qc_conv,omitempty" cms:"skip_qc_conv,tag,metadata"`
@@ -665,4 +669,16 @@ func (ty ReqType) Normalize() ReqType {
 		return ReqTypeQC
 	}
 	return ty
+}
+
+// GetEffectiveConverter returns the effective converter setting based on override priority:
+// FeatureItem.Converter > CityItem.Converter > specConverter (PlateauSpec.Converter) > default (empty string)
+func GetEffectiveConverter(featureItem *FeatureItem, cityItem *CityItem, specConverter string) string {
+	if featureItem != nil && featureItem.Converter != "" {
+		return featureItem.Converter
+	}
+	if cityItem != nil && cityItem.Converter != "" {
+		return cityItem.Converter
+	}
+	return specConverter
 }

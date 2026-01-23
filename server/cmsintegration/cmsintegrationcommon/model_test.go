@@ -385,3 +385,70 @@ func TestReqType_Normalize(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEffectiveConverter(t *testing.T) {
+	tests := []struct {
+		name          string
+		featureItem   *FeatureItem
+		cityItem      *CityItem
+		specConverter string
+		want          string
+	}{
+		{
+			name:          "all nil/empty: returns spec converter",
+			featureItem:   nil,
+			cityItem:      nil,
+			specConverter: "fme",
+			want:          "fme",
+		},
+		{
+			name:          "spec converter only",
+			featureItem:   &FeatureItem{},
+			cityItem:      &CityItem{},
+			specConverter: "flow",
+			want:          "flow",
+		},
+		{
+			name:          "city item overrides spec",
+			featureItem:   nil,
+			cityItem:      &CityItem{Converter: "fme_flow"},
+			specConverter: "fme",
+			want:          "fme_flow",
+		},
+		{
+			name:          "feature item overrides city item",
+			featureItem:   &FeatureItem{Converter: "flow"},
+			cityItem:      &CityItem{Converter: "fme_flow"},
+			specConverter: "fme",
+			want:          "flow",
+		},
+		{
+			name:          "feature item overrides spec (city item nil)",
+			featureItem:   &FeatureItem{Converter: "flow"},
+			cityItem:      nil,
+			specConverter: "fme",
+			want:          "flow",
+		},
+		{
+			name:          "feature item empty: falls back to city item",
+			featureItem:   &FeatureItem{Converter: ""},
+			cityItem:      &CityItem{Converter: "fme_flow"},
+			specConverter: "fme",
+			want:          "fme_flow",
+		},
+		{
+			name:          "both items empty: falls back to spec",
+			featureItem:   &FeatureItem{Converter: ""},
+			cityItem:      &CityItem{Converter: ""},
+			specConverter: "flow",
+			want:          "flow",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetEffectiveConverter(tt.featureItem, tt.cityItem, tt.specConverter)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

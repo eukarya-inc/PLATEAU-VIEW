@@ -86,7 +86,5 @@ func (p *plateauCMSMock) DatasetTypes(ctx context.Context) (plateaucms.DatasetTy
 }
 
 func (p *plateauCMSMock) Metadata(ctx context.Context, prj string, findDataCatalog, useDefault bool) (plateaucms.Metadata, plateaucms.MetadataList, error) {
-	return plateaucms.Metadata{
-		Converter: "fme",
-	}, nil, nil
+	return plateaucms.Metadata{}, nil, nil
 }

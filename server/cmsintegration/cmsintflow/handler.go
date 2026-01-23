@@ -52,29 +52,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		}
 		log.Infofc(ctx, "main item: id=%s", mainItem.ID)
 
-		md, _, err := s.PCMS.Metadata(ctx, w.ProjectID(), false, false)
-		if err != nil {
-			log.Errorfc(ctx, "failed to get metadata: %v", err)
-			return nil
-		}
-		log.Debugfc(ctx, "metadata: %s", pp.Sprint(md))
-		if !md.IsFlowEnabled() {
-			log.Debugfc(ctx, "flow is disabled")
-			return nil
-		}
-
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
-		if md.Converter == plateaucms.ConverterFMEFlow {
-			// In fme_flow mode, check if this feature type should use Flow
-			if modelName == "flow" {
-				// Test model (plateau-flow) always uses Flow
-				log.Infofc(ctx, "flow model detected, proceeding with flow")
-			} else if !md.ShouldUseFlow(modelName) {
-				log.Infofc(ctx, "skip: feature type %s is not enabled for flow (converter=%s, flow_enabled_features=%s)",
-					modelName, md.Converter, md.FlowEnabledFeatures)
-				return nil
-			}
-		}
 
 		log.Debugfc(ctx, "getting feature types")
 		featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
@@ -84,8 +62,16 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		}
 		log.Debugfc(ctx, "feature types: count=%d", len(featureTypes))
 
+		log.Debugfc(ctx, "getting plateau specs")
+		specs, err := s.PCMS.PlateauSpecs(ctx)
+		if err != nil {
+			log.Errorfc(ctx, "failed to get plateau specs: %v", err)
+			return nil
+		}
+		log.Debugfc(ctx, "plateau specs: count=%d", len(specs))
+
 		log.Infofc(ctx, "sending request to flow: project=%s, model=%s, item=%s", w.ProjectID(), modelName, mainItem.ID)
-		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, ""); err != nil {
+		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), ""); err != nil {
 			log.Errorfc(ctx, "failed to trigger flow: %v", err)
 			return nil
 		}

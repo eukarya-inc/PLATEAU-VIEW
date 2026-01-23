@@ -36,10 +36,16 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 		return FlowRequestResult{}, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	u := f.getTriggerURL(r.TriggerID)
+	// Use request's BaseURL if provided, otherwise use client's default
+	baseURL := f.baseURL
+	if r.BaseURL != "" {
+		baseURL = r.BaseURL
+	}
+
+	u := getTriggerURL(baseURL, r.TriggerID)
 	if u == "" {
-		log.Errorfc(ctx, "invalid flow url: base_url=%s, trigger_id=%s", f.baseURL, r.TriggerID)
-		return FlowRequestResult{}, fmt.Errorf("invalid url: base_url=%s, trigger_id=%s", f.baseURL, r.TriggerID)
+		log.Errorfc(ctx, "invalid flow url: base_url=%s, trigger_id=%s", baseURL, r.TriggerID)
+		return FlowRequestResult{}, fmt.Errorf("invalid url: base_url=%s, trigger_id=%s", baseURL, r.TriggerID)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(b))
@@ -86,9 +92,8 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 	return
 }
 
-func (f *flowImpl) getTriggerURL(triggerID string) string {
-	base := f.baseURL
-	if base == "" {
+func getTriggerURL(baseURL, triggerID string) string {
+	if baseURL == "" {
 		if _, err := url.Parse(triggerID); err == nil {
 			return triggerID
 		}
@@ -96,6 +101,6 @@ func (f *flowImpl) getTriggerURL(triggerID string) string {
 		return ""
 	}
 
-	u, _ := url.JoinPath(f.baseURL, "api", "triggers", triggerID, "run")
+	u, _ := url.JoinPath(baseURL, "api", "triggers", triggerID, "run")
 	return u
 }

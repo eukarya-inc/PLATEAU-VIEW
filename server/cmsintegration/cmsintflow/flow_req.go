@@ -8,6 +8,7 @@ import (
 
 type FlowRequest struct {
 	TriggerID       string
+	BaseURL         string // Optional: overrides client's base URL if set
 	NotificationURL string
 	AuthToken       string
 	CityGMLURL      string

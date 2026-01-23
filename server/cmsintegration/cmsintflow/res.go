@@ -56,6 +56,13 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		return nil
 	}
 
+	// plateau specs
+	specs, err := s.PCMS.PlateauSpecs(ctx)
+	if err != nil {
+		log.Infofc(ctx, "early return: failed to get plateau specs: %v", err)
+		return nil
+	}
+
 	// get mainItem
 	mainItem, err := s.CMS.GetItem(ctx, id.ItemID, false)
 	if err != nil {
@@ -206,7 +213,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 			} else {
 				log.Infofc(ctx, "trigger conv")
 				rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-				if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, cmsintegrationcommon.ReqTypeConv); err != nil {
+				if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv); err != nil {
 					log.Errorfc(ctx, "failed to trigger conv: %v", err)
 					return fmt.Errorf("failed to send request to flow: %w", err)
 				}

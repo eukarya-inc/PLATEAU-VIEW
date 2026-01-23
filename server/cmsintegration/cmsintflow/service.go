@@ -38,6 +38,7 @@ type Services struct {
 type PCMS interface {
 	plateaucms.FeatureTypeStore
 	plateaucms.MetadataStore
+	plateaucms.SpecStore
 }
 
 func NewServices(c Config) (s *Services, _ error) {
