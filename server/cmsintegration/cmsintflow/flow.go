@@ -42,7 +42,7 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 		baseURL = r.BaseURL
 	}
 
-	u := f.getTriggerURL(baseURL, r.TriggerID)
+	u := getTriggerURL(baseURL, r.TriggerID)
 	if u == "" {
 		log.Errorfc(ctx, "invalid flow url: base_url=%s, trigger_id=%s", baseURL, r.TriggerID)
 		return FlowRequestResult{}, fmt.Errorf("invalid url: base_url=%s, trigger_id=%s", baseURL, r.TriggerID)
@@ -92,7 +92,7 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 	return
 }
 
-func (f *flowImpl) getTriggerURL(baseURL, triggerID string) string {
+func getTriggerURL(baseURL, triggerID string) string {
 	if baseURL == "" {
 		if _, err := url.Parse(triggerID); err == nil {
 			return triggerID

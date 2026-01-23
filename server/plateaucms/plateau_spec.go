@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/rerror"
@@ -68,12 +69,14 @@ func (s PlateauSpec) IsFlowEnabled() bool {
 
 // IsFMEEnabledConverter returns whether FME is enabled for the given converter value
 func IsFMEEnabledConverter(converter string) bool {
-	return converter == "" || converter == ConverterFME || converter == ConverterFMEFlow
+	c := strings.ToLower(converter)
+	return c == "" || c == ConverterFME || c == ConverterFMEFlow
 }
 
 // IsFlowEnabledConverter returns whether Flow is enabled for the given converter value
 func IsFlowEnabledConverter(converter string) bool {
-	return converter == ConverterFlow || converter == ConverterFMEFlow
+	c := strings.ToLower(converter)
+	return c == ConverterFlow || c == ConverterFMEFlow
 }
 
 // ShouldUseFlow returns whether Flow should be used for the given feature type.
