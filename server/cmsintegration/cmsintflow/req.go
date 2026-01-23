@@ -119,8 +119,7 @@ func sendRequestToFlow(
 	log.Debugfc(ctx, "effective converter: %s (item=%s, city=%s, spec=%s)", effectiveConverter, item.Converter, cityItem.Converter, spec.Converter)
 
 	// check if Flow is enabled
-	tempSpec := &plateaucms.PlateauSpec{Converter: effectiveConverter, FlowTriggers: spec.FlowTriggers}
-	if !tempSpec.IsFlowEnabled() {
+	if !plateaucms.IsFlowEnabledConverter(effectiveConverter) {
 		log.Infofc(ctx, "skip: flow is disabled (converter=%s)", effectiveConverter)
 		return nil
 	}
@@ -130,7 +129,7 @@ func sendRequestToFlow(
 		if modelName == "flow" {
 			// Test model (plateau-flow) always uses Flow
 			log.Infofc(ctx, "flow model detected, proceeding with flow")
-		} else if !tempSpec.ShouldUseFlow(featureType.Code) {
+		} else if !spec.ShouldUseFlow(featureType.Code) {
 			log.Infofc(ctx, "skip: feature type %s is not enabled for flow in fme_flow mode (converter=%s)",
 				featureType.Code, effectiveConverter)
 			return nil

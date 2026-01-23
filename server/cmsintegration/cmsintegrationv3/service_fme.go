@@ -158,16 +158,14 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	log.Debugfc(ctx, "effective converter: %s (item=%s, city=%s, spec=%s)", effectiveConverter, item.Converter, cityItem.Converter, specConverter)
 
 	// check if FME is enabled
-	tempSpec := &plateaucms.PlateauSpec{Converter: effectiveConverter}
-	if !tempSpec.IsFMEEnabled() {
+	if !plateaucms.IsFMEEnabledConverter(effectiveConverter) {
 		log.Infofc(ctx, "skip: fme is disabled (converter=%s)", effectiveConverter)
 		return nil
 	}
 
 	// In fme_flow mode, check if this feature type should use Flow instead
 	if spec != nil && effectiveConverter == plateaucms.ConverterFMEFlow {
-		tempSpec.FlowTriggers = spec.FlowTriggers
-		if tempSpec.ShouldUseFlow(featureType.Code) {
+		if spec.ShouldUseFlow(featureType.Code) {
 			log.Infofc(ctx, "skip: feature type %s should use flow instead of fme (converter=%s)",
 				featureType.Code, effectiveConverter)
 			return nil

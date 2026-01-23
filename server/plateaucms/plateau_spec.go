@@ -58,12 +58,22 @@ func minorVersionsFromMax(major, max int) []string {
 
 // IsFMEEnabled returns whether FME is enabled for this spec
 func (s PlateauSpec) IsFMEEnabled() bool {
-	return s.Converter == "" || s.Converter == ConverterFME || s.Converter == ConverterFMEFlow
+	return IsFMEEnabledConverter(s.Converter)
 }
 
 // IsFlowEnabled returns whether Flow is enabled for this spec
 func (s PlateauSpec) IsFlowEnabled() bool {
-	return s.Converter == ConverterFlow || s.Converter == ConverterFMEFlow
+	return IsFlowEnabledConverter(s.Converter)
+}
+
+// IsFMEEnabledConverter returns whether FME is enabled for the given converter value
+func IsFMEEnabledConverter(converter string) bool {
+	return converter == "" || converter == ConverterFME || converter == ConverterFMEFlow
+}
+
+// IsFlowEnabledConverter returns whether Flow is enabled for the given converter value
+func IsFlowEnabledConverter(converter string) bool {
+	return converter == ConverterFlow || converter == ConverterFMEFlow
 }
 
 // ShouldUseFlow returns whether Flow should be used for the given feature type.
