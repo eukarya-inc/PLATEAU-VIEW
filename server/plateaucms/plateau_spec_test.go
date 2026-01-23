@@ -333,3 +333,39 @@ func TestPlateauSpecList_FindByYear(t *testing.T) {
 	emptyList := PlateauSpecList{}
 	assert.Nil(t, emptyList.FindByYear(2024))
 }
+
+func TestPlateauSpec_GetEffectiveFlowURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		specURL    string
+		defaultURL string
+		want       string
+	}{
+		{
+			name:       "spec URL set: returns spec URL",
+			specURL:    "https://spec.example.com",
+			defaultURL: "https://default.example.com",
+			want:       "https://spec.example.com",
+		},
+		{
+			name:       "spec URL empty: returns default URL",
+			specURL:    "",
+			defaultURL: "https://default.example.com",
+			want:       "https://default.example.com",
+		},
+		{
+			name:       "both empty: returns empty",
+			specURL:    "",
+			defaultURL: "",
+			want:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := PlateauSpec{FlowURL: tt.specURL}
+			got := s.GetEffectiveFlowURL(tt.defaultURL)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

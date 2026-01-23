@@ -39,6 +39,7 @@ type PlateauSpec struct {
 	AttrList        string `json:"attr_list" cms:"-"`
 
 	// FME/Flow settings
+	FlowURL      string        `json:"flow_url" cms:"flow_url,text"`
 	Converter    string        `json:"converter" cms:"converter,select"`
 	FlowTriggers []FlowTrigger `json:"flow_triggers" cms:"flow_triggers,group"`
 }
@@ -107,6 +108,14 @@ func (s PlateauSpec) GetFlowConvTrigger(featureType string) string {
 		return t.FlowConvTrigger
 	}
 	return ""
+}
+
+// GetEffectiveFlowURL returns the Flow URL, using the spec's FlowURL if set, otherwise the default
+func (s PlateauSpec) GetEffectiveFlowURL(defaultURL string) string {
+	if s.FlowURL != "" {
+		return s.FlowURL
+	}
+	return defaultURL
 }
 
 func (h *CMS) PlateauSpecs(ctx context.Context) ([]PlateauSpec, error) {

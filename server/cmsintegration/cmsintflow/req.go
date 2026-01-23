@@ -177,9 +177,11 @@ func sendRequestToFlow(
 
 	// request to flow
 	notificationURL := resultURL(conf, sig)
-	log.Infofc(ctx, "requesting to flow: triggerID=%s, notificationURL=%s, cityGMLURL=%s", triggerID, notificationURL, cityGMLAsset.URL)
+	flowBaseURL := spec.GetEffectiveFlowURL(conf.FlowBaseURL)
+	log.Infofc(ctx, "requesting to flow: triggerID=%s, baseURL=%s, notificationURL=%s, cityGMLURL=%s", triggerID, flowBaseURL, notificationURL, cityGMLAsset.URL)
 	res, err := s.Flow.Request(ctx, FlowRequest{
 		TriggerID:       triggerID,
+		BaseURL:         flowBaseURL,
 		NotificationURL: notificationURL,
 		AuthToken:       conf.FlowToken,
 		CityGMLURL:      cityGMLAsset.URL,
