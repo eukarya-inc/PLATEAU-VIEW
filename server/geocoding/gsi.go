@@ -3,10 +3,14 @@ package geocoding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 )
+
+// ErrGSIUnavailable indicates that the GSI API is temporarily unavailable (502/503/504)
+var ErrGSIUnavailable = errors.New("GSI API is temporarily unavailable")
 
 const DefaultGSIURL = "https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress"
 
@@ -62,6 +66,12 @@ func (c *GSIClient) Fetch(ctx context.Context, lon, lat float64) (*GSIResult, er
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		// Return specific error for upstream service unavailability
+		if resp.StatusCode == http.StatusBadGateway ||
+			resp.StatusCode == http.StatusServiceUnavailable ||
+			resp.StatusCode == http.StatusGatewayTimeout {
+			return nil, fmt.Errorf("%w: status code %d", ErrGSIUnavailable, resp.StatusCode)
+		}
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 

@@ -2,6 +2,7 @@ package geocoding
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,12 +12,13 @@ import (
 
 func TestGSIClient_Fetch(t *testing.T) {
 	tests := []struct {
-		name           string
-		responseBody   string
-		responseStatus int
-		wantCode       string
-		wantName       string
-		wantErr        bool
+		name            string
+		responseBody    string
+		responseStatus  int
+		wantCode        string
+		wantName        string
+		wantErr         bool
+		wantUnavailable bool
 	}{
 		{
 			name: "success",
@@ -47,6 +49,27 @@ func TestGSIClient_Fetch(t *testing.T) {
 			responseStatus: http.StatusInternalServerError,
 			wantErr:        true,
 		},
+		{
+			name:            "bad gateway",
+			responseBody:    "",
+			responseStatus:  http.StatusBadGateway,
+			wantErr:         true,
+			wantUnavailable: true,
+		},
+		{
+			name:            "service unavailable",
+			responseBody:    "",
+			responseStatus:  http.StatusServiceUnavailable,
+			wantErr:         true,
+			wantUnavailable: true,
+		},
+		{
+			name:            "gateway timeout",
+			responseBody:    "",
+			responseStatus:  http.StatusGatewayTimeout,
+			wantErr:         true,
+			wantUnavailable: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -66,6 +89,9 @@ func TestGSIClient_Fetch(t *testing.T) {
 
 			if tt.wantErr {
 				assert.Error(t, err)
+				if tt.wantUnavailable {
+					assert.True(t, errors.Is(err, ErrGSIUnavailable), "expected ErrGSIUnavailable error")
+				}
 				return
 			}
 
