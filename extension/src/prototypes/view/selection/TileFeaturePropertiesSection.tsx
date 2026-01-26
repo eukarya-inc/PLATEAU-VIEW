@@ -5,8 +5,8 @@ import { useMemo, type FC } from "react";
 import { useOptionalAtomValue } from "../../../shared/hooks";
 import {
   ancestorsKey,
-  attributesKey,
   makePropertyForFeatureInspector,
+  retrieveAttributes,
 } from "../../../shared/plateau/featureInspector";
 import { TILESET_FEATURE } from "../../../shared/reearth/layers";
 import { Feature } from "../../../shared/reearth/types/layer";
@@ -60,7 +60,8 @@ export const TileFeaturePropertiesSection: FC<TileFeaturePropertiesSectionProps>
 
   const featureType = useMemo(() => layers[0].features[0]?.properties["feature_type"], [layers]);
   const ancestorsFeatureType = useMemo(
-    () => layers[0].features[0]?.properties[attributesKey]?.[ancestorsKey]?.[0]?.["feature_type"],
+    () =>
+      retrieveAttributes(layers[0].features[0]?.properties)?.[ancestorsKey]?.[0]?.["feature_type"],
     [layers],
   );
 

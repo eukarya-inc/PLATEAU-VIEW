@@ -11,8 +11,27 @@ import { RootLayerForDataset } from "../../view-layers";
 import { getAttributeLabel, getRootFields } from "./attributes";
 import type { AttributeValue } from "./loadAttributes";
 
-export const attributesKey = "attributes";
+const attributesKey = "attributes";
 export const ancestorsKey = "ancestors";
+
+export const retrieveAttributes = (properties: unknown): Record<string, any> | undefined => {
+  if (!properties) return;
+
+  const object =
+    typeof properties === "object"
+      ? (properties as Record<string, unknown>)[attributesKey]
+      : undefined;
+
+  if (!object) return;
+  if (typeof object === "object") return object as Record<string, any>;
+  if (typeof object !== "string") return;
+
+  try {
+    return JSON.parse(object);
+  } catch {
+    return;
+  }
+};
 
 const parseJsonPathAsNodes = (obj: any, path: string) => {
   try {
@@ -174,7 +193,7 @@ export const makePropertyForFeatureInspector = ({
   const shouldDisplayAllAttributes = features.length === 1;
   const rawAllAttributes = shouldDisplayAllAttributes
     ? features
-        ?.map(f => f.properties?.[attributesKey] ?? {})
+        ?.map(f => retrieveAttributes(f.properties) ?? {})
         .filter(v => !!v && !!Object.keys(v).length)
     : undefined;
 
