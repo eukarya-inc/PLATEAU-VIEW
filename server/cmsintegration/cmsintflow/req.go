@@ -58,16 +58,18 @@ func sendRequestToFlow(
 	// type
 	fty := cmsintegrationcommon.ReqTypeFrom(!featureType.QC, !featureType.Conv)
 	ity := item.ReqType().Override(overrideReqType)
-	ty := fty.Intersection(ity).Normalize()
+	originalTy := fty.Intersection(ity)
+	ty := originalTy.Normalize()
 	if ty == "" || ty == cmsintegrationcommon.ReqTypeQCConv {
 		log.Infofc(ctx, "skip: request type is empty or qc_conv: fty=%s, ity=%s, ty=%s", fty, ity, ty)
 		return nil
 	}
 
-	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s", mainItem.ID, featureType.Code, ty)
+	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s (original=%s)", mainItem.ID, featureType.Code, ty, originalTy)
 
 	// update convertion status
-	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
+	// originalTyを渡すことで、品質検査・変換の場合に変換ステータスを「未実行」にリセットできる
+	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, originalTy, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
 		log.Errorfc(ctx, "failed to update item status: %v", err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}
