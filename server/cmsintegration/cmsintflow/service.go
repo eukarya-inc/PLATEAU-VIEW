@@ -74,11 +74,10 @@ func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, t
 	switch ty {
 	case cmsintegrationcommon.ReqTypeConv:
 		convStatus = status
-	case cmsintegrationcommon.ReqTypeQC:
+	case cmsintegrationcommon.ReqTypeQC, cmsintegrationcommon.ReqTypeQCConv:
+		// ReqTypeQCConvの場合も、最初は品質検査ステータスのみを更新する
+		// 変換ステータスは品質検査成功後にReqTypeConvとして更新される
 		qcStatus = status
-	case cmsintegrationcommon.ReqTypeQCConv:
-		qcStatus = status
-		convStatus = status
 	}
 
 	fields := (&cmsintegrationcommon.FeatureItem{

@@ -633,11 +633,10 @@ func (t ReqType) CMSStatus(s ConvertionStatus) (qc ConvertionStatus, conv Conver
 	switch t {
 	case ReqTypeConv:
 		conv = s
-	case ReqTypeQC:
+	case ReqTypeQC, ReqTypeQCConv:
+		// ReqTypeQCConvの場合も、品質検査ステータスのみを更新する
+		// 変換ステータスは品質検査成功後にReqTypeConvとして更新される
 		qc = s
-	default:
-		qc = s
-		conv = s
 	}
 	return
 }
