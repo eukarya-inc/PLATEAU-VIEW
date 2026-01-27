@@ -90,6 +90,11 @@ func (g *DatacatalogGenerator) Generate(projectName string) (skipped bool, err e
 	// デバッグ出力を有効化（キャッシュファイル生成を含む）
 	repos.EnableDebug(true)
 
+	// Hostを設定（lodstat MVT URLの生成に必要）
+	if g.config.Host != "" {
+		repos.SetHost(g.config.Host)
+	}
+
 	// Writer設定
 	var memWriter *datacatalogv3.MemRepoWriter
 	var gcsStorage *datacatalogv3.GCSStorage
