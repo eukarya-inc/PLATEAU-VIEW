@@ -39,13 +39,16 @@ func sendRequestToFlow(
 	}
 
 	// feature type
+	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
 	featureTypeCodes := featureTypes.Codes()
 	featureTypeCode := item.FeatureTypeCode()
+	baseModelName := cmsintegrationcommon.ExtractBaseFeatureType(modelName)
+	baseFeatureTypeCode := cmsintegrationcommon.ExtractBaseFeatureType(featureTypeCode)
 	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
-		return ft.Code == modelName || ft.Code == featureTypeCode
+		return ft.Code == modelName || ft.Code == baseModelName || ft.Code == featureTypeCode || ft.Code == baseFeatureTypeCode
 	})
 	if !ok {
-		log.Infofc(ctx, "skip: invalid feature type or model name: modelName=%s, featureTypeCode=%s, availableCodes=%v", modelName, featureTypeCode, featureTypeCodes)
+		log.Infofc(ctx, "skip: invalid feature type or model name: modelName=%s (base=%s), featureTypeCode=%s (base=%s), availableCodes=%v", modelName, baseModelName, featureTypeCode, baseFeatureTypeCode, featureTypeCodes)
 		return nil
 	}
 

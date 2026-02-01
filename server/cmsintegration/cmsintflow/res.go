@@ -48,11 +48,13 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		return nil
 	}
 
+	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
+	baseFeatureType := cmsintegrationcommon.ExtractBaseFeatureType(id.FeatureType)
 	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
-		return ft.Code == id.FeatureType
+		return ft.Code == id.FeatureType || ft.Code == baseFeatureType
 	})
 	if !ok {
-		log.Infofc(ctx, "early return: invalid feature type: %s, available=%v", id.FeatureType, lo.Map(featureTypes, func(ft plateaucms.PlateauFeatureType, _ int) string { return ft.Code }))
+		log.Infofc(ctx, "early return: invalid feature type: %s (base=%s), available=%v", id.FeatureType, baseFeatureType, lo.Map(featureTypes, func(ft plateaucms.PlateauFeatureType, _ int) string { return ft.Code }))
 		return nil
 	}
 

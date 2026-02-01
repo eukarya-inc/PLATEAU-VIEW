@@ -63,12 +63,14 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 		return nil
 	}
 
+	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
 	featureTypeCodes := featureTypes.Codes()
+	baseFeatureTypeCode := cmsintegrationcommon.ExtractBaseFeatureType(featureTypeCode)
 	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
-		return ft.Code == featureTypeCode
+		return ft.Code == featureTypeCode || ft.Code == baseFeatureTypeCode
 	})
 	if !ok {
-		log.Infofc(ctx, "skip: invalid feature type: %s, available=%v", featureTypeCode, featureTypeCodes)
+		log.Infofc(ctx, "skip: invalid feature type: %s (base=%s), available=%v", featureTypeCode, baseFeatureTypeCode, featureTypeCodes)
 		return nil
 	}
 
@@ -315,11 +317,13 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		return nil
 	}
 
+	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
+	baseFeatureType := cmsintegrationcommon.ExtractBaseFeatureType(id.FeatureType)
 	featureType, ok := lo.Find(featureTypes, func(ft plateaucms.PlateauFeatureType) bool {
-		return ft.Code == id.FeatureType
+		return ft.Code == id.FeatureType || ft.Code == baseFeatureType
 	})
 	if !ok {
-		log.Debugfc(ctx, "invalid feature type: %s", id.FeatureType)
+		log.Debugfc(ctx, "invalid feature type: %s (base=%s)", id.FeatureType, baseFeatureType)
 		return nil
 	}
 
