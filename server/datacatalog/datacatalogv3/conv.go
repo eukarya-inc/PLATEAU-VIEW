@@ -333,8 +333,11 @@ func convertPlateauRaw(
 			ftcode = ds.FeatureType
 		}
 
-		dt := dts[ftcode]
-		ft := fts[ftcode]
+		// For derived types (e.g., bldg2), use the base type's DatasetType and FeatureType
+		// since derived types are merged into base types in the catalog
+		baseFtcode := ExtractBaseFeatureType(ftcode)
+		dt := dts[baseFtcode]
+		ft := fts[baseFtcode]
 
 		if dt == nil || ft == nil {
 			warning = append(warning, fmt.Sprintf("plateau %s: invalid feature type: %s", ds.ID, ftcode))
