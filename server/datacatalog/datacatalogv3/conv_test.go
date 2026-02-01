@@ -4,8 +4,14 @@ import (
 	"testing"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/stretchr/testify/assert"
 )
+
+// readyStatus returns a Status tag that makes IsBeta() return true
+func readyStatus() *cms.Tag {
+	return &cms.Tag{Name: string(ManagementStatusReady)}
+}
 
 func TestExtractBaseFeatureType(t *testing.T) {
 	tests := []struct {
@@ -109,7 +115,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "single base type single city",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 0},
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 			},
 			expected: map[string][]string{
@@ -120,10 +126,10 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "derived type higher priority wins",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 0},
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 				"bldg2": {
-					{ID: "item2", City: "city1", Priority: 10},
+					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
 			expected: map[string][]string{
@@ -134,10 +140,10 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "equal priority derived type wins",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 0},
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 				"bldg2": {
-					{ID: "item2", City: "city1", Priority: 0},
+					{ID: "item2", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 			},
 			expected: map[string][]string{
@@ -148,10 +154,10 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "base type higher priority wins over derived",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 100},
+					{ID: "item1", City: "city1", Priority: 100, Status: readyStatus()},
 				},
 				"bldg2": {
-					{ID: "item2", City: "city1", Priority: 10},
+					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
 			expected: map[string][]string{
@@ -162,11 +168,11 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "multiple cities independent",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 0},
-					{ID: "item3", City: "city2", Priority: 100},
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
+					{ID: "item3", City: "city2", Priority: 100, Status: readyStatus()},
 				},
 				"bldg2": {
-					{ID: "item2", City: "city1", Priority: 10},
+					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
 			expected: map[string][]string{
@@ -178,13 +184,36 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
 					nil,
-					{ID: "item1", City: "city1", Priority: 0},
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
 					nil,
 				},
 			},
 			expected: map[string][]string{
 				"bldg": {"city1"},
 			},
+		},
+		{
+			name: "items without ready status are skipped",
+			input: map[string][]*PlateauFeatureItem{
+				"bldg": {
+					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
+				},
+				"bldg2": {
+					{ID: "item2", City: "city1", Priority: 100, Status: nil}, // not ready, should be skipped
+				},
+			},
+			expected: map[string][]string{
+				"bldg": {"city1"}, // item1 wins because item2 is not ready
+			},
+		},
+		{
+			name: "all items without ready status results in empty",
+			input: map[string][]*PlateauFeatureItem{
+				"bldg": {
+					{ID: "item1", City: "city1", Priority: 0, Status: nil},
+				},
+			},
+			expected: map[string][]string{},
 		},
 	}
 
@@ -216,10 +245,10 @@ func TestFilterPlateauByPriority_VerifyWinningItem(t *testing.T) {
 	// This test verifies that the correct item wins based on priority
 	input := map[string][]*PlateauFeatureItem{
 		"bldg": {
-			{ID: "bldg-item", City: "city1", Priority: 5},
+			{ID: "bldg-item", City: "city1", Priority: 5, Status: readyStatus()},
 		},
 		"bldg2": {
-			{ID: "bldg2-item", City: "city1", Priority: 10},
+			{ID: "bldg2-item", City: "city1", Priority: 10, Status: readyStatus()},
 		},
 	}
 
@@ -232,6 +261,28 @@ func TestFilterPlateauByPriority_VerifyWinningItem(t *testing.T) {
 	assert.Len(t, items, 1)
 	// The bldg2 item should win due to higher priority
 	assert.Equal(t, "bldg2-item", items[0].ID)
+}
+
+func TestFilterPlateauByPriority_NotReadyItemsSkipped(t *testing.T) {
+	// This test verifies that items without ready status are skipped
+	input := map[string][]*PlateauFeatureItem{
+		"bldg": {
+			{ID: "bldg-item", City: "city1", Priority: 5, Status: readyStatus()},
+		},
+		"bldg2": {
+			{ID: "bldg2-item", City: "city1", Priority: 100, Status: nil}, // higher priority but not ready
+		},
+	}
+
+	result := filterPlateauByPriority(input)
+
+	// Should have one entry for bldg (base code)
+	assert.Len(t, result, 1)
+	items, ok := result["bldg"]
+	assert.True(t, ok)
+	assert.Len(t, items, 1)
+	// The bldg item should win because bldg2 is not ready
+	assert.Equal(t, "bldg-item", items[0].ID)
 }
 
 func TestAllData_Into_FiltersEmptyDatasetTypes(t *testing.T) {

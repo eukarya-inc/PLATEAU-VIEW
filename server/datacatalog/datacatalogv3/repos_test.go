@@ -382,6 +382,14 @@ var bldg = j(`{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
 				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
+				}
 			]
 		},
 		{
@@ -395,6 +403,14 @@ var bldg = j(`{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
 				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
+				}
 			]
 		},
 		{
@@ -407,6 +423,14 @@ var bldg = j(`{
 				{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
+				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
 				}
 			]
 		}

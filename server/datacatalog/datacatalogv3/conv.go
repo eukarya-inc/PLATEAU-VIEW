@@ -22,6 +22,7 @@ func IsDerivedFeatureType(code string) bool {
 
 // filterPlateauByPriority filters plateau items by priority.
 // For each city + base feature type combination, only the item with highest priority is kept.
+// Only items with IsBeta() == true (Status == "確認可能") are considered for priority comparison.
 // When priorities are equal, derived types (e.g., "bldg2") are preferred over base types.
 // Returns: filtered items mapped to their BASE feature type code.
 func filterPlateauByPriority(
@@ -41,6 +42,11 @@ func filterPlateauByPriority(
 
 		for _, item := range items {
 			if item == nil {
+				continue
+			}
+
+			// Skip items that are not ready for catalog (Status != "確認可能")
+			if !item.IsBeta() {
 				continue
 			}
 
