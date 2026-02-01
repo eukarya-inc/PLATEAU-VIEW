@@ -189,6 +189,9 @@ type PlateauFeatureItem struct {
 	Group       string                    `json:"group,omitempty" cms:"group,text"`
 	MaxLOD      string                    `json:"maxlod,omitempty" cms:"maxlod,-"`
 	FeatureType string                    `json:"feature_type,omitempty" cms:"feature_type,select"`
+	// Priority: 同じ都市・同じベース地物型で複数アイテムがある場合、
+	// 優先度が高い(数値が大きい)方をデータカタログに表示。デフォルト: 0
+	Priority int `json:"priority,omitempty" cms:"priority,integer"`
 	// metadata
 	Sample bool     `json:"sample,omitempty" cms:"sample,bool,metadata"`
 	Status *cms.Tag `json:"status,omitempty" cms:"status,select,metadata"`
