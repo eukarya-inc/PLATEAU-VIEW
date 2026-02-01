@@ -75,7 +75,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	log.Infofc(ctx, "baseFeatureItem: %s", pp.Sprint(baseFeatureItem))
 
 	// outputs
-	internal := res.Internal()
+	internal := res.InternalWithFeatureType(featureType.Code, featureType.UseGroups)
 	log.Infofc(ctx, "internal: %s", pp.Sprint(internal))
 
 	// upload assets

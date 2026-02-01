@@ -48,7 +48,8 @@ func (r FlowResult) IDsMessage() string {
 	return "（" + strings.Join(ids, ", ") + "）"
 }
 
-func (r FlowResult) Internal() (res FlowInternalResult) {
+// InternalWithFeatureType parses Flow outputs with feature type context for proper key extraction
+func (r FlowResult) InternalWithFeatureType(featureTypeCode string, useGroups bool) (res FlowInternalResult) {
 	for _, output := range r.Outputs {
 		base := path.Base(output)
 
@@ -68,7 +69,7 @@ func (r FlowResult) Internal() (res FlowInternalResult) {
 			continue
 		}
 
-		key := getOutputKey(base)
+		key := getOutputKey(base, featureTypeCode, useGroups)
 		if res.Conv == nil {
 			res.Conv = map[string][]string{}
 		}
@@ -78,19 +79,50 @@ func (r FlowResult) Internal() (res FlowInternalResult) {
 	return
 }
 
+// Internal parses Flow outputs (legacy method without feature type context)
+func (r FlowResult) Internal() (res FlowInternalResult) {
+	return r.InternalWithFeatureType("", false)
+}
+
 var reDigits = regexp.MustCompile(`^\d+_(.*)$`)
 
-func getOutputKey(s string) string {
+func getOutputKey(s string, featureTypeCode string, useGroups bool) string {
 	k := reDigits.ReplaceAllString(fileName(s), "$1")
-	k = strings.TrimSuffix(k, "_no_texture")
-	k = strings.TrimSuffix(k, "_l1")
-	k = strings.TrimSuffix(k, "_l2")
-	k = strings.TrimSuffix(k, "_lod0")
-	k = strings.TrimSuffix(k, "_lod1")
-	k = strings.TrimSuffix(k, "_lod2")
-	k = strings.TrimSuffix(k, "_lod3")
-	k = strings.TrimSuffix(k, "_lod4")
-	return k
+
+	// For feature types that use groups (UseGroups=true), extract the feature type key
+	// e.g., "uwajima-shi_city_2025_citygml_1_op_urf_UseDistrict_mvt_lod1" -> "urf_UseDistrict"
+	if useGroups && featureTypeCode != "" {
+		pattern := "_op_" + featureTypeCode + "_"
+		if idx := strings.Index(k, pattern); idx != -1 {
+			// Extract from "_op_" onward, skip "_op_" itself
+			k = k[idx+4:]
+			return trimOutputKeySuffixes(k)
+		}
+	}
+
+	// For bldg and other feature types (default behavior)
+	return trimOutputKeySuffixes(k)
+}
+
+func trimOutputKeySuffixes(s string) string {
+	// Loop to handle combined suffixes like "_lod2_no_texture" or "_mvt_lod1"
+	for {
+		prev := s
+		s = strings.TrimSuffix(s, "_lod0")
+		s = strings.TrimSuffix(s, "_lod1")
+		s = strings.TrimSuffix(s, "_lod2")
+		s = strings.TrimSuffix(s, "_lod3")
+		s = strings.TrimSuffix(s, "_lod4")
+		s = strings.TrimSuffix(s, "_lod")
+		s = strings.TrimSuffix(s, "_mvt")
+		s = strings.TrimSuffix(s, "_no_texture")
+		s = strings.TrimSuffix(s, "_l1")
+		s = strings.TrimSuffix(s, "_l2")
+		if s == prev {
+			break
+		}
+	}
+	return s
 }
 
 func fileName(s string) string {
