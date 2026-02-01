@@ -47,3 +47,26 @@ func TestFlowResult_Internal(t *testing.T) {
 	res := r.Internal()
 	assert.Equal(t, expected, res)
 }
+
+func TestFlowResult_Internal_DictionaryJson(t *testing.T) {
+	// Test that dictionary.json (without prefix) is also recognized as dictionary file
+	r := FlowResult{
+		Status: "succeeded",
+		Outputs: []string{
+			"https://example.com/artifacts/dictionary.json",
+			"https://example.com/13999_hoge-shi_citygml_op_1_bldg_3dtiles_lod1.zip",
+		},
+	}
+
+	expected := FlowInternalResult{
+		Conv: map[string][]string{
+			"hoge-shi_citygml_op_1_bldg_3dtiles": {
+				"https://example.com/13999_hoge-shi_citygml_op_1_bldg_3dtiles_lod1.zip",
+			},
+		},
+		Dic: "https://example.com/artifacts/dictionary.json",
+	}
+
+	res := r.Internal()
+	assert.Equal(t, expected, res)
+}

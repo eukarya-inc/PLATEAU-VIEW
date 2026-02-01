@@ -68,8 +68,13 @@ func sendRequestToFlow(
 	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s (original=%s)", mainItem.ID, featureType.Code, ty, originalTy)
 
 	// update convertion status
-	// originalTyを渡すことで、品質検査・変換の場合に変換ステータスを「未実行」にリセットできる
-	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, originalTy, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
+	// 品質検査を開始する際、変換もサポートされている場合は、変換ステータスを「未実行」にリセットする
+	// これにより、CMS側で設定された「実行中」がリセットされ、品質検査成功後に変換ステータスが更新される
+	statusUpdateTy := ty
+	if ty == cmsintegrationcommon.ReqTypeQC && featureType.Conv {
+		statusUpdateTy = cmsintegrationcommon.ReqTypeQCConv
+	}
+	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, statusUpdateTy, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
 		log.Errorfc(ctx, "failed to update item status: %v", err)
 		return fmt.Errorf("failed to update item: %w", err)
 	}

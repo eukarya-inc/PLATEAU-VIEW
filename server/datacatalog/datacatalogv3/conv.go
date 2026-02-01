@@ -2,10 +2,84 @@ package datacatalogv3
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
 )
+
+// ExtractBaseFeatureType extracts the base feature type from a code.
+// Examples: "bldg2" -> "bldg", "tran10" -> "tran", "bldg" -> "bldg"
+func ExtractBaseFeatureType(code string) string {
+	return strings.TrimRight(code, "0123456789")
+}
+
+// IsDerivedFeatureType returns true if the feature type code is a derived type
+// (e.g., "bldg2" is derived from "bldg").
+func IsDerivedFeatureType(code string) bool {
+	return ExtractBaseFeatureType(code) != code
+}
+
+// filterPlateauByPriority filters plateau items by priority.
+// For each city + base feature type combination, only the item with highest priority is kept.
+// Only items with IsBeta() == true (Status == "確認可能") are considered for priority comparison.
+// When priorities are equal, derived types (e.g., "bldg2") are preferred over base types.
+// Returns: filtered items mapped to their BASE feature type code.
+func filterPlateauByPriority(
+	plateau map[string][]*PlateauFeatureItem,
+) map[string][]*PlateauFeatureItem {
+	// cityID -> baseFeatureType -> best entry
+	type priorityEntry struct {
+		priority        int
+		featureTypeCode string // original code (e.g., "bldg2")
+		item            *PlateauFeatureItem
+	}
+
+	bestByCity := make(map[string]map[string]priorityEntry)
+
+	for featureTypeCode, items := range plateau {
+		baseFeatureType := ExtractBaseFeatureType(featureTypeCode)
+
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+
+			// Skip items that are not ready for catalog (Status != "確認可能")
+			if !item.IsBeta() {
+				continue
+			}
+
+			cityID := item.City
+			if bestByCity[cityID] == nil {
+				bestByCity[cityID] = make(map[string]priorityEntry)
+			}
+
+			current, exists := bestByCity[cityID][baseFeatureType]
+			shouldReplace := !exists ||
+				item.Priority > current.priority ||
+				(item.Priority == current.priority && featureTypeCode > current.featureTypeCode)
+
+			if shouldReplace {
+				bestByCity[cityID][baseFeatureType] = priorityEntry{
+					priority:        item.Priority,
+					featureTypeCode: featureTypeCode,
+					item:            item,
+				}
+			}
+		}
+	}
+
+	// Build result with base feature type code as key
+	result := make(map[string][]*PlateauFeatureItem)
+	for _, cityBest := range bestByCity {
+		for baseCode, entry := range cityBest {
+			result[baseCode] = append(result[baseCode], entry.item)
+		}
+	}
+
+	return result
+}
 
 const sampleCode = "sample"
 
@@ -50,7 +124,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 
 	res.Years = ic.Years()
 
-	// wards
+	// wards - use all plateau items (before priority filtering) to get all wards
 	for _, ft := range res.DatasetTypes[plateauapi.DatasetTypeCategoryPlateau] {
 		wards, w := getWards(all.Plateau[ft.GetCode()], ic)
 		warning = append(warning, w...)
@@ -61,13 +135,35 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		)
 	}
 
-	// plateau
+	// plateau - filter by priority and map to base feature types
+	filteredPlateau := filterPlateauByPriority(all.Plateau)
 	plateauDatasetTypes := res.DatasetTypes.CodeMap(plateauapi.DatasetTypeCategoryPlateau)
 	plateauFeatureTypes := all.FeatureTypes.PlateauMap()
+
+	// Track processed base codes to avoid duplicates
+	processedBaseCodes := make(map[string]bool)
 	for _, dt := range res.DatasetTypes[plateauapi.DatasetTypeCategoryPlateau] {
+		code := dt.GetCode()
+		baseCode := ExtractBaseFeatureType(code)
+
+		// Skip if base code already processed
+		if processedBaseCodes[baseCode] {
+			continue
+		}
+		// Skip derived types (process only base types)
+		if baseCode != code {
+			continue
+		}
+		processedBaseCodes[baseCode] = true
+
+		items := filteredPlateau[baseCode]
+		if items == nil {
+			continue
+		}
+
 		datasets, w := convertPlateau(
-			all.Plateau[dt.GetCode()],
-			dt.GetCode(),
+			items,
+			baseCode, // Use base feature type code
 			res.PlateauSpecs,
 			plateauDatasetTypes,
 			plateauFeatureTypes,
