@@ -53,7 +53,7 @@ func (r FlowResult) Internal() (res FlowInternalResult) {
 		base := path.Base(output)
 
 		switch {
-		case strings.HasSuffix(base, "dic.json"):
+		case strings.HasSuffix(base, "dic.json") || base == "dictionary.json":
 			res.Dic = output
 			continue
 		case strings.HasSuffix(base, "qc_result.zip"):
