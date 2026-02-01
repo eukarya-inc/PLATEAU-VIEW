@@ -102,17 +102,42 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 		return c.GetGeospatialjpDataItems(ctx, c.project)
 	})
 
-	featureItemsChans := make([]<-chan lo.Tuple3[string, []*PlateauFeatureItem, error], 0, len(all.FeatureTypes.Plateau))
-	for _, featureType := range all.FeatureTypes.Plateau {
-		featureType := featureType
+	// Build set of base feature type codes from plateau-features
+	baseFeatureTypeCodes := make(map[string]bool, len(all.FeatureTypes.Plateau))
+	for _, ft := range all.FeatureTypes.Plateau {
+		baseFeatureTypeCodes[ft.Code] = true
+	}
 
+	// Collect all feature type codes to fetch (base types + derived types from CMS models)
+	featureCodesToFetch := make([]string, 0, len(all.FeatureTypes.Plateau))
+	for _, featureType := range all.FeatureTypes.Plateau {
 		if featureType.MinYear > 0 && c.year < featureType.MinYear {
 			continue
 		}
+		featureCodesToFetch = append(featureCodesToFetch, featureType.Code)
+	}
+
+	// Detect derived types from CMS model list (e.g., bldg2 when bldg exists)
+	for modelKey := range cmsinfo.ModelIDMap {
+		// Skip if already in base feature types
+		if baseFeatureTypeCodes[modelKey] {
+			continue
+		}
+		// Check if this is a derived type (e.g., bldg2 -> bldg)
+		baseCode := ExtractBaseFeatureType(modelKey)
+		if baseCode != modelKey && baseFeatureTypeCodes[baseCode] {
+			// This is a derived type whose base exists in plateau-features
+			featureCodesToFetch = append(featureCodesToFetch, modelKey)
+		}
+	}
+
+	featureItemsChans := make([]<-chan lo.Tuple3[string, []*PlateauFeatureItem, error], 0, len(featureCodesToFetch))
+	for _, featureCode := range featureCodesToFetch {
+		featureCode := featureCode
 
 		featureItemsChan := lo.Async3(func() (string, []*PlateauFeatureItem, error) {
-			res, err := c.GetPlateauItems(ctx, c.project, featureType.Code)
-			return featureType.Code, res, err
+			res, err := c.GetPlateauItems(ctx, c.project, featureCode)
+			return featureCode, res, err
 		})
 		featureItemsChans = append(featureItemsChans, featureItemsChan)
 	}
