@@ -102,6 +102,10 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 		return c.GetGeospatialjpDataItems(ctx, c.project)
 	})
 
+	flowItemsChan := lo.Async2(func() ([]*PlateauFeatureItem, error) {
+		return c.GetFlowItems(ctx, c.project)
+	})
+
 	// Build set of base feature type codes from plateau-features
 	baseFeatureTypeCodes := make(map[string]bool, len(all.FeatureTypes.Plateau))
 	for _, ft := range all.FeatureTypes.Plateau {
@@ -170,6 +174,26 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 		return nil, fmt.Errorf("failed to get geospatialjp data items: %w", res.B)
 	} else {
 		all.GeospatialjpDataItems = res.A
+	}
+
+	// Flow items - group by feature type, skip items without City, CityGML, or Data
+	if res := <-flowItemsChan; res.B != nil {
+		// Flow model is optional, so we just log the error
+		log.Warnfc(ctx, "datacatalogv3: failed to get flow items: %v", res.B)
+	} else {
+		all.Flow = make(map[string][]*PlateauFeatureItem)
+		for _, item := range res.A {
+			// Skip items without City, CityGML, or Data
+			if item.City == "" || item.CityGML == "" || len(item.Data) == 0 {
+				continue
+			}
+			// Get feature type from item
+			ft := item.FeatureType
+			if ft == "" {
+				continue
+			}
+			all.Flow[ft] = append(all.Flow[ft], item)
+		}
 	}
 
 	all.Plateau = make(map[string][]*PlateauFeatureItem)
@@ -356,6 +380,34 @@ func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string) ([]*
 		c.cms, ctx, project, modelPrefix+geospatialjpDataModel,
 		func(i cms.Item) *GeospatialjpDataItem {
 			return GeospatialjpDataItemFrom(&i)
+		},
+	)
+
+	if err == nil && c.cache {
+		if err := saveCache(c.cacheDir, cacheKey, items); err != nil {
+			return nil, err
+		}
+	}
+
+	return items, err
+}
+
+func (c *CMS) GetFlowItems(ctx context.Context, project string) ([]*PlateauFeatureItem, error) {
+	cacheKey := fmt.Sprintf("flow_%s", project)
+	if c.cache {
+		if items, err := loadCache[[]*PlateauFeatureItem](
+			c.cacheDir, cacheKey,
+		); err != nil {
+			return nil, err
+		} else if items != nil {
+			return items, nil
+		}
+	}
+
+	items, err := getItemsAndConv(
+		c.cms, ctx, project, modelPrefix+flowModel,
+		func(i cms.Item) *PlateauFeatureItem {
+			return PlateauFeatureItemFrom(&i, "")
 		},
 	)
 

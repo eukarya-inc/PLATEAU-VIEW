@@ -18,6 +18,7 @@ const cityModel = "city"
 const relatedModel = "related"
 const genericModel = "generic"
 const sampleModel = "sample"
+const flowModel = "flow"
 const geospatialjpDataModel = "geospatialjp-data"
 const defaultSpec = "第3.2版"
 

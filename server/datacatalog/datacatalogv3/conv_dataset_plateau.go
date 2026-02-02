@@ -57,6 +57,7 @@ type ToPlateauDatasetsOptions struct {
 	FeatureType *FeatureType
 	Year        int
 	CMSInfo     CMSInfo
+	IsFlow      bool // Flow model data (always beta, with [Flow] prefix)
 }
 
 func (i *PlateauFeatureItem) toDatasets(opts ToPlateauDatasetsOptions) (res []*plateauapi.PlateauDataset, warning []string) {
@@ -92,6 +93,8 @@ func (i *PlateauFeatureItem) toDatasets(opts ToPlateauDatasetsOptions) (res []*p
 
 	return
 }
+
+const flowNamePrefix = "[Flow] "
 
 func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, warning []string) {
 	if len(seed.AssetURLs) == 0 {
@@ -137,6 +140,11 @@ func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, war
 		} else {
 			datasetName = datasetName + "（屋内）"
 		}
+	}
+
+	// Add [Flow] prefix for Flow datasets
+	if seed.IsFlow {
+		datasetName = flowNamePrefix + datasetName
 	}
 
 	res = &plateauapi.PlateauDataset{

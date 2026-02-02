@@ -164,6 +164,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		datasets, w := convertPlateau(
 			items,
 			baseCode, // Use base feature type code
+			false,    // not flow
 			res.PlateauSpecs,
 			plateauDatasetTypes,
 			plateauFeatureTypes,
@@ -171,6 +172,28 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		)
 		warning = append(warning, w...)
 		res.Datasets.Append(plateauapi.DatasetTypeCategoryPlateau, datasets)
+	}
+
+	// flow - convert Flow model data (always beta, no priority filtering)
+	if len(all.Flow) > 0 {
+		for code, items := range all.Flow {
+			if len(items) == 0 {
+				continue
+			}
+
+			baseCode := ExtractBaseFeatureType(code)
+			datasets, w := convertPlateau(
+				items,
+				baseCode, // Use base feature type code
+				true,     // is flow
+				res.PlateauSpecs,
+				plateauDatasetTypes,
+				plateauFeatureTypes,
+				ic,
+			)
+			warning = append(warning, w...)
+			res.Datasets.Append(plateauapi.DatasetTypeCategoryPlateau, datasets)
+		}
 	}
 
 	// sample
@@ -266,6 +289,7 @@ func convertSample(
 			targets,
 			false,
 			"",
+			false, // not flow
 			specs,
 			dts,
 			fts,
@@ -286,6 +310,7 @@ func convertSample(
 			targets,
 			false,
 			"",
+			false, // not flow
 			specs,
 			dts,
 			fts,
@@ -303,13 +328,14 @@ func convertSample(
 func convertPlateau(
 	items []*PlateauFeatureItem,
 	code string,
+	isFlow bool,
 	specs []plateauapi.PlateauSpec,
 	dts map[string]plateauapi.DatasetType,
 	fts map[string]*FeatureType,
 	ic *internalContext,
 ) ([]plateauapi.Dataset, []string) {
 	res, w := convertPlateauRaw(
-		items, true, code, specs, dts, fts, ic,
+		items, true, code, isFlow, specs, dts, fts, ic,
 	)
 	return plateauapi.ToDatasets(res), w
 }
@@ -318,6 +344,7 @@ func convertPlateauRaw(
 	items []*PlateauFeatureItem,
 	ignoreSample bool,
 	code string,
+	isFlow bool,
 	specs []plateauapi.PlateauSpec,
 	dts map[string]plateauapi.DatasetType,
 	fts map[string]*FeatureType,
@@ -385,6 +412,7 @@ func convertPlateauRaw(
 			FeatureType: ft,
 			Year:        ic.regYear,
 			CMSInfo:     ic.cmsinfo,
+			IsFlow:      isFlow,
 		}
 		ds, w := ds.toDatasets(opts)
 		warning = append(warning, w...)

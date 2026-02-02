@@ -17,6 +17,7 @@ type AllData struct {
 	Generic               []*GenericItem
 	Sample                []*PlateauFeatureItem
 	Plateau               map[string][]*PlateauFeatureItem
+	Flow                  map[string][]*PlateauFeatureItem // plateau-flow model items grouped by feature type
 	GeospatialjpDataItems []*GeospatialjpDataItem
 	CMSInfo               CMSInfo
 }

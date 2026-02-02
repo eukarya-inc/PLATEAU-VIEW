@@ -37,6 +37,7 @@ type plateauDatasetSeed struct {
 	HideLOD               bool
 	RegisterationYear     int
 	UseCategoryAsMVTLayer bool
+	IsFlow                bool // Flow model data
 }
 
 func (seed plateauDatasetSeed) GetID() string {
@@ -54,6 +55,11 @@ func (seed plateauDatasetSeed) GetID() string {
 	// Add "_interior" suffix for interior datasets
 	if isInterior {
 		id = id + "_interior"
+	}
+
+	// Add "_flow" suffix for Flow datasets
+	if seed.IsFlow {
+		id = id + "_flow"
 	}
 
 	return id
@@ -104,10 +110,19 @@ func plateauDatasetSeedsFrom(i *PlateauFeatureItem, opts ToPlateauDatasetsOption
 		res[i].Pref = opts.Area.Pref
 		res[i].City = opts.Area.City
 		res[i].Spec = opts.Spec
+		res[i].IsFlow = opts.IsFlow
+
+		// Flow data is always beta stage
+		stg := opts.Area.CityItem.PlateauStage(opts.DatasetType.Code)
+		cmsURL := opts.CMSInfo.ItemBaseURL(opts.DatasetType.Code)
+		if opts.IsFlow {
+			stg = stageBeta
+			cmsURL = opts.CMSInfo.ItemBaseURL(flowModel)
+		}
 		res[i].Admin = adminFrom(Admin{
 			ItemID:      opts.ID,
-			Stage:       opts.Area.CityItem.PlateauStage(opts.DatasetType.Code),
-			CMSURL:      opts.CMSInfo.ItemBaseURL(opts.DatasetType.Code),
+			Stage:       stg,
+			CMSURL:      cmsURL,
 			CreatedAt:   opts.CreatedAt,
 			UpdatedAt:   opts.UpdatedAt,
 			SubAreaCode: opts.Area.CityItem.SubCityCode,
