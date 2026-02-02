@@ -177,6 +177,50 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 	// flow - convert Flow model data (always beta, no priority filtering)
 	// Only process if FlowEnabled is true in metadata
 	if all.CMSInfo.FlowEnabled && len(all.Flow) > 0 {
+		// Register Flow-referenced cities that might be in alpha stage
+		// Flow items can reference alpha-stage cities for testing purposes
+		flowCityItemIDs := make(map[string]bool)
+		for _, items := range all.Flow {
+			for _, item := range items {
+				if item.City != "" {
+					flowCityItemIDs[item.City] = true
+				}
+			}
+		}
+
+		for _, cityItem := range all.City {
+			if !flowCityItemIDs[cityItem.ID] {
+				continue
+			}
+			// Skip if already registered
+			if ic.CityItem(cityItem.ID) != nil {
+				continue
+			}
+			// Register even if alpha stage (for Flow)
+			city := cityItem.ToCity()
+			if city == nil {
+				continue
+			}
+
+			// Create prefecture manually (ToPrefecture checks IsPublicOrBeta, but we want to bypass that for Flow)
+			prefCode := cityItem.CityCode[:2]
+			pref := &plateauapi.Prefecture{
+				ID:   plateauapi.NewID(prefCode, plateauapi.TypePrefecture),
+				Name: cityItem.Prefecture,
+				Code: plateauapi.AreaCode(prefCode),
+				Type: plateauapi.AreaTypePrefecture,
+			}
+
+			ic.Add(cityItem, pref, city)
+
+			if res.Areas.FindByCodeAndType(pref.Code, plateauapi.AreaTypePrefecture) == nil {
+				res.Areas.Append(plateauapi.AreaTypePrefecture, []plateauapi.Area{pref})
+			}
+			if res.Areas.FindByCodeAndType(city.Code, plateauapi.AreaTypeCity) == nil {
+				res.Areas.Append(plateauapi.AreaTypeCity, []plateauapi.Area{city})
+			}
+		}
+
 		for code, items := range all.Flow {
 			if len(items) == 0 {
 				continue
