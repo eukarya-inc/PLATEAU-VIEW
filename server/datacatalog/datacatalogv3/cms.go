@@ -102,9 +102,13 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 		return c.GetGeospatialjpDataItems(ctx, c.project)
 	})
 
-	flowItemsChan := lo.Async2(func() ([]*PlateauFeatureItem, error) {
-		return c.GetFlowItems(ctx, c.project)
-	})
+	// Only fetch flow items if Flow is enabled in metadata
+	var flowItemsChan <-chan lo.Tuple2[[]*PlateauFeatureItem, error]
+	if cmsinfo.FlowEnabled {
+		flowItemsChan = lo.Async2(func() ([]*PlateauFeatureItem, error) {
+			return c.GetFlowItems(ctx, c.project)
+		})
+	}
 
 	// Build set of base feature type codes from plateau-features
 	baseFeatureTypeCodes := make(map[string]bool, len(all.FeatureTypes.Plateau))
@@ -177,22 +181,24 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	}
 
 	// Flow items - group by feature type, skip items without City, CityGML, or Data
-	if res := <-flowItemsChan; res.B != nil {
-		// Flow model is optional, so we just log the error
-		log.Warnfc(ctx, "datacatalogv3: failed to get flow items: %v", res.B)
-	} else {
-		all.Flow = make(map[string][]*PlateauFeatureItem)
-		for _, item := range res.A {
-			// Skip items without City, CityGML, or Data
-			if item.City == "" || item.CityGML == "" || len(item.Data) == 0 {
-				continue
+	if flowItemsChan != nil {
+		if res := <-flowItemsChan; res.B != nil {
+			// Flow model is optional, so we just log the error
+			log.Warnfc(ctx, "datacatalogv3: failed to get flow items: %v", res.B)
+		} else {
+			all.Flow = make(map[string][]*PlateauFeatureItem)
+			for _, item := range res.A {
+				// Skip items without City, CityGML, or Data
+				if item.City == "" || item.CityGML == "" || len(item.Data) == 0 {
+					continue
+				}
+				// Get feature type from item
+				ft := item.FeatureType
+				if ft == "" {
+					continue
+				}
+				all.Flow[ft] = append(all.Flow[ft], item)
 			}
-			// Get feature type from item
-			ft := item.FeatureType
-			if ft == "" {
-				continue
-			}
-			all.Flow[ft] = append(all.Flow[ft], item)
 		}
 	}
 
@@ -441,6 +447,7 @@ func (c *CMS) GetCMSInfo(ctx context.Context) (*CMSInfo, error) {
 		WorkspaceID: md.WorkspaceID,
 		ProjectID:   md.ProjectID,
 		ModelIDMap:  modelIDs,
+		FlowEnabled: md.DataCatalogFlowEnabled,
 	}, nil
 }
 

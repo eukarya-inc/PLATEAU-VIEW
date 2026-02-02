@@ -94,7 +94,7 @@ func (i *PlateauFeatureItem) toDatasets(opts ToPlateauDatasetsOptions) (res []*p
 	return
 }
 
-const flowNamePrefix = "[Flow] "
+const flowNamePrefix = "[Flowテスト用] "
 
 func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, warning []string) {
 	if len(seed.AssetURLs) == 0 {

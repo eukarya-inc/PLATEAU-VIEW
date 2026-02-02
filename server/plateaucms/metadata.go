@@ -25,6 +25,7 @@ type Metadata struct {
 	ProjectAlias             string `json:"project_alias" cms:"project_alias,text"`
 	DataCatalogProjectAlias  string `json:"datacatalog_project_alias" cms:"datacatalog_project_alias,text"`
 	DataCatalogSchemaVersion string `json:"datacatalog_schema_version" cms:"datacatalog_schema_version,select"`
+	DataCatalogFlowEnabled   bool   `json:"datacatalog_flow_enabled" cms:"datacatalog_flow_enabled,boolean"`
 	CMSAPIKey                string `json:"cms_apikey" cms:"cms_apikey,text"`
 	SidebarAccessToken       string `json:"sidebar_access_token" cms:"sidebar_access_token,text"`
 	SubPorjectAlias          string `json:"subproject_alias" cms:"subproject_alias,text"`

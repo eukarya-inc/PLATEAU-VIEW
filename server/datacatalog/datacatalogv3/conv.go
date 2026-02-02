@@ -175,7 +175,8 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 	}
 
 	// flow - convert Flow model data (always beta, no priority filtering)
-	if len(all.Flow) > 0 {
+	// Only process if FlowEnabled is true in metadata
+	if all.CMSInfo.FlowEnabled && len(all.Flow) > 0 {
 		for code, items := range all.Flow {
 			if len(items) == 0 {
 				continue
