@@ -2,8 +2,9 @@ package cmsintflow
 
 import (
 	"path"
-	"regexp"
 	"strings"
+
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv3"
 )
 
 type FlowResult struct {
@@ -48,8 +49,8 @@ func (r FlowResult) IDsMessage() string {
 	return "（" + strings.Join(ids, ", ") + "）"
 }
 
-// InternalWithFeatureType parses Flow outputs with feature type context for proper key extraction
-func (r FlowResult) InternalWithFeatureType(featureTypeCode string, useGroups bool) (res FlowInternalResult) {
+// Internal parses Flow outputs and extracts conversion results, dictionary, and QC results
+func (r FlowResult) Internal() (res FlowInternalResult) {
 	for _, output := range r.Outputs {
 		base := path.Base(output)
 
@@ -69,7 +70,7 @@ func (r FlowResult) InternalWithFeatureType(featureTypeCode string, useGroups bo
 			continue
 		}
 
-		key := getOutputKey(base, featureTypeCode, useGroups)
+		key := getOutputKey(base)
 		if res.Conv == nil {
 			res.Conv = map[string][]string{}
 		}
@@ -79,50 +80,33 @@ func (r FlowResult) InternalWithFeatureType(featureTypeCode string, useGroups bo
 	return
 }
 
-// Internal parses Flow outputs (legacy method without feature type context)
-func (r FlowResult) Internal() (res FlowInternalResult) {
-	return r.InternalWithFeatureType("", false)
-}
-
-var reDigits = regexp.MustCompile(`^\d+_(.*)$`)
-
-func getOutputKey(s string, featureTypeCode string, useGroups bool) string {
-	k := reDigits.ReplaceAllString(fileName(s), "$1")
-
-	// For feature types that use groups (UseGroups=true), extract the feature type key
-	// e.g., "uwajima-shi_city_2025_citygml_1_op_urf_UseDistrict_mvt_lod1" -> "urf_UseDistrict"
-	if useGroups && featureTypeCode != "" {
-		pattern := "_op_" + featureTypeCode + "_"
-		if idx := strings.Index(k, pattern); idx != -1 {
-			// Extract from "_op_" onward, skip "_op_" itself
-			k = k[idx+4:]
-			return trimOutputKeySuffixes(k)
-		}
+// getOutputKey extracts the key from an output filename using datacatalogv3.ParseAssetName
+// The key format is "{type}_{name}_{format}" or "{type}_{format}" if name is empty
+// e.g., "veg_PlantCover_3dtiles", "bldg_3dtiles", "fld_natl_river-name_3dtiles"
+func getOutputKey(s string) string {
+	name := datacatalogv3.ParseAssetName(fileName(s))
+	if name == nil {
+		// Fallback: return filename without extension
+		return fileName(s)
 	}
 
-	// For bldg and other feature types (default behavior)
-	return trimOutputKeySuffixes(k)
-}
-
-func trimOutputKeySuffixes(s string) string {
-	// Loop to handle combined suffixes like "_lod2_no_texture" or "_mvt_lod1"
-	for {
-		prev := s
-		s = strings.TrimSuffix(s, "_lod0")
-		s = strings.TrimSuffix(s, "_lod1")
-		s = strings.TrimSuffix(s, "_lod2")
-		s = strings.TrimSuffix(s, "_lod3")
-		s = strings.TrimSuffix(s, "_lod4")
-		s = strings.TrimSuffix(s, "_lod")
-		s = strings.TrimSuffix(s, "_mvt")
-		s = strings.TrimSuffix(s, "_no_texture")
-		s = strings.TrimSuffix(s, "_l1")
-		s = strings.TrimSuffix(s, "_l2")
-		if s == prev {
-			break
+	ex := name.Ex
+	switch {
+	case ex.Fld != nil:
+		// For flood data: "fld_{admin}_{river}_{format}"
+		// e.g., "fld_natl_river-name_3dtiles"
+		return "fld_" + ex.Fld.Admin + "_" + ex.Fld.River + "_" + ex.Fld.Format
+	case ex.Normal != nil:
+		// For normal feature types: "{type}_{name}_{format}" or "{type}_{format}" if name is empty
+		// e.g., "veg_PlantCover_mvt", "veg_PlantCover_3dtiles", "bldg_3dtiles"
+		if ex.Normal.Name != "" {
+			return ex.Normal.Type + "_" + ex.Normal.Name + "_" + ex.Normal.Format
 		}
+		return ex.Normal.Type + "_" + ex.Normal.Format
 	}
-	return s
+
+	// Fallback if extension couldn't be parsed
+	return fileName(s)
 }
 
 func fileName(s string) string {
