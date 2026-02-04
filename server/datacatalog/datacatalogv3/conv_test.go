@@ -102,14 +102,16 @@ func TestIsDerivedFeatureType(t *testing.T) {
 
 func TestFilterPlateauByPriority(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    map[string][]*PlateauFeatureItem
-		expected map[string][]string // baseCode -> []cityID for simplicity
+		name      string
+		input     map[string][]*PlateauFeatureItem
+		cityItems []*CityItem
+		expected  map[string][]string // baseCode -> []cityID for simplicity
 	}{
 		{
-			name:     "empty input",
-			input:    map[string][]*PlateauFeatureItem{},
-			expected: map[string][]string{},
+			name:      "empty input",
+			input:     map[string][]*PlateauFeatureItem{},
+			cityItems: nil,
+			expected:  map[string][]string{},
 		},
 		{
 			name: "single base type single city",
@@ -118,6 +120,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"},
 			},
@@ -132,6 +135,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"}, // item2 wins (higher priority)
 			},
@@ -146,6 +150,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item2", City: "city1", Priority: 0, Status: readyStatus()},
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"}, // item2 wins (bldg2 > bldg alphabetically)
 			},
@@ -160,6 +165,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"}, // item1 wins (higher priority)
 			},
@@ -175,6 +181,7 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()},
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1", "city2"}, // city1: item2, city2: item3
 			},
@@ -188,12 +195,13 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					nil,
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"},
 			},
 		},
 		{
-			name: "items without ready status are skipped",
+			name: "items without ready status are skipped when city not public",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
 					{ID: "item1", City: "city1", Priority: 0, Status: readyStatus()},
@@ -202,24 +210,75 @@ func TestFilterPlateauByPriority(t *testing.T) {
 					{ID: "item2", City: "city1", Priority: 100, Status: nil}, // not ready, should be skipped
 				},
 			},
+			cityItems: nil,
 			expected: map[string][]string{
 				"bldg": {"city1"}, // item1 wins because item2 is not ready
 			},
 		},
 		{
-			name: "all items without ready status results in empty",
+			name: "all items without ready status results in empty when city not public",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
 					{ID: "item1", City: "city1", Priority: 0, Status: nil},
 				},
 			},
-			expected: map[string][]string{},
+			cityItems: nil,
+			expected:  map[string][]string{},
+		},
+		{
+			name: "items without ready status are included when city is public",
+			input: map[string][]*PlateauFeatureItem{
+				"bldg": {
+					{ID: "item1", City: "city1", Priority: 0, Status: nil}, // not ready but city is public
+				},
+			},
+			cityItems: []*CityItem{
+				{ID: "city1", CityPublic: true},
+			},
+			expected: map[string][]string{
+				"bldg": {"city1"}, // included because city is public
+			},
+		},
+		{
+			name: "public city items compete with ready items by priority",
+			input: map[string][]*PlateauFeatureItem{
+				"bldg": {
+					{ID: "item1", City: "city1", Priority: 5, Status: nil}, // public city, no status
+				},
+				"bldg2": {
+					{ID: "item2", City: "city1", Priority: 10, Status: readyStatus()}, // ready status
+				},
+			},
+			cityItems: []*CityItem{
+				{ID: "city1", CityPublic: true},
+			},
+			expected: map[string][]string{
+				"bldg": {"city1"}, // item2 wins (higher priority)
+			},
+		},
+		{
+			name: "mixed public and non-public cities",
+			input: map[string][]*PlateauFeatureItem{
+				"bldg": {
+					{ID: "item1", City: "city1", Priority: 0, Status: nil},         // public city
+					{ID: "item2", City: "city2", Priority: 0, Status: nil},         // non-public city, no status -> skipped
+					{ID: "item3", City: "city3", Priority: 0, Status: readyStatus()}, // non-public city but ready
+				},
+			},
+			cityItems: []*CityItem{
+				{ID: "city1", CityPublic: true},
+				{ID: "city2", CityPublic: false},
+				{ID: "city3", CityPublic: false},
+			},
+			expected: map[string][]string{
+				"bldg": {"city1", "city3"}, // city2 is skipped
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := filterPlateauByPriority(tt.input)
+			result := filterPlateauByPriority(tt.input, tt.cityItems)
 
 			// Convert result to comparable format
 			got := make(map[string][]string)
@@ -252,7 +311,7 @@ func TestFilterPlateauByPriority_VerifyWinningItem(t *testing.T) {
 		},
 	}
 
-	result := filterPlateauByPriority(input)
+	result := filterPlateauByPriority(input, nil)
 
 	// Should have one entry for bldg (base code)
 	assert.Len(t, result, 1)
@@ -264,7 +323,7 @@ func TestFilterPlateauByPriority_VerifyWinningItem(t *testing.T) {
 }
 
 func TestFilterPlateauByPriority_NotReadyItemsSkipped(t *testing.T) {
-	// This test verifies that items without ready status are skipped
+	// This test verifies that items without ready status are skipped when city is not public
 	input := map[string][]*PlateauFeatureItem{
 		"bldg": {
 			{ID: "bldg-item", City: "city1", Priority: 5, Status: readyStatus()},
@@ -274,7 +333,7 @@ func TestFilterPlateauByPriority_NotReadyItemsSkipped(t *testing.T) {
 		},
 	}
 
-	result := filterPlateauByPriority(input)
+	result := filterPlateauByPriority(input, nil)
 
 	// Should have one entry for bldg (base code)
 	assert.Len(t, result, 1)
