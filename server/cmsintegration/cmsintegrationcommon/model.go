@@ -209,6 +209,9 @@ type FeatureItem struct {
 	// compat
 	SkipQC      bool `json:"skip_qc,omitempty" cms:"skip_qc,bool,metadata"`
 	SkipConvert bool `json:"skip_conv,omitempty" cms:"skip_conv,bool,metadata"`
+
+	// Flow run ID for cancellation
+	FlowRunID string `json:"flow_run_id,omitempty" cms:"flow_run_id,text,metadata"`
 }
 
 func (f *FeatureItem) FeatureTypeCode() string {

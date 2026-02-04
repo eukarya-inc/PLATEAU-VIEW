@@ -204,6 +204,14 @@ func sendRequestToFlow(
 
 	log.Infofc(ctx, "success to trigger flow: item=%s, triggerID=%s, res=%#v", mainItem.ID, triggerID, res)
 
+	// Save runId for cancellation
+	if runID, ok := res["runId"].(string); ok && runID != "" {
+		log.Infofc(ctx, "saving flow run id: itemID=%s, runID=%s", mainItem.ID, runID)
+		if err := s.UpdateFlowRunID(ctx, mainItem.ID, runID); err != nil {
+			log.Warnfc(ctx, "failed to save flow run id: %v", err)
+		}
+	}
+
 	// post a comment to the item
 	if err = s.CMS.CommentToItem(ctx, mainItem.ID, fmt.Sprintf("Flowでの%s（v%d）を開始しました。", ty.Title(), specv)); err != nil {
 		return fmt.Errorf("failed to add comment: %w", err)

@@ -217,3 +217,16 @@ func (s *Services) Fail(ctx context.Context, itemID string, ty cmsintegrationcom
 
 	return nil
 }
+
+func (s *Services) UpdateFlowRunID(ctx context.Context, itemID, runID string) error {
+	fields := []*cms.Field{{Key: "flow_run_id", Type: "text", Value: runID}}
+	_, err := s.CMS.UpdateItem(ctx, itemID, nil, fields)
+	if err != nil {
+		return fmt.Errorf("failed to update flow run id: %w", err)
+	}
+	return nil
+}
+
+func (s *Services) ClearFlowRunID(ctx context.Context, itemID string) error {
+	return s.UpdateFlowRunID(ctx, itemID, "")
+}
