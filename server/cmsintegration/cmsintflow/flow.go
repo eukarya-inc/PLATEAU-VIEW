@@ -14,7 +14,7 @@ import (
 
 type Flow interface {
 	Request(context.Context, FlowRequest) (FlowRequestResult, error)
-	Cancel(ctx context.Context, baseURL, runID string) error
+	Cancel(ctx context.Context, baseURL, runID, triggerID string) error
 }
 
 type flowImpl struct {
@@ -93,13 +93,13 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 	return
 }
 
-func (f *flowImpl) Cancel(ctx context.Context, baseURL, runID string) error {
+func (f *flowImpl) Cancel(ctx context.Context, baseURL, runID, triggerID string) error {
 	if baseURL == "" {
 		baseURL = f.baseURL
 	}
 
-	if baseURL == "" || runID == "" {
-		return fmt.Errorf("invalid cancel request: baseURL=%s, runID=%s", baseURL, runID)
+	if baseURL == "" || runID == "" || triggerID == "" {
+		return fmt.Errorf("invalid cancel request: baseURL=%s, runID=%s, triggerID=%s", baseURL, runID, triggerID)
 	}
 
 	u, err := url.JoinPath(baseURL, "api", "jobs", runID, "cancel")
@@ -107,14 +107,24 @@ func (f *flowImpl) Cancel(ctx context.Context, baseURL, runID string) error {
 		return fmt.Errorf("failed to build cancel URL: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, nil)
+	body := map[string]string{
+		"triggerId": triggerID,
+		"authToken": f.token,
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cancel request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(b))
 	if err != nil {
 		log.Errorfc(ctx, "failed to create cancel request: %v", err)
 		return fmt.Errorf("failed to create cancel request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+f.token)
 
-	log.Infofc(ctx, "flow cancel: url=%s, runID=%s", u, runID)
+	log.Infofc(ctx, "flow cancel: url=%s, runID=%s, triggerID=%s", u, runID, triggerID)
 
 	resp, err := f.h.Do(req)
 	if err != nil {

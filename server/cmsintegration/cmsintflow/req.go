@@ -204,10 +204,10 @@ func sendRequestToFlow(
 
 	log.Infofc(ctx, "success to trigger flow: item=%s, triggerID=%s, res=%#v", mainItem.ID, triggerID, res)
 
-	// Save runId for cancellation
+	// Save runId and triggerID for cancellation
 	if runID, ok := res["runId"].(string); ok && runID != "" {
-		log.Infofc(ctx, "saving flow run id: itemID=%s, runID=%s", mainItem.ID, runID)
-		if err := s.UpdateFlowRunID(ctx, mainItem.ID, runID); err != nil {
+		log.Infofc(ctx, "saving flow run id: itemID=%s, runID=%s, triggerID=%s", mainItem.ID, runID, triggerID)
+		if err := s.UpdateFlowRunID(ctx, mainItem.ID, runID, triggerID); err != nil {
 			log.Warnfc(ctx, "failed to save flow run id: %v", err)
 		}
 	}

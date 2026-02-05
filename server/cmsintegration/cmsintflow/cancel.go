@@ -77,12 +77,12 @@ func handleFlowCancellation(ctx context.Context, s *Services, conf *Config, w *c
 	}
 
 	featureItem := cmsintegrationcommon.FeatureItemFrom(mainItem)
-	if featureItem == nil || featureItem.FlowRunID == "" {
-		log.Infofc(ctx, "no flow run id, skipping cancellation: itemID=%s", mainItem.ID)
+	if featureItem == nil || featureItem.FlowRunID == "" || featureItem.FlowTriggerID == "" {
+		log.Infofc(ctx, "no flow run id or trigger id, skipping cancellation: itemID=%s", mainItem.ID)
 		return nil
 	}
 
-	log.Infofc(ctx, "cancelling flow job: itemID=%s, runID=%s", mainItem.ID, featureItem.FlowRunID)
+	log.Infofc(ctx, "cancelling flow job: itemID=%s, runID=%s, triggerID=%s", mainItem.ID, featureItem.FlowRunID, featureItem.FlowTriggerID)
 
 	// Get plateau specs to determine the correct Flow URL
 	specs, err := s.PCMS.PlateauSpecs(ctx)
@@ -101,14 +101,14 @@ func handleFlowCancellation(ctx context.Context, s *Services, conf *Config, w *c
 	}
 
 	// Cancel the Flow job
-	if err := s.Flow.Cancel(ctx, flowBaseURL, featureItem.FlowRunID); err != nil {
+	if err := s.Flow.Cancel(ctx, flowBaseURL, featureItem.FlowRunID, featureItem.FlowTriggerID); err != nil {
 		log.Warnfc(ctx, "failed to cancel flow job: %v", err)
 		// Don't return error - cancellation failure should not block user operations
 	} else {
 		log.Infofc(ctx, "flow job cancelled successfully: runID=%s", featureItem.FlowRunID)
 	}
 
-	// Clear the run ID
+	// Clear the run ID and trigger ID
 	if err := s.ClearFlowRunID(ctx, mainItem.ID); err != nil {
 		log.Warnfc(ctx, "failed to clear flow run id: %v", err)
 	}
