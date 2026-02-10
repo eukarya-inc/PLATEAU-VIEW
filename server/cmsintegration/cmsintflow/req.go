@@ -68,11 +68,19 @@ func sendRequestToFlow(
 		return nil
 	}
 
+	// Skip conversion-only processing while QC is running.
+	// Conversion should wait for QC results.
+	// This occurs when UpdateFeatureItemStatus re-triggers the webhook.
+	if ty == cmsintegrationcommon.ReqTypeConv && cmsintegrationcommon.TagIs(item.QCStatus, cmsintegrationcommon.ConvertionStatusRunning) {
+		log.Infofc(ctx, "skip: QC is running, waiting for QC result before conv: item=%s", mainItem.ID)
+		return nil
+	}
+
 	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s (original=%s)", mainItem.ID, featureType.Code, ty, originalTy)
 
-	// update convertion status
-	// 品質検査を開始する際、変換もサポートされている場合は、変換ステータスを「未実行」にリセットする
-	// これにより、CMS側で設定された「実行中」がリセットされ、品質検査成功後に変換ステータスが更新される
+	// Update conversion status.
+	// When starting QC and conversion is also supported, reset conversion status to "not started".
+	// This resets any "running" status set by CMS, and conversion status will be updated after QC succeeds.
 	statusUpdateTy := ty
 	if ty == cmsintegrationcommon.ReqTypeQC && featureType.Conv {
 		statusUpdateTy = cmsintegrationcommon.ReqTypeQCConv
