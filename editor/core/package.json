@@ -42,7 +42,7 @@
     "@radix-ui/react-slot": "1.1.0",
     "@radix-ui/react-switch": "1.1.0",
     "@radix-ui/react-toggle": "1.1.0",
-    "@reearth/cesium-mvt-imagery-provider": "1.6.0",
+    "@reearth/cesium-mvt-imagery-provider": "1.6.2",
     "@reearth/spatial-id-sdk": "0.0.0",
     "@rot1024/use-transition": "1.0.0",
     "@seznam/compose-react-refs": "1.0.6",
