@@ -1,12 +1,12 @@
 ARG TAG=release
 ARG VERSION
 
-FROM golang:1.25-bookworm AS build
+FROM golang:1.25.5-bookworm AS build
 
 WORKDIR /app
 
-RUN --mount=type=bind,source=go.mod,target=go.mod,rw \
-    --mount=type=bind,source=go.sum,target=go.sum,rw \
+RUN --mount=type=bind,source=go.mod,target=go.mod \
+    --mount=type=bind,source=go.sum,target=go.sum \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
 

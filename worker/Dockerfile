@@ -1,17 +1,17 @@
 ARG TAG=release
 ARG VERSION
 
-FROM golang:1.25-alpine AS build
+FROM golang:1.25.5-alpine AS build
 
 RUN apk add --update --no-cache git ca-certificates build-base fuse
 # RUN CGO_ENABLED=0 go install github.com/googlecloudplatform/gcsfuse@v1.4.1
 
 WORKDIR /app/worker
 
-RUN --mount=type=bind,source=worker/go.mod,target=go.mod,rw \
-    --mount=type=bind,source=worker/go.sum,target=go.sum,rw \
-    --mount=type=bind,source=server/go.mod,target=/app/server/go.mod,rw \
-    --mount=type=bind,source=server/go.sum,target=/app/server/go.sum,rw \
+RUN --mount=type=bind,source=worker/go.mod,target=go.mod \
+    --mount=type=bind,source=worker/go.sum,target=go.sum \
+    --mount=type=bind,source=server/go.mod,target=/app/server/go.mod \
+    --mount=type=bind,source=server/go.sum,target=/app/server/go.sum \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
