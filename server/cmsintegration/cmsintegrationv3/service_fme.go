@@ -283,10 +283,15 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 						return fmt.Errorf("failed to upload qc result: %w", err)
 					}
 
-					item := (&cmsintegrationcommon.FeatureItem{
+					fi := &cmsintegrationcommon.FeatureItem{
 						QCStatus: cmsintegrationcommon.TagFrom(cmsintegrationcommon.ConvertionStatusSuccess),
 						QCResult: qcResultAsset,
-					}).CMSItem()
+					}
+					// QC完了 → Conv開始: qc_convの場合、FME側でConvが始まるのでconv_statusを実行中にする
+					if fmeRequestType(id.Type) == fmeTypeQcConv {
+						fi.ConvertionStatus = cmsintegrationcommon.TagFrom(cmsintegrationcommon.ConvertionStatusRunning)
+					}
+					item := fi.CMSItem()
 
 					_, err = s.CMS.UpdateItem(ctx, id.ItemID, item.Fields, item.MetadataFields)
 					if err != nil {
