@@ -13,6 +13,7 @@ var citygmlDic = map[string]string{
 	"pref":          "都道府県管理",
 }
 
+// TODO: featureTypees はCMSから取得する featureTypeNames に完全移行後に削除する
 var featureTypees = map[string]string{
 	"bldg": "建築物モデル",
 	"tran": "交通（道路）モデル",
@@ -39,6 +40,16 @@ var featureTypees = map[string]string{
 	"dem":  "地形モデル",
 	"area": "区域モデル",
 	"gen":  "汎用都市オブジェクトモデル",
+}
+
+func resolveFeatureTypeName(code string, featureTypeNames map[string]string) string {
+	if name, ok := featureTypees[code]; ok {
+		return name
+	}
+	if name, ok := featureTypeNames[code]; ok {
+		return name
+	}
+	return code
 }
 
 var relatedDataTypes = []string{

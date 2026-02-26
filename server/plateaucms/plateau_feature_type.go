@@ -66,6 +66,14 @@ func (f PlateauFeatureTypeList) Codes() []string {
 	return codes
 }
 
+func (f PlateauFeatureTypeList) CodeNameMap() map[string]string {
+	m := make(map[string]string, len(f))
+	for _, ft := range f {
+		m[ft.Code] = ft.Name
+	}
+	return m
+}
+
 const (
 	DatasetCategoryRelated = "関連データセット"
 	DatasetCategoryGeneric = "その他のデータセット"

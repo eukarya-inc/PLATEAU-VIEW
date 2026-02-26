@@ -56,7 +56,7 @@ func prepareGspatialjp(conf *Config) {
 		panic(err)
 	}
 
-	config.FeatureTypes = strings.Split(ft, ",")
+	config.FeatureTypes, config.FeatureTypeNames = parseFeatureTypes(ft)
 	if err := preparegspatialjp.Command(&config); err != nil {
 		panic(err)
 	}
@@ -113,6 +113,22 @@ func cityGMLPacker(*Config) {
 	if err := citygmlpacker.Run(config); err != nil {
 		panic(err)
 	}
+}
+
+// parseFeatureTypes parses "bldg:建築物モデル,ext:拡張地物モデル,tran" into codes and names.
+func parseFeatureTypes(s string) ([]string, map[string]string) {
+	parts := strings.Split(s, ",")
+	codes := make([]string, 0, len(parts))
+	names := make(map[string]string, len(parts))
+	for _, part := range parts {
+		if code, name, ok := strings.Cut(part, ":"); ok {
+			codes = append(codes, code)
+			names[code] = name
+		} else {
+			codes = append(codes, part)
+		}
+	}
+	return codes, names
 }
 
 func lodStat(c *Config) {
