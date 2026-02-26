@@ -266,9 +266,18 @@ func rewriteQCStatus(item *cms.Item, status cmsintegrationcommon.ConvertionStatu
 	if item == nil {
 		return
 	}
+	tag := cmsintegrationcommon.TagFrom(status)
+	// qc_status is a metadata field, so update MetadataFields
+	for i, f := range item.MetadataFields {
+		if f.Key == "qc_status" {
+			item.MetadataFields[i].Value = tag
+			return
+		}
+	}
+	// fallback: also check Fields for backward compatibility
 	for i, f := range item.Fields {
 		if f.Key == "qc_status" {
-			item.Fields[i].Value = cmsintegrationcommon.TagFrom(status)
+			item.Fields[i].Value = tag
 			return
 		}
 	}
