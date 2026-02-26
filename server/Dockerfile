@@ -5,8 +5,8 @@ FROM golang:1.25-bookworm AS build
 
 WORKDIR /app
 
-RUN --mount=type=bind,source=go.mod,target=go.mod \
-    --mount=type=bind,source=go.sum,target=go.sum \
+RUN --mount=type=bind,source=go.mod,target=go.mod,rw \
+    --mount=type=bind,source=go.sum,target=go.sum,rw \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
 

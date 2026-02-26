@@ -8,10 +8,10 @@ RUN apk add --update --no-cache git ca-certificates build-base fuse
 
 WORKDIR /app/worker
 
-RUN --mount=type=bind,source=worker/go.mod,target=go.mod \
-    --mount=type=bind,source=worker/go.sum,target=go.sum \
-    --mount=type=bind,source=server/go.mod,target=/app/server/go.mod \
-    --mount=type=bind,source=server/go.sum,target=/app/server/go.sum \
+RUN --mount=type=bind,source=worker/go.mod,target=go.mod,rw \
+    --mount=type=bind,source=worker/go.sum,target=go.sum,rw \
+    --mount=type=bind,source=server/go.mod,target=/app/server/go.mod,rw \
+    --mount=type=bind,source=server/go.sum,target=/app/server/go.sum,rw \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
