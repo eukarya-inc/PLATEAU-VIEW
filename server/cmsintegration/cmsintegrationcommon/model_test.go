@@ -313,7 +313,7 @@ func TestIsQCAndConvSkipped(t *testing.T) {
 
 	skipQC, skipConv = (&FeatureItem{
 		SkipQCConv: &cms.Tag{
-			Name: "品質検査・変換のみをスキップ",
+			Name: "品質検査・変換をスキップ",
 		},
 	}).IsQCAndConvSkipped()
 	assert.True(t, skipQC)

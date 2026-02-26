@@ -58,36 +58,42 @@ func sendRequestToFlow(
 		return nil
 	}
 
-	// type
-	fty := cmsintegrationcommon.ReqTypeFrom(!featureType.QC, !featureType.Conv)
-	ity := item.ReqType().Override(overrideReqType)
-	originalTy := fty.Intersection(ity)
-	ty := originalTy.Normalize()
-	if ty == "" || ty == cmsintegrationcommon.ReqTypeQCConv {
-		log.Infofc(ctx, "skip: request type is empty or qc_conv: fty=%s, ity=%s, ty=%s", fty, ity, ty)
+	// Determine action via workflow state machine
+	wm := NewWorkflowMachine(item, featureType.QC, featureType.Conv)
+	if overrideReqType == cmsintegrationcommon.ReqTypeConv {
+		wm.Config.SkipQC = true
+		wm.Config.SkipConv = false
+	}
+	log.Debugfc(ctx, "workflow: state=%+v, config=%+v, override=%s", wm.State, wm.Config, overrideReqType)
+
+	actions, err := wm.Transition(Event{Kind: EventWebhookReceived})
+	if err != nil {
+		return fmt.Errorf("workflow transition error: %w", err)
+	}
+
+	// Find the trigger action (StartQC or StartConv) to determine ty
+	var ty cmsintegrationcommon.ReqType
+	for _, a := range actions {
+		if a.Kind == ActionStartQC || a.Kind == ActionStartConv {
+			ty = ReqTypeForAction(a)
+			break
+		}
+	}
+	if ty == "" {
+		log.Infofc(ctx, "skip: workflow decided no action needed: state=%+v, config=%+v", wm.State, wm.Config)
 		return nil
 	}
 
-	// Skip conversion-only processing while QC is running.
-	// Conversion should wait for QC results.
-	// This occurs when UpdateFeatureItemStatus re-triggers the webhook.
-	if ty == cmsintegrationcommon.ReqTypeConv && cmsintegrationcommon.TagIs(item.QCStatus, cmsintegrationcommon.ConvertionStatusRunning) {
-		log.Infofc(ctx, "skip: QC is running, waiting for QC result before conv: item=%s", mainItem.ID)
-		return nil
-	}
+	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s", mainItem.ID, featureType.Code, ty)
 
-	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s (original=%s)", mainItem.ID, featureType.Code, ty, originalTy)
-
-	// Update conversion status.
-	// When starting QC and conversion is also supported, reset conversion status to "not started".
-	// This resets any "running" status set by CMS, and conversion status will be updated after QC succeeds.
-	statusUpdateTy := ty
-	if ty == cmsintegrationcommon.ReqTypeQC && featureType.Conv {
-		statusUpdateTy = cmsintegrationcommon.ReqTypeQCConv
-	}
-	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, statusUpdateTy, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
-		log.Errorfc(ctx, "failed to update item status: %v", err)
-		return fmt.Errorf("failed to update item: %w", err)
+	// Execute SetStatus actions
+	for _, a := range actions {
+		if a.Kind == ActionSetStatus {
+			if err := s.UpdateStatus(ctx, mainItem.ID, a.QCStatus, a.ConvStatus); err != nil {
+				log.Errorfc(ctx, "failed to update item status: %v", err)
+				return fmt.Errorf("failed to update item: %w", err)
+			}
+		}
 	}
 
 	// get CityGML asset

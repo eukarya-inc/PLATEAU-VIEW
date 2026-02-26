@@ -1,13 +1,25 @@
-# cmsintflow: QC/Conv State Machine
+# cmsintflow: QC/Conv Workflow State Machine
 
 ## Overview
 
 This package handles the QC (Quality Check) and Conversion workflow for PLATEAU CityGML data via FME Flow integration. The workflow is driven by CMS webhooks and Flow result callbacks.
 
-## Entry Points
+## Architecture
 
-1. **Webhook** (`handler.go`): CMS fires `item.update` webhook on any item change → `sendRequestToFlow()`
-2. **Flow Result** (`res.go`): Flow sends result callback → `receiveResultFromFlow()`
+```
+handler.go          req.go                 workflow.go              res.go
+┌──────────┐    ┌───────────────┐    ┌──────────────────┐    ┌────────────────┐
+│ Webhook  │───►│sendRequestTo  │───►│WorkflowMachine   │    │receiveResult   │
+│          │    │Flow()         │    │ .Transition()    │    │FromFlow()      │
+└──────────┘    │               │    │                  │    │                │
+                │ Build SM      │    │ Pure logic:      │◄───│ Build SM       │
+                │ Execute       │    │ - State          │    │ Execute        │
+                │ Actions       │    │ - Config         │    │ Actions        │
+                └───────────────┘    │ - Events→Actions │    └────────────────┘
+                                     └──────────────────┘
+```
+
+The state machine (`workflow.go`) is **pure** — it contains no I/O. It takes the current item state and an event, and returns a list of actions. The callers (`req.go`, `res.go`) execute those actions (CMS updates, Flow API calls).
 
 ## Item Fields
 
@@ -27,126 +39,68 @@ This package handles the QC (Quality Check) and Conversion workflow for PLATEAU 
 | `変換のみ実行` | Run Conv only, skip QC | **true** | false |
 | `品質検査のみをスキップ` | Skip QC, run Conv | **true** | false |
 | `変換のみをスキップ` | Skip Conv, run QC | false | **true** |
-| `品質検査・変換のみをスキップ` | Skip both | **true** | **true** |
+| `品質検査・変換をスキップ` | Skip both | **true** | **true** |
 
 ## State Machine
 
-### States
+### Types (`workflow.go`)
 
-Each item has a compound state of `(qc_status, conv_status)`. Key states:
-
-```
-INIT        = (nil,    nil)      # Item just created
-READY       = (未実行, 未実行)   # Statuses explicitly set to not-started
-QC_RUNNING  = (実行中, 未実行)   # QC in progress
-QC_OK       = (成功,   未実行)   # QC succeeded, conv not yet started
-QC_ERR      = (エラー, 未実行)   # QC failed
-CONV_RUNNING= (成功,   実行中)   # Conv in progress (after QC success)
-DONE        = (成功,   成功)     # Both completed successfully
-CONV_ERR    = (成功,   エラー)   # Conv failed
+```go
+Phase:    idle | running | succeeded | failed
+State:    (QC Phase, Conv Phase)
+Config:   SkipQC, SkipConv, FeatureConv
+Event:    WebhookReceived | QCCompleted(QCOK) | ConvCompleted | FlowFailed
+Action:   Skip | SetStatus(qc, conv) | StartQC | StartConv | Fail(msg)
 ```
 
-### Type Determination Logic
+### Transition Table
+
+| State (QC, Conv) | Event | Condition | Actions | New State |
+|---|---|---|---|---|
+| (idle, idle) | Webhook | !skipQC | SetStatus(qc=実行中, conv=未実行), StartQC | (running, idle) |
+| (idle, idle) | Webhook | skipQC, !skipConv | SetStatus(conv=実行中), StartConv | (idle, running) |
+| (any, any) | Webhook | skipQC && skipConv | Skip | — |
+| (running, idle) | Webhook | skipQC, !skipConv | Skip (QC running guard) | — |
+| (≠idle, any) | Webhook | !skipQC | Skip (idempotency) | — |
+| (any, ≠idle) | Webhook | skipQC, !skipConv | Skip (idempotency) | — |
+| (running, idle) | QCCompleted(ok) | !skipConv, featureConv | SetStatus(qc=成功), StartConv | (succeeded, running) |
+| (running, idle) | QCCompleted(ok) | skipConv or !featureConv | SetStatus(qc=成功) | (succeeded, idle) |
+| (running, idle) | QCCompleted(!ok) | — | SetStatus(qc=エラー) | (failed, idle) |
+| (any, running) | ConvCompleted | — | SetStatus(conv=成功) | (any, succeeded) |
+| (any, any) | FlowFailed | — | Fail(msg) | (running→failed, running→failed) |
+
+### Normal Flow: QC + Conv
 
 ```
-IsQCAndConvSkipped(item) → (skipQC, skipConv)
-  1. Status-based:
-     - qc_status ∉ {nil, 未実行} → skipQC = true
-     - conv_status ∉ {nil, 未実行} → skipConv = true
-     - Both true → return early
-  2. skip_qc_conv tag:
-     - Contains "スキップ": skip what's mentioned
-     - Contains "実行": run what's mentioned, skip the rest
-  3. Legacy bool fields (SkipQC, SkipConvert)
-
-ReqType = ReqTypeFrom(skipQC, skipConv)
-  - skipQC=T, skipConv=T → "" (nothing to do)
-  - skipQC=T, skipConv=F → "conv"
-  - skipQC=F, skipConv=T → "qc"
-  - skipQC=F, skipConv=F → "qc_conv"
-
-sendRequestToFlow:
-  fty = feature type capability (qc_conv if both supported)
-  ity = item.ReqType().Override(overrideReqType)
-  ty  = fty.Intersection(ity).Normalize()
-        Normalize: qc_conv → qc (QC runs first)
-  Guard: ty == "conv" && qc_status == 実行中 → skip (wait for QC)
+  (idle, idle)   ──Webhook──►  (running, idle)  ──QC OK──►  (succeeded, running)  ──Conv OK──►  (succeeded, succeeded)
+                  StartQC                         StartConv                                       Done!
 ```
 
-### Transitions
-
-#### Normal Flow: QC + Conv (skip_qc_conv = nil or "品質検査・変換を実行")
+### Conv Only Flow (skip_qc_conv = "変換のみ実行")
 
 ```
-                    Webhook                          Flow Result (QC OK)
-  INIT ──────────────────────► QC_RUNNING ──────────────────────────► CONV_RUNNING
-  (nil, nil)                   (実行中, 未実行)                       (成功, 実行中)
-  skipQC=F, skipConv=F                                                    │
-  ity=qc_conv → ty=qc                                                    │
-  UpdateStatus(qc_conv,実行中)                                            │
-    → qc=実行中, conv=未実行                                    Flow Result (Conv OK)
-                                                                          │
-                                                                          ▼
-                                                                       DONE
-                                                                    (成功, 成功)
+  (idle, idle)   ──Webhook──►  (idle, running)  ──Conv OK──►  (idle, succeeded)
+                  StartConv                                     Done!
 ```
 
-QC failure path:
-```
-  QC_RUNNING ──── Flow Result (QC NG) ────► QC_ERR
-  (実行中, 未実行)                           (エラー, 未実行)
-                                             Conv is NOT triggered.
-```
-
-#### Conv Only (skip_qc_conv = "変換のみ実行")
+### QC Failure
 
 ```
-                    Webhook
-  INIT ──────────────────────► CONV_RUNNING ──────────► DONE
-  (nil, nil)                   (nil, 実行中)             (nil, 成功)
-  skipQC=T, skipConv=F
-  ity=conv → ty=conv
-  UpdateStatus(conv,実行中)
-    → conv=実行中
+  (running, idle)  ──QC NG──►  (failed, idle)
+                                Conv is NOT triggered.
 ```
 
-#### Webhook Re-entry Guards
-
-When CMS updates an item (e.g. status change), another webhook fires. The guards prevent re-processing:
-
-| Current State | skipQC | skipConv | ity | ty | Result |
-|--------------|--------|----------|-----|-----|--------|
-| (実行中, 未実行) | T | F | conv | conv | **Blocked** by L74 guard (QC running) |
-| (実行中, 実行中) | T | T | "" | "" | Skip (nothing to do) |
-| (成功, 実行中) | T | T | "" | "" | Skip (nothing to do) |
-| (成功, 成功) | T | T | "" | "" | Skip (nothing to do) |
-| (エラー, 未実行) | T | F | conv | conv | Conv runs from webhook |
-
-### receiveResultFromFlow (res.go)
+### Flow Failure (error during QC or Conv)
 
 ```
-QC Result:
-  status=success && QCOK=true:
-    → Update qc_status=成功
-    → Check IsQCAndConvSkipped() for conv
-    → If conv not skipped: sendRequestToFlow(overrideReqType=conv)
-  status=success && QCOK=false:
-    → Update qc_status=成功
-    → Log "QC detected errors", do NOT trigger conv
-  status=error:
-    → Update qc_status=エラー
-
-Conv Result:
-  status=success:
-    → Update conv_status=成功
-    → Upload result assets
-  status=error:
-    → Update conv_status=エラー
+  (running, idle)   ──FlowFailed──►  (failed, idle)
+  (any, running)    ──FlowFailed──►  (any, failed)
 ```
 
 ## Key Design Decisions
 
-1. **QC runs before Conv**: `Normalize()` converts `qc_conv` → `qc`. Conv is triggered only after QC succeeds via `receiveResultFromFlow`.
-2. **Status-based idempotency**: Once a status moves past 未実行, that phase is considered "done or in-progress" and won't be re-triggered by webhooks.
-3. **L74 guard**: Prevents conv from starting while QC is still running (webhook re-entry from status update).
-4. **"実行" tag values**: Skip what's NOT mentioned (e.g. "変換のみ実行" skips QC).
+1. **Pure state machine**: `WorkflowMachine.Transition()` has no side effects. All I/O (CMS updates, Flow API) is performed by the caller based on returned actions. This makes the state logic fully testable without mocks.
+2. **QC before Conv**: When both are enabled, QC runs first. Conv is triggered by `QCCompleted(ok=true)` returning `StartConv`.
+3. **Idempotency**: If a phase has already moved past `idle`, the webhook won't re-trigger it. This prevents re-entry from webhook cascades (CMS fires webhooks when status is updated).
+4. **QC running guard**: When conv-only is requested but QC is still running, the webhook is skipped. Conv will be triggered by the QC result callback instead.
+5. **"実行" tag values**: `IsQCAndConvSkipped()` (in `cmsintegrationcommon`) handles both "スキップ" and "実行" values in the `skip_qc_conv` tag.
