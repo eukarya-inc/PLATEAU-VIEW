@@ -558,6 +558,7 @@ func (item *FeatureItem) ReqType() ReqType {
 func (item *FeatureItem) IsQCAndConvSkipped() (skipQC bool, skipConv bool) {
 	const (
 		skip = "スキップ"
+		run  = "実行"
 		qc   = "品質検査"
 		conv = "変換"
 	)
@@ -574,15 +575,25 @@ func (item *FeatureItem) IsQCAndConvSkipped() (skipQC bool, skipConv bool) {
 	}
 
 	if item.SkipQCConv != nil {
-		if n := item.SkipQCConv.Name; strings.Contains(n, skip) {
-			qc := strings.Contains(n, qc)
-			conv := strings.Contains(n, conv)
-			if !qc && !conv {
+		n := item.SkipQCConv.Name
+		if strings.Contains(n, skip) {
+			hasQC := strings.Contains(n, qc)
+			hasConv := strings.Contains(n, conv)
+			if !hasQC && !hasConv {
 				skipQC = true
 				skipConv = true
 			} else {
-				skipQC = skipQC || qc
-				skipConv = skipConv || conv
+				skipQC = skipQC || hasQC
+				skipConv = skipConv || hasConv
+			}
+		} else if strings.Contains(n, run) {
+			// "実行" values: run what's explicitly mentioned, skip the rest.
+			// e.g. "変換のみ実行" → skipQC=true, "品質検査・変換を実行" → no additional skip
+			hasQC := strings.Contains(n, qc)
+			hasConv := strings.Contains(n, conv)
+			if hasQC || hasConv {
+				skipQC = skipQC || !hasQC
+				skipConv = skipConv || !hasConv
 			}
 		}
 	}
