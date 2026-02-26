@@ -13,39 +13,7 @@ var citygmlDic = map[string]string{
 	"pref":          "都道府県管理",
 }
 
-// TODO: featureTypees はCMSから取得する featureTypeNames に完全移行後に削除する
-var featureTypees = map[string]string{
-	"bldg": "建築物モデル",
-	"tran": "交通（道路）モデル",
-	"rwy":  "交通（鉄道）モデル",
-	"trk":  "交通（徒歩道）モデル",
-	"squr": "交通（広場）モデル",
-	"wwy":  "交通（航路）モデル",
-	"luse": "土地利用モデル",
-	"fld":  "災害リスク（浸水）モデル（洪水浸水想定区域）",
-	"tnm":  "災害リスク（浸水）モデル（津波浸水想定）",
-	"htd":  "災害リスク（浸水）モデル（高潮浸水想定区域）",
-	"ifld": "災害リスク（浸水）モデル（内水浸水想定区域）",
-	"rfld": "災害リスク（浸水）モデル（ため池ハザードマップ）",
-	"lsld": "災害リスク（土砂災害）モデル",
-	"urf":  "都市計画決定情報モデル",
-	"brid": "橋梁モデル",
-	"tun":  "トンネルモデル",
-	"cons": "その他の構造物モデル",
-	"frn":  "都市設備モデル",
-	"unf":  "地下埋設物モデル",
-	"ubld": "地下街モデル",
-	"veg":  "植生モデル",
-	"wtr":  "水部モデル",
-	"dem":  "地形モデル",
-	"area": "区域モデル",
-	"gen":  "汎用都市オブジェクトモデル",
-}
-
 func resolveFeatureTypeName(code string, featureTypeNames map[string]string) string {
-	if name, ok := featureTypees[code]; ok {
-		return name
-	}
 	if name, ok := featureTypeNames[code]; ok {
 		return name
 	}
