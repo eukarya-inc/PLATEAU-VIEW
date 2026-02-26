@@ -21,8 +21,8 @@ TARGET_TYPE="$1"
 # ===== 設定 =====
 CI_WORKFLOW_NAME="ci"                              # 最初に待機するCIワークフロー
 TARGET_BRANCH="main"                               # CIを見るブランチ
-POLL_INTERVAL=10                                   # 何秒おきにチェックするか
-MAX_CHECKS=60                                      # 最大チェック回数 (10秒x60=600秒=10分)
+POLL_INTERVAL=10                                   # run が見つかるまでのポーリング間隔（秒）
+MAX_CHECKS=60                                      # 最大チェック回数
 
 # ターゲットタイプに応じて設定を切り替え
 case "$TARGET_TYPE" in
@@ -49,268 +49,115 @@ echo "Watching CI workflow '$CI_WORKFLOW_NAME' and Dev workflow '$DEV_WORKFLOW_F
 echo "On success, will dispatch '$DISPATCH_WORKFLOW_FILE'."
 echo ""
 
-# 最新コミットの日時を取得（Unix timestamp で比較）
-LATEST_COMMIT_TIMESTAMP=$(git log -1 --format=%ct "$TARGET_BRANCH")
-LATEST_COMMIT_DATE=$(git log -1 --format=%cI "$TARGET_BRANCH")
+# 最新コミットの情報を取得
 LATEST_COMMIT_SHA=$(git rev-parse "$TARGET_BRANCH")
+LATEST_COMMIT_DATE=$(git log -1 --format=%cI "$TARGET_BRANCH")
 echo "Latest commit on $TARGET_BRANCH:"
 echo "  SHA: $LATEST_COMMIT_SHA"
-echo "  Date: $LATEST_COMMIT_DATE (timestamp: $LATEST_COMMIT_TIMESTAMP)"
+echo "  Date: $LATEST_COMMIT_DATE"
 echo ""
+
+# ===== ヘルパー関数 =====
+
+# 指定ワークフローの最新コミットに対応する run ID を見つける
+# 見つかったら run ID を出力して 0 を返す。見つからなければ 1 を返す。
+find_run_for_commit() {
+  local workflow="$1"
+  local sha="$2"
+
+  local run_json
+  run_json=$(gh run list \
+    --workflow "$workflow" \
+    --branch "$TARGET_BRANCH" \
+    -L 5 \
+    --json databaseId,headSha,status,conclusion \
+    --jq ".[] | select(.headSha == \"$sha\")" | head -1)
+
+  if [[ -z "$run_json" || "$run_json" == "null" ]]; then
+    return 1
+  fi
+
+  echo "$run_json" | jq -r '.databaseId'
+}
+
+# run が見つかるまでポーリングして待つ
+wait_for_run() {
+  local workflow="$1"
+  local sha="$2"
+  local label="$3"
+
+  for i in $(seq 1 "$MAX_CHECKS"); do
+    local run_id
+    if run_id=$(find_run_for_commit "$workflow" "$sha"); then
+      echo "$run_id"
+      return 0
+    fi
+    echo "  [$i/$MAX_CHECKS] Waiting for $label run to appear for $sha..." >&2
+    sleep "$POLL_INTERVAL"
+  done
+
+  echo "Timeout: $label run not found for $sha" >&2
+  return 1
+}
 
 # ===== Step 1: CI ワークフローの完了を待つ =====
 echo "Step 1: Waiting for CI workflow to complete..."
 echo ""
 
-for i in $(seq 1 "$MAX_CHECKS"); do
-  echo "[$i/$MAX_CHECKS] Checking CI workflow status..."
-
-  # 最新の1件を取得
-  RUN_INFO=$(gh run list \
-    --workflow "$CI_WORKFLOW_NAME" \
-    --branch "$TARGET_BRANCH" \
-    -L 1 \
-    --json status,conclusion,url,headSha,createdAt \
-    --jq '.[0]')
-
-  if [[ -z "$RUN_INFO" || "$RUN_INFO" == "null" ]]; then
-    echo "  No workflow run found yet. Waiting..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  STATUS=$(echo "$RUN_INFO" | jq -r '.status')
-  CONCLUSION=$(echo "$RUN_INFO" | jq -r '.conclusion // ""')
-  URL=$(echo "$RUN_INFO" | jq -r '.url')
-  SHA=$(echo "$RUN_INFO" | jq -r '.headSha')
-  CREATED_AT=$(echo "$RUN_INFO" | jq -r '.createdAt')
-
-  echo "  status=$STATUS, conclusion=$CONCLUSION, sha=$SHA"
-  echo "  created=$CREATED_AT"
-  echo "  $URL"
-
-  # ワークフローが最新コミットより前に実行されている場合は古いと判断
-  # createdAt を Unix timestamp に変換して比較
-  if command -v gdate &> /dev/null; then
-    # macOS with GNU date (brew install coreutils)
-    WORKFLOW_TIMESTAMP=$(gdate -d "$CREATED_AT" +%s)
-  else
-    # macOS with BSD date - UTC として扱う
-    WORKFLOW_TIMESTAMP=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_AT" +%s 2>/dev/null || date -d "$CREATED_AT" +%s 2>/dev/null || echo "0")
-  fi
-
-  # ワークフローのSHAが最新コミットと一致しているかチェック
-  if [[ "$SHA" != "$LATEST_COMMIT_SHA" ]]; then
-    echo ""
-    echo "⚠️  This workflow run is for a different commit."
-    echo "  Workflow SHA:  $SHA"
-    echo "  Latest commit: $LATEST_COMMIT_SHA"
-    echo "  Waiting for workflow for latest commit to start..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  # まだ進行中
-  if [[ "$STATUS" != "completed" ]]; then
-    echo "  Workflow is still running. Waiting ${POLL_INTERVAL}s..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  # completed かつ success → 次のステップへ
-  if [[ "$CONCLUSION" == "success" ]]; then
-    echo ""
-    echo "✅ CI workflow succeeded for $SHA."
-    echo ""
-    break
-  else
-    echo ""
-    echo "❌ CI workflow completed but not successful (conclusion=$CONCLUSION). Aborting."
-    exit 1
-  fi
-done
-
-if [[ "$CONCLUSION" != "success" ]]; then
-  echo ""
-  echo "⏰ Timeout: CI workflow did not complete successfully within limit (${MAX_CHECKS} checks)."
-  exit 1
-fi
+CI_RUN_ID=$(wait_for_run "$CI_WORKFLOW_NAME" "$LATEST_COMMIT_SHA" "CI")
+echo "Found CI run: $CI_RUN_ID"
+gh run watch "$CI_RUN_ID" --exit-status
+echo ""
+echo "CI workflow succeeded."
+echo ""
 
 # ===== Step 2: Deploy Dev ワークフローの完了を待つ =====
 echo "Step 2: Waiting for Deploy Dev workflow to complete..."
 echo ""
 
-for i in $(seq 1 "$MAX_CHECKS"); do
-  echo "[$i/$MAX_CHECKS] Checking Deploy Dev workflow status..."
-
-  # 最新の1件を取得
-  RUN_INFO=$(gh run list \
-    --workflow "$DEV_WORKFLOW_FILE" \
-    --branch "$TARGET_BRANCH" \
-    -L 1 \
-    --json status,conclusion,url,headSha,createdAt \
-    --jq '.[0]')
-
-  if [[ -z "$RUN_INFO" || "$RUN_INFO" == "null" ]]; then
-    echo "  No workflow run found yet. Waiting..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  STATUS=$(echo "$RUN_INFO" | jq -r '.status')
-  CONCLUSION=$(echo "$RUN_INFO" | jq -r '.conclusion // ""')
-  URL=$(echo "$RUN_INFO" | jq -r '.url')
-  SHA=$(echo "$RUN_INFO" | jq -r '.headSha')
-  CREATED_AT=$(echo "$RUN_INFO" | jq -r '.createdAt')
-
-  echo "  status=$STATUS, conclusion=$CONCLUSION, sha=$SHA"
-  echo "  created=$CREATED_AT"
-  echo "  $URL"
-
-  # ワークフローが最新コミットより前に実行されている場合は古いと判断
-  # createdAt を Unix timestamp に変換して比較
-  if command -v gdate &> /dev/null; then
-    # macOS with GNU date (brew install coreutils)
-    WORKFLOW_TIMESTAMP=$(gdate -d "$CREATED_AT" +%s)
-  else
-    # macOS with BSD date - UTC として扱う
-    WORKFLOW_TIMESTAMP=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_AT" +%s 2>/dev/null || date -d "$CREATED_AT" +%s 2>/dev/null || echo "0")
-  fi
-
-  # ワークフローのSHAが最新コミットと一致しているかチェック
-  if [[ "$SHA" != "$LATEST_COMMIT_SHA" ]]; then
-    echo ""
-    echo "⚠️  This workflow run is for a different commit."
-    echo "  Workflow SHA:  $SHA"
-    echo "  Latest commit: $LATEST_COMMIT_SHA"
-    echo "  Waiting for workflow for latest commit to start..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  # まだ進行中
-  if [[ "$STATUS" != "completed" ]]; then
-    echo "  Workflow is still running. Waiting ${POLL_INTERVAL}s..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  # completed かつ success → 次のステップへ
-  if [[ "$CONCLUSION" == "success" ]]; then
-    echo ""
-    echo "✅ Deploy Dev workflow succeeded for $SHA."
-    echo ""
-    break
-  else
-    echo ""
-    echo "❌ Deploy Dev workflow completed but not successful (conclusion=$CONCLUSION). Aborting."
-    exit 1
-  fi
-done
-
-if [[ "$CONCLUSION" != "success" ]]; then
-  echo ""
-  echo "⏰ Timeout: Deploy Dev workflow did not complete successfully within limit (${MAX_CHECKS} checks)."
-  exit 1
-fi
+DEV_RUN_ID=$(wait_for_run "$DEV_WORKFLOW_FILE" "$LATEST_COMMIT_SHA" "Deploy Dev")
+echo "Found Deploy Dev run: $DEV_RUN_ID"
+gh run watch "$DEV_RUN_ID" --exit-status
+echo ""
+echo "Deploy Dev workflow succeeded."
+echo ""
 
 # ===== Step 3: 本番デプロイのトリガーと監視 =====
 echo "Step 3: Triggering production deployment..."
 echo ""
 
-# 本番デプロイが既に実行されているかチェック
-echo "Checking if production deployment is already completed..."
-
-PROD_LATEST_RUN=$(gh run list \
+# 本番デプロイが既に成功しているかチェック
+PROD_RUN_JSON=$(gh run list \
   --workflow "$DISPATCH_WORKFLOW_FILE" \
   --branch "$TARGET_BRANCH" \
-  -L 1 \
-  --json status,conclusion,url,createdAt,headSha \
-  --jq '.[0]')
+  -L 5 \
+  --json databaseId,headSha,status,conclusion,url \
+  --jq ".[] | select(.headSha == \"$LATEST_COMMIT_SHA\")" | head -1)
 
-if [[ -n "$PROD_LATEST_RUN" && "$PROD_LATEST_RUN" != "null" ]]; then
-  PROD_LATEST_CREATED_AT=$(echo "$PROD_LATEST_RUN" | jq -r '.createdAt')
-  PROD_LATEST_STATUS=$(echo "$PROD_LATEST_RUN" | jq -r '.status')
-  PROD_LATEST_CONCLUSION=$(echo "$PROD_LATEST_RUN" | jq -r '.conclusion // ""')
-  PROD_LATEST_URL=$(echo "$PROD_LATEST_RUN" | jq -r '.url')
-  PROD_LATEST_SHA=$(echo "$PROD_LATEST_RUN" | jq -r '.headSha')
+if [[ -n "$PROD_RUN_JSON" && "$PROD_RUN_JSON" != "null" ]]; then
+  PROD_STATUS=$(echo "$PROD_RUN_JSON" | jq -r '.status')
+  PROD_CONCLUSION=$(echo "$PROD_RUN_JSON" | jq -r '.conclusion // ""')
+  PROD_URL=$(echo "$PROD_RUN_JSON" | jq -r '.url')
 
-  echo "  Latest production run: $PROD_LATEST_CREATED_AT"
-  echo "  Production SHA: $PROD_LATEST_SHA"
-  echo "  Latest commit:  $LATEST_COMMIT_SHA"
-  echo "  Status: $PROD_LATEST_STATUS, Conclusion: $PROD_LATEST_CONCLUSION"
-  echo "  $PROD_LATEST_URL"
-
-  # 本番デプロイが最新コミットと同じSHAで実行されていて、成功している場合
-  if [[ "$PROD_LATEST_SHA" == "$LATEST_COMMIT_SHA" && "$PROD_LATEST_STATUS" == "completed" && "$PROD_LATEST_CONCLUSION" == "success" ]]; then
-    echo ""
-    echo "🎉 Production deployment is already completed for this commit!"
-    echo "  No need to trigger again."
+  if [[ "$PROD_STATUS" == "completed" && "$PROD_CONCLUSION" == "success" ]]; then
+    echo "Production deployment is already completed for this commit!"
+    echo "  $PROD_URL"
     exit 0
   fi
 fi
 
-echo ""
-echo "Dispatching '$DISPATCH_WORKFLOW_FILE'..."
-
-# Use the specific build tag for this commit to avoid caching issues with :latest
+# 本番デプロイをトリガー
 BUILD_TAG="build-$LATEST_COMMIT_SHA"
-echo "Using image tag: $BUILD_TAG"
-
+echo "Dispatching '$DISPATCH_WORKFLOW_FILE' with image_tag=$BUILD_TAG..."
 gh workflow run "$DISPATCH_WORKFLOW_FILE" --ref "$TARGET_BRANCH" -f "image_tag=$BUILD_TAG"
 
 echo ""
-echo "Production deployment has been triggered. Now watching for its completion..."
-echo ""
+echo "Waiting for production deployment run to appear..."
+sleep 5
 
-# 本番デプロイの監視ループ
-sleep 5  # 少し待ってからワークフローが表示されるようにする
-
-for j in $(seq 1 "$MAX_CHECKS"); do
-  echo "[$j/$MAX_CHECKS] Checking production deployment status..."
-
-  PROD_RUN_INFO=$(gh run list \
-    --workflow "$DISPATCH_WORKFLOW_FILE" \
-    --branch "$TARGET_BRANCH" \
-    -L 1 \
-    --json status,conclusion,url,createdAt \
-    --jq '.[0]')
-
-  if [[ -z "$PROD_RUN_INFO" || "$PROD_RUN_INFO" == "null" ]]; then
-    echo "  Production workflow not found yet. Waiting..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  PROD_STATUS=$(echo "$PROD_RUN_INFO" | jq -r '.status')
-  PROD_CONCLUSION=$(echo "$PROD_RUN_INFO" | jq -r '.conclusion // ""')
-  PROD_URL=$(echo "$PROD_RUN_INFO" | jq -r '.url')
-  PROD_CREATED_AT=$(echo "$PROD_RUN_INFO" | jq -r '.createdAt')
-
-  echo "  status=$PROD_STATUS, conclusion=$PROD_CONCLUSION"
-  echo "  $PROD_URL"
-
-  # まだ進行中
-  if [[ "$PROD_STATUS" != "completed" ]]; then
-    echo "  Production deployment is still running. Waiting ${POLL_INTERVAL}s..."
-    sleep "$POLL_INTERVAL"
-    continue
-  fi
-
-  # completed かつ success
-  if [[ "$PROD_CONCLUSION" == "success" ]]; then
-    echo ""
-    echo "🎉 Production deployment succeeded!"
-    echo "  $PROD_URL"
-    exit 0
-  else
-    echo ""
-    echo "❌ Production deployment failed (conclusion=$PROD_CONCLUSION)."
-    echo "  $PROD_URL"
-    exit 1
-  fi
-done
+PROD_RUN_ID=$(wait_for_run "$DISPATCH_WORKFLOW_FILE" "$LATEST_COMMIT_SHA" "Production")
+echo "Found Production run: $PROD_RUN_ID"
+gh run watch "$PROD_RUN_ID" --exit-status
 
 echo ""
-echo "⏰ Timeout: Production deployment did not complete within limit (${MAX_CHECKS} checks)."
-exit 1
+echo "Production deployment succeeded!"
