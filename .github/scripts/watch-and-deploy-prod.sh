@@ -111,15 +111,18 @@ echo ""
 echo "CI workflow succeeded."
 echo ""
 
-# ===== Step 2: Deploy Dev ワークフローの完了を待つ =====
-echo "Step 2: Waiting for Deploy Dev workflow to complete..."
+# ===== Step 2: Deploy Dev ワークフローの完了を待つ（存在する場合のみ） =====
+echo "Step 2: Checking for Deploy Dev workflow..."
 echo ""
 
-DEV_RUN_ID=$(wait_for_run "$DEV_WORKFLOW_FILE" "$LATEST_COMMIT_SHA" "Deploy Dev")
-echo "Found Deploy Dev run: $DEV_RUN_ID"
-gh run watch "$DEV_RUN_ID" --exit-status
-echo ""
-echo "Deploy Dev workflow succeeded."
+if DEV_RUN_ID=$(find_run_for_commit "$DEV_WORKFLOW_FILE" "$LATEST_COMMIT_SHA"); then
+  echo "Found Deploy Dev run: $DEV_RUN_ID"
+  gh run watch "$DEV_RUN_ID" --exit-status
+  echo ""
+  echo "Deploy Dev workflow succeeded."
+else
+  echo "No Deploy Dev workflow found for this commit (dev deploy may be included in CI). Skipping."
+fi
 echo ""
 
 # ===== Step 3: 本番デプロイのトリガーと監視 =====
