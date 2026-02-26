@@ -3,6 +3,16 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
+      target:
+        type: choice
+        description: "Deploy target (default: all)"
+        required: false
+        default: all
+        options:
+          - all
+          - server
+          - worker
+          - web
       web_run_id:
         type: string
         description: Deploy the specific version of web to specify the run ID. If specified, deployment of the server will be skipped. (Optional)
@@ -29,7 +39,7 @@ jobs:
       contents: read
       id-token: write
       packages: read
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' && (inputs.target == 'all' || inputs.target == 'web' || inputs.target == '')
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -64,7 +74,7 @@ jobs:
       contents: read
       id-token: write
       packages: read
-    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' && (inputs.target == 'all' || inputs.target == 'server' || inputs.target == '')
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -79,13 +89,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull docker image
-        run: docker pull $CMS_IMAGE_NAME_GHCR && docker pull $WORKER_IMAGE_NAME_GHCR
+        run: docker pull $CMS_IMAGE_NAME_GHCR
       - name: Push docker image
         run: |
           docker tag $CMS_IMAGE_NAME_GHCR $CMS_IMAGE_NAME_GCP \
-          && docker push $CMS_IMAGE_NAME_GCP \
-          && docker tag $WORKER_IMAGE_NAME_GHCR $WORKER_IMAGE_NAME_GCP \
-          && docker push $WORKER_IMAGE_NAME_GCP
+          && docker push $CMS_IMAGE_NAME_GCP
       - name: Deploy
         run: |
           gcloud run deploy reearth-cms-api \
@@ -93,6 +101,36 @@ jobs:
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
             --quiet
+
+  deploy_worker:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' && (inputs.target == 'all' || inputs.target == 'worker' || inputs.target == '')
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull docker image
+        run: docker pull $WORKER_IMAGE_NAME_GHCR
+      - name: Push docker image
+        run: |
+          docker tag $WORKER_IMAGE_NAME_GHCR $WORKER_IMAGE_NAME_GCP \
+          && docker push $WORKER_IMAGE_NAME_GCP
+      - name: Deploy
+        run: |
           gcloud run deploy reearth-cms-worker \
             --image $WORKER_IMAGE_NAME_GCP \
             --region ${{ vars.GCP_REGION }} \
