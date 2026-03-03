@@ -64,7 +64,7 @@ export const BuildingFilterSection: FC<BuildingFilterSectionProps> = ({
                       )
                         return;
 
-                      const minimum = Math.ceil(property.minimum);
+                      const minimum = Math.floor(property.minimum);
                       const maximum = Math.ceil(property.maximum);
 
                       return {
