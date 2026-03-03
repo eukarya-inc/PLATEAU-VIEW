@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/reearth/reearthx/log"
 )
@@ -384,6 +385,8 @@ func (c *Ckan) ReorderResource(ctx context.Context, pkgID string, resourceIDs []
 	return nil
 }
 
+const ckanMaxRetries = 3
+
 func (c *Ckan) send(
 	ctx context.Context,
 	method string,
@@ -394,6 +397,60 @@ func (c *Ckan) send(
 	body io.Reader,
 	result any,
 ) error {
+	// buffer the body for potential retries
+	var bodyBytes []byte
+	if body != nil {
+		b, err := io.ReadAll(body)
+		if err != nil {
+			return fmt.Errorf("failed to read request body: %w", err)
+		}
+		bodyBytes = b
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= ckanMaxRetries; attempt++ {
+		if attempt > 0 {
+			wait := time.Duration(attempt) * time.Second
+			log.Infofc(ctx, "ckan: retrying request (attempt %d/%d) after %v", attempt, ckanMaxRetries, wait)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(wait):
+			}
+		}
+
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+
+		var statusCode int
+		statusCode, lastErr = c.sendOnce(ctx, method, path, queries, contentType, contentLength, bodyReader, result)
+		if lastErr == nil {
+			return nil
+		}
+
+		// only retry on server errors (5xx)
+		if statusCode < 500 {
+			return lastErr
+		}
+
+		log.Warnfc(ctx, "ckan: server error (status %d), will retry: %v", statusCode, lastErr)
+	}
+
+	return lastErr
+}
+
+func (c *Ckan) sendOnce(
+	ctx context.Context,
+	method string,
+	path []string,
+	queries map[string]string,
+	contentType string,
+	contentLength int,
+	body io.Reader,
+	result any,
+) (int, error) {
 	u := c.base.JoinPath(path...)
 	if queries != nil {
 		q := u.Query()
@@ -405,7 +462,7 @@ func (c *Ckan) send(
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	if contentType == "" {
@@ -422,15 +479,15 @@ func (c *Ckan) send(
 	res, err := c.client.Do(req)
 	if err != nil {
 		log.Errorfc(ctx, "ckan: send error: %v", err)
-		return fmt.Errorf("failed to send request: %w", err)
+		return 0, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	defer func() { _ = res.Body.Close() }()
 
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
-		log.Errorfc(ctx, "ckan: result (%d): failed to read response body")
-		return fmt.Errorf("failed to read response body: %w", err)
+		log.Errorfc(ctx, "ckan: result (%d): failed to read response body", res.StatusCode)
+		return res.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	if res.StatusCode != 200 {
@@ -441,16 +498,16 @@ func (c *Ckan) send(
 		}
 
 		log.Infofc(ctx, "ckan: result (%d): %s", res.StatusCode, msg)
-		return fmt.Errorf("status code %d: %s", res.StatusCode, msg)
+		return res.StatusCode, fmt.Errorf("status code %d: %s", res.StatusCode, msg)
 	}
 
 	if result != nil {
 		if err := json.Unmarshal(b, result); err != nil {
-			return fmt.Errorf("failed to parse JSON: %w", err)
+			return res.StatusCode, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 	}
 
 	log.Debugfc(ctx, "ckan: ok: %s", b)
 
-	return nil
+	return res.StatusCode, nil
 }
