@@ -1,6 +1,6 @@
 module github.com/eukarya-inc/PLATEAU-VIEW/worker
 
-go 1.25
+go 1.25.5
 
 replace github.com/eukarya-inc/PLATEAU-VIEW/server => ../server
 
@@ -19,7 +19,7 @@ require (
 	github.com/ricochet2200/go-disk-usage/du v0.0.0-20210707232629-ac9918953285
 	github.com/samber/lo v1.52.0
 	github.com/spf13/afero v1.14.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
 	golang.org/x/sync v0.19.0
 	google.golang.org/api v0.233.0
@@ -64,7 +64,7 @@ require (
 	github.com/labstack/echo/v4 v4.13.3 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
-	github.com/mark3labs/mcp-go v0.43.0 // indirect
+	github.com/mark3labs/mcp-go v0.43.2 // indirect
 	github.com/maruel/panicparse/v2 v2.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

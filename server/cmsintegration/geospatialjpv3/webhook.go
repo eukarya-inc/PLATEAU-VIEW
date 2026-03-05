@@ -100,11 +100,12 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 
 		// feature types
 		featureTypes, err := h.pcms.PlateauFeatureTypes(ctx)
-		featureTypeCodes := featureTypes.Codes()
 		if err != nil {
 			log.Errorfc(ctx, "failed to get feature types: %v", err)
 			return nil
 		}
+		featureTypeCodes := featureTypes.Codes()
+		featureTypeNames := featureTypes.CodeNameMap()
 
 		cityItem := CityItemFrom(item, featureTypeCodes)
 
@@ -152,7 +153,7 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 		log.Debugfc(ctx, "%s", pp.Sprint(cityItem))
 
 		if b := getChangedBool(w, prepareFieldKey); b != nil && *b {
-			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes); err != nil {
+			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes, featureTypeNames); err != nil {
 				log.Errorfc(ctx, "failed to prepare: %v", err)
 			}
 		} else {

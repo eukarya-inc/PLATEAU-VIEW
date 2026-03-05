@@ -58,28 +58,42 @@ func sendRequestToFlow(
 		return nil
 	}
 
-	// type
-	fty := cmsintegrationcommon.ReqTypeFrom(!featureType.QC, !featureType.Conv)
-	ity := item.ReqType().Override(overrideReqType)
-	originalTy := fty.Intersection(ity)
-	ty := originalTy.Normalize()
-	if ty == "" || ty == cmsintegrationcommon.ReqTypeQCConv {
-		log.Infofc(ctx, "skip: request type is empty or qc_conv: fty=%s, ity=%s, ty=%s", fty, ity, ty)
+	// Determine action via workflow state machine
+	wm := NewWorkflowMachine(item, featureType.QC, featureType.Conv)
+	if overrideReqType == cmsintegrationcommon.ReqTypeConv {
+		wm.Config.SkipQC = true
+		wm.Config.SkipConv = false
+	}
+	log.Debugfc(ctx, "workflow: state=%+v, config=%+v, override=%s", wm.State, wm.Config, overrideReqType)
+
+	actions, err := wm.Transition(Event{Kind: EventWebhookReceived})
+	if err != nil {
+		return fmt.Errorf("workflow transition error: %w", err)
+	}
+
+	// Find the trigger action (StartQC or StartConv) to determine ty
+	var ty cmsintegrationcommon.ReqType
+	for _, a := range actions {
+		if a.Kind == ActionStartQC || a.Kind == ActionStartConv {
+			ty = ReqTypeForAction(a)
+			break
+		}
+	}
+	if ty == "" {
+		log.Infofc(ctx, "skip: workflow decided no action needed: state=%+v, config=%+v", wm.State, wm.Config)
 		return nil
 	}
 
-	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s (original=%s)", mainItem.ID, featureType.Code, ty, originalTy)
+	log.Infofc(ctx, "processing: item=%s, featureType=%s, reqType=%s", mainItem.ID, featureType.Code, ty)
 
-	// update convertion status
-	// 品質検査を開始する際、変換もサポートされている場合は、変換ステータスを「未実行」にリセットする
-	// これにより、CMS側で設定された「実行中」がリセットされ、品質検査成功後に変換ステータスが更新される
-	statusUpdateTy := ty
-	if ty == cmsintegrationcommon.ReqTypeQC && featureType.Conv {
-		statusUpdateTy = cmsintegrationcommon.ReqTypeQCConv
-	}
-	if err := s.UpdateFeatureItemStatus(ctx, mainItem.ID, statusUpdateTy, cmsintegrationcommon.ConvertionStatusRunning); err != nil {
-		log.Errorfc(ctx, "failed to update item status: %v", err)
-		return fmt.Errorf("failed to update item: %w", err)
+	// Execute SetStatus actions
+	for _, a := range actions {
+		if a.Kind == ActionSetStatus {
+			if err := s.UpdateStatus(ctx, mainItem.ID, a.QCStatus, a.ConvStatus); err != nil {
+				log.Errorfc(ctx, "failed to update item status: %v", err)
+				return fmt.Errorf("failed to update item: %w", err)
+			}
+		}
 	}
 
 	// get CityGML asset

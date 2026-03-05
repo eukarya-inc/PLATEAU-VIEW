@@ -22,7 +22,7 @@ func TestGenerateCityGMLIndexItem(t *testing.T) {
 	assert.NoError(t, err)
 	f := afero.NewIOFS(zipfs.New(&zr.Reader))
 
-	res, err := generateCityGMLIndexItem(seed, name, size, f)
+	res, err := generateCityGMLIndexItem(seed, name, size, f, nil)
 	assert.NoError(t, err)
 
 	text := renderIndexItem(res, 0)

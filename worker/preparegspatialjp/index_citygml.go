@@ -9,7 +9,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-func generateCityGMLIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS) (*IndexItem, error) {
+func generateCityGMLIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS, featureTypeNames map[string]string) (*IndexItem, error) {
 	ft := ""
 
 	return walk(f, "", "/", func(p string, d fs.DirEntry, err error) (*IndexItem, error) {
@@ -21,10 +21,10 @@ func generateCityGMLIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS
 
 		base := path.Base(p)
 
-		if name, ok := featureTypees[base]; ok {
+		if resolved := resolveFeatureTypeName(base, featureTypeNames); resolved != base {
 			ft = base
 			return &IndexItem{
-				Name: fmt.Sprintf("**%s**：%s（CityGML）", base, name),
+				Name: fmt.Sprintf("**%s**：%s（CityGML）", base, resolved),
 			}, nil
 		}
 

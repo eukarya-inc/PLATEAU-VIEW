@@ -82,14 +82,14 @@ func plateauDatasetSeedsFrom(i *PlateauFeatureItem, opts ToPlateauDatasetsOption
 	} else {
 		items := i.Items
 		if len(i.Data) > 0 {
-			items = []PlateauFeatureItemDatum{
+			items = append([]PlateauFeatureItemDatum{
 				{
 					Data:   i.Data,
 					Desc:   i.Desc,
 					Group:  i.Group,
 					Simple: true,
 				},
-			}
+			}, items...)
 		}
 
 		for _, item := range items {

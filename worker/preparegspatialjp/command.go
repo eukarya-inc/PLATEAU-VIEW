@@ -32,6 +32,7 @@ type Config struct {
 	SkipImcompleteItems bool
 	IgnoreStatus        bool
 	FeatureTypes        []string
+	FeatureTypeNames    map[string]string
 }
 
 type MergeContext struct {
@@ -283,7 +284,7 @@ func CommandSingle(conf *Config) (err error) {
 			RelatedZipPath: relatedPath,
 			Generic:        indexItem.Generic,
 			Dic:            dic,
-		}, conf.FeatureTypes); err != nil {
+		}, conf.FeatureTypes, conf.FeatureTypeNames); err != nil {
 			return err
 		}
 	} else {

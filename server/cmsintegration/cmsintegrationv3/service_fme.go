@@ -102,13 +102,6 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 	log.Debugfc(ctx, "raw item: %s", pp.Sprint(mainItem))
 	log.Debugfc(ctx, "item: %s", pp.Sprint(item))
 
-	// update convertion status
-	err = s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning)
-	if err != nil {
-		log.Errorfc(ctx, "failed to update item status: %v", err)
-		return fmt.Errorf("failed to update item: %w", err)
-	}
-
 	// get CityGML asset
 	log.Debugfc(ctx, "getting citygml asset: %s", item.CityGML)
 	cityGMLAsset, err := s.CMS.Asset(ctx, item.CityGML)
@@ -172,6 +165,13 @@ func sendRequestToFME(ctx context.Context, s *Services, conf *Config, w *cmswebh
 				featureType.Code, effectiveConverter)
 			return nil
 		}
+	}
+
+	// update convertion status (after routing check to avoid corrupting status for Flow-handled types)
+	err = s.UpdateFeatureItemStatus(ctx, mainItem.ID, ty, cmsintegrationcommon.ConvertionStatusRunning)
+	if err != nil {
+		log.Errorfc(ctx, "failed to update item status: %v", err)
+		return fmt.Errorf("failed to update item: %w", err)
 	}
 
 	// validate city item
@@ -283,10 +283,15 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 						return fmt.Errorf("failed to upload qc result: %w", err)
 					}
 
-					item := (&cmsintegrationcommon.FeatureItem{
+					fi := &cmsintegrationcommon.FeatureItem{
 						QCStatus: cmsintegrationcommon.TagFrom(cmsintegrationcommon.ConvertionStatusSuccess),
 						QCResult: qcResultAsset,
-					}).CMSItem()
+					}
+					// QC完了 → Conv開始: qc_convの場合、FME側でConvが始まるのでconv_statusを実行中にする
+					if fmeRequestType(id.Type) == fmeTypeQcConv {
+						fi.ConvertionStatus = cmsintegrationcommon.TagFrom(cmsintegrationcommon.ConvertionStatusRunning)
+					}
+					item := fi.CMSItem()
 
 					_, err = s.CMS.UpdateItem(ctx, id.ItemID, item.Fields, item.MetadataFields)
 					if err != nil {

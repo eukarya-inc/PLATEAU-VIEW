@@ -374,7 +374,7 @@ func TestSendRequestToFME(t *testing.T) {
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, "conv_status", metadataFields[0].Key)
-			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), metadataFields[0].Value)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusNotStarted), metadataFields[0].Value)
 			return nil, nil
 		}
 		c.MockCommentToItem = func(ctx context.Context, assetID, content string) error {
@@ -529,7 +529,7 @@ func TestSendRequestToFME(t *testing.T) {
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, "conv_status", metadataFields[0].Key)
-			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), metadataFields[0].Value)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusNotStarted), metadataFields[0].Value)
 			return nil, nil
 		}
 		c.MockCommentToItem = func(ctx context.Context, assetID, content string) error {
@@ -838,6 +838,13 @@ func TestReceiveResultFromFME(t *testing.T) {
 			return url, nil
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+			// QC完了 → conv_status=実行中 になること
+			convField, _ := lo.Find(metadataFields, func(f *cms.Field) bool { return f.Key == "conv_status" })
+			assert.NotNil(t, convField)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), convField.Value)
+			qcField, _ := lo.Find(metadataFields, func(f *cms.Field) bool { return f.Key == "qc_status" })
+			assert.NotNil(t, qcField)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusSuccess), qcField.Value)
 			return nil, nil
 		}
 		err := receiveResultFromFME(ctx, s, conf, r)

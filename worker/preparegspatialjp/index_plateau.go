@@ -12,7 +12,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS, featureTypes []string) (*IndexItem, error) {
+func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS, featureTypes []string, featureTypeNames map[string]string) (*IndexItem, error) {
 	data := map[string]plateauItemSeed{}
 
 	if err := fs.WalkDir(f, "", func(p string, d fs.DirEntry, err error) error {
@@ -52,7 +52,7 @@ func generatePlateauIndexItem(seed *IndexSeed, name string, size uint64, f fs.FS
 	items := plateauItems(data, featureTypes)
 	children := []*IndexItem{}
 	for _, d := range items {
-		children = append(children, d.Item())
+		children = append(children, d.Item(featureTypeNames))
 	}
 
 	return &IndexItem{
@@ -98,8 +98,8 @@ type plateauItemSeed struct {
 	LOD  map[int]string
 }
 
-func (p plateauItemSeed) Item() *IndexItem {
-	title := featureTypees[p.Type]
+func (p plateauItemSeed) Item(featureTypeNames map[string]string) *IndexItem {
+	title := resolveFeatureTypeName(p.Type, featureTypeNames)
 	format := extractDataFormat(p.Name)
 
 	if len(p.LOD) == 0 {

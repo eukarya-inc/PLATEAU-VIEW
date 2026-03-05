@@ -96,6 +96,21 @@ func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, t
 	return err
 }
 
+// UpdateStatus updates the QC/Conv status fields directly.
+// This is used by the workflow state machine's action execution.
+func (s *Services) UpdateStatus(ctx context.Context, itemID string, qcStatus, convStatus cmsintegrationcommon.ConvertionStatus) error {
+	fields := (&cmsintegrationcommon.FeatureItem{
+		ConvertionStatus: cmsintegrationcommon.TagFrom(convStatus),
+		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),
+	}).CMSItem().MetadataFields
+	_, err := s.CMS.UpdateItem(ctx, itemID, nil, fields)
+	if err != nil {
+		j, _ := json.Marshal(fields)
+		log.Debugfc(ctx, "cmsintegrationv3: item update for %s: %s", itemID, j)
+	}
+	return err
+}
+
 func (s *Services) UploadAsset(ctx context.Context, pid, url string) (_ string, err error) {
 	const max = 3
 	var errs []error

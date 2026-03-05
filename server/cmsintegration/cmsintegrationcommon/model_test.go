@@ -313,7 +313,7 @@ func TestIsQCAndConvSkipped(t *testing.T) {
 
 	skipQC, skipConv = (&FeatureItem{
 		SkipQCConv: &cms.Tag{
-			Name: "品質検査・変換のみをスキップ",
+			Name: "品質検査・変換をスキップ",
 		},
 	}).IsQCAndConvSkipped()
 	assert.True(t, skipQC)
@@ -337,6 +337,79 @@ func TestIsQCAndConvSkipped(t *testing.T) {
 	}).IsQCAndConvSkipped()
 	assert.True(t, skipQC)
 	assert.True(t, skipConv)
+
+	// When only QC is running, QC should be skipped but Conv should not.
+	skipQC, skipConv = (&FeatureItem{
+		QCStatus: &cms.Tag{
+			Name: string(ConvertionStatusRunning),
+		},
+	}).IsQCAndConvSkipped()
+	assert.True(t, skipQC)
+	assert.False(t, skipConv)
+
+	// "実行" values: run what's mentioned, skip the rest
+	// "品質検査・変換を実行" → run both, no additional skip
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "品質検査・変換を実行",
+		},
+	}).IsQCAndConvSkipped()
+	assert.False(t, skipQC)
+	assert.False(t, skipConv)
+
+	// "変換のみ実行" → skipQC=true (run conv only)
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "変換のみ実行",
+		},
+	}).IsQCAndConvSkipped()
+	assert.True(t, skipQC)
+	assert.False(t, skipConv)
+
+	// "変換のみ実行" with QC already errored → still skipQC=true, conv runs
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "変換のみ実行",
+		},
+		QCStatus: &cms.Tag{
+			Name: string(ConvertionStatusError),
+		},
+	}).IsQCAndConvSkipped()
+	assert.True(t, skipQC)
+	assert.False(t, skipConv)
+
+	// "変換のみ実行" with QC succeeded → skipQC=true, conv runs
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "変換のみ実行",
+		},
+		QCStatus: &cms.Tag{
+			Name: string(ConvertionStatusSuccess),
+		},
+	}).IsQCAndConvSkipped()
+	assert.True(t, skipQC)
+	assert.False(t, skipConv)
+
+	// "品質検査のみ実行" → skipConv=true (run QC only)
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "品質検査のみ実行",
+		},
+	}).IsQCAndConvSkipped()
+	assert.False(t, skipQC)
+	assert.True(t, skipConv)
+
+	// "品質検査・変換を実行" with QC errored → skipQC=true (from status), skipConv=false
+	skipQC, skipConv = (&FeatureItem{
+		SkipQCConv: &cms.Tag{
+			Name: "品質検査・変換を実行",
+		},
+		QCStatus: &cms.Tag{
+			Name: string(ConvertionStatusError),
+		},
+	}).IsQCAndConvSkipped()
+	assert.True(t, skipQC)
+	assert.False(t, skipConv)
 }
 
 func TestReqType_Intersection(t *testing.T) {

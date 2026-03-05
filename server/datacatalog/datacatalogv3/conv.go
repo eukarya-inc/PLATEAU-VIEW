@@ -22,12 +22,24 @@ func IsDerivedFeatureType(code string) bool {
 
 // filterPlateauByPriority filters plateau items by priority.
 // For each city + base feature type combination, only the item with highest priority is kept.
-// Only items with IsBeta() == true (Status == "確認可能") are considered for priority comparison.
+// Items are included if:
+//   - The city is public (CityPublic == true), OR
+//   - The item has IsBeta() == true (Status == "確認可能")
+//
 // When priorities are equal, derived types (e.g., "bldg2") are preferred over base types.
 // Returns: filtered items mapped to their BASE feature type code.
 func filterPlateauByPriority(
 	plateau map[string][]*PlateauFeatureItem,
+	cityItems []*CityItem,
 ) map[string][]*PlateauFeatureItem {
+	// Build cityID -> CityItem map for quick lookup
+	cityMap := make(map[string]*CityItem)
+	for _, c := range cityItems {
+		if c != nil {
+			cityMap[c.ID] = c
+		}
+	}
+
 	// cityID -> baseFeatureType -> best entry
 	type priorityEntry struct {
 		priority        int
@@ -45,8 +57,12 @@ func filterPlateauByPriority(
 				continue
 			}
 
-			// Skip items that are not ready for catalog (Status != "確認可能")
-			if !item.IsBeta() {
+			// Check if this item should be included in the catalog:
+			// - If the city is public (CityPublic == true), include regardless of Status
+			// - Otherwise, only include if Status == "確認可能" (IsBeta() == true)
+			cityItem := cityMap[item.City]
+			isPublicCity := cityItem != nil && cityItem.CityPublic
+			if !isPublicCity && !item.IsBeta() {
 				continue
 			}
 
@@ -136,7 +152,7 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 	}
 
 	// plateau - filter by priority and map to base feature types
-	filteredPlateau := filterPlateauByPriority(all.Plateau)
+	filteredPlateau := filterPlateauByPriority(all.Plateau, all.City)
 	plateauDatasetTypes := res.DatasetTypes.CodeMap(plateauapi.DatasetTypeCategoryPlateau)
 	plateauFeatureTypes := all.FeatureTypes.PlateauMap()
 

@@ -25,7 +25,7 @@ func Example_generatePlateauIndexItem() {
 
 	f := afero.NewIOFS(zipfs.New(&zr.Reader))
 
-	res, err := generatePlateauIndexItem(seed, name, size, f, featureTypes)
+	res, err := generatePlateauIndexItem(seed, name, size, f, featureTypes, nil)
 	if err != nil {
 		panic(err)
 	}

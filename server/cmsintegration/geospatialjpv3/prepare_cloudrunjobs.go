@@ -2,7 +2,6 @@ package geospatialjpv3
 
 import (
 	"context"
-	"strings"
 
 	run "cloud.google.com/go/run/apiv2"
 	runpb "cloud.google.com/go/run/apiv2/runpb"
@@ -11,7 +10,7 @@ import (
 
 // jobName (Cloud Run Jobs): "projects/" + gcpProjectID + "/locations/" + gcpLocation + "/jobs/plateauview-api-worker"
 
-func prepareWithCloudRunJobs(ctx context.Context, itemID, projectID, jobName string, featureTypes []string) error {
+func prepareWithCloudRunJobs(ctx context.Context, itemID, projectID, jobName string, featureTypes []string, featureTypeNames map[string]string) error {
 	if jobName == "" {
 		log.Debugfc(ctx, "geospatialjp webhook: no job name")
 		return nil
@@ -32,7 +31,7 @@ func prepareWithCloudRunJobs(ctx context.Context, itemID, projectID, jobName str
 				"prepare-gspatialjp",
 				"--city=" + itemID,
 				"--project=" + projectID,
-				"--feature-types=" + strings.Join(featureTypes, ","),
+				"--feature-types=" + encodeFeatureTypes(featureTypes, featureTypeNames),
 				"--wetrun",
 			}},
 		}}

@@ -134,13 +134,33 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		log.Infofc(ctx, "qc result uploaded: assetID=%s", qcResult)
 	}
 
-	// update item
-	qcStatus, convStatus := id.Type.CMSStatus(cmsintegrationcommon.ConvertionStatusSuccess)
+	// Determine status updates and next actions via workflow state machine
+	wm := NewWorkflowMachine(baseFeatureItem, featureType.QC, featureType.Conv)
+	var wmEvent Event
+	switch id.Type {
+	case cmsintegrationcommon.ReqTypeQC:
+		wmEvent = Event{Kind: EventQCCompleted, QCOK: internal.QCOK}
+	case cmsintegrationcommon.ReqTypeConv:
+		wmEvent = Event{Kind: EventConvCompleted}
+	}
+	wmActions, _ := wm.Transition(wmEvent)
+	log.Debugfc(ctx, "workflow: event=%+v, actions=%+v, newState=%+v", wmEvent, wmActions, wm.State)
 
-	// if QC detected errors, set qcStatus to error
-	if id.Type == cmsintegrationcommon.ReqTypeQC && !internal.QCOK {
-		qcStatus = cmsintegrationcommon.ConvertionStatusError
-		log.Infofc(ctx, "QC detected errors, setting qcStatus to error")
+	// Extract status values from workflow actions for the CMS item update
+	var qcStatus, convStatus cmsintegrationcommon.ConvertionStatus
+	var shouldStartConv bool
+	for _, a := range wmActions {
+		switch a.Kind {
+		case ActionSetStatus:
+			if a.QCStatus != "" {
+				qcStatus = a.QCStatus
+			}
+			if a.ConvStatus != "" {
+				convStatus = a.ConvStatus
+			}
+		case ActionStartConv:
+			shouldStartConv = true
+		}
 	}
 
 	// items
@@ -208,23 +228,13 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// Clear runId on completion (will be set again if conv is triggered after QC)
 	_ = s.ClearFlowRunID(ctx, id.ItemID)
 
-	// if the qc is success and QCOK, trigger the conversion (unless conversion is skipped)
-	if id.Type == cmsintegrationcommon.ReqTypeQC && qcStatus == cmsintegrationcommon.ConvertionStatusSuccess {
-		if !internal.QCOK {
-			log.Infofc(ctx, "skip conv after qc because QC detected errors (QCOK=false)")
-		} else {
-			// Check if conversion should be skipped
-			_, skipConv := baseFeatureItem.IsQCAndConvSkipped()
-			if skipConv || !featureType.Conv {
-				log.Infofc(ctx, "skip conv after qc success because conversion is marked as skip or feature type doesn't support conversion")
-			} else {
-				log.Infofc(ctx, "trigger conv")
-				rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-				if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv); err != nil {
-					log.Errorfc(ctx, "failed to trigger conv: %v", err)
-					return fmt.Errorf("failed to send request to flow: %w", err)
-				}
-			}
+	// If the workflow state machine decided to start conv (after QC success), trigger it
+	if shouldStartConv {
+		log.Infofc(ctx, "trigger conv after QC success")
+		rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
+		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv); err != nil {
+			log.Errorfc(ctx, "failed to trigger conv: %v", err)
+			return fmt.Errorf("failed to send request to flow: %w", err)
 		}
 	}
 
@@ -261,9 +271,18 @@ func rewriteQCStatus(item *cms.Item, status cmsintegrationcommon.ConvertionStatu
 	if item == nil {
 		return
 	}
+	tag := cmsintegrationcommon.TagFrom(status)
+	// qc_status is a metadata field, so update MetadataFields
+	for i, f := range item.MetadataFields {
+		if f.Key == "qc_status" {
+			item.MetadataFields[i].Value = tag
+			return
+		}
+	}
+	// fallback: also check Fields for backward compatibility
 	for i, f := range item.Fields {
 		if f.Key == "qc_status" {
-			item.Fields[i].Value = cmsintegrationcommon.TagFrom(status)
+			item.Fields[i].Value = tag
 			return
 		}
 	}

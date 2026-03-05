@@ -94,6 +94,11 @@ func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, c
 	case fmeTypeQcConv:
 		qcStatus = status
 		convStatus = status
+		// 開始時（実行中）の場合、変換ステータスは「未実行」にリセットする
+		// FME側でQC→Convの順に処理されるため、開始時点ではQCのみ実行中とする
+		if status == cmsintegrationcommon.ConvertionStatusRunning {
+			convStatus = cmsintegrationcommon.ConvertionStatusNotStarted
+		}
 	}
 
 	fields := (&cmsintegrationcommon.FeatureItem{

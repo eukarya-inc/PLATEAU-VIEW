@@ -189,4 +189,3 @@ func TestFlowResult_Internal_Fld(t *testing.T) {
 	res := r.Internal()
 	assert.Equal(t, expected, res)
 }
-
