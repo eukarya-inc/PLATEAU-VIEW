@@ -38,6 +38,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	if res.IsFailed() {
 		log.Infofc(ctx, "early return: flow result is failed: status=%s, logs=%v", res.Status, res.Logs)
 		_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s%s", cmsintegrationcommon.ReqType(id.Type).Title(), res.IDsMessage(), logurls)
+		// Clear runId on failure
+		_ = s.ClearFlowRunID(ctx, id.ItemID)
 		return nil
 	}
 
@@ -222,6 +224,9 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	}
 
 	log.Infofc(ctx, "success to receive result from flow: %s", id.Type)
+
+	// Clear runId on completion (will be set again if conv is triggered after QC)
+	_ = s.ClearFlowRunID(ctx, id.ItemID)
 
 	// If the workflow state machine decided to start conv (after QC success), trigger it
 	if shouldStartConv {

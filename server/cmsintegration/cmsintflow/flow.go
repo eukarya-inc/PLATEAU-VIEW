@@ -14,6 +14,7 @@ import (
 
 type Flow interface {
 	Request(context.Context, FlowRequest) (FlowRequestResult, error)
+	Cancel(ctx context.Context, baseURL, runID, triggerID string) error
 }
 
 type flowImpl struct {
@@ -90,6 +91,63 @@ func (f *flowImpl) Request(ctx context.Context, r FlowRequest) (res FlowRequestR
 	}
 
 	return
+}
+
+func (f *flowImpl) Cancel(ctx context.Context, baseURL, runID, triggerID string) error {
+	if baseURL == "" {
+		baseURL = f.baseURL
+	}
+
+	if baseURL == "" || runID == "" || triggerID == "" {
+		return fmt.Errorf("invalid cancel request: baseURL=%s, runID=%s, triggerID=%s", baseURL, runID, triggerID)
+	}
+
+	u, err := url.JoinPath(baseURL, "api", "jobs", runID, "cancel")
+	if err != nil {
+		return fmt.Errorf("failed to build cancel URL: %w", err)
+	}
+
+	body := map[string]string{
+		"triggerId": triggerID,
+		"authToken": f.token,
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cancel request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(b))
+	if err != nil {
+		log.Errorfc(ctx, "failed to create cancel request: %v", err)
+		return fmt.Errorf("failed to create cancel request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+f.token)
+
+	log.Infofc(ctx, "flow cancel: url=%s, runID=%s, triggerID=%s", u, runID, triggerID)
+
+	resp, err := f.h.Do(req)
+	if err != nil {
+		log.Errorfc(ctx, "failed to send cancel request: url=%s, err=%v", u, err)
+		return fmt.Errorf("failed to send cancel request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	resb, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorfc(ctx, "failed to read cancel response: %v", err)
+		return fmt.Errorf("failed to read cancel response: %w", err)
+	}
+
+	log.Infofc(ctx, "flow cancel resp: status=%s", resp.Status)
+	log.Debugfc(ctx, "flow cancel resp body: %s", resb)
+
+	if resp.StatusCode != http.StatusOK {
+		log.Errorfc(ctx, "cancel request failed: status=%d, body=%s", resp.StatusCode, resb)
+		return fmt.Errorf("cancel failed: status=%d, body=%s", resp.StatusCode, resb)
+	}
+
+	return nil
 }
 
 func getTriggerURL(baseURL, triggerID string) string {
