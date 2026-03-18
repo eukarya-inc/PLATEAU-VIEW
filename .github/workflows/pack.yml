@@ -7,10 +7,7 @@ on:
         type: choice
         options:
           - no-update
-          - visualizer
-          - cms
           - flow
-          - all
 
 jobs:
   pack:
@@ -42,25 +39,15 @@ jobs:
           unzip plateau.zip
           mv PLATEAU-VIEW-plateau plateau-old
           rm plateau.zip
-      - name: Extract Re:Earth CMS zip
-        if: ${{ inputs.update == 'cms' || inputs.update == 'all' }}
-        run: |
-          curl -LO https://github.com/reearth/reearth-cms/archive/refs/heads/main.zip
-          unzip main.zip
-          mv reearth-cms-main plateau/cms
-          rm main.zip
-      - name: Extract previous Re:Earth CMS zip
-        if: ${{ inputs.update != 'cms' && inputs.update != 'all' }}
-        run: mv plateau-old/cms plateau/cms
       - name: Extract Re:Earth Flow zip
-        if: ${{ inputs.update == 'flow' || inputs.update == 'all' }}
+        if: ${{ inputs.update == 'flow' }}
         run: |
           curl -LO https://github.com/reearth/reearth-flow/archive/refs/heads/main.zip
           unzip main.zip
           mv reearth-flow-main plateau/flow
           rm main.zip
       - name: Extract previous Re:Earth Flow zip
-        if: ${{ inputs.update != 'flow' && inputs.update != 'all' }}
+        if: ${{ inputs.update != 'flow' }}
         run: mv plateau-old/flow plateau/flow
       - run: tree -a
       - name: Commit and push
