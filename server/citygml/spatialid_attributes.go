@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/geo/spatialid"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo/spatialid"
 	"github.com/klauspost/compress/gzip"
 	"github.com/orisano/gosax/xmlb"
 	"github.com/reearth/reearthx/log"
@@ -127,11 +127,32 @@ func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) 
 					return err
 				}
 				h.Next = fah
+				h.boundingBox = nil // Reset bounding box for each feature
 				ok, err := processFeature(fs.Dec, &h)
 				if err != nil {
 					return err
 				}
 				if ok {
+					// Add bounding box information if available
+					if h.boundingBox != nil {
+						fah.Val["_bbox"] = map[string]any{
+							"min": map[string]float64{
+								"lng": h.boundingBox.Min.X,
+								"lat": h.boundingBox.Min.Y,
+								"alt": h.boundingBox.Min.Z,
+							},
+							"max": map[string]float64{
+								"lng": h.boundingBox.Max.X,
+								"lat": h.boundingBox.Max.Y,
+								"alt": h.boundingBox.Max.Z,
+							},
+							"center": map[string]float64{
+								"lng": (h.boundingBox.Min.X + h.boundingBox.Max.X) / 2,
+								"lat": (h.boundingBox.Min.Y + h.boundingBox.Max.Y) / 2,
+								"alt": (h.boundingBox.Min.Z + h.boundingBox.Max.Z) / 2,
+							},
+						}
+					}
 					attributes = append(attributes, fah.Val)
 				}
 			}

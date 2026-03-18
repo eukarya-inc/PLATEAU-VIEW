@@ -1,4 +1,5 @@
 import { BlockContext } from "@reearth/beta/features/Visualizer/shared/components/BlockWrapper";
+import { Markdown } from "@reearth/beta/lib/reearth-ui";
 import { useT } from "@reearth/services/i18n";
 import { styled } from "@reearth/services/theme";
 import { debounce } from "lodash-es";
@@ -11,11 +12,6 @@ import {
   useState,
   FC
 } from "react";
-import ReactMarkdown from "react-markdown";
-import gfm from "remark-gfm";
-import "github-markdown-css";
-
-const plugins = [gfm];
 
 export type Props = {
   text: string;
@@ -57,11 +53,9 @@ const MdBlockEditor: FC<Props> = ({ text, onUpdate }) => {
       onChange={onChange}
     />
   ) : (
-    <MarkdownWrapper className="markdown-body">
-      <ReactMarkdown remarkPlugins={plugins}>
-        {value || t("Add markdown text here")}
-      </ReactMarkdown>
-    </MarkdownWrapper>
+    <StyledMarkdown empty={!value}>
+      {value || t("Add markdown text here")}
+    </StyledMarkdown>
   );
 };
 
@@ -76,16 +70,10 @@ const StyledTextArea = styled("textarea")(() => ({
   outline: "none"
 }));
 
-const MarkdownWrapper = styled("div")(() => ({
-  "@media (prefers-color-scheme: dark)": {
-    all: "unset"
-  },
-  "& ul": {
-    listStyleType: "initial"
-  },
-  "& ol": {
-    listStyleType: "decimal"
-  }
+const StyledMarkdown = styled(Markdown)<{ empty: boolean }>(({ empty }) => ({
+  minHeight: empty ? "115px" : "0",
+  fontSize: "14px",
+  opacity: !empty ? 1 : 0.6
 }));
 
 export default MdBlockEditor;

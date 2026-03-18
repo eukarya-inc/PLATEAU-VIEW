@@ -3,7 +3,7 @@ package repo
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
 )
 
 type AssetUpload interface {

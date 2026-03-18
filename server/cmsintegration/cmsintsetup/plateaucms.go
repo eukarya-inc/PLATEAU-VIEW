@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 	cms "github.com/reearth/reearth-cms-api/go"
 )
 
@@ -80,7 +80,7 @@ func findCache(base, key string, t any) (bool, error) {
 		return false, err
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := json.NewDecoder(f).Decode(t); err != nil {
 		return false, err
 	}
@@ -98,7 +98,7 @@ func saveCache(base, key string, content any) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := json.NewEncoder(f).Encode(content); err != nil {
 		return err
 	}

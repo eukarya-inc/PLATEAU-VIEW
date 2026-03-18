@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/log"
 )
 

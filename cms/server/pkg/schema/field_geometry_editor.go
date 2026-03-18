@@ -3,7 +3,7 @@ package schema
 import (
 	"strings"
 
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
 )
@@ -13,12 +13,13 @@ type GeometryEditorSupportedTypeList []GeometryEditorSupportedType
 func (l GeometryEditorSupportedTypeList) Has(st GeometryEditorSupportedType) bool {
 	hasAny := slices.Contains(l, GeometryEditorSupportedTypeAny)
 	if hasAny && st != "" {
-	     return true
+		return true
 	}
 	return slices.ContainsFunc(l, func(t GeometryEditorSupportedType) bool {
 		return t == st
 	})
 }
+
 type FieldGeometryEditor struct {
 	st GeometryEditorSupportedTypeList
 }

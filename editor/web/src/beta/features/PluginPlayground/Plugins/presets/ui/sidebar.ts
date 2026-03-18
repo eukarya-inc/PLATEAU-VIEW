@@ -208,5 +208,6 @@ const widgetFile: FileType = {
 
 export const sidebar: PluginType = {
   id: "sidebar",
-  files: [yamlFile, widgetFile]
+  title: "Sidebar",
+  files: [widgetFile, yamlFile]
 };

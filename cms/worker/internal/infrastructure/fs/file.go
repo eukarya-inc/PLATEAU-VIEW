@@ -8,7 +8,7 @@ import (
 	"path"
 
 	"github.com/kennygrant/sanitize"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/spf13/afero"
 )
@@ -23,7 +23,7 @@ func NewFile(fs afero.Fs, urlBase string) (gateway.File, error) {
 	var err error
 	b, err = url.Parse(urlBase)
 	if err != nil {
-		return nil, invalidBaseURLErr
+		return nil, errInvalidBaseURL
 	}
 
 	return &fileRepo{

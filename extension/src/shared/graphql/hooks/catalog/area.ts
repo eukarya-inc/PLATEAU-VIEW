@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { TOKYO_SAMPLE_DATA_CITY_CODE } from "../../../constants";
+import { SAMPLE_DATA_CITY_CODE_SUFFIX } from "../../../constants";
 import { AREAS, AREA_DATASETS } from "../../base/catalog/queries/area";
 import { AreasInput, DatasetsInput } from "../../types/catalog";
 
@@ -23,7 +23,9 @@ export const useAreas = (input?: AreasInput, options?: Options) => {
       data: data.data
         ? {
             ...data.data,
-            areas: data.data.areas.filter(a => a.code !== TOKYO_SAMPLE_DATA_CITY_CODE),
+            areas: data.data.areas.filter(a =>
+              !(a.code as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX),
+            ),
           }
         : undefined,
     }),
@@ -46,7 +48,9 @@ export const useAreaDatasets = (code: string, input?: DatasetsInput, options?: O
     () =>
       data?.area?.datasets
         .map(d =>
-          d.cityCode === TOKYO_SAMPLE_DATA_CITY_CODE ? { ...d, cityCode: null, city: null } : d,
+          d.cityCode && (d.cityCode as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX)
+            ? { ...d, cityCode: null, city: null }
+            : d,
         )
         .sort((a, b) => a.type.order - b.type.order),
     [data],

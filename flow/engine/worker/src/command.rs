@@ -2,26 +2,41 @@ use std::{collections::HashMap, io, str::FromStr, sync::Arc};
 
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use reearth_flow_action_log::factory::{create_root_logger, LoggerFactory};
-use reearth_flow_common::{dir::setup_job_directory, uri::Uri};
+use reearth_flow_common::{
+    dir::setup_job_directory,
+    uri::{Protocol, Uri},
+};
 use reearth_flow_runner::runner::AsyncRunner;
+use reearth_flow_runtime::incremental::IncrementalRunConfig;
 use reearth_flow_state::State;
 use reearth_flow_storage::resolve::{self, StorageResolver};
 use reearth_flow_types::Workflow;
+use uuid::Uuid;
 
 use crate::{
     artifact::upload_artifact,
     asset::download_asset,
     event_handler::{EventHandler, NodeFailureHandler},
     factory::ALL_ACTION_FACTORIES,
-    pubsub::{backend::PubSubBackend, publisher::Publisher},
+    incremental::{prepare_incremental_artifacts, prepare_incremental_feature_store, DirCopySpec},
+};
+use reearth_flow_worker::{
+    errors::{self, Error},
+    logger::{enable_file_logging, set_pubsub_context, USER_FACING_LOG_HANDLER},
+    pubsub::{PubSubBackend, Publisher},
     types::{
         job_complete_event::{JobCompleteEvent, JobResult},
         metadata::Metadata,
     },
 };
 
+use tokio::runtime::Handle;
+
 const WORKER_ASSET_GLOBAL_PARAMETER_VARIABLE: &str = "workerAssetPath";
 const WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE: &str = "workerArtifactPath";
+
+// Special UUID for workflow definition errors
+const WORKFLOW_PARSE_ERROR_UUID: Uuid = Uuid::nil(); // 00000000-0000-0000-0000-000000000000
 
 pub fn build_worker_command() -> Command {
     Command::new("Re:Earth Flow Worker")
@@ -33,6 +48,8 @@ pub fn build_worker_command() -> Command {
         .arg(worker_num_arg())
         .arg(pubsub_backend_arg())
         .arg(vars_arg())
+        .arg(previous_job_id_arg())
+        .arg(start_node_id_arg())
 }
 
 fn workflow_arg() -> Arg {
@@ -81,6 +98,24 @@ fn vars_arg() -> Arg {
         .display_order(5)
 }
 
+fn previous_job_id_arg() -> Arg {
+    Arg::new("previous_job_id")
+        .long("previous-job-id")
+        .help("Job ID to reuse intermediate data from")
+        .required(false)
+}
+
+fn start_node_id_arg() -> Arg {
+    Arg::new("start_node_id")
+        .long("start-node-id")
+        .help("Start node id for incremental run")
+        .required(false)
+}
+
+fn flow_var(name: &str) -> Option<String> {
+    std::env::var(format!("FLOW_VAR_{name}")).ok()
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RunWorkerCommand {
     workflow: String,
@@ -88,20 +123,22 @@ pub struct RunWorkerCommand {
     vars: HashMap<String, String>,
     worker_num: usize,
     pubsub_backend: String,
+    previous_job_id: Option<String>,
+    start_node_id: Option<String>,
 }
 
 impl RunWorkerCommand {
-    pub fn parse_cli_args(mut matches: ArgMatches) -> crate::errors::Result<Self> {
+    pub fn parse_cli_args(mut matches: ArgMatches) -> errors::Result<Self> {
         let workflow = matches
             .remove_one::<String>("workflow")
-            .ok_or(crate::errors::Error::init("No workflow provided"))?;
+            .ok_or(Error::init("No workflow provided"))?;
         let metadata_path = matches
             .remove_one::<String>("metadata_path")
-            .ok_or(crate::errors::Error::init("No metadata path provided"))?;
-        let metadata_path =
-            Uri::from_str(metadata_path.as_str()).map_err(crate::errors::Error::init)?;
+            .ok_or(Error::init("No metadata path provided"))?;
+        let metadata_path = Uri::from_str(metadata_path.as_str()).map_err(Error::init)?;
         let worker_num = matches
-            .remove_one::<usize>("worker_num")
+            .remove_one::<String>("worker_num")
+            .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(num_cpus::get());
         let pubsub_backend = matches
             .remove_one::<String>("pubsub_backend")
@@ -121,41 +158,77 @@ impl RunWorkerCommand {
         } else {
             HashMap::<String, String>::new()
         };
+        let previous_job_id = matches.remove_one::<String>("previous_job_id");
+        let start_node_id = matches.remove_one::<String>("start_node_id");
         Ok(Self {
             workflow,
             metadata_path,
             vars,
             worker_num,
             pubsub_backend,
+            previous_job_id,
+            start_node_id,
         })
     }
 
-    pub fn execute(&self) -> crate::errors::Result<()> {
+    pub fn execute(&self) -> errors::Result<()> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(self.worker_num)
             .enable_all()
             .build()
-            .map_err(crate::errors::Error::FailedToCreateTokioRuntime)?;
+            .map_err(Error::FailedToCreateTokioRuntime)?;
         runtime.block_on(self.run())
     }
 
-    async fn run(&self) -> crate::errors::Result<()> {
+    async fn run(&self) -> errors::Result<()> {
         tracing::info!("Starting worker");
         let storage_resolver = Arc::new(resolve::StorageResolver::new());
-        let (workflow, state, logger_factory, meta) = self.prepare(&storage_resolver).await?;
+
+        let meta = self.download_metadata(&storage_resolver).await?;
+        enable_file_logging(meta.job_id)?;
+
+        let workflow_yaml = self.download_workflow(&storage_resolver).await?;
+
+        let (workflow_id, workflow_name) = Self::extract_workflow_info(&workflow_yaml);
+        let workflow_id = workflow_id.unwrap_or(WORKFLOW_PARSE_ERROR_UUID);
 
         let pubsub = PubSubBackend::try_from(self.pubsub_backend.as_str())
             .await
-            .map_err(crate::errors::Error::init)?;
+            .map_err(Error::init)?;
 
-        let handler: Arc<dyn reearth_flow_runtime::event::EventHandler> = match pubsub {
-            PubSubBackend::Google(pubsub) => {
-                Arc::new(EventHandler::new(workflow.id, meta.job_id, pubsub))
+        let handle = Handle::current();
+        set_pubsub_context(pubsub.clone(), workflow_id, meta.job_id, handle)
+            .map_err(Error::init)?;
+
+        if let Some(name) = workflow_name {
+            if let Some(handler) = USER_FACING_LOG_HANDLER.get() {
+                handler.set_workflow_name(name);
             }
-            PubSubBackend::Noop(pubsub) => {
-                Arc::new(EventHandler::new(workflow.id, meta.job_id, pubsub))
+        }
+
+        let mut workflow = match Workflow::try_from(workflow_yaml.as_str()) {
+            Ok(w) => w,
+            Err(e) => {
+                if let Some(handler) = USER_FACING_LOG_HANDLER.get() {
+                    handler.send_workflow_definition_error(&e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+                self.cleanup(&meta, &storage_resolver).await?;
+
+                return Err(Error::failed_to_create_workflow(e));
             }
         };
+
+        let (ingress_state, feature_state, logger_factory, incremental_run_config) = self
+            .prepare_workflow(&storage_resolver, &meta, &mut workflow)
+            .await?;
+
+        let handler: Arc<dyn reearth_flow_runtime::event::EventHandler> = match pubsub.clone() {
+            PubSubBackend::Google(p) => Arc::new(EventHandler::new(workflow.id, meta.job_id, p)),
+            PubSubBackend::Noop(p) => Arc::new(EventHandler::new(workflow.id, meta.job_id, p)),
+        };
+
         let workflow_id = workflow.id;
         let node_failure_handler = Arc::new(NodeFailureHandler::new());
         let result = AsyncRunner::run_with_event_handler(
@@ -164,7 +237,9 @@ impl RunWorkerCommand {
             ALL_ACTION_FACTORIES.clone(),
             logger_factory,
             storage_resolver.clone(),
-            state,
+            ingress_state,
+            feature_state,
+            incremental_run_config,
             vec![handler, node_failure_handler.clone()],
         )
         .await;
@@ -180,19 +255,23 @@ impl RunWorkerCommand {
             Err(_) => JobResult::Failed,
         };
         self.cleanup(&meta, &storage_resolver).await?;
-        let pubsub = PubSubBackend::try_from(self.pubsub_backend.as_str())
-            .await
-            .map_err(crate::errors::Error::init)?;
-        match pubsub {
-            PubSubBackend::Google(pubsub) => pubsub
+        match &pubsub {
+            PubSubBackend::Google(p) => p
                 .publish(JobCompleteEvent::new(
                     workflow_id,
                     meta.job_id,
                     job_result.clone(),
                 ))
                 .await
-                .map_err(crate::errors::Error::run),
-            PubSubBackend::Noop(_) => Ok(()),
+                .map_err(Error::run),
+            PubSubBackend::Noop(p) => p
+                .publish(JobCompleteEvent::new(
+                    workflow_id,
+                    meta.job_id,
+                    job_result.clone(),
+                ))
+                .await
+                .map_err(|e| Error::run(format!("{e:?}"))),
         }?;
         tracing::info!(
             "Job completed with workflow_id: {:?}, job_id: {:?} result: {:?}",
@@ -203,91 +282,240 @@ impl RunWorkerCommand {
         Ok(())
     }
 
-    async fn prepare(
+    async fn download_metadata(
         &self,
         storage_resolver: &Arc<StorageResolver>,
-    ) -> crate::errors::Result<(Workflow, Arc<State>, Arc<LoggerFactory>, Metadata)> {
-        let json = if self.workflow == "-" {
-            io::read_to_string(io::stdin()).map_err(crate::errors::Error::init)?
-        } else {
-            let path = Uri::from_str(self.workflow.as_str()).map_err(crate::errors::Error::init)?;
-            let storage = storage_resolver
-                .resolve(&path)
-                .map_err(crate::errors::Error::init)?;
-            let bytes = storage
-                .get(path.path().as_path())
-                .await
-                .map_err(crate::errors::Error::FailedToDownloadWorkflow)?;
-            let bytes = bytes
-                .bytes()
-                .await
-                .map_err(crate::errors::Error::FailedToDownloadWorkflow)?;
-            String::from_utf8(bytes.to_vec()).map_err(crate::errors::Error::init)?
-        };
-        let mut workflow = Workflow::try_from(json.as_str())
-            .map_err(crate::errors::Error::failed_to_create_workflow)?;
-
+    ) -> errors::Result<Metadata> {
         let storage = storage_resolver
             .resolve(&self.metadata_path)
-            .map_err(crate::errors::Error::init)?;
+            .map_err(Error::init)?;
 
         let meta = storage
             .get(&self.metadata_path.as_path())
             .await
-            .map_err(crate::errors::Error::FailedToDownloadMetadata)?;
+            .map_err(Error::FailedToDownloadMetadata)?;
         let meta_json = meta
             .bytes()
             .await
-            .map_err(crate::errors::Error::FailedToDownloadMetadata)?;
-        let meta_json =
-            String::from_utf8(meta_json.to_vec()).map_err(crate::errors::Error::init)?;
-        let meta: Metadata =
-            serde_json::from_str(meta_json.as_str()).map_err(crate::errors::Error::init)?;
+            .map_err(Error::FailedToDownloadMetadata)?;
+        let meta_json = String::from_utf8(meta_json.to_vec()).map_err(Error::init)?;
+        let meta: Metadata = serde_json::from_str(meta_json.as_str()).map_err(Error::init)?;
 
+        Ok(meta)
+    }
+
+    async fn download_workflow(
+        &self,
+        storage_resolver: &Arc<StorageResolver>,
+    ) -> errors::Result<String> {
+        let (yaml_content, base_dir) = if self.workflow == "-" {
+            let content = io::read_to_string(io::stdin()).map_err(Error::init)?;
+            (content, None)
+        } else {
+            let path = Uri::from_str(self.workflow.as_str()).map_err(Error::init)?;
+
+            // Extract base directory for !include resolution
+            let base_dir = if path.protocol() == Protocol::File {
+                path.path().parent().map(|p| p.to_path_buf())
+            } else {
+                None
+            };
+
+            let storage = storage_resolver.resolve(&path).map_err(Error::init)?;
+            let bytes = storage
+                .get(path.path().as_path())
+                .await
+                .map_err(Error::FailedToDownloadWorkflow)?;
+            let bytes = bytes
+                .bytes()
+                .await
+                .map_err(Error::FailedToDownloadWorkflow)?;
+            let content = String::from_utf8(bytes.to_vec()).map_err(Error::init)?;
+            (content, base_dir)
+        };
+
+        // Expand !include directives if we have a base directory
+        let expanded = if let Some(base) = base_dir.as_ref() {
+            reearth_flow_common::serde::expand_yaml_includes(&yaml_content, Some(base))
+                .map_err(Error::init)?
+        } else {
+            reearth_flow_common::serde::expand_yaml_includes(&yaml_content, None)
+                .map_err(Error::init)?
+        };
+
+        Ok(expanded)
+    }
+
+    fn extract_workflow_info(yaml: &str) -> (Option<Uuid>, Option<String>) {
+        match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
+            Ok(value) => {
+                let id = value
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
+                let name = value
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                (id, name)
+            }
+            Err(_) => (None, None),
+        }
+    }
+
+    async fn prepare_workflow(
+        &self,
+        storage_resolver: &Arc<StorageResolver>,
+        meta: &Metadata,
+        workflow: &mut Workflow,
+    ) -> errors::Result<(
+        Arc<State>,
+        Arc<State>,
+        Arc<LoggerFactory>,
+        Option<IncrementalRunConfig>,
+    )> {
         let job_id = meta.job_id;
-        let asset_path =
-            setup_job_directory("workers", "assets", job_id).map_err(crate::errors::Error::init)?;
+        let asset_path = setup_job_directory("workers", "assets", job_id).map_err(Error::init)?;
 
-        let artifact_path = setup_job_directory("workers", "artifacts", job_id)
-            .map_err(crate::errors::Error::init)?;
+        let artifact_path =
+            setup_job_directory("workers", "artifacts", job_id).map_err(Error::init)?;
+
+        let temp_artifact_path =
+            setup_job_directory("workers", "temp-artifacts", job_id).map_err(Error::init)?;
+        let temp_artifact_root = temp_artifact_path
+            .path()
+            .to_str()
+            .ok_or_else(|| Error::init("Invalid temp-artifacts dir path"))?
+            .to_string();
+        std::env::set_var(
+            "FLOW_RUNTIME_JOB_TEMP_ARTIFACT_DIRECTORY",
+            temp_artifact_root,
+        );
 
         let mut global = HashMap::new();
         global.insert(
             WORKER_ASSET_GLOBAL_PARAMETER_VARIABLE.to_string(),
             asset_path.to_string(),
         );
-        global.insert(
-            WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE.to_string(),
-            artifact_path.to_string(),
-        );
+        let external = self
+            .vars
+            .get(WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE)
+            .cloned()
+            .or_else(|| flow_var(WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE));
+        if let Some(v) = external {
+            tracing::info!(
+                "workerArtifactPath is provided externally. Using caller value in globals: {}",
+                v
+            );
+            global.insert(WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE.to_string(), v);
+        } else {
+            tracing::info!(
+                "workerArtifactPath is not provided. Injecting job-scoped default: {}",
+                artifact_path
+            );
+            global.insert(
+                WORKER_ARTIFACT_GLOBAL_PARAMETER_VARIABLE.to_string(),
+                artifact_path.to_string(),
+            );
+        }
         workflow
             .extend_with(global)
-            .map_err(crate::errors::Error::failed_to_create_workflow)?;
+            .map_err(Error::failed_to_create_workflow)?;
         workflow
             .merge_with(self.vars.clone())
-            .map_err(crate::errors::Error::failed_to_create_workflow)?;
+            .map_err(Error::failed_to_create_workflow)?;
 
         download_asset(storage_resolver, &meta.assets, &asset_path).await?;
 
-        let action_log_uri = setup_job_directory("workers", "action-log", job_id)
-            .map_err(crate::errors::Error::init)?;
-        let state_uri = setup_job_directory("workers", "feature-store", job_id)
-            .map_err(crate::errors::Error::init)?;
-        let state =
-            Arc::new(State::new(&state_uri, storage_resolver).map_err(crate::errors::Error::init)?);
+        let action_log_uri =
+            setup_job_directory("workers", "action-log", job_id).map_err(Error::init)?;
+        let feature_state_uri =
+            setup_job_directory("workers", "feature-store", job_id).map_err(Error::init)?;
+        let feature_state =
+            Arc::new(State::new(&feature_state_uri, storage_resolver).map_err(Error::init)?);
+        let ingress_state = Arc::clone(&feature_state);
+
+        let mut incremental_run_config: Option<IncrementalRunConfig> = None;
+
+        if let Some(prev_job_id) = &self.previous_job_id {
+            tracing::info!(
+                "Incremental run parameter: previous_job_id = {}",
+                prev_job_id
+            );
+        }
+        if let Some(start_node_id) = &self.start_node_id {
+            tracing::info!(
+                "Incremental run parameter: start_node_id = {}",
+                start_node_id
+            );
+        }
+
+        if let (Some(prev_job_str), Some(start_node_str)) =
+            (&self.previous_job_id, &self.start_node_id)
+        {
+            let prev_job_id = uuid::Uuid::parse_str(prev_job_str).map_err(Error::init)?;
+            let start_node_id = uuid::Uuid::parse_str(start_node_str).map_err(Error::init)?;
+
+            let (previous_feature_state, available_edge_ids) = prepare_incremental_feature_store(
+                "workers",
+                workflow,
+                job_id,
+                storage_resolver.as_ref(),
+                meta,
+                prev_job_id,
+                start_node_id,
+                feature_state.as_ref(),
+            )
+            .await?;
+
+            prepare_incremental_artifacts(
+                "workers",
+                storage_resolver.as_ref(),
+                meta,
+                prev_job_id,
+                job_id,
+                &[
+                    DirCopySpec::new("artifacts", "previous-artifacts"),
+                    DirCopySpec::new("temp-artifacts", "previous-temp-artifacts"),
+                ],
+            )
+            .await?;
+
+            previous_feature_state
+                .rewrite_feature_store_file_paths_in_root_dir(prev_job_id, job_id)
+                .map_err(Error::init)?;
+            feature_state
+                .rewrite_feature_store_file_paths_in_root_dir(prev_job_id, job_id)
+                .map_err(Error::init)?;
+
+            incremental_run_config = Some(IncrementalRunConfig {
+                start_node_id,
+                previous_feature_state,
+                available_edge_ids,
+            });
+        } else if self.previous_job_id.is_some() || self.start_node_id.is_some() {
+            tracing::info!("Incremental snapshot requires both --previous-job-id and --start-node-id. Ignoring.");
+        } else {
+            tracing::info!("No incremental snapshot parameters provided. Running full workflow.");
+        }
 
         let logger_factory = Arc::new(LoggerFactory::new(
             create_root_logger(action_log_uri.path()),
             action_log_uri.path(),
         ));
-        Ok((workflow, state, logger_factory, meta))
+        Ok((
+            ingress_state,
+            feature_state,
+            logger_factory,
+            incremental_run_config,
+        ))
     }
 
     async fn cleanup(
         &self,
         meta: &Metadata,
         storage_resolver: &Arc<StorageResolver>,
-    ) -> crate::errors::Result<()> {
+    ) -> errors::Result<()> {
         upload_artifact(storage_resolver, meta).await?;
         Ok(())
     }

@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/reearth/reearth-cms/worker/internal/infrastructure/gcp"
-	"github.com/reearth/reearth-cms/worker/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/infrastructure/gcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/pkg/asset"
 	"github.com/reearth/reearthx/log"
 )
 

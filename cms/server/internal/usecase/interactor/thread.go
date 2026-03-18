@@ -3,12 +3,12 @@ package interactor
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/thread"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/thread"
 )
 
 type Thread struct {

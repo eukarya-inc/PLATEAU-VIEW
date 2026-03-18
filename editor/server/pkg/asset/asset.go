@@ -3,9 +3,6 @@ package asset
 import (
 	"errors"
 	"time"
-
-	"github.com/reearth/reearth/server/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 var (
@@ -15,10 +12,9 @@ var (
 )
 
 type Asset struct {
-	id          id.AssetID
+	id          ID
 	createdAt   time.Time
-	workspace   accountdomain.WorkspaceID
-	project     *id.ProjectID
+	workspace   WorkspaceID
 	name        string // file name
 	size        int64  // file size
 	url         string
@@ -26,20 +22,12 @@ type Asset struct {
 	coreSupport bool
 }
 
-func (a *Asset) ID() id.AssetID {
+func (a *Asset) ID() ID {
 	return a.id
 }
 
-func (a *Asset) Workspace() accountdomain.WorkspaceID {
+func (a *Asset) Workspace() WorkspaceID {
 	return a.workspace
-}
-
-func (a *Asset) Project() *id.ProjectID {
-	return a.project
-}
-
-func (a *Asset) SetProject(project *id.ProjectID) {
-	a.project = project
 }
 
 func (a *Asset) Name() string {

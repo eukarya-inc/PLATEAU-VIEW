@@ -8,9 +8,6 @@ exec:
   filename: internal/adapter/gql/generated.go
 model:
   filename: internal/adapter/gql/gqlmodel/models_gen.go
-resolver:
-  filename: internal/adapter/gql/resolver.go
-  type: Resolver
 models:
   DateTime:
     model: github.com/99designs/gqlgen/graphql.Time
@@ -24,6 +21,8 @@ models:
     model: github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel.ID
   JSON:
     model: github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel.JSON
+  Bytes:
+    model: github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel.Bytes
   Asset:
     fields:
       workspace:
@@ -81,6 +80,8 @@ models:
       projects:
         resolver: true
       deployments:
+        resolver: true
+      workerConfig:
         resolver: true
   WorkspaceMember:
     fields:

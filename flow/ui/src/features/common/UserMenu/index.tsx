@@ -1,5 +1,11 @@
-import { ArrowSquareOut, Keyboard, SignOut, User } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon,
+  KeyboardIcon,
+  SignOutIcon,
+  UserIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 import {
   Avatar,
@@ -12,7 +18,7 @@ import {
 } from "@flow/components";
 import { config } from "@flow/config";
 import KeyboardShortcutDialog from "@flow/features/KeyboardShortcutDialog";
-import { useShortcuts } from "@flow/hooks";
+import { GENERAL_HOT_KEYS } from "@flow/global-constants";
 import { useAuth } from "@flow/lib/auth";
 import { useUser } from "@flow/lib/gql";
 import { useT } from "@flow/lib/i18n";
@@ -31,7 +37,7 @@ const UserMenu: React.FC<Props> = ({
   className,
   dropdownPosition = "right",
   dropdownAlign,
-  dropdownOffset,
+  dropdownOffset = 10,
 }) => {
   const t = useT();
   const { logout: handleLogout } = useAuth();
@@ -45,20 +51,13 @@ const UserMenu: React.FC<Props> = ({
 
   const handleTosPageOpen = openLinkInNewTab(tosUrl ?? "");
   const handleDocumentationPageOpen = openLinkInNewTab(documentationUrl ?? "");
-
-  useShortcuts([
-    {
-      keyBinding: { key: "/", commandKey: true },
-      callback: () => setOpenShortcutDialog((o) => !o),
-    },
-  ]);
-
+  useHotkeys(GENERAL_HOT_KEYS, () => setOpenShortcutDialog(true));
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger>
-          <div className={`flex items-center gap-1 ${className}`}>
-            <Avatar className="size-7">
+          <div className={`flex size-8 items-center gap-1 ${className}`}>
+            <Avatar className="size-full">
               <AvatarFallback>
                 {me?.name ? me.name.charAt(0).toUpperCase() : "?"}
               </AvatarFallback>
@@ -79,13 +78,13 @@ const UserMenu: React.FC<Props> = ({
             className="justify-between gap-4"
             onClick={() => setOpenAccountUpdateDialog(true)}>
             <p>{t("Account Settings")}</p>
-            <User weight="light" />
+            <UserIcon weight="light" />
           </DropdownMenuItem>
           <DropdownMenuItem
             className="justify-between gap-4"
             onClick={() => setOpenShortcutDialog(true)}>
             <p>{t("Keyboard Shortcuts")}</p>
-            <Keyboard weight="light" />
+            <KeyboardIcon weight="light" />
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {tosUrl && (
@@ -93,7 +92,7 @@ const UserMenu: React.FC<Props> = ({
               className="justify-between gap-4"
               onClick={handleTosPageOpen}>
               <p>{t("Terms of Service")}</p>
-              <ArrowSquareOut weight="light" />
+              <ArrowSquareOutIcon weight="light" />
             </DropdownMenuItem>
           )}
           {documentationUrl && (
@@ -101,7 +100,7 @@ const UserMenu: React.FC<Props> = ({
               className="justify-between gap-4"
               onClick={handleDocumentationPageOpen}>
               <p>{t("Documentation")}</p>
-              <ArrowSquareOut weight="light" />
+              <ArrowSquareOutIcon weight="light" />
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
@@ -109,7 +108,7 @@ const UserMenu: React.FC<Props> = ({
             className="justify-between gap-4 text-warning"
             onClick={handleLogout}>
             <p>{t("Log Out")}</p>
-            <SignOut weight="light" />
+            <SignOutIcon weight="light" />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

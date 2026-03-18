@@ -39,30 +39,9 @@ create: 作成する
 Your workspace Name*: ワークスペース名*
 your workspace name: ワークスペース名
 The name is already in use by another workspace. Please choose a different name.: このワークスペース名はすでに使用されています。別の名前を指定してください。
-Important Changes: 重要な変更点
-dashboard.assets.migration.warning: >-
-  機能要件に基づき、プロジェクトの構造を変更することを決定しました。これまでワークスペース内で管理されていたアセット管理ページを、各プロジェクトごとのページに移動します。つまり、アセットはプロジェクト単位で管理されるようになり、ユーザーがインポートやエクスポートをより便利に行えるようになります。<br/>そのため、このページは今後利用できなくなり、次のバージョンで削除される予定です。詳細については、<1>こちらのページ</1>をご参照ください。
-Add a team member: チームメンバーを追加
-Add: 追加
-Search by email address or user name: メールアドレスまたはユーザー名で検索
-Can't find the user: ユーザーが見つかりません
-User already joined this workspace.: ユーザーはすでにこのワークスペースに参加しています。
-Remove: 削除
-'Your are removing member ': '次のメンバーを削除しています '
-' out of this workspace. Are you sure you want to do that?': ' 削除後このワークスペースに存在しない。本当に削除しますか？'
-Search member by name or email: 名前またはEメールでメンバーを検索
-invite user: ユーザーを招待
-User Name: ユーザー名
-Email: メールアドレス
-Role: 役割
+Use Name or Email: 名前またはメールアドレスを使用
+Find Member: メンバーを検索
 No Member match your search.: 一致するメンバーが見つかりません'
-MAINTAINER: 管理者
-OWNER: 所有者
-READER: 閲覧者
-WRITER: 作成者
-Change Role: 役割を変更
-Update Member Role: メンバーの役割を更新
-Update: 更新する
 Last Created: 最終作成日
 First Created: 最初の作成日
 Last Updated: 最終更新日
@@ -77,7 +56,6 @@ Created At: 作成日時
 No Project has been created yet: まだプロジェクトが作成されていません
 Rename: 名称変更
 Project Setting: プロジェクト設定
-Project Assets: プロジェクトアセット
 Export: エクスポート
 Move to Recycle Bin: ゴミ箱に移動
 Create new project: 新しいプロジェクトを作成
@@ -86,6 +64,8 @@ Project Name *: プロジェクト名 *
 Text: テキスト
 Description: 説明
 Write down your content: 内容を書き込む
+Cover Image: カバー画像
+Remove: ゴミ箱へ移動
 Your project will be moved to Recycle Bin.: プロジェクトはゴミ箱に移動されます。
 This means the project will no longer be published. But you can still see and recover your project from the Recycle bin.: これによりプロジェクトは公開されなくなりますが、ゴミ箱から閲覧と復元が可能です。
 Starred: スター付き
@@ -134,6 +114,9 @@ Vector Tile: ベクトルタイル
 Data Source Manager: データソースマネージャー
 Support for the KML format is currently experimental and remains somewhat unstable, with certain features not yet fully supported. We advise using it with caution.: >-
   KMLフォーマットのサポートは現在、実験的な段階にあり、安定性に欠ける部分があります。また、いくつかの機能はまだ完全にはサポートされていません。ご利用の際はご注意ください。
+'Google Maps API Key ': Google Maps APIキー
+'You can apply a key ': キーを申請できます
+here: ここ
 Cesium OSM 3D Tiles: Cesium OSM 3Dタイル
 Google Photorealistic 3D Tiles: Googleフォトリアリスティック3Dタイル
 URL: URL
@@ -145,13 +128,8 @@ Data source: データソース
 Layer Name: レイヤー名
 Format: 形式
 Custom property schema: カスタムプロパティスキーマ
-Update data resource URL: リソースURLを更新
-New data resource URL: 新しいリソースURL
-Resource URL copied to clipboard: リソースURLがクリップボードにコピーされました
-Edit: 編集
 Edit Field: フィールド編集
 Delete Field: フィールド削除
-More: その他
 Edit Custom Property: カスタムプロパティ編集
 New Custom Property: 新しいカスタムプロパティ
 Submit: 反映
@@ -166,39 +144,25 @@ Delete schema property field?: プロパティのフィールドを削除しま�
 This action will apply to all features in the current layer. Do you want to proceed?: この操作は、現在のレイヤーのすべてのフィーチャーに適用されます。続行しますか？
 Unsupported custom field: サポートされていないカスタムフィールド
 Custom Properties: カスタムプロパティ
+Edit: 編集
 No custom properties: カスタムプロパティはありません
 Geometry: ジオメトリ
 Properties: プロパティ
-Photo Overlay: フォトオーバーレイ
-Photo Overlay Set: フォトオーバーレイ設定
-Not set: 設定されていません
-Layer: レイヤー
-Feature: 地物
-Layer Style: レイヤースタイル
-Infobox: インフォボックス
 Enable Infobox: インフォボックスを有効化
 Show infobox when the user clicks on a layer: レイヤーをクリックした際にインフォボックスを表示
 NO STYLE: スタイルなし
-Enable PhotoOverlay: フォトオーバーレイを有効化
-Show photo overlay when the user clicks on a layer: レイヤーをクリックした際にフォトオーバーレイを表示
+Layer Style: レイヤースタイル
 Settings: 設定
 Add Layer from Resource: リソースからレイヤーを追加
 Add Sketch Layer: スケッチレイヤーを追加
 Layers: レイヤー
 New Layer: 新しいレイヤー
-Fly to: 移動
-Visibility: 表示・非表示切り替え
 Delete this Layer?: このレイヤーを削除しますか？
 Are you sure you want to remove this Layer? If deleted, all data of this layer will be lost and you can not recover it again.: 本当にこのレイヤーを削除しますか？削除すると、このレイヤーのデータはすべて失われ、二度と復元できません。
 Interface: インターフェース
 Code: コード
 Invalid style: 無効なスタイル
 No style selected: スタイルが選択されていません
-Marker style: マーカースタイル
-Polyline style: ポリラインスタイル
-Polygon style: ポリゴンスタイル
-3dtiles style: 3Dタイルスタイル
-3D model style: 3Dモデルのスタイル
 Condition is incompatible with the current system for this node or value.: 条件は現在のシステムと互換性がありません。
 Expression is incompatible with the current system for this node or value.: 式は現在のシステムと互換性がありません。
 ${your property name}: ${プロパティ名}
@@ -208,22 +172,12 @@ font weight: フォントウェイト
 font color: フォントカラー
 italic: イタリック
 New node: 新しいノード
-Assign style: スタイルの割り当て
-New style: 新しいスタイル
-Contain: 収める
-Fixed: 固定
-Photo transparency: フォト透過度
-PhotoOverlay settings: フォトオーバーレイ設定
-Photo: フォト
-Photo size type: フォトサイズタイプ
-Photo size: フォトサイズ
-Photo description: フォト説明
-Camera: カメラ
 Main: メイン
 Tiles: タイル
 Terrain: 地形
 Globe: 地球
 Sky: 空
+Camera: カメラ
 Unknown scene setting: 不明なシーン設定
 Scene: シーン
 New Sketch Layer: 新しいスケッチレイヤー
@@ -234,29 +188,10 @@ Title: タイトル
 Type: タイプ
 The keyword you want to use as the custom property title has been used in the system, please choose any other keyword: カスタムプロパティのタイトルとして使用するキーワードが既にシステムで使用されています。他のキーワードを選択してください
 New Property: 新しいプロパティ
-Click to place the point: クリックでポイントを追加する
-Double click or press Enter key to finish drawing: ダブルクリックするか、Enter キーを押して描画を終了します
-Right click to cancel drawing: 右クリックで描画をキャンセルする
-Press ESC to undo the last step: ESCキーで最後のステップを取り消す
-Marker: マーカー
-Polyline: ポリライン
-Circle: 丸
-Rectangle: 長方形
-Polygon: ポリゴン
-Extruded circle: 円柱
-Extruded rectangle: 立方体
-Extruded polygon: 押し出しポリゴン
-Drag and Drop to adjust the point position: ドラッグ&ドロップでポイントの位置を調整する
-Select a point and press Delete key to remove it: ポイントを選択して Delete キーを押すと削除されます
-Double click or press Enter to save the edits: 編集内容を保存するにはダブルクリックするか、Enter キーを押します
-Right click to cancel editing: 右クリックで編集をキャンセルする
-Edit Geometry: ジオメトリを編集
-Delete Feature: 地物を削除
-Delete this feature?: 地物を削除しますか?
-Are you sure you want to delete this feature? If deleted, you can not recover it again.: 本当にこの地物を削除しますか？削除すると二度と復元できません。
 Story: ストーリー
 Publish: 公開
 Unpublish: 非公開にする
+Update: 更新する
 Congratulations!: おめでとうございます！
 Publish your story: ストーリーを公開する
 Publish your scene: シーンを公開する
@@ -301,9 +236,8 @@ Background color: 背景色
 Align System: アラインシステム
 Add Widget: ウィジェットを追加
 Widget Manager: ウィジェット管理
+Project settings: プロジェクト設定
 Plugin: プラグイン
-Dashboard: ダッシュボード
-Editor: エディタ
 Unknown: 不明
 Asset management: アセット管理
 Map: マップ
@@ -315,77 +249,9 @@ Error: エラー
 Warning: 注意
 Notice: 通知
 You have reached a policy limit. Please contact an administrator of your Re:Earth system.: 現在のポリシーの上限に達しました。システム管理者にお問い合わせください。
-HTML Editor: HTML エディター
-Run Code: コードを実行
-This plugin does not have a valid reearth.yml file.: このプラグインには有効な reearth.yml ファイルがありません。
-No valid schema defined.: 有効なスキーマが定義されていません。
-Chiyoda 3D Tiles: 千代田区 3D Tiles
-Japanese Heritage Sites: 日本の遺産
-Viewer: ビューアー
-Plugins: プラグイン
-Extension Settings: 拡張機能の設定
-Add File: ファイルを追加
-Import Plugin: プラグインをインポート
-Export Plugin: プラグインをエクスポート
-Share Plugin: プラグインを共有
-Shared: 共有
-No plugins: プラグインがありません
-Custom: カスタム
-User Interface: ユーザーインターフェース
-Data: データ
-Viewer & Scene Settings: ビューアとシーン設定
-Manage Layer: レイヤーの管理
-Manage Layer Style: レイヤースタイルの管理
-Timeline: タイムライン
-My Plugin: マイプラグイン
-Responsive Panel: レスポンシブ パネル
-Sidebar: サイドバー
-Header: ヘッダー
-Popup: ポップアップ
-Modal Window: モーダルウィンドウ
-Messenger Between Extension and Visualizer: エクステンションとVisualizerとの通信
-Messenger Between Extensions: エクステンション間での通信
-Enable Shadow Style: 影の表示を有効にする
-Enable Terrain: 3D地形を有効にする
-Show Label: ラベルを表示
-Take Screenshot: スクリーンショットを撮る
-Mouse Events: マウスイベント
-Add Geojson: Geojsonを追加
-Add CSV: CSVを追加
-Add KML: KMLを追加
-Add WMS: WMSを追加
-Add CZML: CZMLを追加
-Add 3D Tiles: 3Dタイルを追加
-Add Google Photorealistic 3D Tiles: Google Photorealistic 3D Tilesを追加
-Add OSM 3D Tiles: OSM 3D Tilesを追加
-Hide Fly To Delete Layer: カメラ移動とレイヤーの削除
-Override Layer Data: レイヤーデータの上書き
-Show Selected Features Information: 選択された地物情報を表示
-Layer Styling Examples: レイヤースタイリング
-Feature Style 3D Model: フィーチャースタイル 3D モデル
-Feature Style 3D Tiles: フィーチャースタイル 3D タイル
-Filter Features by Style: スタイルでフィーチャーをフィルタリング
-Override Style: スタイルの上書き
-Style With Condition: 条件付きスタイル
-Playback Control: 再生コントロール
-Time Driven Features: 時系列による地物変化
-Time Driven Path: 時系列による線形移動
-Client Storage: クライアントストレージ
-Extension Property: 拡張プロパティ
-Zoom In Out: ズームイン/アウト
-Camera Rotation: カメラ回転
-Camera Position: カメラ位置
-Shared Plugin: 共有プラグイン
-Invalid shared plugin URL: 共有プラグインのURLが無効です
-File not found: ファイルが見つかりません
-Only zip files are supported: zipファイルのみサポートされています
-Zip file is empty: Zipファイルは空です
-Plugin link copied to clipboard: プラグインのリンクがクリップボードにコピーされました
-Show Story Panel: ストーリーパネルを表示
-UI Language: UI言語
 General: 一般
 Public: 公開
-Most project settings are hidden when the project is archived. Please unarchive the project to view and edit these settings.: プロジェクトをアーカイブすると、削除とアーカイブ解除以外の操作は行えません。再度編集可能な状態にするには、プロジェクトのアーカイブを解除してください。
+Most project settings are hidden when the project is archived. Please unarchive the project to view and edit these settings.: プロジェクトをアーカイブ化すると、削除とアーカイブ化解除以外の編集は行えません。再度編集可能な状態にするには、プロジェクトのアーカイブ化を解除してください。
 Project Info: プロジェクト情報
 Thumbnail: サムネイル画像
 Danger Zone: 重要操作
@@ -443,6 +309,25 @@ aria-label-zoom-out: ズームアウト
 Spacing settings: 余白設定
 Block: ブロック
 Unsupported field type: サポートされていないフィールドタイプ
+Add a team member: チームメンバーを追加
+Add: 追加
+Search by email address or user name: メールアドレスまたはユーザー名で検索
+Can't find the user: ユーザーが見つかりません
+User already joined this workspace.: ユーザーはすでにこのワークスペースに参加しています。
+MAINTAINER: 管理者
+OWNER: 所有者
+READER: 閲覧者
+WRITER: 作成者
+New member: 新しいメンバー
+User Name: ユーザー名
+Email: メールアドレス
+Role: 役割
+Change Role: 役割を変更
+Reader: 閲覧者
+Writer: 作成者
+Maintainer: 管理者
+Owner: 所有者
+Update Member Role: メンバーの役割を更新
 Delete workspace: ワークスペースを削除
 I am sure I want to delete this workspace.: このワークスペースを削除することを確認しました
 This action is permanent and cannot be reversed.: この操作は元に戻すことができません。
@@ -483,12 +368,11 @@ Superscript: 上付き文字
 Clear Formatting: 書式をクリア
 Loading...: ロード中...
 Please select: 選択してください
-This function is currently experimental and remains somewhat unstable.: この機能は試験運用中です。不具合が生じる可能性があることをご了承ください。
 'Sort:': '並び替え:'
-Grid Layout: グリッドレイアウト
-List Layout: リストのレイアウト
 Version: バージョン
+This function is currently experimental and remains somewhat unstable.: この機能は現在、実験的な段階にあり、安定性に欠ける部分があります。
 Wrong file format: 誤ったファイル形式
+Not set: 設定されていません
 Choose: 選択
 Upload: アップロード
 Position Capture: 位置キャプチャ
@@ -500,7 +384,6 @@ Current Rotation: 現在の回転
 Heading: ヘディング
 Pitch: ピッチ
 Roll: ロール
-FOV: 視野角
 Camera Position Editor: カメラ位置エディタ
 Location: 位置
 value: 値
@@ -524,7 +407,6 @@ Set Time: 時間を設定
 Date: 日付
 Time: 時刻
 Time Zone: タイムゾーン
-Zoom Level Editor: ズームレベルエディター
 Failed to add one or more assets.: アセットの追加に失敗しました。
 Successfully added one or more assets.: アセットの追加に成功しました。
 Failed to delete one or more assets.: アセットの削除に失敗しました。
@@ -561,7 +443,6 @@ Failed to delete user.: ユーザーの削除に失敗しました。
 Successfully delete user!: ユーザーの削除に成功しました！
 Failed to change language.: 言語の変更に失敗しました。
 Successfully updated user language!: ユーザーの言語が更新されました！
-Successfully enabled photo overlay: フォトオーバーレイが有効になりました
 Failed to install plugin.: プラグインのインストールに失敗しました。
 Successfully installed plugin!: プラグインがインストールされました。
 Failed to upgrade plugin.: プラグインのアップグレードに失敗しました。

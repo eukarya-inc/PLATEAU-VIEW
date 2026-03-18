@@ -3,46 +3,46 @@ package storytelling
 import (
 	"errors"
 
-	"github.com/reearth/reearth/server/pkg/id"
+	"github.com/reearth/reearth/server/pkg/plugin"
 	"github.com/reearth/reearth/server/pkg/property"
 )
 
 type Block struct {
-	id        id.BlockID
-	plugin    id.PluginID
-	extension id.PluginExtensionID
-	property  id.PropertyID
+	id        BlockID
+	plugin    PluginID
+	extension PluginExtensionID
+	property  PropertyID
 }
 
-func (i *Block) ID() id.BlockID {
+func (i *Block) ID() BlockID {
 	if i == nil {
-		return id.BlockID{}
+		return BlockID{}
 	}
 	return i.id
 }
 
-func (i *Block) Plugin() id.PluginID {
+func (i *Block) Plugin() PluginID {
 	if i == nil {
-		return id.PluginID{}
+		return PluginID{}
 	}
 	return i.plugin
 }
 
-func (i *Block) Extension() id.PluginExtensionID {
+func (i *Block) Extension() PluginExtensionID {
 	if i == nil {
-		return id.PluginExtensionID("")
+		return PluginExtensionID("")
 	}
 	return i.extension
 }
 
-func (i *Block) Property() id.PropertyID {
+func (i *Block) Property() PropertyID {
 	if i == nil {
-		return id.PropertyID{}
+		return PropertyID{}
 	}
 	return i.property
 }
 
-func (i *Block) PropertyRef() *id.PropertyID {
+func (i *Block) PropertyRef() *PropertyID {
 	if i == nil {
 		return nil
 	}
@@ -58,14 +58,14 @@ func (i *Block) ValidateProperty(pm property.Map) error {
 	if lp == nil {
 		return errors.New("property does not exist")
 	}
-	if !lp.Schema().Equal(id.NewPropertySchemaID(i.plugin, i.extension.String())) {
+	if !lp.Schema().Equal(NewPropertySchemaID(i.plugin, i.extension.String())) {
 		return errors.New("property has a invalid schema")
 	}
 
 	return nil
 }
 
-func (i *Block) UpgradePlugin(id id.PluginID) {
+func (i *Block) UpgradePlugin(id plugin.ID) {
 	if i == nil || !i.plugin.NameEqual(id) {
 		return
 	}

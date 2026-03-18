@@ -63,6 +63,8 @@ type CityItem struct {
 	RelatedDataset    string            `json:"related_dataset,omitempty" cms:"related_dataset,reference"`
 	GeospatialjpIndex string            `json:"geospatialjp-index,omitempty" cms:"geospatialjp-index,reference"`
 	GeospatialjpData  string            `json:"geospatialjp-data,omitempty" cms:"geospatialjp-data,reference"`
+	// FME/Flow converter override (empty means use PlateauSpec setting)
+	Converter string `json:"converter,omitempty" cms:"converter,select"`
 	// meatadata
 	PlateauDataStatus string          `json:"plateau_data_status,omitempty" cms:"plateau_data_status,select,metadata"`
 	CityPublic        bool            `json:"city_public,omitempty" cms:"city_public,bool,metadata"`
@@ -188,20 +190,29 @@ type FeatureItem struct {
 	FeatureType string             `json:"featureType,omitempty" cms:"feature_type,select"`
 
 	// override city item's settings
-	PRCS        string `json:"prcs" cms:"prcs,text"`
-	Schemas     string `json:"schemas" cms:"schemas,asset"`
-	CodeLists   string `json:"codelists" cms:"code_lists,asset"`
-	ObjectLists string `json:"objectLists" cms:"object_lists,asset"`
+	Spec        string           `json:"spec,omitempty" cms:"spec,select"`
+	PRCS        string           `json:"prcs" cms:"prcs,text"`
+	Schemas     *cms.PublicAsset `json:"schemas" cms:"schemas,asset"`
+	CodeLists   *cms.PublicAsset `json:"codelists" cms:"codelists,asset"`
+	ObjectLists *cms.PublicAsset `json:"objectLists" cms:"objectLists,asset"`
+	// FME/Flow converter override (empty means use CityItem or PlateauSpec setting)
+	Converter string `json:"converter,omitempty" cms:"converter,select"`
 
 	// metadata
 	SkipQCConv       *cms.Tag `json:"skip_qc_conv,omitempty" cms:"skip_qc_conv,tag,metadata"`
 	Status           *cms.Tag `json:"status,omitempty" cms:"status,select,metadata"`
 	ConvertionStatus *cms.Tag `json:"conv_status,omitempty" cms:"conv_status,tag,metadata"`
 	QCStatus         *cms.Tag `json:"qc_status,omitempty" cms:"qc_status,tag,metadata"`
+	LODStatStatus    *cms.Tag `json:"lodstat_status,omitempty" cms:"lodstat_status,tag,metadata"`
+	MaxLODStatus     *cms.Tag `json:"maxlod_status,omitempty" cms:"maxlod_status,tag,metadata"`
 
 	// compat
 	SkipQC      bool `json:"skip_qc,omitempty" cms:"skip_qc,bool,metadata"`
 	SkipConvert bool `json:"skip_conv,omitempty" cms:"skip_conv,bool,metadata"`
+
+	// Flow fields for cancellation
+	FlowRunID    string `json:"flow_run_id,omitempty" cms:"flow_run_id,text,metadata"`
+	FlowTriggerID string `json:"flow_trigger_id,omitempty" cms:"flow_trigger_id,text,metadata"`
 }
 
 func (f *FeatureItem) FeatureTypeCode() string {
@@ -221,13 +232,44 @@ func (f *FeatureItem) ConvSettings() *ConvSettings {
 	if f == nil {
 		return nil
 	}
+	var schemas, codeLists, objectLists string
+	if f.Schemas != nil {
+		schemas = f.Schemas.URL
+	}
+	if f.CodeLists != nil {
+		codeLists = f.CodeLists.URL
+	}
+	if f.ObjectLists != nil {
+		objectLists = f.ObjectLists.URL
+	}
 	return &ConvSettings{
 		FeatureType: f.FeatureTypeCode(),
 		PRCS:        f.PRCS,
-		Schemas:     f.Schemas,
-		CodeLists:   f.CodeLists,
-		ObjectLists: f.ObjectLists,
+		Schemas:     schemas,
+		CodeLists:   codeLists,
+		ObjectLists: objectLists,
 	}
+}
+
+func (f *FeatureItem) SpecMajorVersionInt() int {
+	if f == nil || f.Spec == "" {
+		return 0
+	}
+	s := strings.TrimPrefix(f.Spec, "v")
+	s = strings.TrimPrefix(s, "第")
+	s = strings.TrimSuffix(s, "版")
+
+	m, _, ok := strings.Cut(s, ".")
+	if !ok {
+		m = s
+	}
+
+	v, err := strconv.Atoi(m)
+	if err != nil {
+		return 0
+	}
+
+	return v
 }
 
 type ConvSettings struct {
@@ -298,6 +340,19 @@ type FeatureItemDatum struct {
 func FeatureItemFrom(item *cms.Item) (i *FeatureItem) {
 	i = &FeatureItem{}
 	item.Unmarshal(i)
+
+	// fallback for old field keys (code_lists -> codelists, object_lists -> objectLists)
+	if i.CodeLists == nil {
+		if a := item.FieldByKey("code_lists").GetValue().Asset(); a != nil {
+			i.CodeLists = a
+		}
+	}
+	if i.ObjectLists == nil {
+		if a := item.FieldByKey("object_lists").GetValue().Asset(); a != nil {
+			i.ObjectLists = a
+		}
+	}
+
 	return
 }
 
@@ -507,6 +562,7 @@ func (item *FeatureItem) ReqType() ReqType {
 func (item *FeatureItem) IsQCAndConvSkipped() (skipQC bool, skipConv bool) {
 	const (
 		skip = "スキップ"
+		run  = "実行"
 		qc   = "品質検査"
 		conv = "変換"
 	)
@@ -523,15 +579,25 @@ func (item *FeatureItem) IsQCAndConvSkipped() (skipQC bool, skipConv bool) {
 	}
 
 	if item.SkipQCConv != nil {
-		if n := item.SkipQCConv.Name; strings.Contains(n, skip) {
-			qc := strings.Contains(n, qc)
-			conv := strings.Contains(n, conv)
-			if !qc && !conv {
+		n := item.SkipQCConv.Name
+		if strings.Contains(n, skip) {
+			hasQC := strings.Contains(n, qc)
+			hasConv := strings.Contains(n, conv)
+			if !hasQC && !hasConv {
 				skipQC = true
 				skipConv = true
 			} else {
-				skipQC = skipQC || qc
-				skipConv = skipConv || conv
+				skipQC = skipQC || hasQC
+				skipConv = skipConv || hasConv
+			}
+		} else if strings.Contains(n, run) {
+			// "実行" values: run what's explicitly mentioned, skip the rest.
+			// e.g. "変換のみ実行" → skipQC=true, "品質検査・変換を実行" → no additional skip
+			hasQC := strings.Contains(n, qc)
+			hasConv := strings.Contains(n, conv)
+			if hasQC || hasConv {
+				skipQC = skipQC || !hasQC
+				skipConv = skipConv || !hasConv
 			}
 		}
 	}
@@ -579,13 +645,13 @@ func (r ReqType) Title() string {
 }
 
 func (t ReqType) CMSStatus(s ConvertionStatus) (qc ConvertionStatus, conv ConvertionStatus) {
-	if t == ReqTypeConv {
+	switch t {
+	case ReqTypeConv:
 		conv = s
-	} else if t == ReqTypeQC {
+	case ReqTypeQC, ReqTypeQCConv:
+		// ReqTypeQCConvの場合も、品質検査ステータスのみを更新する
+		// 変換ステータスは品質検査成功後にReqTypeConvとして更新される
 		qc = s
-	} else {
-		qc = s
-		conv = s
 	}
 	return
 }
@@ -617,4 +683,16 @@ func (ty ReqType) Normalize() ReqType {
 		return ReqTypeQC
 	}
 	return ty
+}
+
+// GetEffectiveConverter returns the effective converter setting based on override priority:
+// FeatureItem.Converter > CityItem.Converter > specConverter (PlateauSpec.Converter) > default (empty string)
+func GetEffectiveConverter(featureItem *FeatureItem, cityItem *CityItem, specConverter string) string {
+	if featureItem != nil && featureItem.Converter != "" {
+		return featureItem.Converter
+	}
+	if cityItem != nil && cityItem.Converter != "" {
+		return cityItem.Converter
+	}
+	return specConverter
 }

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/joho/godotenv"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/stretchr/testify/assert"
@@ -59,7 +59,7 @@ func TestExtractDataFromCMS(t *testing.T) {
 		Project: prj,
 		Cache:   false,
 	})
-	all, err := c2.GetAll(ctx)
+	all, err := c2.GetAll(ctx, "")
 	assert.NoError(t, err)
 
 	t.Log("get all data done")

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"github.com/reearth/reearth-accounts/server/pkg/gqlclient"
 	"github.com/reearth/reearth-flow/api/internal/app/config"
 	authserver "github.com/reearth/reearth-flow/api/internal/infrastructure/auth"
 	"github.com/reearth/reearth-flow/api/internal/rbac"
@@ -48,17 +49,27 @@ func Start(debug bool, version string) {
 
 	repos, gateways, acRepos, acGateways := initReposAndGateways(ctx, conf, debug)
 
+	// Health checker
+	healthChecker := NewHealthChecker(conf, version, gateways.File, gateways.Redis)
+
 	// PermissionChecker
 	if conf.AccountsApiHost == "" {
-		log.Fatalf("accounts host configuration is required")
+		log.Error("accounts host configuration is required")
+		return
 	}
 	if _, err := url.Parse(conf.AccountsApiHost); err != nil {
-		log.Fatalf("invalid accounts host URL: %v", err)
+		log.Errorf("invalid accounts host URL: %v", err)
+		return
 	}
 	permissionChecker := cerbosClient.NewPermissionChecker(rbac.ServiceName, conf.AccountsApiHost)
 	if permissionChecker == nil {
-		log.Fatalf("failed to initialize permission checker")
+		log.Error("failed to initialize permission checker")
+		return
 	}
+
+	// AccountGQLClient
+	const accountsTimeoutSec = 30
+	accountGQLClient := gqlclient.NewClient(conf.AccountsApiHost, accountsTimeoutSec, authserver.NewDynamicAuthTransport())
 
 	serverCfg := &ServerConfig{
 		Config:            conf,
@@ -68,6 +79,8 @@ func Start(debug bool, version string) {
 		Gateways:          gateways,
 		AccountGateways:   acGateways,
 		PermissionChecker: permissionChecker,
+		AccountGQLClient:  accountGQLClient,
+		HealthChecker:     healthChecker,
 	}
 
 	httpServer := NewServer(ctx, serverCfg)
@@ -108,18 +121,20 @@ func Start(debug bool, version string) {
 }
 
 type WebServer struct {
-	address   string
 	appServer *echo.Echo
+	address   string
 }
 
 type ServerConfig struct {
-	Config            *config.Config
-	Debug             bool
-	Repos             *repo.Container
-	AccountRepos      *accountrepo.Container
-	Gateways          *gateway.Container
-	AccountGateways   *accountgateway.Container
 	PermissionChecker gateway.PermissionChecker
+	Config            *config.Config
+	Repos             *repo.Container
+	AccountRepos      *accountrepo.Container // TODO: Remove this field once the migration is complete.
+	Gateways          *gateway.Container
+	AccountGateways   *accountgateway.Container // TODO: Remove this field once the migration is complete.
+	AccountGQLClient  *gqlclient.Client
+	HealthChecker     *HealthChecker
+	Debug             bool
 }
 
 func NewServer(ctx context.Context, cfg *ServerConfig) *WebServer {
@@ -139,8 +154,6 @@ func NewServer(ctx context.Context, cfg *ServerConfig) *WebServer {
 	address := fmt.Sprintf("%s:%s", host, port)
 
 	e := initEcho(ctx, cfg)
-
-	authServer(ctx, e, &cfg.Config.AuthSrv, cfg.Repos)
 
 	return &WebServer{
 		address:   address,

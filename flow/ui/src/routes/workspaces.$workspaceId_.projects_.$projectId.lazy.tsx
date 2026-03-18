@@ -1,24 +1,28 @@
 import { createLazyFileRoute, useParams } from "@tanstack/react-router";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
-import { LoadingSplashscreen } from "@flow/components";
+import { Button, FlowLogo, LoadingSplashscreen } from "@flow/components";
+import BasicBoiler from "@flow/components/BasicBoiler";
+import ErrorPage from "@flow/components/errors/ErrorPage";
+import { ProjectCorruptionError } from "@flow/errors";
 import Editor from "@flow/features/Editor";
+import { VersionDialog } from "@flow/features/Editor/components/OverlayUI/components";
 import {
   ProjectIdWrapper,
   WorkspaceIdWrapper,
 } from "@flow/features/PageWrapper";
-import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
 import {
-  useJobSubscriptionsSetup,
-  useFullscreen,
-  useShortcuts,
-} from "@flow/hooks";
+  DEFAULT_ENTRY_GRAPH_ID,
+  GLOBAL_HOT_KEYS,
+} from "@flow/global-constants";
+import { useFullscreen, useJobSubscriptionsSetup } from "@flow/hooks";
 import { useAuth } from "@flow/lib/auth";
+import { useT } from "@flow/lib/i18n";
 import { useIndexedDB } from "@flow/lib/indexedDB";
 import useYjsSetup from "@flow/lib/yjs/useYjsSetup";
 import { useCurrentProject } from "@flow/stores";
-// import { useShortcut } from "@flow/hooks/useShortcut";
 
 export const Route = createLazyFileRoute(
   "/workspaces/$workspaceId_/projects_/$projectId",
@@ -31,6 +35,9 @@ export const Route = createLazyFileRoute(
         </ReactFlowProvider>
       </ProjectIdWrapper>
     </WorkspaceIdWrapper>
+  ),
+  errorComponent: ({ error, reset }) => (
+    <ErrorComponent error={error} onErrorReset={reset} />
   ),
 });
 
@@ -51,24 +58,28 @@ const EditorComponent = () => {
     }
   }, [accessToken, getAccessToken]);
 
-  useShortcuts([
-    {
-      keyBinding: { key: "+", commandKey: false },
-      callback: zoomIn,
+  useHotkeys(
+    GLOBAL_HOT_KEYS,
+    (event, handler) => {
+      const hasModifier = event.metaKey || event.ctrlKey;
+
+      switch (handler.keys?.join("")) {
+        case "equal":
+          zoomIn();
+          break;
+        case "minus":
+          zoomOut();
+          break;
+        case "0":
+          fitView();
+          break;
+        case "f":
+          if (hasModifier) handleFullscreenToggle();
+          break;
+      }
     },
-    {
-      keyBinding: { key: "-", commandKey: false },
-      callback: zoomOut,
-    },
-    {
-      keyBinding: { key: "0", commandKey: true },
-      callback: fitView,
-    },
-    {
-      keyBinding: { key: "f", commandKey: true },
-      callback: handleFullscreenToggle,
-    },
-  ]);
+    { preventDefault: true },
+  );
 
   const { projectId }: { projectId: string } = useParams({
     strict: false,
@@ -92,20 +103,79 @@ const EditorComponent = () => {
     undoManager,
     undoTrackerActionWrapper,
     yDocState,
+    yAwareness,
   } = useYjsSetup({
     isProtected: true,
     projectId,
     workflowId: DEFAULT_ENTRY_GRAPH_ID,
   });
 
-  return !yWorkflows || !isSynced || !undoTrackerActionWrapper ? (
+  return !yWorkflows ||
+    !isSynced ||
+    !undoTrackerActionWrapper ||
+    !yAwareness ? (
     <LoadingSplashscreen />
   ) : (
     <Editor
       yWorkflows={yWorkflows}
       undoManager={undoManager}
       yDoc={yDocState}
+      yAwareness={yAwareness}
       undoTrackerActionWrapper={undoTrackerActionWrapper}
     />
+  );
+};
+
+const ErrorComponent = ({
+  error,
+  onErrorReset,
+}: {
+  error: Error;
+  onErrorReset: () => void;
+}) => {
+  const [openVersionDialog, setOpenVersionDialog] = useState(false);
+  const t = useT();
+
+  const [currentProject] = useCurrentProject();
+
+  const { yDocState } = useYjsSetup({
+    isProtected: true,
+    projectId: currentProject?.id,
+    workflowId: DEFAULT_ENTRY_GRAPH_ID,
+  });
+
+  const handleCloseDialog = () => {
+    setOpenVersionDialog(false);
+  };
+
+  return (
+    <>
+      {error instanceof ProjectCorruptionError ? (
+        <div className="flex h-screen w-full flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center gap-8">
+            <BasicBoiler
+              text={t("Project or version is corrupted.")}
+              icon={<FlowLogo className="size-16 text-accent" />}
+            />
+            <Button
+              onClick={() => setOpenVersionDialog(true)}
+              variant="default"
+              className="ml-4">
+              {t("Revert to a previous version")}
+            </Button>
+          </div>
+          {openVersionDialog && (
+            <VersionDialog
+              yDoc={yDocState}
+              project={currentProject}
+              onDialogClose={handleCloseDialog}
+              onErrorReset={onErrorReset}
+            />
+          )}
+        </div>
+      ) : (
+        <ErrorPage />
+      )}
+    </>
   );
 };

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/samber/lo"
 )
 
 type CellPos struct {
@@ -77,5 +77,6 @@ func fromXCode(code int) string {
 		code = next - 1
 	}
 
-	return string(lo.Reverse(x))
+	slices.Reverse(x)
+	return string(x)
 }

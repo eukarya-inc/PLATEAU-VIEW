@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/mongox/mongotest"
 	"github.com/reearth/reearthx/rerror"

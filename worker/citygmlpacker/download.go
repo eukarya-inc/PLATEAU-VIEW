@@ -45,7 +45,7 @@ func (d *Download) Download(client *http.Client) bool {
 		return false
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		_ = d.Close()

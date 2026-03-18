@@ -3,10 +3,10 @@ package interfaces
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"

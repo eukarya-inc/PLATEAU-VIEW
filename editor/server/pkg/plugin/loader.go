@@ -2,14 +2,12 @@ package plugin
 
 import (
 	"context"
-
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
-type Loader func(context.Context, []id.PluginID) (List, error)
+type Loader func(context.Context, []ID) (List, error)
 
 func LoaderFrom(data ...*Plugin) Loader {
-	return func(ctx context.Context, ids []id.PluginID) (List, error) {
+	return func(ctx context.Context, ids []ID) (List, error) {
 		res := make(List, 0, len(ids))
 		for _, i := range ids {
 			found := false
@@ -28,8 +26,8 @@ func LoaderFrom(data ...*Plugin) Loader {
 	}
 }
 
-func LoaderFromMap(data map[id.PluginID]*Plugin) Loader {
-	return func(ctx context.Context, ids []id.PluginID) (List, error) {
+func LoaderFromMap(data map[ID]*Plugin) Loader {
+	return func(ctx context.Context, ids []ID) (List, error) {
 		res := make(List, 0, len(ids))
 		for _, i := range ids {
 			if d, ok := data[i]; ok {

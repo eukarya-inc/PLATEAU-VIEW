@@ -11,6 +11,9 @@ func New() *repo.Container {
 	return &repo.Container{
 		Asset:          NewAsset(),
 		Config:         NewConfig(),
+		DatasetSchema:  NewDatasetSchema(),
+		Dataset:        NewDataset(),
+		Layer:          NewLayer(),
 		NLSLayer:       NewNLSLayer(),
 		Style:          NewStyle(),
 		Plugin:         NewPlugin(),
@@ -18,6 +21,7 @@ func New() *repo.Container {
 		PropertySchema: NewPropertySchema(),
 		Property:       NewProperty(),
 		Scene:          NewScene(),
+		Tag:            NewTag(),
 		Workspace:      accountmemory.NewWorkspace(),
 		User:           accountmemory.NewUser(),
 		SceneLock:      NewSceneLock(),

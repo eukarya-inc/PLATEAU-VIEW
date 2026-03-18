@@ -2,8 +2,6 @@ package storytelling
 
 import (
 	"time"
-
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 type StoryBuilder struct {
@@ -16,7 +14,7 @@ func NewStory() *StoryBuilder {
 
 func (b *StoryBuilder) Build() (*Story, error) {
 	if b.s.id.IsNil() {
-		return nil, id.ErrInvalidID
+		return nil, ErrInvalidID
 	}
 	if b.s.updatedAt.IsZero() {
 		b.s.updatedAt = b.s.CreatedAt()
@@ -36,22 +34,22 @@ func (b *StoryBuilder) MustBuild() *Story {
 	return s
 }
 
-func (b *StoryBuilder) ID(id id.StoryID) *StoryBuilder {
+func (b *StoryBuilder) ID(id StoryID) *StoryBuilder {
 	b.s.id = id
 	return b
 }
 
 func (b *StoryBuilder) NewID() *StoryBuilder {
-	b.s.id = id.NewStoryID()
+	b.s.id = NewStoryID()
 	return b
 }
 
-func (b *StoryBuilder) Property(property id.PropertyID) *StoryBuilder {
+func (b *StoryBuilder) Property(property PropertyID) *StoryBuilder {
 	b.s.property = property
 	return b
 }
 
-func (b *StoryBuilder) Scene(scene id.SceneID) *StoryBuilder {
+func (b *StoryBuilder) Scene(scene SceneID) *StoryBuilder {
 	b.s.scene = scene
 	return b
 }
@@ -120,15 +118,5 @@ func (b *StoryBuilder) PublicImage(image string) *StoryBuilder {
 
 func (b *StoryBuilder) PublicNoIndex(noIndex bool) *StoryBuilder {
 	b.s.publicNoIndex = noIndex
-	return b
-}
-
-func (b *StoryBuilder) EnableGa(enableGa bool) *StoryBuilder {
-	b.s.enableGa = enableGa
-	return b
-}
-
-func (b *StoryBuilder) TrackingID(trackingID string) *StoryBuilder {
-	b.s.trackingID = trackingID
 	return b
 }

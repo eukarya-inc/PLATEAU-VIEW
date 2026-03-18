@@ -3,10 +3,10 @@ package gqlmodel
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/operator"
-	"github.com/reearth/reearth-cms/server/pkg/thread"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/operator"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/thread"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -83,4 +83,3 @@ func TestConvertThread_FromResourceType(t *testing.T) {
 	assert.Equal(t, want4, got4)
 	assert.False(t, ok4)
 }
-

@@ -1,10 +1,8 @@
 package property
 
-import "github.com/reearth/reearth/server/pkg/id"
-
 type SchemaFieldPointer struct {
-	SchemaGroup id.PropertySchemaGroupID
-	Field       id.PropertyFieldID
+	SchemaGroup SchemaGroupID
+	Field       FieldID
 }
 
 func (p SchemaFieldPointer) Pointer() *Pointer {

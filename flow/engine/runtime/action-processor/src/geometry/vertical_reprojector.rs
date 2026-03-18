@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use nusamai_projection::vshift::Jgd2011ToWgs84;
 use reearth_flow_runtime::{
@@ -24,7 +25,7 @@ impl ProcessorFactory for VerticalReprojectorFactory {
     }
 
     fn description(&self) -> &str {
-        "Reprojects the geometry of a feature to a specified coordinate system"
+        "Reproject Vertical Coordinates Between Datums"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +53,12 @@ impl ProcessorFactory for VerticalReprojectorFactory {
         let params: VerticalReprojectorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::VerticalReprojectorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::VerticalReprojectorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -82,9 +81,13 @@ enum VerticalReprojectorType {
     Jgd2011ToWgs84,
 }
 
+/// # Vertical Reprojector Parameters
+/// Configure the type of vertical datum conversion to apply
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VerticalReprojectorParam {
+    /// # Reprojector Type
+    /// The type of vertical coordinate transformation to apply
     reprojector_type: VerticalReprojectorType,
 }
 
@@ -109,17 +112,17 @@ impl Processor for VerticalReprojector {
         match geometry_value {
             GeometryValue::CityGmlGeometry(mut geos) => {
                 geos.transform_inplace(&self.reprojector);
-                feature.geometry = Geometry {
+                feature.geometry = Arc::new(Geometry {
                     epsg,
                     value: GeometryValue::CityGmlGeometry(geos),
-                };
+                });
             }
             GeometryValue::FlowGeometry3D(mut geos) => {
                 geos.transform_inplace(&self.reprojector);
-                feature.geometry = Geometry {
+                feature.geometry = Arc::new(Geometry {
                     epsg,
                     value: GeometryValue::FlowGeometry3D(geos),
-                };
+                });
             }
             GeometryValue::None | GeometryValue::FlowGeometry2D(..) => {}
         }
@@ -127,7 +130,11 @@ impl Processor for VerticalReprojector {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

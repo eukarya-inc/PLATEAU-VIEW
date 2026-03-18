@@ -10,12 +10,12 @@ import (
 )
 
 type AuthConfig struct {
-	ISS      string   `pp:",omitempty"`
-	AUD      []string `pp:",omitempty"`
 	ALG      *string  `pp:",omitempty"`
 	TTL      *int     `pp:",omitempty"`
 	ClientID *string  `pp:",omitempty"`
 	JWKSURI  *string  `pp:",omitempty"`
+	ISS      string   `pp:",omitempty"`
+	AUD      []string `pp:",omitempty"`
 }
 
 func (a AuthConfig) JWTProvider() appx.JWTProvider {
@@ -131,7 +131,7 @@ func getAuthDomain(url string) string {
 	}
 	// Auth0 JS library adds slash to the end of the domain (issuer)
 	if !strings.HasSuffix(url, "/") {
-		url = url + "/"
+		url += "/"
 	}
 	return url
 }

@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/project"
-	"github.com/reearth/reearth-cms/server/pkg/thread"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/thread"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/stretchr/testify/assert"
 )
@@ -68,7 +68,7 @@ func TestNewAsset(t *testing.T) {
 	}{
 		{
 			name: "new",
-			a:    asset.New().ID(aId).Project(pId).CreatedByUser(uId).CreatedAt(now).Thread(tId.Ref()).UUID(uuId.String()).Size(123).MustBuild(),
+			a:    asset.New().ID(aId).Project(pId).CreatedByUser(uId).CreatedAt(now).Thread(tId.Ref()).UUID(uuId.String()).Size(123).Public(true).MustBuild(),
 			want: &AssetDocument{
 				ID:                      aId.String(),
 				Project:                 pId.String(),
@@ -81,6 +81,7 @@ func TestNewAsset(t *testing.T) {
 				UUID:                    uuId.String(),
 				Thread:                  tId.StringRef(),
 				ArchiveExtractionStatus: "",
+				Public: true,
 			},
 			aDocId: aId.String(),
 		},

@@ -17,7 +17,7 @@ export default function DevTools() {
 
   return (
     <div className="react-flow__devtools">
-      <div className="absolute left-[50px] top-0">
+      <div className="absolute top-[10%] right-[35%]">
         <DevToolButton
           setActive={setNodeInspectorActive}
           active={nodeInspectorActive}

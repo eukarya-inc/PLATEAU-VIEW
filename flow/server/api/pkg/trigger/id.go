@@ -1,15 +1,17 @@
 package trigger
 
 import (
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
-type ID = id.TriggerID
-type DeploymentID = id.DeploymentID
-type ProjectID = id.ProjectID
-type WorkflowID = id.WorkflowID
-type WorkspaceID = accountdomain.WorkspaceID
+type (
+	ID           = id.TriggerID
+	DeploymentID = id.DeploymentID
+	ProjectID    = id.ProjectID
+	WorkflowID   = id.WorkflowID
+	WorkspaceID  = accountsid.WorkspaceID
+)
 
 var NewID = id.NewTriggerID
 

@@ -4,17 +4,26 @@ import (
 	"context"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/usecasex"
 )
 
 type FieldAndValue struct {
 	Field schema.FieldID
 	Value *value.Multiple
+}
+
+type CopyParams struct {
+	OldSchema   id.SchemaID
+	NewSchema   id.SchemaID
+	NewModel    id.ModelID
+	Timestamp   time.Time
+	User        *string
+	Integration *string
 }
 
 type Item interface {
@@ -36,4 +45,5 @@ type Item interface {
 	UpdateRef(context.Context, id.ItemID, version.Ref, *version.VersionOrRef) error
 	Remove(context.Context, id.ItemID) error
 	Archive(context.Context, id.ItemID, id.ProjectID, bool) error
+	Copy(context.Context, CopyParams) (*string, *string, error)
 }

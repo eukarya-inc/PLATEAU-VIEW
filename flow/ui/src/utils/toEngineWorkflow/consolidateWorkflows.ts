@@ -1,5 +1,9 @@
 import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
-import type { EngineReadyWorkflow, Workflow } from "@flow/types";
+import type {
+  EngineReadyWorkflow,
+  WorkflowVariable,
+  Workflow,
+} from "@flow/types";
 
 import { generateUUID } from "../generateUUID";
 
@@ -7,6 +11,7 @@ import { createSubGraphs } from "./createSubGraphs";
 
 export const consolidateWorkflows = (
   name: string,
+  workflowVariables: WorkflowVariable[] = [],
   workflows: Workflow[],
 ): EngineReadyWorkflow | undefined => {
   const defaultEntryWorkflow = workflows.find(
@@ -15,6 +20,14 @@ export const consolidateWorkflows = (
   if (!defaultEntryWorkflow) return undefined;
 
   const newEntryId = generateUUID();
+
+  const withVariables = Object.fromEntries(
+    workflowVariables.map((v) => [
+      v.name,
+      v.defaultValue === "" ? null : v.defaultValue, // Convert empty string defaults to null for engine compatibility
+    ]),
+  );
+
   const convertedWorkflows = workflows.map((wf) => {
     return wf.id === DEFAULT_ENTRY_GRAPH_ID ? { ...wf, id: newEntryId } : wf;
   });
@@ -25,7 +38,7 @@ export const consolidateWorkflows = (
     id: generateUUID(),
     name,
     entryGraphId: newEntryId,
-    // with // TODO: conversion of data.params to with
+    with: withVariables,
     graphs: subGraphs,
   };
 

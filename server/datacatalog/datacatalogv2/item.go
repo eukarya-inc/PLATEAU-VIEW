@@ -1,8 +1,8 @@
 package datacatalogv2
 
 import (
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2/datacatalogutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2/datacatalogutil"
 	"github.com/samber/lo"
 )
 

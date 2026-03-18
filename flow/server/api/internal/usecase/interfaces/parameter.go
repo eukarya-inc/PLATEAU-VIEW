@@ -8,12 +8,14 @@ import (
 )
 
 type DeclareParameterParam struct {
-	Index     *int // Optional, will be set to last position if nil
-	Name      string
-	ProjectID id.ProjectID
-	Required  bool
-	Type      parameter.Type
-	Value     interface{}
+	DefaultValue any
+	Config       any
+	Index        *int
+	Name         string
+	Type         parameter.Type
+	ProjectID    id.ProjectID
+	Required     bool
+	Public       bool
 }
 
 type UpdateParameterOrderParam struct {
@@ -22,9 +24,32 @@ type UpdateParameterOrderParam struct {
 	ProjectID id.ProjectID
 }
 
-type UpdateParameterValueParam struct {
-	ParamID id.ParameterID
-	Value   interface{}
+type UpdateParameterParam struct {
+	DefaultValue  any
+	Config        any
+	NameValue     string
+	TypeValue     parameter.Type
+	ParamID       id.ParameterID
+	RequiredValue bool
+	PublicValue   bool
+}
+
+type UpdateParameterBatchItemParam struct {
+	DefaultValue  any
+	Config        any
+	NameValue     *string
+	RequiredValue *bool
+	PublicValue   *bool
+	TypeValue     *parameter.Type
+	ParamID       id.ParameterID
+}
+
+type UpdateParametersParam struct {
+	Creates   []DeclareParameterParam
+	Updates   []UpdateParameterBatchItemParam
+	Deletes   id.ParameterIDList
+	Reorders  []UpdateParameterOrderParam
+	ProjectID id.ProjectID
 }
 
 type Parameter interface {
@@ -32,6 +57,8 @@ type Parameter interface {
 	Fetch(context.Context, id.ParameterIDList) (*parameter.ParameterList, error)
 	FetchByProject(context.Context, id.ProjectID) (*parameter.ParameterList, error)
 	RemoveParameter(context.Context, id.ParameterID) (id.ParameterID, error)
+	RemoveParameters(context.Context, id.ParameterIDList) (id.ParameterIDList, error)
 	UpdateParameterOrder(context.Context, UpdateParameterOrderParam) (*parameter.ParameterList, error)
-	UpdateParameterValue(context.Context, UpdateParameterValueParam) (*parameter.Parameter, error)
+	UpdateParameter(context.Context, UpdateParameterParam) (*parameter.Parameter, error)
+	UpdateParameters(context.Context, UpdateParametersParam) (*parameter.ParameterList, error)
 }

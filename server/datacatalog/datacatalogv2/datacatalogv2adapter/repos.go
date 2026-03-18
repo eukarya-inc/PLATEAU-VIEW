@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
 )
@@ -23,15 +23,36 @@ func NewRepos() *Repos {
 	return r
 }
 
-func (r *Repos) Prepare(ctx context.Context, f *Fetcher) error {
+// Prepare registers the fetcher for a project but doesn't fetch data.
+// Actual fetching happens lazily when GetOrFetch is called.
+func (r *Repos) Prepare(_ context.Context, f *Fetcher) error {
 	project := f.Project()
 	if _, ok := r.fetchers.Load(project); ok {
 		return nil
 	}
 
 	r.setCMS(f)
-	_, err := r.Update(ctx, project)
-	return err
+	return nil
+}
+
+// GetOrFetch returns the repo for a project, fetching from CMS if not cached.
+func (r *Repos) GetOrFetch(ctx context.Context, project string) *plateauapi.RepoWrapper {
+	repo := r.Repo(project)
+	if repo != nil {
+		return repo
+	}
+
+	// If fetcher is not registered, return nil
+	if _, ok := r.fetchers.Load(project); !ok {
+		return nil
+	}
+
+	// Fetch and cache
+	if _, err := r.Update(ctx, project); err != nil {
+		return nil
+	}
+
+	return r.Repo(project)
 }
 
 func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUpdateResult, error) {

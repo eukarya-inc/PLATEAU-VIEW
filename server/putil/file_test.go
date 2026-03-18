@@ -16,7 +16,7 @@ func TestDeliverFile(t *testing.T) {
 	tmppath := filepath.Join(tmpdir, "test.txt")
 	tmppath2 := filepath.Join(tmpdir, "test2.txt")
 	_ = os.WriteFile(tmppath, []byte("test"), 0644)
-	defer os.Remove(tmppath)
+	defer func() { _ = os.Remove(tmppath) }()
 
 	e := echo.New()
 

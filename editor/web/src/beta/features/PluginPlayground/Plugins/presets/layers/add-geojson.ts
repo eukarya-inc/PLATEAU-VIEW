@@ -94,7 +94,6 @@ const layerGeojsonFromUrl = {
 };
 
 // Add the inline GeoJSON layer to Re:Earth
-// Documentation on Layers "add" event: https://visualizer.developer.reearth.io/plugin-api/layers/#add
 reearth.layers.add(layerGeojsonInline);
 
 // Add the GeoJSON layer from the URL to Re:Earth
@@ -104,5 +103,6 @@ reearth.layers.add(layerGeojsonFromUrl);
 
 export const addGeojson: PluginType = {
   id: "add-geojson",
-  files: [yamlFile, widgetFile]
+  title: "Add GeoJSON",
+  files: [widgetFile, yamlFile]
 };

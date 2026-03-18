@@ -1,21 +1,27 @@
 package gqlmodel
 
 import (
-	"github.com/reearth/reearthx/account/accountdomain/workspace"
+	"github.com/reearth/reearth-accounts/server/pkg/role"
+	accountsworkspace "github.com/reearth/reearth-accounts/server/pkg/workspace"
 )
 
-func ToWorkspace(t *workspace.Workspace) *Workspace {
+func ToWorkspace(t *accountsworkspace.Workspace) *Workspace {
 	if t == nil {
 		return nil
 	}
 
-	memberMap := t.Members().Users()
-	members := make([]*WorkspaceMember, 0, len(memberMap))
-	for u, r := range memberMap {
-		members = append(members, &WorkspaceMember{
-			UserID: IDFrom(u),
-			Role:   ToRole(r.Role),
-		})
+	members := make([]*WorkspaceMember, 0, t.Members().Count())
+
+	for userID, memberInfo := range t.Members().Users() {
+		workspaceMember := &WorkspaceMember{
+			UserID: IDFrom(userID),
+			Role:   Role(memberInfo.Role),
+			User: &User{
+				ID: IDFrom(userID),
+			},
+		}
+
+		members = append(members, workspaceMember)
 	}
 
 	return &Workspace{
@@ -26,30 +32,17 @@ func ToWorkspace(t *workspace.Workspace) *Workspace {
 	}
 }
 
-func ToRole(r workspace.Role) Role {
+func FromRole(r Role) role.RoleType {
 	switch r {
-	case workspace.RoleReader:
-		return RoleReader
-	case workspace.RoleWriter:
-		return RoleWriter
-	case workspace.RoleMaintainer:
-		return RoleMaintainer
-	case workspace.RoleOwner:
-		return RoleOwner
-	}
-	return Role("")
-}
-
-func FromRole(r Role) workspace.Role {
-	switch r {
-	case RoleReader:
-		return workspace.RoleReader
-	case RoleWriter:
-		return workspace.RoleWriter
-	case RoleMaintainer:
-		return workspace.RoleMaintainer
 	case RoleOwner:
-		return workspace.RoleOwner
+		return role.RoleOwner
+	case RoleMaintainer:
+		return role.RoleMaintainer
+	case RoleWriter:
+		return role.RoleWriter
+	case RoleReader:
+		return role.RoleReader
+	default:
+		return role.RoleType("")
 	}
-	return workspace.Role("")
 }

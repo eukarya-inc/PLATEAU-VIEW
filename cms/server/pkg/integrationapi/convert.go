@@ -3,9 +3,9 @@
 package integrationapi
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/event"
-	"github.com/reearth/reearth-cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/event"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 )
@@ -14,13 +14,13 @@ var (
 	ErrUnsupportedEntity = rerror.NewE(i18n.T("unsupported entity"))
 )
 
-func New(obj any, v string, urlResolver asset.URLResolver) (res any, err error) {
+func New(obj any, v string) (res any, err error) {
 	// note: version (v) is not used currently
 	switch o := obj.(type) {
 	case *event.Event[any]:
-		res, err = NewEvent(o, v, urlResolver)
+		res, err = NewEvent(o, v)
 	case *asset.Asset:
-		res = NewAsset(o, nil, urlResolver(o), true)
+		res = NewAsset(o, nil, true)
 	case *asset.File:
 		res = ToAssetFile(o, true)
 	case *item.Item:

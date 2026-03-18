@@ -23,7 +23,7 @@ impl ProcessorFactory for ElevationExtractorFactory {
     }
 
     fn description(&self) -> &str {
-        "Extracts a feature’s first z coordinate value, storing it in an attribute."
+        "Extract Z-Coordinate Elevation to Attribute"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -51,14 +51,12 @@ impl ProcessorFactory for ElevationExtractorFactory {
         let params: ElevationExtractorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::ElevationExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::ElevationExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -73,9 +71,13 @@ impl ProcessorFactory for ElevationExtractorFactory {
     }
 }
 
+/// # Elevation Extractor Parameters
+/// Configure where to store the extracted elevation value from geometry coordinates
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ElevationExtractorParam {
+    /// # Output Attribute
+    /// Name of the attribute where the extracted elevation value will be stored
     output_attribute: Attribute,
 }
 
@@ -106,8 +108,8 @@ impl Processor for ElevationExtractor {
             }
             GeometryValue::FlowGeometry2D(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
-                    self.output_attribute.clone(),
+                feature.insert(
+                    &self.output_attribute,
                     AttributeValue::Number(
                         serde_json::Number::from_f64(geometry.elevation()).ok_or(
                             GeometryProcessorError::ElevationExtractor(
@@ -120,8 +122,8 @@ impl Processor for ElevationExtractor {
             }
             GeometryValue::FlowGeometry3D(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
-                    self.output_attribute.clone(),
+                feature.insert(
+                    &self.output_attribute,
                     AttributeValue::Number(
                         serde_json::Number::from_f64(geometry.elevation()).ok_or(
                             GeometryProcessorError::ElevationExtractor(
@@ -134,8 +136,8 @@ impl Processor for ElevationExtractor {
             }
             GeometryValue::CityGmlGeometry(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
-                    self.output_attribute.clone(),
+                feature.insert(
+                    &self.output_attribute,
                     AttributeValue::Number(
                         serde_json::Number::from_f64(geometry.elevation()).ok_or(
                             GeometryProcessorError::ElevationExtractor(
@@ -150,7 +152,11 @@ impl Processor for ElevationExtractor {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

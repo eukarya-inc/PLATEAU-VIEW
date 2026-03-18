@@ -29,7 +29,7 @@ const JobRunDialog: React.FC<Props> = ({ setShowDialog }) => {
     Deployment | undefined
   >(undefined);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [currentOrder, setCurrentOrder] = useState<OrderDirection>(
+  const [currentOrder, setCurrentOrderDir] = useState<OrderDirection>(
     OrderDirection.Desc,
   );
   const [openSelectDeploymentsDialog, setOpenSelectDeploymentsDialog] =
@@ -70,7 +70,7 @@ const JobRunDialog: React.FC<Props> = ({ setShowDialog }) => {
             <div
               className="flex h-8 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
               onClick={() => setOpenSelectDeploymentsDialog(true)}>
-              <span className="cursor-default whitespace-nowrap pr-2 text-muted-foreground">
+              <span className="cursor-default pr-2 whitespace-nowrap text-muted-foreground">
                 {t("Select Deployment: ")}
               </span>
               {selectedDeployment ? (
@@ -100,12 +100,11 @@ const JobRunDialog: React.FC<Props> = ({ setShowDialog }) => {
           deployments={deployments}
           currentPage={currentPage}
           totalPages={totalPages}
-          currentOrder={currentOrder}
           isFetching={isFetching}
           setShowDialog={() => setOpenSelectDeploymentsDialog(false)}
-          handleSelectDeployment={selectDeployment}
+          onSelectDeployment={selectDeployment}
           setCurrentPage={setCurrentPage}
-          setCurrentOrder={setCurrentOrder}
+          setCurrentOrderDir={setCurrentOrderDir}
         />
       )}
     </Dialog>

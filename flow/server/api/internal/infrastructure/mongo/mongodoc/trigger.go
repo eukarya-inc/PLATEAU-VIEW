@@ -3,28 +3,30 @@ package mongodoc
 import (
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/trigger"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"golang.org/x/exp/slices"
 )
 
 type TriggerDocument struct {
-	ID            string    `bson:"id"`
-	WorkspaceID   string    `bson:"workspaceid"`
-	DeploymentID  string    `bson:"deploymentid"`
-	Description   string    `bson:"description"`
-	EventSource   string    `bson:"eventsource"`
-	TimeInterval  string    `bson:"timeinterval,omitempty"`
-	AuthToken     string    `bson:"authtoken,omitempty"`
-	CreatedAt     time.Time `bson:"createdat"`
-	UpdatedAt     time.Time `bson:"updatedat"`
-	LastTriggered time.Time `bson:"lasttriggered,omitempty"`
+	CreatedAt     time.Time          `bson:"createdat"`
+	UpdatedAt     time.Time          `bson:"updatedat"`
+	LastTriggered time.Time          `bson:"lasttriggered,omitempty"`
+	Enabled       *bool              `bson:"enabled,omitempty"`
+	ID            string             `bson:"id"`
+	WorkspaceID   string             `bson:"workspaceid"`
+	DeploymentID  string             `bson:"deploymentid"`
+	Description   string             `bson:"description"`
+	EventSource   string             `bson:"eventsource"`
+	TimeInterval  string             `bson:"timeinterval,omitempty"`
+	AuthToken     string             `bson:"authtoken,omitempty"`
+	Variables     []VariableDocument `bson:"variables,omitempty"`
 }
 
 type TriggerConsumer = Consumer[*TriggerDocument, *trigger.Trigger]
 
-func NewTriggerConsumer(workspaces []accountdomain.WorkspaceID) *TriggerConsumer {
+func NewTriggerConsumer(workspaces []accountsid.WorkspaceID) *TriggerConsumer {
 	return NewConsumer[*TriggerDocument, *trigger.Trigger](func(t *trigger.Trigger) bool {
 		return workspaces == nil || slices.Contains(workspaces, t.Workspace())
 	})
@@ -57,6 +59,13 @@ func NewTrigger(t *trigger.Trigger) (*TriggerDocument, string) {
 		doc.LastTriggered = *lastTriggered
 	}
 
+	e := t.Enabled()
+	doc.Enabled = &e
+
+	if vs := t.Variables(); len(vs) > 0 {
+		doc.Variables = VariablesToDoc(vs)
+	}
+
 	return doc, tid
 }
 
@@ -66,7 +75,7 @@ func (d *TriggerDocument) Model() (*trigger.Trigger, error) {
 		return nil, err
 	}
 
-	wid, err := accountdomain.WorkspaceIDFrom(d.WorkspaceID)
+	wid, err := accountsid.WorkspaceIDFrom(d.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +88,12 @@ func (d *TriggerDocument) Model() (*trigger.Trigger, error) {
 	eventSource := trigger.EventSourceType(d.EventSource)
 	timeInterval := trigger.TimeInterval(d.TimeInterval)
 
-	return trigger.New().
+	enabled := true
+	if d.Enabled != nil {
+		enabled = *d.Enabled
+	}
+
+	b := trigger.New().
 		ID(tid).
 		Workspace(wid).
 		Deployment(did).
@@ -87,7 +101,14 @@ func (d *TriggerDocument) Model() (*trigger.Trigger, error) {
 		EventSource(eventSource).
 		TimeInterval(timeInterval).
 		AuthToken(d.AuthToken).
+		CreatedAt(d.CreatedAt).
 		UpdatedAt(d.UpdatedAt).
 		LastTriggered(d.LastTriggered).
-		Build()
+		Enabled(enabled)
+
+	if vs := VariablesFromDoc(d.Variables); len(vs) > 0 {
+		b = b.Variables(vs)
+	}
+
+	return b.Build()
 }

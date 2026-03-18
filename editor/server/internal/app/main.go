@@ -2,18 +2,19 @@ package app
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"os"
-	"strconv"
+	"os/signal"
 
+	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth/server/internal/app/config"
-	mongorepo "github.com/reearth/reearth/server/internal/infrastructure/mongo"
-	"github.com/reearth/reearth/server/internal/infrastructure/mongo/migration"
+	"github.com/reearth/reearth/server/internal/usecase/gateway"
+	"github.com/reearth/reearth/server/internal/usecase/repo"
+	"github.com/reearth/reearthx/account/accountusecase/accountgateway"
+	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"github.com/reearth/reearthx/log"
-	"github.com/reearth/reearthx/mongox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
+	"golang.org/x/net/http2"
 )
 
 func Start(debug bool, version string) {
@@ -41,55 +42,85 @@ func Start(debug bool, version string) {
 		}
 	}()
 
-	// run migration
-	if os.Getenv("RUN_MIGRATION") == "true" {
-		client, err := mongo.Connect(
-			ctx,
-			options.Client().
-				ApplyURI(conf.DB).
-				SetMonitor(otelmongo.NewMonitor()),
-		)
+	// Init repositories
+	repos, gateways, acRepos, acGateways := initReposAndGateways(ctx, conf, debug)
 
-		if err != nil {
-			log.Fatalf("failed to connect to mongo: %v", err)
-			return
-		}
+	// Start web server
+	NewServer(ctx, &ServerConfig{
+		Config:          conf,
+		Debug:           debug,
+		Repos:           repos,
+		AccountRepos:    acRepos,
+		Gateways:        gateways,
+		AccountGateways: acGateways,
+	}).Run()
+}
 
-		clientx := mongox.NewClient(conf.DB_Vis, client)
-		db := clientx.Database()
+type WebServer struct {
+	address   string
+	appServer *echo.Echo
+}
 
-		lock, err := mongorepo.NewLock(db.Collection("locks"))
-		if err != nil {
-			log.Fatalf("failed to create lock: %v", err)
-		}
+type ServerConfig struct {
+	Config          *config.Config
+	Debug           bool
+	Repos           *repo.Container
+	AccountRepos    *accountrepo.Container
+	Gateways        *gateway.Container
+	AccountGateways *accountgateway.Container
+}
 
-		migrationKeyStr := os.Getenv("MIGRATION_KEY")
-		if migrationKeyStr != "" {
-			migrationKey, err := strconv.ParseInt(migrationKeyStr, 10, 64)
-			if err != nil {
-				log.Fatalf("Failed to parse MIGRATION_KEY: %v", err)
-				return
-			}
-			result, err := db.Collection("config").UpdateOne(ctx, bson.M{}, bson.M{
-				"$set": bson.M{
-					"migration": migrationKey,
-				},
-			})
-			if err != nil {
-				log.Fatalf("failed to migration set: %v", err)
-				return
-			}
-			log.Infof("MatchedCount: %d, ModifiedCount: %d migration key: %s \n", result.MatchedCount, result.ModifiedCount, migrationKey)
-		}
-
-		log.Infof("------migration start------")
-		if err := migration.Do(ctx, clientx, mongorepo.NewConfig(db.Collection("config"), lock)); err != nil {
-			log.Fatalf("failed to run migration: %v", err)
-		}
-		log.Infof("------migration done------")
-		return
+func NewServer(ctx context.Context, cfg *ServerConfig) *WebServer {
+	port := cfg.Config.Port
+	if port == "" {
+		port = "8080"
 	}
 
-	// run server
-	runServer(ctx, conf, debug)
+	host := cfg.Config.ServerHost
+	if host == "" {
+		if cfg.Debug {
+			host = "localhost"
+		} else {
+			host = "0.0.0.0"
+		}
+	}
+	address := host + ":" + port
+
+	w := &WebServer{
+		address: address,
+	}
+
+	w.appServer = initEcho(ctx, cfg)
+	return w
+}
+
+func (w *WebServer) Run() {
+	defer log.Infof("Server shutdown")
+
+	debugLog := ""
+	if w.appServer.Debug {
+		debugLog += " with debug mode"
+	}
+	log.Infof("server started%s at http://%s\n", debugLog, w.address)
+
+	go func() {
+		err := w.appServer.StartH2CServer(w.address, &http2.Server{})
+		log.Fatalf("failed to run server: %v", err)
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+}
+
+func (w *WebServer) Serve(l net.Listener) error {
+	return w.appServer.Server.Serve(l)
+}
+
+func (w *WebServer) ServeHTTP(wr http.ResponseWriter, r *http.Request) {
+	w.appServer.ServeHTTP(wr, r)
+}
+
+func (w *WebServer) Shutdown(ctx context.Context) error {
+	return w.appServer.Shutdown(ctx)
 }

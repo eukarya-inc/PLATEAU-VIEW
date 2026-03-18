@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
+	"github.com/reearth/reearth/server/internal/app/config"
 	"github.com/reearth/reearth/server/internal/usecase/repo"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/project"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/idx"
@@ -40,7 +40,7 @@ func TestCreateAndGetProject(t *testing.T) {
 		Value("projects").Object().
 		Value("edges").Array()
 
-	edges.Length().IsEqual(2)
+	edges.Length().IsEqual(1)
 	edges.Value(0).Object().Value("node").Object().Value("name").IsEqual("test2-1")
 
 	// check
@@ -142,7 +142,7 @@ func TestSortByName(t *testing.T) {
 		Value("projects").Object().
 		Value("edges").Array()
 
-	edges.Length().IsEqual(5)
+	edges.Length().IsEqual(4)
 	edges.Value(0).Object().Value("node").Object().Value("name").IsEqual("a-project")
 	edges.Value(1).Object().Value("node").Object().Value("name").IsEqual("A-project")
 	edges.Value(2).Object().Value("node").Object().Value("name").IsEqual("b-project")
@@ -524,7 +524,7 @@ func testData(e *httpexpect.Expect) {
 func projects(t *testing.T, ctx context.Context, r *repo.Container, count int, wID idx.ID[accountdomain.Workspace], name string, alias string, coreSupport bool) {
 	for i := range make([]int, count) {
 		p := project.New().
-			ID(id.NewProjectID()).
+			ID(project.NewID()).
 			Name(fmt.Sprintf(name+" name%d", i+1)).
 			Description(fmt.Sprintf(name+" description%d", i+1)).
 			ImageURL(lo.Must(url.Parse("https://test.com"))).
@@ -542,7 +542,7 @@ func projects(t *testing.T, ctx context.Context, r *repo.Container, count int, w
 func projectsOldData(t *testing.T, ctx context.Context, r *repo.Container, count int, wID idx.ID[accountdomain.Workspace], name string, alias string) {
 	for i := range make([]int, count) {
 		p := project.New().
-			ID(id.NewProjectID()).
+			ID(project.NewID()).
 			Name(fmt.Sprintf(name+" name%d", i+1)).
 			Description(fmt.Sprintf(name+" description%d", i+1)).
 			ImageURL(lo.Must(url.Parse("https://test.com"))).
@@ -558,7 +558,13 @@ func projectsOldData(t *testing.T, ctx context.Context, r *repo.Container, count
 }
 
 func TestGetProjectPagination(t *testing.T) {
-	e, r, _ := ServerAndRepos(t, baseSeeder)
+	c := &config.Config{
+		Origins: []string{"https://example.com"},
+		AuthSrv: config.AuthSrvConfig{
+			Disabled: true,
+		},
+	}
+	e, r, _ := StartServerAndRepos(t, c, true, baseSeeder)
 	ctx := context.Background()
 
 	projects(t, ctx, r, 20, wID, "[wID]project", "ALIAS1", true)
@@ -583,7 +589,7 @@ func TestGetProjectPagination(t *testing.T) {
 
 	projects := Request(e, uID.String(), requestBody).Object().Value("data").Object().Value("projects").Object()
 
-	projects.HasValue("totalCount", 21)
+	projects.HasValue("totalCount", 20)
 
 	edges := projects.Value("edges").Array().Iter()
 	assert.Equal(t, len(edges), 16)
@@ -615,10 +621,10 @@ func TestGetProjectPagination(t *testing.T) {
 		},
 	}
 	projects = Request(e, uID.String(), requestBody).Object().Value("data").Object().Value("projects").Object()
-	projects.HasValue("totalCount", 5)
+	projects.HasValue("totalCount", 4)
 
 	edges = projects.Value("edges").Array().Iter()
-	assert.Equal(t, len(edges), 5)
+	assert.Equal(t, len(edges), 4)
 	for _, v := range edges {
 		//Only the same teamId
 		v.Object().Value("node").Object().HasValue("teamId", wID.String())
@@ -630,7 +636,13 @@ func TestGetProjectPagination(t *testing.T) {
 }
 
 func TestGetProjectPaginationKeyword(t *testing.T) {
-	e, r, _ := ServerAndRepos(t, baseSeeder)
+	c := &config.Config{
+		Origins: []string{"https://example.com"},
+		AuthSrv: config.AuthSrvConfig{
+			Disabled: true,
+		},
+	}
+	e, r, _ := StartServerAndRepos(t, c, true, baseSeeder)
 	ctx := context.Background()
 
 	// no match data

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
 	"github.com/vikstrous/dataloadgen"
 )
 

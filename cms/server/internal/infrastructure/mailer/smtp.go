@@ -3,7 +3,7 @@ package mailer
 import (
 	"net/smtp"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 )

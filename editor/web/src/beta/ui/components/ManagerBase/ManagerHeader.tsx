@@ -186,14 +186,12 @@ export const ManagerHeader: FC<ManagerHeaderProps> = ({
               icon="grid"
               appearance="simple"
               active={layout === "grid"}
-              tooltipText={t("Grid Layout")}
               onClick={(e) => handleLayoutChange(e, "grid")}
             />
             <IconButton
               icon="list"
               appearance="simple"
               active={layout === "list"}
-              tooltipText={t("List Layout")}
               onClick={(e) => handleLayoutChange(e, "list")}
             />
           </Layouts>

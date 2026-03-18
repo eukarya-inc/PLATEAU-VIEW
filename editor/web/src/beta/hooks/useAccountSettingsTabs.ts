@@ -15,6 +15,12 @@ export const accountSettingTabs: {
     text: "Workspace",
     icon: "usersFour",
     path: "/settings/workspaces/:workspaceId"
+  },
+  {
+    id: "members",
+    text: "Members",
+    icon: "users",
+    path: "/settings/workspaces/:workspaceId/members"
   }
 ] as const;
 

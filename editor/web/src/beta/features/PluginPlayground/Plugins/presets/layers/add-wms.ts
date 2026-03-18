@@ -32,7 +32,6 @@ const layerWmsUrl = {
 };
 
 // Add the WMS layer from the URL to Re:Earth
-// Documentation on Layers "add" event: https://visualizer.developer.reearth.io/plugin-api/layers/#add
 reearth.layers.add(layerWmsUrl);
 
 //WMS data is provided by NASA GIBS（https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api)`
@@ -40,5 +39,6 @@ reearth.layers.add(layerWmsUrl);
 
 export const addWms: PluginType = {
   id: "add-wms",
-  files: [yamlFile, widgetFile]
+  title: "Add WMS (Web Map Service)",
+  files: [widgetFile, yamlFile]
 };

@@ -1,7 +1,8 @@
-import { RectangleDashed } from "@phosphor-icons/react";
+import { RectangleDashedIcon } from "@phosphor-icons/react";
 import { NodeProps, NodeResizer } from "@xyflow/react";
 import { memo } from "react";
 
+import { useAwarenessNodeSelections } from "@flow/features/Editor/editorContext";
 import type { Node } from "@flow/types";
 
 import useHooks from "./hooks";
@@ -10,6 +11,8 @@ export type BatchNodeProps = NodeProps<Node>;
 
 const BatchNode: React.FC<BatchNodeProps> = ({ data, selected, id }) => {
   const { bounds, rgbaColor, handleOnEndResize } = useHooks({ id, data });
+  const awarenessSelections = useAwarenessNodeSelections(id);
+  const remoteColor = awarenessSelections[0]?.color;
 
   return (
     <>
@@ -19,7 +22,7 @@ const BatchNode: React.FC<BatchNodeProps> = ({ data, selected, id }) => {
             background: "none",
             zIndex: 0,
           }}
-          lineClassName="border border-border rounded"
+          lineClassName="border-none rounded"
           handleStyle={{
             background: "none",
             width: 8,
@@ -35,7 +38,8 @@ const BatchNode: React.FC<BatchNodeProps> = ({ data, selected, id }) => {
       )}
 
       <div
-        className={`relative z-0 h-full rounded-b-sm bg-accent/20 ${selected ? "border-border" : undefined}`}
+        className={`relative z-0 h-full rounded-b-lg border-x border-b bg-orange-400/40 p-2 shadow-md shadow-secondary backdrop-blur-xs dark:bg-orange-400/20 ${selected ? "border-orange-400/50" : "border-transparent"} ${data.isDisabled ? "opacity-70" : ""}`}
+        style={remoteColor ? { outline: `solid ${remoteColor}` } : undefined}
         ref={(element) => {
           if (element) {
             element.style.setProperty(
@@ -46,7 +50,8 @@ const BatchNode: React.FC<BatchNodeProps> = ({ data, selected, id }) => {
           }
         }}>
         <div
-          className={`absolute inset-x-[-0.8px] top-[-33px] flex items-center gap-2 rounded-t-sm border-x border-t bg-accent/50 px-2 py-1 ${selected ? "border-border" : "border-transparent"}`}
+          style={remoteColor ? { outline: `solid ${remoteColor}` } : undefined}
+          className={`absolute inset-x-[-0.8px] top-[-33px] flex items-center gap-2 rounded-t-lg border-x border-t bg-secondary p-1 ${selected ? "border-orange-400/50" : "border-transparent"} ${data.isDisabled ? "opacity-70" : ""}`}
           ref={(element) => {
             if (element)
               element.style.setProperty(
@@ -55,7 +60,12 @@ const BatchNode: React.FC<BatchNodeProps> = ({ data, selected, id }) => {
                 "important",
               );
           }}>
-          <RectangleDashed />
+          <div className="rounded-lg bg-primary p-1">
+            <RectangleDashedIcon
+              className="w-[15px] fill-orange-400/80"
+              weight="bold"
+            />
+          </div>
           <p>{data.customizations?.customName || data.officialName}</p>
         </div>
       </div>

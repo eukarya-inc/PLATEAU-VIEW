@@ -32,6 +32,7 @@ type Config struct {
 	SkipImcompleteItems bool
 	IgnoreStatus        bool
 	FeatureTypes        []string
+	FeatureTypeNames    map[string]string
 }
 
 type MergeContext struct {
@@ -200,11 +201,11 @@ func CommandSingle(conf *Config) (err error) {
 
 	// maxlod
 	if !conf.SkipMaxLOD {
-		if err := PrepareMaxLOD(ctx, cw, mc); err != nil {
+		if err := PrepareLODStat(ctx, cw, mc); err != nil {
 			return err
 		}
 	} else if conf.ValidateMaxLOD {
-		if err := ValidateMaxLOD(ctx, cw, mc); err != nil {
+		if err := ValidateLODStat(ctx, cw, mc); err != nil {
 			return err
 		}
 	}
@@ -283,7 +284,7 @@ func CommandSingle(conf *Config) (err error) {
 			RelatedZipPath: relatedPath,
 			Generic:        indexItem.Generic,
 			Dic:            dic,
-		}, conf.FeatureTypes); err != nil {
+		}, conf.FeatureTypes, conf.FeatureTypeNames); err != nil {
 			return err
 		}
 	} else {

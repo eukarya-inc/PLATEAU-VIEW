@@ -3,20 +3,21 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/trigger"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/rerror"
 )
 
 type Trigger struct {
-	lock sync.Mutex
 	data map[id.TriggerID]*trigger.Trigger
 	f    repo.WorkspaceFilter
+	lock sync.Mutex
 }
 
 func NewTrigger() *Trigger {
@@ -32,7 +33,7 @@ func (r *Trigger) Filtered(f repo.WorkspaceFilter) repo.Trigger {
 	}
 }
 
-func (r *Trigger) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, pagination *interfaces.PaginationParam) ([]*trigger.Trigger, *interfaces.PageBasedInfo, error) {
+func (r *Trigger) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, pagination *interfaces.PaginationParam, keyword *string) ([]*trigger.Trigger, *interfaces.PageBasedInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -42,9 +43,18 @@ func (r *Trigger) FindByWorkspace(ctx context.Context, id accountdomain.Workspac
 
 	result := make([]*trigger.Trigger, 0, len(r.data))
 	for _, t := range r.data {
-		if t.Workspace() == id {
-			result = append(result, t)
+		if t.Workspace() != id {
+			continue
 		}
+
+		if keyword != nil && *keyword != "" {
+			if !strings.Contains(strings.ToLower(t.Description()), strings.ToLower(*keyword)) &&
+				!strings.Contains(strings.ToLower(t.ID().String()), strings.ToLower(*keyword)) {
+				continue
+			}
+		}
+
+		result = append(result, t)
 	}
 
 	total := int64(len(result))
@@ -130,6 +140,19 @@ func (r *Trigger) FindByIDs(ctx context.Context, ids id.TriggerIDList) ([]*trigg
 			continue
 		}
 		result[i] = nil
+	}
+	return result, nil
+}
+
+func (r *Trigger) FindByDeployment(ctx context.Context, deploymentID id.DeploymentID) ([]*trigger.Trigger, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	result := make([]*trigger.Trigger, 0)
+	for _, t := range r.data {
+		if t.Deployment() == deploymentID && r.f.CanRead(t.Workspace()) {
+			result = append(result, t)
+		}
 	}
 	return result, nil
 }

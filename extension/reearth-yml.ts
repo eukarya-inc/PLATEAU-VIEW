@@ -277,6 +277,22 @@ const yml = {
         ],
       },
     },
+    {
+      id: "data-attribution-widget",
+      type: "widget",
+      name: "Data Attribution",
+      widgetLayout: {
+        extendable: {
+          horizontally: true,
+        },
+        defaultLocation: {
+          zone: "inner",
+          section: "left",
+          area: "bottom",
+        },
+        extended: true,
+      },
+    },
   ],
 };
 

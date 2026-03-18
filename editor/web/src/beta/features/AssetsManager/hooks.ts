@@ -1,4 +1,5 @@
 import useLoadMore from "@reearth/beta/hooks/useLoadMore";
+import { BreadcrumbItem } from "@reearth/beta/lib/reearth-ui";
 import { ManagerLayout } from "@reearth/beta/ui/components/ManagerBase";
 import { useAssetsFetcher } from "@reearth/services/api";
 import { AssetSortField, SortDirection } from "@reearth/services/gql";
@@ -26,20 +27,16 @@ const typeToGQLField = {
 
 export default ({
   workspaceId,
-  projectId,
   allowMultipleSelection,
   assetsTypes,
   layout,
-  additionalFilter,
   onSelectChange,
   onLayoutChange
 }: {
   workspaceId?: string;
-  projectId?: string;
   allowMultipleSelection: boolean;
   assetsTypes?: AcceptedAssetsTypes;
   layout?: ManagerLayout;
-  additionalFilter?: (asset: Asset) => boolean;
   onSelectChange?: (assets: Asset[]) => void;
   onLayoutChange?: (layout: ManagerLayout) => void;
 }) => {
@@ -112,7 +109,6 @@ export default ({
   const { assets, hasMoreAssets, isRefetching, endCursor, loading, fetchMore } =
     useAssetsQuery({
       teamId: workspaceId ?? "",
-      projectId,
       pagination: {
         first: ASSETS_PER_PAGE
       },
@@ -140,16 +136,13 @@ export default ({
   );
 
   const filteredAssets = useMemo(() => {
-    const assetsWithAdditionalFilter = additionalFilter
-      ? assets?.filter(additionalFilter)
-      : assets;
-    if (!assetsExts || !assets) return assetsWithAdditionalFilter;
-    return assetsWithAdditionalFilter.filter((a) =>
+    if (!assetsExts || !assets) return assets;
+    return assets.filter((a) =>
       assetsExts.includes(
         (a.url.split(".").pop()?.toLowerCase() as FileType) ?? ""
       )
     );
-  }, [assets, assetsExts, additionalFilter]);
+  }, [assets, assetsExts]);
 
   // get more assets
   const isLoadingMoreRef = useRef(false);
@@ -209,12 +202,11 @@ export default ({
       if (!files) return;
       await useCreateAssets({
         teamId: workspaceId ?? "",
-        projectId,
         file: files,
         coreSupport: true
       });
     },
-    [useCreateAssets, workspaceId, projectId]
+    [workspaceId, useCreateAssets]
   );
 
   // upload
@@ -245,10 +237,10 @@ export default ({
 
   // path
   // TODO: support path with folder
-  // const [paths, _setPaths] = useState<BreadcrumbItem[]>([
-  //   { id: "assets", title: t("Assets") }
-  // ]);
-  // const handlePathClick = useCallback((_id?: string) => {}, []);
+  const [paths, _setPaths] = useState<BreadcrumbItem[]>([
+    { id: "assets", title: t("Assets") }
+  ]);
+  const handlePathClick = useCallback((_id?: string) => {}, []);
 
   // select
   const [selectedAssetIds, selectAsset] = useState<string[]>([]);
@@ -309,6 +301,8 @@ export default ({
 
   return {
     filteredAssets,
+    paths,
+    handlePathClick,
     sortValue,
     sortOptions,
     handleSortChange,

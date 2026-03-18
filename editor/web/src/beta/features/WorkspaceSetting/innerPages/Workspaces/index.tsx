@@ -1,11 +1,6 @@
 import { Collapse, Typography, Button } from "@reearth/beta/lib/reearth-ui";
 import { InputField } from "@reearth/beta/ui/fields";
-import {
-  useMeFetcher,
-  useProjectFetcher,
-  useWorkspaceFetcher
-} from "@reearth/services/api";
-import { Role } from "@reearth/services/gql";
+import { useProjectFetcher, useWorkspaceFetcher } from "@reearth/services/api";
 import { useT } from "@reearth/services/i18n";
 import { useWorkspace, type Workspace } from "@reearth/services/state";
 import { styled } from "@reearth/services/theme";
@@ -58,13 +53,6 @@ const WorkspaceSetting: FC<Props> = ({ workspace }) => {
     }
   }, [workspace, currentWorkspace, setWorkspace]);
 
-  const { me } = useMeFetcher().useMeQuery();
-  const meId = me?.id;
-  const meRole = useMemo(
-    () => workspace?.members?.find((m) => m.userId === meId)?.role,
-    [workspace, meId]
-  );
-
   return (
     <InnerPage>
       <SettingsWrapper>
@@ -75,13 +63,13 @@ const WorkspaceSetting: FC<Props> = ({ workspace }) => {
               value={localWorkspaceName}
               onChange={setLocalWorkspaceName}
               appearance={workspace?.personal ? "readonly" : undefined}
-              disabled={!!workspace?.personal || meRole !== Role.Owner}
+              disabled={!!workspace?.personal}
             />
             <ButtonWrapper>
               <Button
                 title={t("Submit")}
                 appearance="primary"
-                disabled={!!workspace?.personal || meRole !== Role.Owner}
+                disabled={!!workspace?.personal}
                 onClick={handleSubmitUpdateWorkspaceName}
               />
             </ButtonWrapper>
@@ -104,7 +92,6 @@ const WorkspaceSetting: FC<Props> = ({ workspace }) => {
                     onClick={() => {
                       setDeleteWorkspaceModal(true);
                     }}
-                    disabled={meRole !== Role.Owner}
                   />
                 </ButtonWrapper>
               </DangerItem>

@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/vincent-petithory/dataurl"

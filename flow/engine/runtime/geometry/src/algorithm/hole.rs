@@ -1,7 +1,8 @@
 use crate::types::{
-    coordinate::Coordinate, coordnum::CoordNum, face::Face, geometry::Geometry, line::Line,
-    line_string::LineString, multi_line_string::MultiLineString, multi_point::MultiPoint,
-    multi_polygon::MultiPolygon, point::Point, polygon::Polygon, rect::Rect, solid::Solid,
+    coordinate::Coordinate, coordnum::CoordNum, csg::CSG, face::Face, geometry::Geometry,
+    line::Line, line_string::LineString, multi_line_string::MultiLineString,
+    multi_point::MultiPoint, multi_polygon::MultiPolygon, point::Point, polygon::Polygon,
+    rect::Rect, solid::Solid,
 };
 
 pub trait HoleCounter<T: CoordNum, Z: CoordNum> {
@@ -11,6 +12,8 @@ pub trait HoleCounter<T: CoordNum, Z: CoordNum> {
 }
 
 impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Coordinate<T, Z> {}
+
+impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for CSG<T, Z> {}
 
 impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Point<T, Z> {}
 
@@ -38,15 +41,12 @@ impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Face<T, Z> {}
 
 impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Solid<T, Z> {}
 
-impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Rect<T, Z> {
-    fn hole_count(&self) -> usize {
-        self.to_polygon().hole_count()
-    }
-}
+impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Rect<T, Z> {}
 
 impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Geometry<T, Z> {
     fn hole_count(&self) -> usize {
         match self {
+            Geometry::CSG(c) => c.hole_count(),
             Geometry::Point(p) => p.hole_count(),
             Geometry::Line(l) => l.hole_count(),
             Geometry::LineString(ls) => ls.hole_count(),
@@ -56,6 +56,7 @@ impl<T: CoordNum, Z: CoordNum> HoleCounter<T, Z> for Geometry<T, Z> {
             Geometry::MultiPolygon(mp) => mp.hole_count(),
             Geometry::Rect(rect) => rect.hole_count(),
             Geometry::Triangle(_) => unimplemented!(),
+            Geometry::TriangularMesh(_) => unimplemented!(),
             Geometry::Solid(s) => s.hole_count(),
             Geometry::GeometryCollection(gc) => gc.iter().map(|g| g.hole_count()).sum(),
         }

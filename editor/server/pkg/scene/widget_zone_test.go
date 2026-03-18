@@ -3,7 +3,6 @@ package scene
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,17 +21,17 @@ func TestWidgetZone_Section(t *testing.T) {
 }
 
 func TestWidgetZone_Find(t *testing.T) {
-	wid1 := id.NewWidgetID()
-	wid2 := id.NewWidgetID()
-	wid3 := id.NewWidgetID()
-	wid4 := id.NewWidgetID()
-	wid5 := id.NewWidgetID()
-	wid6 := id.NewWidgetID()
-	wid7 := id.NewWidgetID()
+	wid1 := NewWidgetID()
+	wid2 := NewWidgetID()
+	wid3 := NewWidgetID()
+	wid4 := NewWidgetID()
+	wid5 := NewWidgetID()
+	wid6 := NewWidgetID()
+	wid7 := NewWidgetID()
 
 	tests := []struct {
 		Name      string
-		Input     id.WidgetID
+		Input     WidgetID
 		Expected1 int
 		Expected2 WidgetSectionType
 		Expected3 WidgetAreaType
@@ -61,7 +60,7 @@ func TestWidgetZone_Find(t *testing.T) {
 		},
 		{
 			Name:      "invalid id",
-			Input:     id.NewWidgetID(),
+			Input:     NewWidgetID(),
 			Expected1: -1,
 			Expected2: "",
 			Expected3: "",
@@ -90,9 +89,9 @@ func TestWidgetZone_Find(t *testing.T) {
 			}
 
 			ez := NewWidgetZone()
-			ez.Section(WidgetSectionLeft).Area(WidgetAreaTop).AddAll(id.WidgetIDList{wid1, wid2, wid3})
-			ez.Section(WidgetSectionCenter).Area(WidgetAreaTop).AddAll(id.WidgetIDList{wid4, wid5})
-			ez.Section(WidgetSectionRight).Area(WidgetAreaTop).AddAll(id.WidgetIDList{wid6, wid7})
+			ez.Section(WidgetSectionLeft).Area(WidgetAreaTop).AddAll(WidgetIDList{wid1, wid2, wid3})
+			ez.Section(WidgetSectionCenter).Area(WidgetAreaTop).AddAll(WidgetIDList{wid4, wid5})
+			ez.Section(WidgetSectionRight).Area(WidgetAreaTop).AddAll(WidgetIDList{wid6, wid7})
 
 			index, section, area := ez.Find(tc.Input)
 			assert.Equal(t, tc.Expected1, index)
@@ -103,50 +102,50 @@ func TestWidgetZone_Find(t *testing.T) {
 }
 
 func TestWidgetZone_Remove(t *testing.T) {
-	wid := id.NewWidgetID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name     string
 		Section  WidgetSectionType
-		Input    id.WidgetID
-		Expected id.WidgetIDList
+		Input    WidgetID
+		Expected WidgetIDList
 		Nil      bool
 	}{
 		{
 			Name:     "left: remove a widget from widget section",
 			Section:  WidgetSectionLeft,
 			Input:    wid,
-			Expected: id.WidgetIDList{},
+			Expected: WidgetIDList{},
 		},
 		{
 			Name:     "left: couldn't find widgetId",
 			Section:  WidgetSectionLeft,
-			Input:    id.NewWidgetID(),
-			Expected: id.WidgetIDList{wid},
+			Input:    NewWidgetID(),
+			Expected: WidgetIDList{wid},
 		},
 		{
 			Name:     "center: remove a widget from widget section",
 			Section:  WidgetSectionCenter,
 			Input:    wid,
-			Expected: id.WidgetIDList{},
+			Expected: WidgetIDList{},
 		},
 		{
 			Name:     "center: couldn't find widgetId",
 			Section:  WidgetSectionCenter,
-			Input:    id.NewWidgetID(),
-			Expected: id.WidgetIDList{wid},
+			Input:    NewWidgetID(),
+			Expected: WidgetIDList{wid},
 		},
 		{
 			Name:     "right: remove a widget from widget section",
 			Section:  WidgetSectionRight,
 			Input:    wid,
-			Expected: id.WidgetIDList{},
+			Expected: WidgetIDList{},
 		},
 		{
 			Name:     "right: couldn't find widgetId",
 			Section:  WidgetSectionRight,
-			Input:    id.NewWidgetID(),
-			Expected: id.WidgetIDList{wid},
+			Input:    NewWidgetID(),
+			Expected: WidgetIDList{wid},
 		},
 		{
 			Name:    "nil",

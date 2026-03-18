@@ -8,12 +8,59 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::{Attribute, AttributeValue, Expr, Feature};
+use reearth_flow_types::{Attribute, AttributeValue, Attributes, Expr, Feature};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::errors::AttributeProcessorError;
+
+#[derive(Debug, Clone, Copy)]
+enum NumericValue {
+    Integer(i64),
+    Float(f64),
+}
+
+impl Default for NumericValue {
+    fn default() -> Self {
+        NumericValue::Integer(0)
+    }
+}
+
+impl NumericValue {
+    fn add(self, other: NumericValue) -> NumericValue {
+        match (self, other) {
+            (NumericValue::Integer(a), NumericValue::Integer(b)) => NumericValue::Integer(a + b),
+            (NumericValue::Float(a), NumericValue::Float(b)) => NumericValue::Float(a + b),
+            (NumericValue::Integer(a), NumericValue::Float(b)) => NumericValue::Float(a as f64 + b),
+            (NumericValue::Float(a), NumericValue::Integer(b)) => NumericValue::Float(a + b as f64),
+        }
+    }
+
+    fn to_attribute_value(self) -> AttributeValue {
+        match self {
+            NumericValue::Integer(i) => AttributeValue::Number(serde_json::Number::from(i)),
+            NumericValue::Float(f) => {
+                if f.fract() == 0.0 {
+                    // If it's a whole number, try to convert to integer
+                    if f >= i64::MIN as f64 && f <= i64::MAX as f64 && f == f as i64 as f64 {
+                        AttributeValue::Number(serde_json::Number::from(f as i64))
+                    } else {
+                        AttributeValue::Number(
+                            serde_json::Number::from_f64(f)
+                                .unwrap_or_else(|| serde_json::Number::from(0)),
+                        )
+                    }
+                } else {
+                    AttributeValue::Number(
+                        serde_json::Number::from_f64(f)
+                            .unwrap_or_else(|| serde_json::Number::from(0)),
+                    )
+                }
+            }
+        }
+    }
+}
 
 pub static COMPLETE_PORT: Lazy<Port> = Lazy::new(|| Port::new("complete"));
 
@@ -26,7 +73,7 @@ impl ProcessorFactory for StatisticsCalculatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Calculates statistics of features"
+        "Calculates statistical aggregations on feature attributes with customizable expressions"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +102,12 @@ impl ProcessorFactory for StatisticsCalculatorFactory {
         let params: StatisticsCalculatorParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::StatisticsCalculatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::StatisticsCalculatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -76,7 +121,7 @@ impl ProcessorFactory for StatisticsCalculatorFactory {
         for calculation in &params.calculations {
             let expr = &calculation.expr;
             let template_ast = expr_engine.compile(expr.as_ref()).map_err(|e| {
-                AttributeProcessorError::StatisticsCalculatorFactory(format!("{:?}", e))
+                AttributeProcessorError::StatisticsCalculatorFactory(format!("{e:?}"))
             })?;
             calculations.push(CompiledCalculation {
                 expr: template_ast,
@@ -85,8 +130,8 @@ impl ProcessorFactory for StatisticsCalculatorFactory {
         }
 
         let process = StatisticsCalculator {
-            aggregate_name: params.aggregate_name,
-            aggregate_attribute: params.aggregate_attribute,
+            group_id: params.group_id,
+            group_by: params.group_by,
             calculations,
             aggregate_buffer: HashMap::new(),
             global_params: with,
@@ -97,10 +142,10 @@ impl ProcessorFactory for StatisticsCalculatorFactory {
 
 #[derive(Debug, Clone)]
 struct StatisticsCalculator {
-    aggregate_name: Option<Attribute>,
-    aggregate_attribute: Option<Attribute>,
+    group_id: Option<Attribute>,
+    group_by: Option<Vec<Attribute>>,
     calculations: Vec<CompiledCalculation>,
-    aggregate_buffer: HashMap<Attribute, HashMap<String, i64>>,
+    aggregate_buffer: HashMap<Attribute, HashMap<String, NumericValue>>,
     global_params: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -110,14 +155,20 @@ struct CompiledCalculation {
     expr: rhai::AST,
 }
 
+/// # StatisticsCalculator Parameters
+///
+/// Configuration for calculating statistical aggregations on feature attributes.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct StatisticsCalculatorParam {
-    /// # Name of the attribute to aggregate by
-    aggregate_name: Option<Attribute>,
-    /// # Attribute to aggregate by
-    aggregate_attribute: Option<Attribute>,
-    /// # Calculations to perform
+    /// # Group id
+    /// Optional attribute to store the group identifier. The ID will be formed by concatenating the values of the group_by attributes separated by '|'.
+    group_id: Option<Attribute>,
+    /// # Group by
+    /// Attributes to group features by for aggregation. All of the inputs will be grouped if not specified.
+    group_by: Option<Vec<Attribute>>,
+    /// # Calculations
+    /// List of statistical calculations to perform on grouped features
     calculations: Vec<Calculation>,
 }
 
@@ -131,6 +182,10 @@ struct Calculation {
 }
 
 impl Processor for StatisticsCalculator {
+    fn is_accumulating(&self) -> bool {
+        false
+    }
+
     fn process(
         &mut self,
         ctx: ExecutorContext,
@@ -139,33 +194,59 @@ impl Processor for StatisticsCalculator {
         let expr_engine = Arc::clone(&ctx.expr_engine);
         let feature = &ctx.feature;
         let scope = feature.new_scope(expr_engine.clone(), &self.global_params);
-        let aggregate = self
-            .aggregate_attribute
-            .clone()
+        let aggregate_key = self
+            .group_by
+            .as_ref()
+            .unwrap_or(&Vec::new())
+            .iter()
             .map(|attr| {
-                let Some(value) = feature.attributes.get(&attr) else {
-                    return "undefined".to_string();
-                };
-                let AttributeValue::String(value) = value else {
-                    return "undefined".to_string();
+                let Some(value) = feature.attributes.get(attr) else {
+                    return "".to_string();
                 };
                 value.to_string()
             })
-            .unwrap_or("all".to_string());
+            .collect::<Vec<_>>()
+            .join("|");
 
         for calculation in &self.calculations {
             let aggregate_buffer = self
                 .aggregate_buffer
                 .entry(calculation.new_attribute.clone())
                 .or_default();
-            let content = aggregate_buffer.entry(aggregate.clone()).or_default();
-            let eval = scope.eval_ast::<i64>(&calculation.expr);
-            match eval {
+            let content = aggregate_buffer.entry(aggregate_key.clone()).or_default();
+
+            // Try to evaluate as f64 first, then fall back to i64
+            let eval_result = scope.eval_ast::<f64>(&calculation.expr);
+            match eval_result {
                 Ok(eval) => {
-                    *content += eval;
+                    let numeric_value = NumericValue::Float(eval);
+                    *content = match *content {
+                        NumericValue::Integer(i) => numeric_value.add(NumericValue::Integer(i)),
+                        NumericValue::Float(f) => numeric_value.add(NumericValue::Float(f)),
+                    };
                 }
-                _ => {
-                    continue;
+                Err(_) => {
+                    // If f64 evaluation fails, try i64
+                    let eval_result = scope.eval_ast::<i64>(&calculation.expr);
+                    match eval_result {
+                        Ok(eval) => {
+                            let numeric_value = NumericValue::Integer(eval);
+                            *content = match *content {
+                                NumericValue::Integer(i) => {
+                                    numeric_value.add(NumericValue::Integer(i))
+                                }
+                                NumericValue::Float(f) => numeric_value.add(NumericValue::Float(f)),
+                            };
+                        }
+                        Err(e) => {
+                            return Err(Box::new(
+                                AttributeProcessorError::StatisticsCalculatorFactory(format!(
+                                    "Failed to evaluate expression for attribute '{}', error: {:?}",
+                                    calculation.new_attribute, e
+                                )),
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -173,28 +254,38 @@ impl Processor for StatisticsCalculator {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
-        let mut features = HashMap::<String, HashMap<Attribute, i64>>::new();
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
+        let mut features = HashMap::<String, HashMap<Attribute, NumericValue>>::new();
         for (new_attribute, value) in &self.aggregate_buffer {
-            for (attr, count) in value {
+            for (aggregate_key, count) in value {
                 let current = features
-                    .entry(attr.to_string())
+                    .entry(aggregate_key.to_string())
                     .or_default()
                     .entry(new_attribute.clone())
                     .or_default();
-                *current += count;
+                *current = current.add(*count);
             }
         }
-        for (attr, value) in features {
-            let mut feature = Feature::new();
-            if let Some(aggregate_name) = self.aggregate_name.as_ref() {
-                feature.insert(aggregate_name, AttributeValue::String(attr));
+        for (aggregate_key, value) in features {
+            let mut feature = Feature::new_with_attributes(Attributes::new());
+
+            if let Some(group_by_attrs) = self.group_by.as_ref() {
+                let group_values: Vec<&str> = aggregate_key.split('|').collect();
+                for (attr, attr_value) in group_by_attrs.iter().zip(group_values.iter()) {
+                    feature.insert(attr, AttributeValue::String(attr_value.to_string()));
+                }
             }
-            for (new_attribute, count) in value {
-                feature.insert(
-                    new_attribute.clone(),
-                    AttributeValue::Number(serde_json::Number::from(count)),
-                );
+
+            if let Some(group_id) = self.group_id.as_ref() {
+                feature.insert(group_id, AttributeValue::String(aggregate_key.clone()));
+            }
+
+            for (new_attribute, count) in &value {
+                feature.insert(new_attribute.clone(), count.to_attribute_value());
             }
             fw.send(ExecutorContext::new_with_node_context_feature_and_port(
                 &ctx,

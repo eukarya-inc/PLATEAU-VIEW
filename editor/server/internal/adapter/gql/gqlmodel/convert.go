@@ -69,6 +69,8 @@ func FromPluginExtension(p PluginExtensionType) plugin.ExtensionType {
 	switch p {
 	case PluginExtensionTypeBlock:
 		return plugin.ExtensionTypeBlock
+	case PluginExtensionTypeCluster:
+		return plugin.ExtensionTypeCluster
 	case PluginExtensionTypeInfobox:
 		return plugin.ExtensionTypeInfobox
 	case PluginExtensionTypeInfoboxBlock:

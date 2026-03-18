@@ -1,5 +1,4 @@
-import { ViewerProperty } from "@reearth/beta/features/Editor/Visualizer/type";
-import { ComputedFeature } from "@reearth/core";
+import { ViewerProperty, ComputedFeature } from "@reearth/core";
 
 import { LatLngHeight } from "./common";
 

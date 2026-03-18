@@ -1,13 +1,13 @@
 import {
-  ArrowArcLeft,
-  ArrowArcRight,
-  Database,
-  Disc,
-  Graph,
-  Layout,
-  Lightning,
-  Note,
-  RectangleDashed,
+  ArrowArcLeftIcon,
+  ArrowArcRightIcon,
+  DatabaseIcon,
+  DiscIcon,
+  GraphIcon,
+  LayoutIcon,
+  LightningIcon,
+  NoteIcon,
+  RectangleDashedIcon,
 } from "@phosphor-icons/react";
 import { memo, type DragEvent } from "react";
 import { createRoot } from "react-dom/client";
@@ -35,7 +35,6 @@ type Props = {
   canUndo: boolean;
   canRedo: boolean;
   isMainWorkflow: boolean;
-  hasReader?: boolean;
   onRedo: () => void;
   onUndo: () => void;
   onLayoutChange: () => void;
@@ -45,7 +44,6 @@ const Toolbox: React.FC<Props> = ({
   canUndo,
   canRedo,
   isMainWorkflow,
-  hasReader,
   onRedo,
   onUndo,
   onLayoutChange,
@@ -54,35 +52,41 @@ const Toolbox: React.FC<Props> = ({
   const availableTools: Tool[] = [
     {
       id: "reader" as const,
-      name: t("Reader Node"),
-      icon: <Database weight="thin" />,
-      disabled: !isMainWorkflow || hasReader,
+      name: t("Reader"),
+      icon: <DatabaseIcon weight="thin" size={16} />,
+      disabled: !isMainWorkflow,
     },
     {
       id: "transformer" as const,
-      name: t("Transformer Node"),
-      icon: <Lightning weight="thin" />,
+      name: t("Transformer"),
+      icon: <LightningIcon weight="thin" size={16} />,
     },
     {
       id: "writer" as const,
-      name: t("Writer Node"),
-      icon: <Disc weight="thin" />,
+      name: t("Writer"),
+      icon: <DiscIcon weight="thin" size={16} />,
       disabled: !isMainWorkflow,
     },
     {
       id: "note" as const,
       name: t("Note"),
-      icon: <Note weight="thin" />,
+      icon: <NoteIcon weight="thin" size={16} />,
     },
     {
       id: "batch" as const,
-      name: t("Batch Node"),
-      icon: <RectangleDashed weight="thin" />,
+      name: t("Batch"),
+      icon: (
+        <RectangleDashedIcon
+          className="fill-orange-400"
+          weight="thin"
+          size={16}
+        />
+      ),
     },
     {
       id: "subworkflow" as const,
-      name: t("Subworkflow Node"),
-      icon: <Graph weight="thin" />,
+      name: t("Subworkflow"),
+      icon: <GraphIcon weight="thin" size={16} />,
     },
   ];
 
@@ -90,21 +94,21 @@ const Toolbox: React.FC<Props> = ({
     {
       id: "layout",
       name: t("Auto layout"),
-      icon: <Layout className="size-4" weight="thin" />,
+      icon: <LayoutIcon weight="thin" size={16} />,
       onClick: onLayoutChange,
     },
     { id: "break" },
     {
       id: "undo",
       name: t("Undo last action"),
-      icon: <ArrowArcLeft className="size-4" weight="thin" />,
+      icon: <ArrowArcLeftIcon weight="thin" size={16} />,
       disabled: !canUndo,
       onClick: onUndo,
     },
     {
       id: "redo",
       name: t("Redo action"),
-      icon: <ArrowArcRight className="size-4" weight="thin" />,
+      icon: <ArrowArcRightIcon weight="thin" size={16} />,
       disabled: !canRedo,
       onClick: onRedo,
     },
@@ -122,10 +126,10 @@ const Toolbox: React.FC<Props> = ({
 
     const root = createRoot(dragPreviewContainer);
     root.render(
-      <div className="flex size-12 rounded bg-secondary">
+      <div className="rounded bg-secondary">
         <div
           className={`
-          flex w-full justify-center rounded align-middle
+          flex h-8 w-18 justify-center rounded align-middle
           ${
             nodeType === "reader"
               ? "bg-node-reader/60"
@@ -138,17 +142,17 @@ const Toolbox: React.FC<Props> = ({
                     : "bg-node-transformer/60"
           }`}>
           {nodeType === "reader" ? (
-            <Database className="self-center" />
+            <DatabaseIcon className="self-center" />
           ) : nodeType === "writer" ? (
-            <Disc className="self-center" />
+            <DiscIcon className="self-center" />
           ) : nodeType === "subworkflow" ? (
-            <Graph className="self-center" />
+            <GraphIcon className="self-center" />
           ) : nodeType === "batch" ? (
-            <RectangleDashed className="self-center" />
+            <RectangleDashedIcon className="self-center" />
           ) : nodeType === "note" ? (
-            <Note className="self-center" />
+            <NoteIcon className="self-center" />
           ) : (
-            <Lightning className="self-center" />
+            <LightningIcon className="self-center" />
           )}
         </div>
       </div>,
@@ -163,35 +167,52 @@ const Toolbox: React.FC<Props> = ({
       document.body.removeChild(dragPreviewContainer);
     }, 0);
   };
+
   return (
-    <div className="self-start rounded-md bg-secondary">
-      <div className="flex flex-col flex-wrap rounded-md border transition-all">
+    <div
+      className={`self-start rounded-xl border bg-secondary/70 p-1 shadow-md shadow-[black]/10 backdrop-blur-xs dark:shadow-secondary ${isMainWorkflow ? "border-border dark:border-primary" : "border-node-subworkflow"}`}>
+      <div className="flex flex-wrap gap-2 rounded-md transition-all">
         {availableTools.map((tool, idx) =>
           tool.id === "break" ? (
-            <div key={tool.id + idx} className="w-full border-t" />
+            <div key={tool.id + idx} className="mx-1 box-border border-t" />
           ) : (
-            <IconButton
-              key={tool.id}
-              className={`dndnode-${tool.id} rounded-[4px]`}
-              tooltipPosition="right"
-              tooltipText={tool.name}
-              icon={tool.icon}
-              onDragStart={(event) => onDragStart(event, tool.id)}
-              draggable
-              disabled={tool.disabled}
-            />
+            <div key={tool.id} className="self-center rounded-md bg-secondary">
+              <IconButton
+                className={`dndnode-${tool.id} h-8 w-18 cursor-grab text-white backdrop-blur-xs ${
+                  tool.id === "reader"
+                    ? "bg-node-reader hover:bg-node-reader/80 hover:text-white dark:bg-node-reader/60 dark:hover:bg-node-reader/80"
+                    : tool.id === "writer"
+                      ? "bg-node-writer hover:bg-node-writer/80 hover:text-white dark:bg-node-writer/60 dark:hover:bg-node-writer/80"
+                      : tool.id === "subworkflow"
+                        ? "bg-node-subworkflow/90 hover:bg-node-subworkflow/80 hover:text-white  dark:bg-node-subworkflow/60 dark:hover:bg-node-subworkflow/80"
+                        : tool.id === "batch" || tool.id === "note"
+                          ? "bg-zinc-600 hover:bg-zinc-700/80 hover:text-white dark:bg-primary/60 dark:hover:bg-primary/80"
+                          : "bg-node-transformer hover:bg-node-transformer/80 hover:text-white dark:bg-node-transformer/60 dark:hover:bg-node-transformer/80"
+                }`}
+                tooltipPosition="bottom"
+                tooltipOffset={4}
+                showArrow
+                tooltipText={tool.name}
+                icon={tool.icon}
+                onDragStart={(event) => onDragStart(event, tool.id)}
+                draggable
+                disabled={tool.disabled}
+              />
+            </div>
           ),
         )}
-        <div className="w-full border-t" />
+        <div className="my-1 border-r" />
         {availableActions.map((action, idx) =>
           action.id === "break" ? (
-            <div key={action.id + idx} className="w-full border-t" />
+            <div key={action.id + idx} className="my-1 border-r" />
           ) : (
             <IconButton
               key={action.id}
-              className="gap-0 rounded-[4px]"
-              tooltipPosition="right"
+              className="h-8 w-10 gap-0 rounded-[4px] hover:bg-primary/60"
+              tooltipPosition="bottom"
               tooltipText={action.name}
+              tooltipOffset={4}
+              showArrow
               icon={action.icon}
               disabled={action.disabled}
               onClick={action.onClick}

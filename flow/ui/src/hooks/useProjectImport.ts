@@ -1,111 +1,71 @@
-import JSZip from "jszip";
-import { ChangeEvent, useCallback, useRef, useState } from "react";
-import { WebsocketProvider } from "y-websocket";
-import * as Y from "yjs";
+import { useCallback, useState } from "react";
 
-import { config } from "@flow/config";
-import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
-import { useAuth } from "@flow/lib/auth";
-import { useProject } from "@flow/lib/gql";
+import { useProject, useWorkflowVariables } from "@flow/lib/gql";
 import { useT } from "@flow/lib/i18n";
-import { YWorkflow } from "@flow/lib/yjs/types";
-import { useCurrentWorkspace } from "@flow/stores";
-import { ProjectToImport } from "@flow/types";
+import type { AnyWorkflowVariable, Workspace } from "@flow/types";
 
 export default () => {
-  const { getAccessToken } = useAuth();
+  const [isProjectImporting, setIsProjectImporting] = useState<boolean>(false);
   const t = useT();
 
-  const [currentWorkspace] = useCurrentWorkspace();
+  const { createProject, importProject } = useProject();
+  const { updateMultipleWorkflowVariables } = useWorkflowVariables();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [isProjectImporting, setIsProjectImporting] = useState<boolean>(false);
-
-  const handleProjectImportClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const { createProject } = useProject();
-
-  const handleProjectFileUpload = useCallback(
-    async (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
+  const handleProjectImport = useCallback(
+    async ({
+      projectName,
+      projectDescription,
+      workspace,
+      yDocBinary,
+      workflowVariables,
+    }: {
+      projectName: string;
+      projectDescription: string;
+      workspace: Workspace;
+      yDocBinary: Uint8Array<ArrayBufferLike>;
+      workflowVariables?: AnyWorkflowVariable[];
+    }) => {
       try {
         setIsProjectImporting(true);
 
-        const zip = await JSZip.loadAsync(file);
-
-        const yDocBinary = await zip.file("ydoc.bin")?.async("uint8array");
-        if (!yDocBinary) {
-          throw new Error("Missing Y.doc binary data");
-        }
-
-        const projectMetaJson = await zip
-          .file("projectMeta.json")
-          ?.async("string");
-        if (!projectMetaJson) {
-          throw new Error("Missing project metadata");
-        }
-
-        const projectMeta: ProjectToImport = JSON.parse(projectMetaJson);
-
-        if (!projectMeta) return console.error("Missing project metadata");
-        if (!currentWorkspace)
-          return console.error("Missing current workspace");
-
         const { project } = await createProject({
-          workspaceId: currentWorkspace?.id,
-          name: projectMeta.name + t("(import)"),
-          description: projectMeta.description,
+          workspaceId: workspace.id,
+          name: projectName + t("(import)"),
+          description: projectDescription,
         });
 
-        if (!project) return console.error("Failed to create project");
-
-        const yDoc = new Y.Doc();
-        const { websocket } = config();
-
-        if (websocket && projectMeta) {
-          const token = await getAccessToken();
-
-          const yWebSocketProvider = new WebsocketProvider(
-            websocket,
-            `${project.id}:${DEFAULT_ENTRY_GRAPH_ID}`,
-            yDoc,
-            { params: { token } },
-          );
-
-          await new Promise<void>((resolve) => {
-            yWebSocketProvider.once("sync", () => {
-              yDoc.transact(() => {
-                Y.applyUpdate(yDoc, yDocBinary);
-              });
-
-              const yWorkflows = yDoc.getMap<YWorkflow>("workflows");
-              if (!yWorkflows.get(DEFAULT_ENTRY_GRAPH_ID)) {
-                console.warn("Imported project has no workflows");
-              }
-
-              setIsProjectImporting(false);
-              resolve();
-            });
-          });
-          yWebSocketProvider?.destroy();
+        if (!project) {
+          console.error("Failed to create project");
+          return;
         }
+
+        if (workflowVariables && workflowVariables.length > 0) {
+          await updateMultipleWorkflowVariables({
+            projectId: project.id,
+            creates: workflowVariables.map((pv, index) => ({
+              name: pv.name,
+              defaultValue: pv.defaultValue,
+              type: pv.type,
+              required: pv.required,
+              publicValue: pv.public,
+              index,
+              config: pv.config,
+            })),
+          });
+        }
+
+        await importProject(project.id, yDocBinary, workspace.id);
       } catch (error) {
         console.error("Failed to import project:", error);
+      } finally {
         setIsProjectImporting(false);
       }
     },
-    [createProject, currentWorkspace, getAccessToken, t],
+    [createProject, importProject, updateMultipleWorkflowVariables, t],
   );
 
   return {
     isProjectImporting,
-    handleProjectImportClick,
-    handleProjectFileUpload,
-    fileInputRef,
+    handleProjectImport,
   };
 };

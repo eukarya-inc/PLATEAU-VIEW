@@ -3,10 +3,10 @@ package mongodoc
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/internal/infrastructure/mongo/mongogit"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/infrastructure/mongo/mongogit"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/util"

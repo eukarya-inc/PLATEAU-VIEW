@@ -9,8 +9,8 @@ import (
 
 func TestPage_SettersGetters(t *testing.T) {
 
-	pageID := id.NewPageID()
-	propertyID := id.NewPropertyID()
+	pageID := NewPageID()
+	propertyID := NewPropertyID()
 	p := &Page{
 		id:              pageID,
 		property:        propertyID,
@@ -34,7 +34,7 @@ func TestPage_SettersGetters(t *testing.T) {
 	p.SetTitle("test2")
 	assert.Equal(t, "test2", p.Title())
 
-	layerID := id.NewNLSLayerID()
+	layerID := NewLayerID()
 	assert.False(t, p.HasLayer(layerID))
 	p.SetLayers([]id.NLSLayerID{layerID})
 	assert.Equal(t, 1, len(p.Layers()))
@@ -66,9 +66,9 @@ func TestPage_BlockManipulation(t *testing.T) {
 	assert.Nil(t, p.Clone())
 	assert.Nil(t, p.Duplicate())
 	assert.Equal(t, 0, p.Count())
-	assert.Nil(t, p.Block(id.NewBlockID()))
+	assert.Nil(t, p.Block(NewBlockID()))
 	assert.Nil(t, p.PropertyRef())
-	assert.False(t, p.HasBlock(id.NewBlockID()))
+	assert.False(t, p.HasBlock(NewBlockID()))
 	assert.Nil(t, p.BlockAt(0))
 	assert.NotPanics(t, func() {
 		p.SetTitle("test")
@@ -80,8 +80,8 @@ func TestPage_BlockManipulation(t *testing.T) {
 	assert.Nil(t, p.RemoveBlocksByPlugin(id.MustPluginID("xxx~1.1.1"), nil))
 	assert.Nil(t, p.BlocksByPlugin(id.MustPluginID("xxx~1.1.1"), nil))
 
-	pageID := id.NewPageID()
-	propertyID := id.NewPropertyID()
+	pageID := NewPageID()
+	propertyID := NewPropertyID()
 	p = &Page{
 		id:              pageID,
 		property:        propertyID,
@@ -100,7 +100,7 @@ func TestPage_BlockManipulation(t *testing.T) {
 	assert.NotEqual(t, p.Id(), duplicate.Id())
 	assert.Equal(t, p.Title()+" (copy)", duplicate.Title())
 
-	blockID1 := id.NewBlockID()
+	blockID1 := NewBlockID()
 	pluginId := id.MustPluginID("xxx~1.1.1")
 
 	assert.Nil(t, p.Blocks())
@@ -114,7 +114,7 @@ func TestPage_BlockManipulation(t *testing.T) {
 		id:        blockID1,
 		plugin:    pluginId,
 		extension: id.PluginExtensionID("xxx"),
-		property:  id.NewPropertyID(),
+		property:  NewPropertyID(),
 	}
 	p.AddBlock(b1, 3)
 
@@ -124,12 +124,12 @@ func TestPage_BlockManipulation(t *testing.T) {
 	assert.Equal(t, b1, p.BlockAt(0))
 	assert.Equal(t, BlockList{b1}, p.BlocksByPlugin(pluginId, nil))
 
-	blockID2 := id.NewBlockID()
+	blockID2 := NewBlockID()
 	b2 := &Block{
 		id:        blockID2,
 		plugin:    pluginId,
 		extension: id.PluginExtensionID("xxx"),
-		property:  id.NewPropertyID(),
+		property:  NewPropertyID(),
 	}
 	p.AddBlock(b2, 3)
 	assert.Equal(t, 2, p.Count())

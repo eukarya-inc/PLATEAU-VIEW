@@ -37,7 +37,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 	log.Infof("downloading... %s", ustr)
 	body, err := httpGet(ctx, p.httpClient, ustr)
 	if body != nil {
-		defer body.Close()
+		defer func() { _ = body.Close() }()
 	}
 	if err != nil {
 		return fmt.Errorf("get: %w", err)

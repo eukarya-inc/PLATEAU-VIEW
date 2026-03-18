@@ -2,14 +2,15 @@ package geospatialjpv2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
-	"github.com/pkg/errors"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
+	pkgerrors "github.com/pkg/errors"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
@@ -92,7 +93,7 @@ func (s *Services) CheckCatalog(ctx context.Context, projectID string, i Item) e
 		}.Fields(), nil); err != nil {
 			log.Errorfc(ctx, "failed to update item %s: %w", i.ID, err)
 		}
-		return fmt.Errorf("G空間情報センター用メタデータシートが見つかりません。")
+		return errors.New(errMsgMetadataSheetNotFound)
 	}
 
 	// validate catalog
@@ -117,7 +118,7 @@ func (s *Services) CheckCatalog(ctx context.Context, projectID string, i Item) e
 
 func (s *Services) RegisterCkanResources(ctx context.Context, i Item, disableSDKPublication bool) error {
 	if i.Catalog == "" {
-		return errors.New("「目録ファイル」が登録されていません。")
+		return pkgerrors.New("「目録ファイル」が登録されていません。")
 	}
 
 	// decide year and suffix
@@ -196,7 +197,7 @@ func (s *Services) RegisterCkanResources(ctx context.Context, i Item, disableSDK
 	if cbuf != nil && catalogFileName != "" {
 		catalogResource, _ := findResource(pkg, ResourceNameCatalog+suffix, "XLSX", "", "")
 		if _, err = s.Ckan.UploadResource(ctx, catalogResource, catalogFileName, cbuf); err != nil {
-			return fmt.Errorf("G空間情報センターへの目録リソースの登録に失敗しました。: %w", err)
+			return fmt.Errorf("%s: %w", errMsgCatalogResourceRegisterFailed, err)
 		}
 	} else {
 		log.Infofc(ctx, "geospatialjp: catalog is not registerd so uploading is skipped")
@@ -206,7 +207,7 @@ func (s *Services) RegisterCkanResources(ctx context.Context, i Item, disableSDK
 	citygmlResource, needUpdate := findResource(pkg, ResourceNameCityGML+suffix, "ZIP", "", citygmlAsset.URL)
 	if needUpdate {
 		if _, err = s.Ckan.SaveResource(ctx, citygmlResource); err != nil {
-			return fmt.Errorf("G空間情報センターへのCityGMLリソースの登録に失敗しました。: %w", err)
+			return fmt.Errorf("%s: %w", errMsgCityGMLResourceRegisterFailed, err)
 		}
 	} else {
 		log.Infofc(ctx, "geospatialjp: updating citygml resource was skipped")
@@ -217,7 +218,7 @@ func (s *Services) RegisterCkanResources(ctx context.Context, i Item, disableSDK
 		allResource, needUpdate := findResource(pkg, ResourceNameAll+suffix, "ZIP", "", allAsset.URL)
 		if needUpdate {
 			if _, err = s.Ckan.SaveResource(ctx, allResource); err != nil {
-				return fmt.Errorf("G空間情報センターへの全データリソースの登録に失敗しました。: %w", err)
+				return fmt.Errorf("%s: %w", errMsgAllDataResourceRegisterFailed, err)
 			}
 		} else {
 			log.Infofc(ctx, "geospatialjp: updating all resource was skipped")
@@ -286,7 +287,9 @@ func (s *Services) parseCatalog(ctx context.Context, catalogURL string) (c *Cata
 		return c, cf, fmt.Errorf("アセットの取得に失敗しました: ステータスコード %d", catalogAssetRes.StatusCode)
 	}
 
-	defer catalogAssetRes.Body.Close()
+	defer func() {
+		_ = catalogAssetRes.Body.Close()
+	}()
 
 	// parse catalog
 	xf, err := excelize.OpenReader(catalogAssetRes.Body)
@@ -307,7 +310,7 @@ func (s *Services) findOrCreatePackage(ctx context.Context, c *Catalog, cityCode
 	// find
 	pkg, pkgName, err := s.findPackage(ctx, cityCode, cityName, dataYear)
 	if err != nil {
-		return nil, fmt.Errorf("G空間情報センターからデータセットを検索できませんでした: %w", err)
+		return nil, fmt.Errorf("%s: %w", errMsgDatasetSearchFailed, err)
 	}
 
 	// create
@@ -321,7 +324,7 @@ func (s *Services) findOrCreatePackage(ctx context.Context, c *Catalog, cityCode
 
 		pkg2, err := s.Ckan.CreatePackage(ctx, *newpkg)
 		if err != nil {
-			return nil, fmt.Errorf("G空間情報センターにデータセット %s を作成できませんでした: %w", pkgName, err)
+			return nil, fmt.Errorf("%s: %w", fmt.Sprintf(errMsgDatasetCreateFailed, pkgName), err)
 		}
 		return &pkg2, nil
 	}

@@ -11,13 +11,11 @@ import useFileInput from "use-file-input";
 
 export default ({
   workspaceId,
-  projectId,
   onAssetSelect,
   assetsTypes,
   multiple = true
 }: {
   workspaceId?: string;
-  projectId?: string;
   onAssetSelect?: (inputValue?: string, name?: string) => void;
   assetsTypes?: AcceptedAssetsTypes;
   multiple?: boolean;
@@ -48,7 +46,6 @@ export default ({
       try {
         const result = await useCreateAssets({
           teamId: workspaceId ?? "",
-          projectId,
           file: files,
           coreSupport: true
         });
@@ -59,7 +56,7 @@ export default ({
         console.error("Error creating assets:", error);
       }
     },
-    [useCreateAssets, workspaceId, projectId, onAssetSelect]
+    [workspaceId, useCreateAssets, onAssetSelect]
   );
   const handleFileUpload = useFileInput(
     (files) => handleAssetsCreate?.(files),

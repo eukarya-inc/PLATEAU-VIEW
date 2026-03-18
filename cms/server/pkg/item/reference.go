@@ -1,9 +1,9 @@
 package item
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 )
 
 func AreItemsReferenced(i1, i2 *Item, s1, s2 *schema.Schema) (*id.FieldID, *id.FieldID) {

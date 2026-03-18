@@ -1,7 +1,11 @@
-import { CaretDown, CaretUp, Download } from "@phosphor-icons/react";
+import {
+  CaretDownIcon,
+  CaretUpIcon,
+  DownloadIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 
-import { Button } from "@flow/components";
+import { Button, Switch } from "@flow/components";
 import { useT } from "@flow/lib/i18n";
 import { openLinkInNewTab } from "@flow/utils";
 
@@ -16,9 +20,19 @@ type Props = {
   title: string;
   content?: DetailsBoxContent[];
   collapsible?: boolean;
+  toggle?: boolean;
+  toggleValue?: boolean;
+  onToggleChange?: (checked: boolean) => void;
 };
 
-const DetailsBox: React.FC<Props> = ({ title, content, collapsible }) => {
+const DetailsBox: React.FC<Props> = ({
+  title,
+  content,
+  collapsible,
+  toggle,
+  toggleValue,
+  onToggleChange,
+}) => {
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -69,9 +83,15 @@ const DetailsBox: React.FC<Props> = ({ title, content, collapsible }) => {
         onClick={() => collapsible && setCollapsed(!collapsed)}>
         <div className="flex items-center gap-4">
           <p className="text-xl">{title}</p>
-          {collapsible ? collapsed ? <CaretUp /> : <CaretDown /> : null}
+          {collapsible ? collapsed ? <CaretUpIcon /> : <CaretDownIcon /> : null}
         </div>
         <div className="flex items-center gap-2">
+          {!collapsible && toggle && (
+            <div className="flex gap-2">
+              <span className="text-sm font-thin">{t("Is Enabled?")}</span>
+              <Switch checked={toggleValue} onCheckedChange={onToggleChange} />
+            </div>
+          )}
           {!collapsed &&
             downloadContent?.map((detail) =>
               Array.isArray(detail.value) ? (
@@ -86,7 +106,7 @@ const DetailsBox: React.FC<Props> = ({ title, content, collapsible }) => {
                       className="flex h-full items-center gap-2 rounded px-4 py-2"
                       href={value}
                       onClick={() => value && handleDownload(value)}>
-                      <Download />
+                      <DownloadIcon />
                       <p className="max-w-[100px] truncate font-light">
                         {value.split("/").pop()}
                       </p>
@@ -107,7 +127,7 @@ const DetailsBox: React.FC<Props> = ({ title, content, collapsible }) => {
                       typeof detail.value === "string" &&
                       handleDownload(detail.value)
                     }>
-                    <Download />
+                    <DownloadIcon />
                     <p className="font-light">{detail.name}</p>
                   </a>
                 </Button>

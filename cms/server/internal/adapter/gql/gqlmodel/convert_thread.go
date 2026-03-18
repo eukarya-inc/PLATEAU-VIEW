@@ -1,8 +1,8 @@
 package gqlmodel
 
 import (
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/thread"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/thread"
 	"github.com/samber/lo"
 )
 

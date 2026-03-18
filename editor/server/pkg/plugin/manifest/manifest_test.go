@@ -3,14 +3,13 @@ package manifest
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/property"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestManifest_PropertySchemas(t *testing.T) {
-	s1 := property.NewSchema().ID(id.MustPropertySchemaID("xx~1.0.0/aa")).MustBuild()
-	s2 := property.NewSchema().ID(id.MustPropertySchemaID("xx~1.0.0/bb")).MustBuild()
+	s1 := property.NewSchema().ID(property.MustSchemaID("xx~1.0.0/aa")).MustBuild()
+	s2 := property.NewSchema().ID(property.MustSchemaID("xx~1.0.0/bb")).MustBuild()
 
 	tests := []struct {
 		name   string
@@ -55,15 +54,15 @@ func TestManifest_PropertySchemas(t *testing.T) {
 }
 
 func TestManifest_PropertySchema(t *testing.T) {
-	s1 := property.NewSchema().ID(id.MustPropertySchemaID("xx~1.0.0/aa")).MustBuild()
-	s2 := property.NewSchema().ID(id.MustPropertySchemaID("xx~1.0.0/bb")).MustBuild()
+	s1 := property.NewSchema().ID(property.MustSchemaID("xx~1.0.0/aa")).MustBuild()
+	s2 := property.NewSchema().ID(property.MustSchemaID("xx~1.0.0/bb")).MustBuild()
 	m := Manifest{
 		Schema:          s1,
 		ExtensionSchema: property.SchemaList{s2},
 	}
 
 	type args struct {
-		psid id.PropertySchemaID
+		psid property.SchemaID
 	}
 	tests := []struct {
 		name   string

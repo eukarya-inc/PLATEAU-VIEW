@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"runtime"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/worker/citygmlpacker"
-	"github.com/eukarya-inc/reearth-plateauview/worker/extractmaxlod"
-	"github.com/eukarya-inc/reearth-plateauview/worker/preparegspatialjp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/citygmlpacker"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/extractmaxlod"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/lodstat"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/preparegspatialjp"
 	"github.com/k0kubun/pp/v3"
 	"github.com/samber/lo"
 )
@@ -26,6 +29,8 @@ func main() {
 		extractMaxLOD(config)
 	case "citygml-packer":
 		cityGMLPacker(config)
+	case "lodstat":
+		lodStat(config)
 	}
 }
 
@@ -51,7 +56,7 @@ func prepareGspatialjp(conf *Config) {
 		panic(err)
 	}
 
-	config.FeatureTypes = strings.Split(ft, ",")
+	config.FeatureTypes, config.FeatureTypeNames = parseFeatureTypes(ft)
 	if err := preparegspatialjp.Command(&config); err != nil {
 		panic(err)
 	}
@@ -106,6 +111,41 @@ func cityGMLPacker(*Config) {
 	})
 
 	if err := citygmlpacker.Run(config); err != nil {
+		panic(err)
+	}
+}
+
+// parseFeatureTypes parses "bldg:建築物モデル,ext:拡張地物モデル,tran" into codes and names.
+func parseFeatureTypes(s string) ([]string, map[string]string) {
+	parts := strings.Split(s, ",")
+	codes := make([]string, 0, len(parts))
+	names := make(map[string]string, len(parts))
+	for _, part := range parts {
+		if code, name, ok := strings.Cut(part, ":"); ok {
+			codes = append(codes, code)
+			names[code] = name
+		} else {
+			codes = append(codes, part)
+		}
+	}
+	return codes, names
+}
+
+func lodStat(c *Config) {
+	var config lodstat.Config
+	config.CMSURL = c.CMS_URL
+	config.CMSToken = c.CMS_Token
+
+	flag := flag.NewFlagSet("lodstat", flag.ExitOnError)
+	flag.StringVar(&config.SrcURL, "src", "", "src")
+	flag.StringVar(&config.ProjectID, "project", "", "project")
+	flag.StringVar(&config.ItemID, "item", "", "item")
+	flag.StringVar(&config.Feature, "feature", "", "feature")
+	flag.IntVar(&config.Parallelism, "p", runtime.GOMAXPROCS(0), "parallelism")
+	if err := flag.Parse(os.Args[2:]); err != nil {
+		panic(err)
+	}
+	if err := lodstat.Run(context.Background(), config); err != nil {
 		panic(err)
 	}
 }

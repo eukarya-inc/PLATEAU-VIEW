@@ -101,10 +101,11 @@ pub(crate) fn execute(workflow: &str) {
     let job_id = uuid::Uuid::new_v4();
     let action_log_uri = setup_job_directory("engine", "action-log", job_id)
         .expect("Failed to setup job directory.");
-    let state_uri = setup_job_directory("engine", "feature-store", job_id)
+    let feature_state_uri = setup_job_directory("engine", "feature-store", job_id)
         .expect("Failed to setup job directory.");
     let storage_resolver = Arc::new(StorageResolver::new());
-    let state = Arc::new(State::new(&state_uri, &storage_resolver).unwrap());
+    let feature_state = Arc::new(State::new(&feature_state_uri, &storage_resolver).unwrap());
+    let ingress_state = Arc::clone(&feature_state);
     let workflow = create_workflow(workflow);
     let logger_factory = Arc::new(LoggerFactory::new(
         create_root_logger(action_log_uri.path()),
@@ -118,7 +119,9 @@ pub(crate) fn execute(workflow: &str) {
         ALL_ACTION_FACTORIES.clone(),
         logger_factory,
         storage_resolver,
-        state,
+        ingress_state,
+        feature_state,
+        None,
         handlers,
     )
     .expect("Failed to run workflow.");
@@ -128,7 +131,8 @@ pub fn create_workflow(workflow: &str) -> Workflow {
     let current_dir = env::current_dir().unwrap().to_str().unwrap().to_string();
     let current_dir = Path::new(&current_dir);
     let absolute_path = fs::canonicalize(current_dir.join("runtime/examples").join(workflow));
-    let path = absolute_path.expect("Failed to get absolute path.");
+    let path =
+        absolute_path.unwrap_or_else(|_| panic!("Failed to get absolute path for {workflow}"));
     tracing::info!("workflow_path: {:?}", path);
     let yaml = Transformer::new(path, false).unwrap();
     let yaml = yaml.to_string();
@@ -143,8 +147,7 @@ pub fn create_workflow(workflow: &str) -> Workflow {
 pub fn setup_logging_and_tracing() {
     let env_filter = EnvFilter::builder()
         .with_default_directive(Level::INFO.into())
-        .from_env_lossy()
-        .add_directive("opendal=error".parse().unwrap());
+        .from_env_lossy();
     let registry = tracing_subscriber::registry().with(env_filter);
     let event_format = tracing_subscriber::fmt::format()
         .with_target(true)

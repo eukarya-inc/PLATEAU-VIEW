@@ -3,9 +3,10 @@ import type {
   NodeChange as ReactFlowNodeChange,
 } from "@xyflow/react";
 
-type NodeParams = Record<string, any>;
+export type NodeParams = Record<string, any>;
+
 // TODO: Add generic for NodeCustomization for better type checking and separation of concerns
-type NodeCustomizations = {
+export type NodeCustomizations = {
   customName?: string;
   content?: string;
   backgroundColor?: string;
@@ -19,11 +20,13 @@ export type PseudoPort = {
 
 export type NodeData = {
   officialName: string;
-  customName?: string; // TODO: remove customName from data when subworkflow's renaming is re-implemented
   inputs?: string[];
   outputs?: string[];
   params?: NodeParams;
   customizations?: NodeCustomizations;
+  workflowPath?: string;
+  isCollapsed?: boolean;
+  isDisabled?: boolean;
   // subworkflow nodes
   subworkflowId?: string;
   pseudoInputs?: PseudoPort[];

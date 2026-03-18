@@ -3,23 +3,22 @@ package plugin
 import (
 	"github.com/blang/semver"
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 type Plugin struct {
-	id             id.PluginID
+	id             ID
 	name           i18n.String
 	author         string
 	description    i18n.String
 	repositoryURL  string
-	extensions     map[id.PluginExtensionID]*Extension
-	extensionOrder []id.PluginExtensionID
-	schema         *id.PropertySchemaID
+	extensions     map[ExtensionID]*Extension
+	extensionOrder []ExtensionID
+	schema         *PropertySchemaID
 }
 
-func (p *Plugin) ID() id.PluginID {
+func (p *Plugin) ID() ID {
 	if p == nil {
-		return id.PluginID{}
+		return ID{}
 	}
 	return p.id
 }
@@ -31,7 +30,7 @@ func (p *Plugin) Version() semver.Version {
 	return p.id.Version()
 }
 
-func (p *Plugin) Scene() *id.SceneID {
+func (p *Plugin) Scene() *SceneID {
 	return p.ID().Scene()
 }
 
@@ -78,7 +77,7 @@ func (p *Plugin) Extensions() []*Extension {
 	return list
 }
 
-func (p *Plugin) Extension(id id.PluginExtensionID) *Extension {
+func (p *Plugin) Extension(id ExtensionID) *Extension {
 	if p == nil {
 		return nil
 	}
@@ -90,19 +89,19 @@ func (p *Plugin) Extension(id id.PluginExtensionID) *Extension {
 	return nil
 }
 
-func (p *Plugin) Schema() *id.PropertySchemaID {
+func (p *Plugin) Schema() *PropertySchemaID {
 	if p == nil {
 		return nil
 	}
 	return p.schema
 }
 
-func (p *Plugin) PropertySchemas() id.PropertySchemaIDList {
+func (p *Plugin) PropertySchemas() PropertySchemaIDList {
 	if p == nil {
 		return nil
 	}
 
-	ps := make([]id.PropertySchemaID, 0, len(p.extensions)+1)
+	ps := make([]PropertySchemaID, 0, len(p.extensions)+1)
 	if p.schema != nil {
 		ps = append(ps, *p.schema)
 	}
@@ -117,17 +116,17 @@ func (p *Plugin) Clone() *Plugin {
 		return nil
 	}
 
-	var extensions map[id.PluginExtensionID]*Extension
+	var extensions map[ExtensionID]*Extension
 	if p.extensions != nil {
-		extensions = make(map[id.PluginExtensionID]*Extension, len(p.extensions))
+		extensions = make(map[ExtensionID]*Extension, len(p.extensions))
 		for _, e := range p.extensions {
 			extensions[e.ID()] = e.Clone()
 		}
 	}
 
-	var extensionOrder []id.PluginExtensionID
+	var extensionOrder []ExtensionID
 	if p.extensionOrder != nil {
-		extensionOrder = append([]id.PluginExtensionID{}, p.extensionOrder...)
+		extensionOrder = append([]ExtensionID{}, p.extensionOrder...)
 	}
 
 	return &Plugin{

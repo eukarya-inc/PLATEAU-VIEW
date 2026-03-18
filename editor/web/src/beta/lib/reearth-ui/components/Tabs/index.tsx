@@ -1,9 +1,4 @@
-import {
-  Icon,
-  IconName,
-  IconProps,
-  Typography
-} from "@reearth/beta/lib/reearth-ui";
+import { Icon, IconName, Typography } from "@reearth/beta/lib/reearth-ui";
 import { styled, useTheme } from "@reearth/services/theme";
 import {
   FC,
@@ -19,7 +14,7 @@ export type TabItem = {
   name?: string;
   icon?: IconName;
   children?: ReactNode;
-} & Pick<IconProps, "placement" | "tooltipText">;
+};
 
 export type TabsProps = {
   tabs: TabItem[] | [];
@@ -83,7 +78,7 @@ export const Tabs: FC<TabsProps> = ({
         background={background}
         edgeGap={menuEdgeGap}
       >
-        {tabs.map(({ id, icon, name, tooltipText, placement }) => (
+        {tabs.map(({ id, icon, name }) => (
           <Tab
             key={id}
             onClick={() => handleTabChange?.(id)}
@@ -93,9 +88,7 @@ export const Tabs: FC<TabsProps> = ({
           >
             {icon && (
               <Icon
-                tooltipText={tooltipText}
                 icon={icon}
-                placement={placement}
                 color={
                   id === activeTab ? theme.content.main : theme.content.weak
                 }

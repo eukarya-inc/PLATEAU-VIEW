@@ -51,6 +51,9 @@ const propertyFragment = gql`
     fieldId
     type
     value
+    links {
+      ...PropertyFieldLink
+    }
   }
 
   fragment PropertyGroupFragment on PropertyGroup {
@@ -97,7 +100,11 @@ const propertyFragment = gql`
     fields {
       fieldId
       type
+      actualValue
       overridden
+      links {
+        ...PropertyFieldLink
+      }
     }
   }
 
@@ -111,6 +118,7 @@ const propertyFragment = gql`
   fragment MergedPropertyFragmentWithoutSchema on MergedProperty {
     originalId
     parentId
+    linkedDatasetId
     groups {
       ...MergedPropertyGroupFragment
     }
@@ -121,6 +129,12 @@ const propertyFragment = gql`
     schema {
       id
     }
+  }
+
+  fragment PropertyFieldLink on PropertyFieldLink {
+    datasetId
+    datasetSchemaId
+    datasetSchemaFieldId
   }
 `;
 

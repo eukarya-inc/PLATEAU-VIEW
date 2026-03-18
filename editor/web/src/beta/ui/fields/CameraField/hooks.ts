@@ -106,11 +106,6 @@ export default ({
     handleFieldBlur("roll", values[2]);
   };
 
-  const handleFOVChange = (value: number) => {
-    handleFieldChange("fov", value);
-    handleFieldBlur("fov", value);
-  };
-
   return {
     newCamera,
     handleTwinFieldBlur,
@@ -119,7 +114,6 @@ export default ({
     handleTrippleFieldBlur,
     handleFieldChange,
     handleFieldBlur,
-    handleFOVChange,
     handleSave
   };
 };

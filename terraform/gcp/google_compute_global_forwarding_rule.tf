@@ -29,6 +29,18 @@ resource "google_compute_global_forwarding_rule" "plateau_cms" {
   target                = google_compute_target_https_proxy.plateau_cms.self_link
 }
 
+resource "google_compute_global_forwarding_rule" "plateau_cms_http" {
+  project = data.google_project.project.project_id
+
+  name                  = "plateau-cms-http"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  ip_address            = google_compute_global_address.cms.id
+  ip_protocol           = "TCP"
+  port_range            = "80"
+  target                = google_compute_target_http_proxy.plateau_cms.id
+}
+
+
 resource "google_compute_global_forwarding_rule" "editor" {
   project = data.google_project.project.project_id
 
@@ -38,6 +50,17 @@ resource "google_compute_global_forwarding_rule" "editor" {
   ip_protocol           = "TCP"
   port_range            = "443"
   target                = google_compute_target_https_proxy.editor.id
+}
+
+resource "google_compute_global_forwarding_rule" "editor_http" {
+  project = data.google_project.project.project_id
+
+  name                  = "editor-http"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  ip_address            = google_compute_global_address.editor.id
+  ip_protocol           = "TCP"
+  port_range            = "80"
+  target                = google_compute_target_http_proxy.editor.id
 }
 
 resource "google_compute_global_forwarding_rule" "plateau_api" {
@@ -51,6 +74,17 @@ resource "google_compute_global_forwarding_rule" "plateau_api" {
   target                = google_compute_target_https_proxy.plateau_api.id
 }
 
+resource "google_compute_global_forwarding_rule" "plateauview_tile" {
+  project = data.google_project.project.project_id
+
+  name                  = "plateau-tile"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  ip_address            = google_compute_global_address.plateauview_tile.id
+  ip_protocol           = "TCP"
+  port_range            = "443"
+  target                = google_compute_target_https_proxy.plateauview_tile.id
+}
+
 resource "google_compute_global_forwarding_rule" "plateau_flow" {
   project = data.google_project.project.project_id
 
@@ -60,4 +94,15 @@ resource "google_compute_global_forwarding_rule" "plateau_flow" {
   ip_protocol           = "TCP"
   port_range            = "443"
   target                = google_compute_target_https_proxy.plateau_flow.id
+}
+
+resource "google_compute_global_forwarding_rule" "plateau_flow_http" {
+  project = data.google_project.project.project_id
+
+  name                  = "plateau-flow-http"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  ip_address            = google_compute_global_address.plateau_flow.id
+  ip_protocol           = "TCP"
+  port_range            = "80"
+  target                = google_compute_target_http_proxy.plateau_flow.id
 }

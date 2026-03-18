@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/integrationapi"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
@@ -485,12 +485,9 @@ func createItem(ctx context.Context, uc *interfaces.Container, m *model.Model, f
 }
 
 func assetContext(ctx context.Context, m asset.Map, asset *integrationapi.AssetEmbedding) *integrationapi.AssetContext {
-	uc := adapter.Usecases(ctx)
-
 	return &integrationapi.AssetContext{
-		Map:     m,
-		BaseURL: uc.Asset.GetURL,
-		All:     asset != nil && *asset == integrationapi.AssetEmbedding("all"),
+		Map: m,
+		All: asset != nil && *asset == integrationapi.AssetEmbedding("all"),
 	}
 }
 

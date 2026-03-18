@@ -3,30 +3,30 @@ package interactor
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/usecasex"
 )
 
 const retry = 2
 
 type uc struct {
+	readableWorkspaces accountsid.WorkspaceIDList
+	writableWorkspaces accountsid.WorkspaceIDList
 	tx                 bool
-	readableWorkspaces accountdomain.WorkspaceIDList
-	writableWorkspaces accountdomain.WorkspaceIDList
 }
 
 func Usecase() *uc {
 	return &uc{}
 }
 
-func (u *uc) WithReadableWorkspaces(ids ...accountdomain.WorkspaceID) *uc {
-	u.readableWorkspaces = accountdomain.WorkspaceIDList(ids).Clone()
+func (u *uc) WithReadableWorkspaces(ids ...accountsid.WorkspaceID) *uc {
+	u.readableWorkspaces = accountsid.WorkspaceIDList(ids).Clone()
 	return u
 }
 
-func (u *uc) WithWritableWorkspaces(ids ...accountdomain.WorkspaceID) *uc {
-	u.writableWorkspaces = accountdomain.WorkspaceIDList(ids).Clone()
+func (u *uc) WithWritableWorkspaces(ids ...accountsid.WorkspaceID) *uc {
+	u.writableWorkspaces = accountsid.WorkspaceIDList(ids).Clone()
 	return u
 }
 

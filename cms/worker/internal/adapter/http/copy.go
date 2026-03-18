@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/reearth/reearth-cms/server/pkg/task"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/interactor"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/task"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/interactor"
 	"github.com/reearth/reearthx/rerror"
 	"go.mongodb.org/mongo-driver/bson"
 )

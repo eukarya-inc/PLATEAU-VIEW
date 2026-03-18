@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"cloud.google.com/go/storage"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 )
@@ -59,7 +59,7 @@ func (f *fileRepo) Upload(ctx context.Context, name string) (io.WriteCloser, err
 
 	object := bucket.Retryer(storage.WithPolicy(storage.RetryAlways)).Object(name)
 	writer := object.NewWriter(ctx)
-	writer.ObjectAttrs.CacheControl = f.cacheControl
+	writer.CacheControl = f.cacheControl
 	return writer, nil
 }
 

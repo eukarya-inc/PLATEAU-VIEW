@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 )
@@ -75,7 +75,13 @@ func (s *Services) GetFME(url string) fmeInterface {
 	if s.mockFME != nil {
 		return s.mockFME
 	}
-	return newFME(url, s.FMEResultURL)
+	// newFME returns *fme(nil) when url or resultURL is empty.
+	// We need to return nil explicitly to avoid interface nil check issue.
+	f := newFME(url, s.FMEResultURL)
+	if f == nil {
+		return nil
+	}
+	return f
 }
 
 func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, convType fmeRequestType, status cmsintegrationcommon.ConvertionStatus) error {
@@ -88,6 +94,11 @@ func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, c
 	case fmeTypeQcConv:
 		qcStatus = status
 		convStatus = status
+		// 開始時（実行中）の場合、変換ステータスは「未実行」にリセットする
+		// FME側でQC→Convの順に処理されるため、開始時点ではQCのみ実行中とする
+		if status == cmsintegrationcommon.ConvertionStatusRunning {
+			convStatus = cmsintegrationcommon.ConvertionStatusNotStarted
+		}
 	}
 
 	fields := (&cmsintegrationcommon.FeatureItem{

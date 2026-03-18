@@ -29,7 +29,6 @@ export type AreaProps = {
   initialWidth?: number;
   initialHeight?: number;
   extend?: boolean;
-  hidden?: boolean;
   backgroundColor?: string;
   resizableEdge?: ResizableEdge;
   resizeHandleColor?: string;
@@ -65,7 +64,6 @@ export const Area = forwardRef<AreaRef, AreaProps>(
       resizableEdge,
       resizeHandleColor,
       extend,
-      hidden,
       windowRef,
       asWrapper,
       storageId,
@@ -314,7 +312,6 @@ export const Area = forwardRef<AreaRef, AreaProps>(
         ref={resizableRef}
         direction={direction}
         extend={extend}
-        hidden={hidden}
         width={size.width}
         height={size.height}
         backgroundColor={backgroundColor}
@@ -350,7 +347,6 @@ Area.displayName = "Area";
 const StyledArea = styled("div")<{
   direction?: "row" | "column";
   extend?: boolean;
-  hidden?: boolean;
   width: number;
   height: number;
   backgroundColor?: string;
@@ -361,7 +357,6 @@ const StyledArea = styled("div")<{
     theme,
     direction,
     extend,
-    hidden,
     width,
     height,
     backgroundColor,
@@ -369,7 +364,7 @@ const StyledArea = styled("div")<{
     passive
   }) => ({
     position: "relative",
-    display: hidden ? "none" : "flex",
+    display: "flex",
     flexDirection: direction,
     justifyContent: "space-between",
     height: direction === "row" && !extend ? height : "100%",
@@ -387,6 +382,7 @@ const StyledArea = styled("div")<{
     ...(!asWrapper && {
       padding: theme.spacing.micro / 2,
       gap: theme.spacing.micro,
+      display: "flex",
       flexDirection: direction
     }),
     maxHeight: "100%",

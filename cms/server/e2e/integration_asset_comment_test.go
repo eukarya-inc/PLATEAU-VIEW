@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/internal/app"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/integrationapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
 )
 
 // GET|/assets/{assetId}/comments

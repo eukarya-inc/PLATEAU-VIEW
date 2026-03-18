@@ -4,14 +4,15 @@ import (
 	"context"
 	"path"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogmcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
 func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.Context) error, error) {
-	h, err := newReposHandler(conf, pcms)
+	h, err := NewReposHandler(conf, pcms)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +51,23 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 
 	// cache update API
 	g.POST("/update-cache", h.UpdateCacheHandler)
+
+	// Data catalog MCP API
+	mcpService := datacatalogmcp.NewService(h, conf.Host)
+	mcpGroup := g.Group("/mcp")
+	mcpGroup.Use(
+		middleware.CORS(),
+		h.Middleware(),
+	)
+	mcpService.RegisterRoutes(mcpGroup)
+
+	// Return initialization function
+	// If CacheURL is set, load from cache instead of CMS
+	if conf.CacheURL != "" {
+		return func(ctx context.Context) error {
+			return h.InitFromCache(ctx, conf.CacheURL)
+		}, nil
+	}
 
 	return func(ctx context.Context) error {
 		return h.Init(ctx)

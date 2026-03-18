@@ -1,5 +1,4 @@
 import { Geometry, GetSceneQuery, SketchInfo } from "../../gql";
-import { processNewProperty } from "../propertyApi/processNewProperty";
 
 export type NLSInfobox = {
   sceneId: string;
@@ -7,16 +6,6 @@ export type NLSInfobox = {
   propertyId?: string;
   property?: any;
   blocks?: any[];
-};
-
-export type NLSPhotoOverlay = {
-  layerId?: string;
-  propertyId?: string;
-  property?: any;
-  processedProperty?: {
-    enabled?: boolean;
-    cameraDuration?: number;
-  };
 };
 
 export type SketchGeometry = {
@@ -55,7 +44,6 @@ export type NLSLayer = {
   sketch?: Sketch;
   isSketch?: boolean;
   infobox?: NLSInfobox;
-  photoOverlay?: NLSPhotoOverlay;
 };
 
 const getGeometryCoordinates = (geometry: Geometry) => {
@@ -108,7 +96,7 @@ export const getLayers = (rawScene?: GetSceneQuery) => {
     rawScene?.node?.__typename === "Scene" ? rawScene.node : undefined;
 
   return scene?.newLayers?.map((l): NLSLayer => {
-    const layer: NLSLayer = {
+    return {
       id: l.id,
       index: l.index,
       title: l.title,
@@ -134,25 +122,5 @@ export const getLayers = (rawScene?: GetSceneQuery) => {
           }
         : undefined
     };
-
-    // append photoOverlay property
-    if (l.photoOverlay) {
-      const processedPhotoOverlayProperty = processNewProperty(
-        undefined,
-        l.photoOverlay.property
-      );
-      layer.photoOverlay = {
-        layerId: l.photoOverlay.layerId,
-        propertyId: l.photoOverlay.propertyId,
-        property: l.photoOverlay.property,
-        processedProperty: {
-          enabled: processedPhotoOverlayProperty?.default?.enabled?.value,
-          cameraDuration:
-            processedPhotoOverlayProperty?.default?.cameraDuration?.value
-        }
-      };
-    }
-
-    return layer;
   });
 };

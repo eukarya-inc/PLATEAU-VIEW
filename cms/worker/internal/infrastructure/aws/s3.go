@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 )
@@ -93,7 +93,12 @@ func (f *fileRepo) Upload(_ context.Context, name string) (io.WriteCloser, error
 	pr, pw := io.Pipe()
 
 	go func() {
-		defer pw.Close()
+		defer func(pw *io.PipeWriter) {
+			err := pw.Close()
+			if err != nil {
+				log.Errorf("aws: failed to close pipe writer: %v\n", err)
+			}
+		}(pw)
 
 		uploadCtx := context.Background()
 		key := path.Join(s3AssetBasePath, name)

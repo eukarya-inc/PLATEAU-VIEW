@@ -10,7 +10,7 @@ import (
 
 func parseBounds(s string) (quadtree.Bounds, error) {
 	tokens := strings.Split(s, ",")
-	if !(len(tokens) == 2 || len(tokens) == 4) {
+	if len(tokens) != 2 && len(tokens) != 4 {
 		return quadtree.Bounds{}, fmt.Errorf("invalid bounds")
 	}
 

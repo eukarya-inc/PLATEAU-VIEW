@@ -1,8 +1,8 @@
 package mongodoc
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/group"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/group"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/mongox"
 )
 

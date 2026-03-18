@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/rbac"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
@@ -15,8 +16,6 @@ import (
 	"github.com/reearth/reearth-flow/api/pkg/deployment"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/job"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"github.com/reearth/reearthx/usecasex"
 )
 
@@ -25,7 +24,8 @@ type Deployment struct {
 	projectRepo       repo.Project
 	workflowRepo      repo.Workflow
 	jobRepo           repo.Job
-	workspaceRepo     accountrepo.Workspace
+	workerConfigRepo  repo.WorkerConfig
+	triggerRepo       repo.Trigger
 	transaction       usecasex.Transaction
 	batch             gateway.Batch
 	file              gateway.File
@@ -39,7 +39,8 @@ func NewDeployment(r *repo.Container, gr *gateway.Container, jobUsecase interfac
 		projectRepo:       r.Project,
 		workflowRepo:      r.Workflow,
 		jobRepo:           r.Job,
-		workspaceRepo:     r.Workspace,
+		workerConfigRepo:  r.WorkerConfig,
+		triggerRepo:       r.Trigger,
 		transaction:       r.Transaction,
 		batch:             gr.Batch,
 		file:              gr.File,
@@ -60,12 +61,12 @@ func (i *Deployment) Fetch(ctx context.Context, ids []id.DeploymentID) ([]*deplo
 	return i.deploymentRepo.FindByIDs(ctx, ids)
 }
 
-func (i *Deployment) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, p *interfaces.PaginationParam) ([]*deployment.Deployment, *interfaces.PageBasedInfo, error) {
+func (i *Deployment) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, p *interfaces.PaginationParam, keyword *string) ([]*deployment.Deployment, *interfaces.PageBasedInfo, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, nil, err
 	}
 
-	return i.deploymentRepo.FindByWorkspace(ctx, id, p)
+	return i.deploymentRepo.FindByWorkspace(ctx, id, p, keyword)
 }
 
 func (i *Deployment) FindByProject(ctx context.Context, id id.ProjectID) (*deployment.Deployment, error) {
@@ -76,7 +77,7 @@ func (i *Deployment) FindByProject(ctx context.Context, id id.ProjectID) (*deplo
 	return i.deploymentRepo.FindByProject(ctx, id)
 }
 
-func (i *Deployment) FindByVersion(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID, version string) (*deployment.Deployment, error) {
+func (i *Deployment) FindByVersion(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID, version string) (*deployment.Deployment, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, err
 	}
@@ -84,7 +85,7 @@ func (i *Deployment) FindByVersion(ctx context.Context, wsID accountdomain.Works
 	return i.deploymentRepo.FindByVersion(ctx, wsID, projectID, version)
 }
 
-func (i *Deployment) FindHead(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID) (*deployment.Deployment, error) {
+func (i *Deployment) FindHead(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID) (*deployment.Deployment, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func (i *Deployment) FindHead(ctx context.Context, wsID accountdomain.WorkspaceI
 	return i.deploymentRepo.FindHead(ctx, wsID, projectID)
 }
 
-func (i *Deployment) FindVersions(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID) ([]*deployment.Deployment, error) {
+func (i *Deployment) FindVersions(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID) ([]*deployment.Deployment, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, err
 	}
@@ -251,6 +252,14 @@ func (i *Deployment) Delete(ctx context.Context, deploymentID id.DeploymentID) (
 		return err
 	}
 
+	triggers, err := i.triggerRepo.FindByDeployment(ctx, deploymentID)
+	if err != nil {
+		return err
+	}
+	if len(triggers) > 0 {
+		return interfaces.ErrDeploymentHasTriggers
+	}
+
 	tx, err := i.transaction.Begin(ctx)
 	if err != nil {
 		return
@@ -354,7 +363,7 @@ func (i *Deployment) Execute(ctx context.Context, p interfaces.ExecuteDeployment
 		projectID = *d.Project()
 	}
 
-	gcpJobID, err := i.batch.SubmitJob(ctx, j.ID(), d.WorkflowURL(), j.MetadataURL(), nil, projectID, d.Workspace())
+	gcpJobID, err := i.batch.SubmitJob(ctx, j.ID(), d.WorkflowURL(), j.MetadataURL(), nil, projectID, d.Workspace(), nil, nil)
 	if err != nil {
 		return nil, interfaces.ErrJobCreationFailed
 	}

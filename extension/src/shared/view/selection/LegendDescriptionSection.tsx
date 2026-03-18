@@ -1,5 +1,4 @@
 import { FC } from "react";
-import Markdown from "react-markdown";
 
 import { LayerModel, LayerType } from "../../../prototypes/layers";
 import {
@@ -16,6 +15,7 @@ import {
 } from "../../../prototypes/view-layers";
 import { useOptionalAtomValue } from "../../hooks";
 import { LEGEND_DESCRIPTION_FIELD } from "../../types/fieldComponents/general";
+import { ViewMarkdownViewer } from "../../ui-components/common";
 import { CommonContentWrapper } from "../../ui-components/CommonContentWrapper";
 import { useFindComponent } from "../../view-layers/hooks";
 
@@ -45,17 +45,7 @@ export const LegendDescriptionSection: FC<LegendDescriptionSectionProps> = ({ va
 
   return legendDescription?.preset?.description ? (
     <CommonContentWrapper>
-      <Markdown skipHtml components={{ a: LinkRenderer }}>
-        {legendDescription?.preset?.description}
-      </Markdown>
+      <ViewMarkdownViewer content={legendDescription?.preset?.description} />
     </CommonContentWrapper>
   ) : null;
 };
-
-function LinkRenderer(props: any) {
-  return (
-    <a href={props.href} target="_blank" rel="noreferrer">
-      {props.children}
-    </a>
-  );
-}

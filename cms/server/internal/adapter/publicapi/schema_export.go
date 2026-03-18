@@ -3,8 +3,8 @@ package publicapi
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/pkg/exporters"
-	"github.com/reearth/reearth-cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/samber/lo"
 )

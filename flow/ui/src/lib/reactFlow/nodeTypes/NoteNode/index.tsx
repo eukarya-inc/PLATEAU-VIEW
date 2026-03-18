@@ -1,7 +1,8 @@
-import { Note } from "@phosphor-icons/react";
+import { NoteIcon } from "@phosphor-icons/react";
 import { NodeProps, NodeResizer } from "@xyflow/react";
 import { memo } from "react";
 
+import { useAwarenessNodeSelections } from "@flow/features/Editor/editorContext";
 import type { Node } from "@flow/types";
 
 import { convertHextoRgba } from "../utils";
@@ -14,7 +15,8 @@ const NoteNode: React.FC<NoteNodeProps> = ({ id, type, data, ...props }) => {
   // background color will always be a hex color, therefore needs to be converted to rgba
   const backgroundColor = data.customizations?.backgroundColor || "";
   const rgbaColor = convertHextoRgba(backgroundColor, 0.5);
-
+  const awarenessSelections = useAwarenessNodeSelections(id);
+  const remoteColor = awarenessSelections[0]?.color;
   return (
     <>
       {props.selected && (
@@ -23,7 +25,7 @@ const NoteNode: React.FC<NoteNodeProps> = ({ id, type, data, ...props }) => {
             background: "none",
             zIndex: 0,
           }}
-          lineClassName="border border-border rounded"
+          lineClassName="border-none rounded"
           handleStyle={{
             background: "none",
             width: 8,
@@ -34,13 +36,10 @@ const NoteNode: React.FC<NoteNodeProps> = ({ id, type, data, ...props }) => {
           }}
           minWidth={minSize.width}
           minHeight={minSize.height}
-          // onResize={(r) => {
-          //   console.log("ADS: ", r);
-          // }}
         />
       )}
       <div
-        className="z-0 h-full rounded-b-sm bg-secondary/50 p-2"
+        className={`relative z-0 h-full rounded-b-lg border-x border-b bg-secondary/50 p-1 shadow-md shadow-secondary backdrop-blur-xs ${props.selected ? "border-border" : "border-transparent"}`}
         ref={(element) => {
           if (element) {
             element.style.setProperty(
@@ -51,11 +50,15 @@ const NoteNode: React.FC<NoteNodeProps> = ({ id, type, data, ...props }) => {
           }
         }}
         style={{
+          ...(remoteColor ? { outline: `solid ${remoteColor}` } : {}),
           minWidth: minSize.width,
           minHeight: minSize.height,
         }}>
         <div
-          className={`absolute inset-x-[-0.8px] top-[-33px] flex items-center gap-2 rounded-t-sm border-x border-t bg-accent/50 px-2 py-1 ${props.selected ? "border-border" : "border-transparent"}`}
+          className={`absolute inset-x-[-0.8px] top-[-33px] flex items-center gap-2 rounded-t-lg border-x border-t bg-secondary p-1 ${props.selected ? "border-border" : "border-transparent"}`}
+          style={{
+            ...(remoteColor ? { outline: `solid ${remoteColor}` } : {}),
+          }}
           ref={(element) => {
             if (element)
               element.style.setProperty(
@@ -64,16 +67,19 @@ const NoteNode: React.FC<NoteNodeProps> = ({ id, type, data, ...props }) => {
                 "important",
               );
           }}>
-          <Note />
+          <div className="rounded-lg bg-primary/80 p-1">
+            <NoteIcon className="w-[15px]" />
+          </div>
           <p>{data.customizations?.customName ?? data.officialName}</p>
         </div>
         <div
+          className=""
           ref={(element) => {
             if (element) {
               if (element)
                 element.style.setProperty(
                   "color",
-                  data.params?.textColor || "",
+                  data.customizations?.textColor || "",
                   "important",
                 );
             }

@@ -4,7 +4,6 @@ import {
   PopupMenuItem
 } from "@reearth/beta/lib/reearth-ui";
 import { LayerStyle } from "@reearth/services/api/layerStyleApi/utils";
-import { useT } from "@reearth/services/i18n";
 import { useEffect, FC, useCallback, useRef } from "react";
 
 import { LayerStyleAddProps } from "../../../hooks/useLayerStyles";
@@ -35,7 +34,7 @@ const PresetLayerStyle: FC<PresetLayerStyleProps> = ({
   onLayerStyleSelect
 }) => {
   const layerStyleAddedRef = useRef<string | undefined>(undefined);
-  const t = useT();
+
   const handleLayerStyleAddition = useCallback(
     (value?: Record<string, unknown>, styleName?: string) => {
       const name = getLayerStyleName(
@@ -149,14 +148,7 @@ const PresetLayerStyle: FC<PresetLayerStyleProps> = ({
   return (
     <PopupMenu
       menu={menuItems}
-      label={
-        <IconButton
-          icon="plus"
-          size="large"
-          placement="top"
-          tooltipText={t("New style")}
-        />
-      }
+      label={<IconButton icon="plus" size="large" />}
     />
   );
 };

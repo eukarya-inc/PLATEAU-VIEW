@@ -3,29 +3,34 @@ package mongodoc
 import (
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/job"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"golang.org/x/exp/slices"
 )
 
 type JobDocument struct {
-	ID           string     `bson:"id"`
-	Debug        *bool      `bson:"debug"`
-	DeploymentID string     `bson:"deploymentid"`
-	WorkspaceID  string     `bson:"workspaceid"`
-	GCPJobID     string     `bson:"gcpjobid"`
-	LogsURL      string     `bson:"logsurl"`
-	Status       string     `bson:"status"`
-	StartedAt    time.Time  `bson:"startedat"`
-	CompletedAt  *time.Time `bson:"completedat"`
-	MetadataURL  string     `bson:"metadataurl"`
-	OutputURLs   []string   `bson:"outputurls"`
+	StartedAt         time.Time          `bson:"startedat"`
+	Debug             *bool              `bson:"debug"`
+	BatchStatus       *string            `bson:"batchstatus,omitempty"`
+	WorkerStatus      *string            `bson:"workerstatus,omitempty"`
+	CompletedAt       *time.Time         `bson:"completedat"`
+	Variables         []VariableDocument `bson:"variables,omitempty"`
+	ID                string             `bson:"id"`
+	DeploymentID      string             `bson:"deploymentid"`
+	WorkspaceID       string             `bson:"workspaceid"`
+	GCPJobID          string             `bson:"gcpjobid"`
+	LogsURL           string             `bson:"logsurl"`
+	WorkerLogsURL     string             `bson:"workerlogsurl"`
+	UserFacingLogsURL string             `bson:"userfacinglogsurl"`
+	Status            string             `bson:"status"`
+	MetadataURL       string             `bson:"metadataurl"`
+	OutputURLs        []string           `bson:"outputurls"`
 }
 
 type JobConsumer = Consumer[*JobDocument, *job.Job]
 
-func NewJobConsumer(workspaces []accountdomain.WorkspaceID) *JobConsumer {
+func NewJobConsumer(workspaces []accountsid.WorkspaceID) *JobConsumer {
 	return NewConsumer[*JobDocument](func(j *job.Job) bool {
 		result := workspaces == nil || slices.Contains(workspaces, j.Workspace())
 		return result
@@ -39,18 +44,38 @@ func NewJob(j *job.Job) (*JobDocument, string) {
 
 	jid := j.ID().String()
 
+	var batchStatus *string
+	if j.BatchStatus() != nil {
+		s := string(*j.BatchStatus())
+		batchStatus = &s
+	}
+
+	var workerStatus *string
+	if j.WorkerStatus() != nil {
+		s := string(*j.WorkerStatus())
+		workerStatus = &s
+	}
+
 	doc := &JobDocument{
-		ID:           jid,
-		Debug:        j.Debug(),
-		DeploymentID: j.Deployment().String(),
-		WorkspaceID:  j.Workspace().String(),
-		GCPJobID:     j.GCPJobID(),
-		LogsURL:      j.LogsURL(),
-		Status:       string(j.Status()),
-		StartedAt:    j.StartedAt(),
-		CompletedAt:  j.CompletedAt(),
-		MetadataURL:  j.MetadataURL(),
-		OutputURLs:   j.OutputURLs(),
+		ID:                jid,
+		Debug:             j.Debug(),
+		DeploymentID:      j.Deployment().String(),
+		WorkspaceID:       j.Workspace().String(),
+		GCPJobID:          j.GCPJobID(),
+		LogsURL:           j.LogsURL(),
+		WorkerLogsURL:     j.WorkerLogsURL(),
+		UserFacingLogsURL: j.UserFacingLogsURL(),
+		Status:            string(j.Status()),
+		BatchStatus:       batchStatus,
+		WorkerStatus:      workerStatus,
+		StartedAt:         j.StartedAt(),
+		CompletedAt:       j.CompletedAt(),
+		MetadataURL:       j.MetadataURL(),
+		OutputURLs:        j.OutputURLs(),
+	}
+
+	if vs := j.Variables(); len(vs) > 0 {
+		doc.Variables = VariablesToDoc(vs)
 	}
 
 	return doc, jid
@@ -71,9 +96,21 @@ func (d *JobDocument) Model() (*job.Job, error) {
 		return nil, err
 	}
 
-	wid, err := accountdomain.WorkspaceIDFrom(d.WorkspaceID)
+	wid, err := accountsid.WorkspaceIDFrom(d.WorkspaceID)
 	if err != nil {
 		return nil, err
+	}
+
+	var batchStatus *job.Status
+	if d.BatchStatus != nil {
+		s := job.Status(*d.BatchStatus)
+		batchStatus = &s
+	}
+
+	var workerStatus *job.Status
+	if d.WorkerStatus != nil {
+		s := job.Status(*d.WorkerStatus)
+		workerStatus = &s
 	}
 
 	j := job.New().
@@ -82,14 +119,22 @@ func (d *JobDocument) Model() (*job.Job, error) {
 		Deployment(did).
 		Workspace(wid).
 		Status(job.Status(d.Status)).
+		BatchStatus(batchStatus).
+		WorkerStatus(workerStatus).
 		StartedAt(d.StartedAt).
 		MetadataURL(d.MetadataURL).
 		GCPJobID(d.GCPJobID).
 		OutputURLs(d.OutputURLs).
-		LogsURL(d.LogsURL)
+		LogsURL(d.LogsURL).
+		WorkerLogsURL(d.WorkerLogsURL).
+		UserFacingLogsURL(d.UserFacingLogsURL)
 
 	if d.CompletedAt != nil {
 		j = j.CompletedAt(d.CompletedAt)
+	}
+
+	if vs := VariablesFromDoc(d.Variables); len(vs) > 0 {
+		j = j.Variables(vs)
 	}
 
 	jobModel, err := j.Build()

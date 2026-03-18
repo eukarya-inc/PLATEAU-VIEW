@@ -1,4 +1,4 @@
-import { useReactFlow } from "@xyflow/react";
+import { useReactFlow, type OnConnectStart } from "@xyflow/react";
 import {
   MouseEvent,
   useCallback,
@@ -7,14 +7,22 @@ import {
   useRef,
   useState,
 } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { useY } from "react-yjs";
-import { Map as YMap, UndoManager as YUndoManager } from "yjs";
+import type { Awareness } from "y-protocols/awareness";
+import { Doc, Map as YMap, UndoManager as YUndoManager } from "yjs";
 
-import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
-import { useShortcuts } from "@flow/hooks";
+import {
+  DEFAULT_ENTRY_GRAPH_ID,
+  EDITOR_HOT_KEYS,
+} from "@flow/global-constants";
+import { useProjectExport, useProjectSave } from "@flow/hooks";
 import { useSharedProject } from "@flow/lib/gql";
-import { checkForReader } from "@flow/lib/reactFlow";
-import { useYjsStore } from "@flow/lib/yjs";
+import {
+  useAwarenessPresence,
+  useSpotlightUser,
+  useYjsStore,
+} from "@flow/lib/yjs";
 import type { YWorkflow } from "@flow/lib/yjs/types";
 import useWorkflowTabs from "@flow/lib/yjs/useWorkflowTabs";
 import { useCurrentProject } from "@flow/stores";
@@ -23,15 +31,18 @@ import type { Algorithm, Direction, Edge, Node } from "@flow/types";
 import useCanvasCopyPaste from "./useCanvasCopyPaste";
 import useDebugRun from "./useDebugRun";
 import useDeployment from "./useDeployment";
-import useNodeLocker from "./useNodeLocker";
 import useUIState from "./useUIState";
 
 export default ({
+  yDoc,
   yWorkflows,
+  yAwareness,
   undoManager,
   undoTrackerActionWrapper,
 }: {
+  yDoc: Doc | null;
   yWorkflows: YMap<YWorkflow>;
+  yAwareness: Awareness;
   undoManager: YUndoManager | null;
   undoTrackerActionWrapper: (
     callback: () => void,
@@ -47,6 +58,8 @@ export default ({
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
 
+  const [openNode, setOpenNode] = useState<Node | undefined>(undefined);
+
   // TODO: If we split canvas more, or use refs, etc, this will become unnecessary @KaWaite
   useEffect(() => {
     fitView({ padding: 0.5 });
@@ -58,11 +71,11 @@ export default ({
     rawWorkflows,
     currentYWorkflow,
     handleYWorkflowAdd,
-    // handleYWorkflowAddFromSelection,
+    handleYWorkflowAddFromSelection,
     handleYWorkflowUpdate,
     handleYNodesAdd,
     handleYNodesChange,
-    handleYNodeDataUpdate,
+    handleYNodesDataUpdate,
     handleYEdgesAdd,
     handleYEdgesChange,
     handleYWorkflowUndo,
@@ -77,6 +90,22 @@ export default ({
     setSelectedEdgeIds,
     undoTrackerActionWrapper,
   });
+
+  const { handleProjectExport } = useProjectExport();
+
+  const { shareProject, unshareProject } = useSharedProject();
+
+  const [currentProject] = useCurrentProject();
+
+  const { handleProjectSnapshotSave, isSaving } = useProjectSave({
+    projectId: currentProject?.id,
+  });
+
+  const [showBeforeDeleteDialog, setShowBeforeDeleteDialog] =
+    useState<boolean>(false);
+  const deferredDeleteRef = useRef<{
+    resolve: (val: boolean) => void;
+  } | null>(null);
 
   const rawNodes = useY(currentYWorkflow?.get("nodes") ?? new YMap()) as Record<
     string,
@@ -111,96 +140,90 @@ export default ({
   // Non-persistant state needs to be managed here
   const edges = useMemo(
     () =>
-      Object.values(rawEdges).map((edge) => ({
-        ...edge,
-        selected:
-          selectedEdgeIds.includes(edge.id) && !edge.selected
-            ? true
-            : (edge.selected ?? false),
-      })),
-    [rawEdges, selectedEdgeIds],
-  );
+      Object.values(rawEdges).map((edge) => {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        const targetNode = nodes.find((n) => n.id === edge.target);
+        const sourceIsCollapsed = sourceNode?.data?.isCollapsed;
+        const targetIsCollapsed = targetNode?.data?.isCollapsed;
 
-  const hasReader = checkForReader(nodes);
-
-  const { lockedNodeIds, locallyLockedNode, handleNodeLocking } = useNodeLocker(
-    { nodes, selectedNodeIds, setSelectedNodeIds },
+        return {
+          ...edge,
+          selected:
+            selectedEdgeIds.includes(edge.id) && !edge.selected
+              ? true
+              : (edge.selected ?? false),
+          reconnectable: !(sourceIsCollapsed || targetIsCollapsed),
+        };
+      }),
+    [rawEdges, selectedEdgeIds, nodes],
   );
 
   const {
     openWorkflows,
+    openWorkflowIds,
     isMainWorkflow,
     handleWorkflowOpen,
     handleWorkflowClose,
     handleCurrentWorkflowIdChange,
+    setWorkflowsNames,
   } = useWorkflowTabs({
     currentWorkflowId,
     rawWorkflows,
     setCurrentWorkflowId,
   });
 
+  const handleOpenNode = useCallback(
+    (nodeId?: string) => {
+      if (!nodeId) {
+        setOpenNode(undefined);
+      }
+      setOpenNode((on) =>
+        on?.id === nodeId ? undefined : nodes.find((n) => n.id === nodeId),
+      );
+    },
+    [nodes, setOpenNode],
+  );
+
   // Passed to editor context so needs to be a ref
-  const handleNodeDoubleClickRef =
-    useRef<
-      (
-        e: MouseEvent | undefined,
-        nodeId: string,
-        subworkflowId?: string,
-      ) => void
-    >(undefined);
-  handleNodeDoubleClickRef.current = (
+  const handleNodeSettingsClickRef =
+    useRef<(e: MouseEvent | undefined, nodeId: string) => void>(undefined);
+  handleNodeSettingsClickRef.current = (
     _e: MouseEvent | undefined,
     nodeId: string,
-    subworkflowId?: string,
   ) => {
-    if (subworkflowId) {
-      handleWorkflowOpen(subworkflowId);
-    } else {
-      fitView({
-        nodes: [{ id: nodeId }],
-        duration: 500,
-        padding: 2,
-      });
-      handleNodeLocking(nodeId);
-    }
+    handleOpenNode(nodeId);
   };
-  const handleNodeDoubleClick = useCallback(
-    (e: MouseEvent | undefined, nodeId: string, subworkflowId?: string) =>
-      handleNodeDoubleClickRef.current?.(e, nodeId, subworkflowId),
+
+  const handleNodeSettings = useCallback(
+    (e: MouseEvent | undefined, nodeId: string) =>
+      handleNodeSettingsClickRef.current?.(e, nodeId),
     [],
   );
 
-  const { handleCopy, handlePaste } = useCanvasCopyPaste({
+  const { handleCopy, handleCut, handlePaste } = useCanvasCopyPaste({
     nodes,
     edges,
     rawWorkflows,
+    currentWorkflowId,
+    isMainWorkflow,
     handleWorkflowUpdate: handleYWorkflowUpdate,
     handleNodesAdd: handleYNodesAdd,
     handleNodesChange: handleYNodesChange,
     handleEdgesAdd: handleYEdgesAdd,
+    handleEdgesChange: handleYEdgesChange,
   });
 
   const {
-    openPanel,
     nodePickerOpen,
-    rightPanelContent,
-    hoveredDetails,
-    handleNodeHover,
-    handleEdgeHover,
-    handlePanelOpen,
+    openNodePickerViaShortcut,
     handleNodePickerOpen,
     handleNodePickerClose,
-    handleRightPanelOpen,
-  } = useUIState({ hasReader });
+  } = useUIState();
 
   const { allowedToDeploy, handleWorkflowDeployment } = useDeployment({
     currentNodes: nodes,
     yWorkflows,
   });
-
-  const { shareProject, unshareProject } = useSharedProject();
-
-  const [currentProject] = useCurrentProject();
 
   const handleProjectShare = useCallback(
     (share: boolean) => {
@@ -232,87 +255,246 @@ export default ({
     [fitView, handleYLayoutChange],
   );
 
-  const { handleDebugRunStart, handleDebugRunStop } = useDebugRun({
+  const {
+    customDebugRunWorkflowVariables,
+    refetchWorkflowVariables,
+    handleDebugRunStart,
+    handleFromSelectedNodeDebugRunStart,
+    handleDebugRunStop,
+    handleDebugRunVariableValueChange,
+    loadExternalDebugJob,
+    activeUsersDebugRuns,
+  } = useDebugRun({
     rawWorkflows,
+    yAwareness,
+    onProjectSnapshotSave: handleProjectSnapshotSave,
   });
 
-  useShortcuts([
-    {
-      keyBinding: { key: "r", commandKey: false },
-      callback: () =>
-        handleNodePickerOpen({ x: 0, y: 0 }, "reader", isMainWorkflow),
+  const handleBeforeDeleteNodes = useCallback(
+    ({ nodes: nodesToDelete }: { nodes: Node[] }) => {
+      return new Promise<boolean>((resolve) => {
+        const deletingIds = new Set(nodesToDelete.map((node) => node.id));
+
+        let totalInputRouters = 0;
+        let totalOutputRouters = 0;
+        let remainingInputRouters = 0;
+        let remainingOutputRouters = 0;
+
+        for (const node of nodes) {
+          const officalName = node.data.officialName;
+          if (officalName !== "InputRouter" && officalName !== "OutputRouter")
+            continue;
+          const isDeleting = deletingIds.has(node.id);
+
+          if (officalName === "InputRouter") {
+            totalInputRouters++;
+            if (!isDeleting) remainingInputRouters++;
+          } else if (officalName === "OutputRouter") {
+            totalOutputRouters++;
+            if (!isDeleting) remainingOutputRouters++;
+          }
+        }
+
+        const isDeletingLastInputRouter =
+          totalInputRouters > 0 && remainingInputRouters === 0;
+
+        const isDeletingLastOutputRouter =
+          totalOutputRouters > 0 && remainingOutputRouters === 0;
+
+        if (isDeletingLastInputRouter || isDeletingLastOutputRouter) {
+          deferredDeleteRef.current = { resolve };
+          setShowBeforeDeleteDialog(true);
+        } else {
+          resolve(true);
+        }
+      });
     },
-    {
-      keyBinding: { key: "t", commandKey: false },
-      callback: () => handleNodePickerOpen({ x: 0, y: 0 }, "transformer"),
+    [nodes],
+  );
+
+  const handleDeleteDialogClose = () => setShowBeforeDeleteDialog(false);
+  const [showSearchPanel, setShowSearchPanel] = useState<boolean>(false);
+
+  useHotkeys(
+    EDITOR_HOT_KEYS,
+    (event, handler) => {
+      const hasModifier = event.metaKey || event.ctrlKey;
+      const hasShift = event.shiftKey;
+
+      switch (handler.keys?.join("")) {
+        case "s":
+          if (hasModifier && !isSaving && !hasShift)
+            handleProjectSnapshotSave?.();
+          if (hasModifier && hasShift)
+            handleYWorkflowAddFromSelection(nodes, edges);
+          break;
+        case "k":
+          if (hasModifier && !showSearchPanel) setShowSearchPanel(true);
+          if (hasModifier && showSearchPanel) setShowSearchPanel(false);
+
+          break;
+        case "z":
+          if (hasModifier && hasShift) handleYWorkflowRedo?.();
+          if (hasModifier && !hasShift) handleYWorkflowUndo?.();
+          break;
+      }
     },
-    {
-      keyBinding: { key: "w", commandKey: false },
-      callback: () =>
-        handleNodePickerOpen({ x: 0, y: 0 }, "writer", isMainWorkflow),
+    { preventDefault: true },
+  );
+
+  const handleWorkflowRename = useCallback(
+    (id: string, newName: string) => {
+      handleYWorkflowRename(id, newName);
+      setWorkflowsNames((prevNames) =>
+        prevNames.map((w) => (w.id === id ? { ...w, name: newName } : w)),
+      );
     },
-    {
-      keyBinding: { key: "c", commandKey: true },
-      callback: handleCopy,
+    [handleYWorkflowRename, setWorkflowsNames],
+  );
+
+  const handleCurrentProjectExport = () => {
+    if (yDoc && currentProject) {
+      handleProjectExport({ yDoc, project: currentProject });
+    }
+  };
+
+  const {
+    self,
+    users,
+    handlePointerDown,
+    setDraggingEdge,
+    clearDraggingEdge,
+    awarenessSelectionsMap,
+  } = useAwarenessPresence({
+    selectedNodeIds,
+    yAwareness,
+  });
+
+  const handleConnectStart: OnConnectStart = useCallback(
+    (_event, params) => {
+      if (params.nodeId) {
+        setDraggingEdge(params.nodeId, params.handleId, params.handleType);
+      }
     },
-    {
-      keyBinding: { key: "v", commandKey: true },
-      callback: handlePaste,
+    [setDraggingEdge],
+  );
+
+  const handleConnectEnd = useCallback(() => {
+    clearDraggingEdge();
+  }, [clearDraggingEdge]);
+
+  const {
+    spotlightUser,
+    spotlightUserClientId,
+    handleSpotlightUserSelect,
+    handleSpotlightUserDeselect,
+  } = useSpotlightUser({
+    yAwareness,
+    users,
+    currentWorkflowId,
+    openWorkflowIds,
+    handleWorkflowOpen,
+    handleWorkflowClose,
+  });
+
+  const handleNodesDisable = useCallback(
+    (ns?: Node[]) => {
+      const nodesToUpdate =
+        ns
+          ?.filter((n) => n.type !== "note")
+          .map((n) => ({
+            nodeId: n.id,
+            type: n.type,
+            isDisabled: !n.data?.isDisabled,
+          })) ||
+        nodes
+          .filter((n) => n.selected && n.type !== "note")
+          .map((n) => ({
+            nodeId: n.id,
+            type: n.type,
+            isDisabled: !n.data?.isDisabled,
+          }));
+
+      handleYNodesDataUpdate(nodesToUpdate);
     },
-    {
-      keyBinding: { key: "z", commandKey: true, shiftKey: true },
-      callback: handleYWorkflowRedo,
+    [nodes, handleYNodesDataUpdate],
+  );
+
+  const handlePaneClick = useCallback(
+    (e: MouseEvent) => {
+      e.preventDefault();
+      handleSpotlightUserDeselect();
     },
-    {
-      keyBinding: { key: "z", commandKey: true },
-      callback: handleYWorkflowUndo,
-    },
-    // {
-    //   keyBinding: { key: "s", commandKey: false },
-    //   callback: () => handleYWorkflowAddFromSelection(nodes, edges),
-    // },
-  ]);
+    [handleSpotlightUserDeselect],
+  );
 
   return {
     currentWorkflowId,
+    currentYWorkflow,
     openWorkflows,
     currentProject,
+    self,
+    users,
     nodes,
     edges,
-    selectedEdgeIds,
-    lockedNodeIds,
-    locallyLockedNode,
-    hoveredDetails,
+    openNode,
     nodePickerOpen,
-    openPanel,
     allowedToDeploy,
-    rightPanelContent,
     canUndo,
     canRedo,
     isMainWorkflow,
-    hasReader,
-    handleRightPanelOpen,
-    handleWorkflowAdd: handleYWorkflowAdd,
+    deferredDeleteRef,
+    isSaving,
+    showBeforeDeleteDialog,
+    spotlightUserClientId,
+    spotlightUser,
+    activeUsersDebugRuns,
+    rawWorkflows,
+    customDebugRunWorkflowVariables,
+    refetchWorkflowVariables,
+    showSearchPanel,
+    openNodePickerViaShortcut,
+    handleDebugRunVariableValueChange,
+    loadExternalDebugJob,
     handleWorkflowDeployment,
     handleProjectShare,
-    handlePanelOpen,
-    handleWorkflowClose,
+    handleCurrentProjectExport,
+    handleWorkflowAdd: handleYWorkflowAdd,
     handleWorkflowChange: handleCurrentWorkflowIdChange,
     handleWorkflowRedo: handleYWorkflowRedo,
     handleWorkflowUndo: handleYWorkflowUndo,
-    handleWorkflowRename: handleYWorkflowRename,
-    handleLayoutChange,
+    handleWorkflowAddFromSelection: handleYWorkflowAddFromSelection,
+    handleWorkflowRename,
+    handleWorkflowOpen,
+    handleWorkflowClose,
     handleNodesAdd: handleYNodesAdd,
     handleNodesChange: handleYNodesChange,
-    handleNodeHover,
-    handleNodeDataUpdate: handleYNodeDataUpdate,
-    handleNodeDoubleClick,
+    handleNodesDisable,
+    handleNodesDataUpdate: handleYNodesDataUpdate,
+    handleNodeSettings,
     handleNodePickerOpen,
     handleNodePickerClose,
+    handleOpenNode,
+    handleBeforeDeleteNodes,
     handleEdgesAdd: handleYEdgesAdd,
     handleEdgesChange: handleYEdgesChange,
-    handleEdgeHover,
+    handleLayoutChange,
+    handleDeleteDialogClose,
     handleDebugRunStart,
+    handleFromSelectedNodeDebugRunStart,
     handleDebugRunStop,
+    handleCopy,
+    handleCut,
+    handlePaste,
+    handleProjectSnapshotSave,
+    handleSpotlightUserSelect,
+    handleSpotlightUserDeselect,
+    handlePaneClick,
+    selectedNodeIds,
+    setShowSearchPanel,
+    handlePointerDown,
+    handleConnectStart,
+    handleConnectEnd,
+    awarenessSelectionsMap,
   };
 };

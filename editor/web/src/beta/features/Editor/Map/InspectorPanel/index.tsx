@@ -18,12 +18,14 @@ const InspectorPanel: FC<Props> = ({ areaRef, showCollapseArea }) => {
     selectedSceneSetting,
     sceneSettings,
     selectedLayer,
-    selectedFeature,
-    selectedSketchFeature,
+    sketchEditingFeature,
     handleFlyTo,
     handleLayerConfigUpdate,
-    handleLayerNameUpdate,
-    handleGeoJsonFeatureUpdate
+    handleGeoJsonFeatureUpdate,
+    handleGeoJsonFeatureDelete,
+    handleSketchGeometryEditStart,
+    handleSketchGeometryEditCancel,
+    handleSketchGeometryEditApply
   } = useMapPage();
 
   const t = useT();
@@ -56,11 +58,13 @@ const InspectorPanel: FC<Props> = ({ areaRef, showCollapseArea }) => {
           layers={layers}
           sceneId={sceneId}
           selectedLayer={selectedLayer}
-          selectedFeature={selectedFeature}
-          selectedSketchFeature={selectedSketchFeature}
           onLayerConfigUpdate={handleLayerConfigUpdate}
           onGeoJsonFeatureUpdate={handleGeoJsonFeatureUpdate}
-          onLayerNameUpdate={handleLayerNameUpdate}
+          onGeoJsonFeatureDelete={handleGeoJsonFeatureDelete}
+          sketchEditingFeature={sketchEditingFeature}
+          onSketchGeometryEditStart={handleSketchGeometryEditStart}
+          onSketchGeometryEditCancel={handleSketchGeometryEditCancel}
+          onSketchGeometryEditApply={handleSketchGeometryEditApply}
         />
       )}
     </Panel>

@@ -87,13 +87,13 @@ const CheckboxesWidget = <
                 id={optionId(id, index)}
                 name={id}
                 checked={checked}
-                disabled={disabled || itemDisabled || readonly}
+                disabled={readonly || itemDisabled || disabled}
                 autoFocus={autofocus && index === 0}
                 // TODO: Fix this
                 // onChange={_onChange(index)}
                 onBlur={_onBlur}
                 onFocus={_onFocus}
-                aria-describedby={ariaDescribedByIds<T>(id)}
+                aria-describedby={ariaDescribedByIds(id)}
               />
             );
           })}

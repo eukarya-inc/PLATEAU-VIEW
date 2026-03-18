@@ -14,7 +14,7 @@ import (
 
 	"slices"
 
-	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"

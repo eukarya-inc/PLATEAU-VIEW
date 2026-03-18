@@ -1,8 +1,7 @@
 import { styled } from "@reearth/services/theme";
 import { FC, MouseEvent, useCallback } from "react";
 
-import { IconName, Icon, IconProps } from "../Icon";
-import Tooltip from "../Tooltip";
+import { IconName, Icon } from "../Icon";
 
 export type IconButtonProps = {
   icon: IconName;
@@ -16,7 +15,7 @@ export type IconButtonProps = {
   iconColor?: string;
   stopPropagationOnClick?: boolean;
   onClick?: (e: MouseEvent) => void;
-} & Pick<IconProps, "placement" | "tooltipText">;
+};
 
 export const IconButton: FC<IconButtonProps> = ({
   appearance = "secondary",
@@ -28,10 +27,8 @@ export const IconButton: FC<IconButtonProps> = ({
   iconRotate,
   iconColor,
   stopPropagationOnClick,
-  hasBorder,
-  tooltipText,
-  placement,
-  onClick
+  onClick,
+  hasBorder
 }) => {
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -41,7 +38,8 @@ export const IconButton: FC<IconButtonProps> = ({
     },
     [disabled, stopPropagationOnClick, onClick]
   );
-  const iconButtonComponent = (
+
+  return (
     <StyledButton
       className={className}
       disabled={disabled}
@@ -54,18 +52,6 @@ export const IconButton: FC<IconButtonProps> = ({
     >
       <Icon icon={icon} color={iconColor} />
     </StyledButton>
-  );
-
-  return tooltipText ? (
-    <Tooltip
-      type="custom"
-      text={tooltipText}
-      placement={placement}
-      offset={5}
-      triggerComponent={iconButtonComponent}
-    />
-  ) : (
-    iconButtonComponent
   );
 };
 

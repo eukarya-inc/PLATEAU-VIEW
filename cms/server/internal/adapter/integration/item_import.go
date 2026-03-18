@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/oapi-codegen/runtime"
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/integrationapi"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/samber/lo"
 )
 

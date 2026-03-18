@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/websocket"
 	"github.com/reearth/reearthx/log"
 )
@@ -18,27 +19,11 @@ type Config struct {
 }
 
 type Client struct {
-	config Config
 	client *http.Client
+	config Config
 }
 
-type documentResponse struct {
-	ID        string `json:"id"`
-	Updates   []byte `json:"updates"`
-	Version   uint64 `json:"version"`
-	Timestamp string `json:"timestamp"`
-}
-
-type historyResponse struct {
-	Updates   []byte `json:"updates"`
-	Version   uint64 `json:"version"`
-	Timestamp string `json:"timestamp"`
-}
-
-type rollbackRequest struct {
-	DocID   string `json:"doc_id"`
-	Version uint64 `json:"version"`
-}
+var _ interfaces.WebsocketClient = &Client{}
 
 func NewClient(config Config) (*Client, error) {
 	if config.ServerURL == "" {
@@ -184,8 +169,8 @@ func (c *Client) GetHistoryMetadata(ctx context.Context, docID string) ([]*webso
 	}
 
 	var historyResp []struct {
-		Version   uint64 `json:"version"`
 		Timestamp string `json:"timestamp"`
+		Version   uint64 `json:"version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&historyResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
@@ -324,6 +309,135 @@ func (c *Client) FlushToGCS(ctx context.Context, id string) error {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to flush document to GCS: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Warnf("failed to close response body: %v", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned non-200 status: %d %s", resp.StatusCode, body)
+	}
+
+	return nil
+}
+
+func (c *Client) CreateSnapshot(ctx context.Context, docID string, version int, name string) (*websocket.Document, error) {
+	url := fmt.Sprintf("%s/api/document/snapshot", c.config.ServerURL)
+
+	createSnapshotReq := createSnapshotRequest{
+		DocID:   docID,
+		Version: uint64(version),
+		Name:    name,
+	}
+
+	reqBody, err := json.Marshal(createSnapshotReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(bytes.NewReader(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create snapshot: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Warnf("failed to close response body: %v", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server returned non-200 status: %d %s", resp.StatusCode, body)
+	}
+
+	var snapshotResp snapshotResponse
+	if err := json.NewDecoder(resp.Body).Decode(&snapshotResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	updates := make([]int, len(snapshotResp.Updates))
+	for i, update := range snapshotResp.Updates {
+		updates[i] = int(update)
+	}
+
+	timestamp, err := time.Parse(time.RFC3339, snapshotResp.Timestamp)
+	if err != nil {
+		log.Warnf("failed to parse timestamp: %v, using current time", err)
+		timestamp = time.Now()
+	}
+
+	return &websocket.Document{
+		ID:        snapshotResp.ID,
+		Updates:   updates,
+		Version:   int(snapshotResp.Version),
+		Timestamp: timestamp,
+	}, nil
+}
+
+func (c *Client) CopyDocument(ctx context.Context, docID string, source string) error {
+	url := fmt.Sprintf("%s/api/document/%s/%s/copy", c.config.ServerURL, docID, source)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to copy document: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Warnf("failed to close response body: %v", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned non-200 status: %d %s", resp.StatusCode, body)
+	}
+
+	return nil
+}
+
+func (c *Client) ImportDocument(ctx context.Context, docID string, data []byte) error {
+	url := fmt.Sprintf("%s/api/document/%s/import", c.config.ServerURL, docID)
+
+	ints := make([]int, len(data))
+	for i, v := range data {
+		ints[i] = int(v)
+	}
+
+	importReq := importDocumentRequest{
+		Data: ints,
+	}
+
+	reqBody, err := json.Marshal(importReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(bytes.NewReader(reqBody)))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to import document: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()

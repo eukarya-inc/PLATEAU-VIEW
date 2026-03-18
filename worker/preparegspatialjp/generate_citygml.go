@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	"github.com/reearth/reearthx/log"
 )
 
@@ -61,10 +61,10 @@ func mergeCityGML(ctx context.Context, c MergeContext) (string, error) {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zw := zip.NewWriter(f)
 	cz := NewCityGMLZipWriter(zw, rootName)
-	defer cz.Close()
+	defer func() { _ = cz.Close() }()
 
 	// copy files
 	for _, ty := range citygmlFiles {
@@ -75,13 +75,7 @@ func mergeCityGML(ctx context.Context, c MergeContext) (string, error) {
 
 		log.Infofc(ctx, "preparing citygml (%s)...", ty)
 
-		prefix := ""
-		if ty == "misc" {
-			ty = ""
-			prefix = "misc/"
-		}
-
-		err := cz.DownloadAndWrite(ctx, url, tmpDir, ty, prefix, "")
+		err := cz.DownloadAndWrite(ctx, url, tmpDir, ty, "", "")
 		if err != nil {
 			return "", fmt.Errorf("failed to download and write %s: %w", ty, err)
 		}
@@ -202,10 +196,6 @@ func cityGMLZipPath(ty, prefix, base string) func(string) (string, error) {
 			}
 		}
 
-		if base == "" && ty == "" {
-			return p, nil
-		}
-
 		paths := strings.Split(p, "/")
 		if len(paths) == 0 {
 			return "", nil
@@ -220,6 +210,11 @@ func cityGMLZipPath(ty, prefix, base string) func(string) (string, error) {
 			if strings.HasSuffix(paths[0], "_"+ty) {
 				// *_ty/** -> ty/**
 				paths[0] = ty
+			}
+
+			// For misc type, remove the ty prefix to place files at root
+			if ty == "misc" && len(paths) > 0 && paths[0] == ty {
+				paths = paths[1:]
 			}
 
 			// squr zip file includes tran directory also, so we don't need to check the first path

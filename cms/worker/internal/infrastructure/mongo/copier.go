@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/oklog/ulid"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/task"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/task"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/repo"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 	"go.mongodb.org/mongo-driver/bson"
@@ -44,7 +44,12 @@ func (r *Copier) Copy(ctx context.Context, f bson.M, changesMap task.Changes) er
 		}
 		return rerror.ErrInternalBy(err)
 	}
-	defer cursor.Close(ctx)
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			log.Errorf("reearth-cms/worker: failed to close cursor: %v\n", err)
+		}
+	}(cursor, ctx)
 
 	var bulkModels []mongo.WriteModel
 	for cursor.Next(ctx) {

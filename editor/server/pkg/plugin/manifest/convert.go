@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/plugin"
 	"github.com/reearth/reearth/server/pkg/property"
 	"github.com/reearth/reearth/server/pkg/visualizer"
@@ -14,13 +13,13 @@ import (
 
 var errInvalidManifestWith = rerror.With(ErrInvalidManifest)
 
-func (i *Root) manifest(sid *id.SceneID, tl *TranslatedRoot) (*Manifest, error) {
-	var pid id.PluginID
+func (i *Root) manifest(sid *plugin.SceneID, tl *TranslatedRoot) (*Manifest, error) {
+	var pid plugin.ID
 	var err error
-	if i.System && string(i.ID) == id.OfficialPluginID.Name() {
-		pid = id.OfficialPluginID
+	if i.System && string(i.ID) == plugin.OfficialPluginID.Name() {
+		pid = plugin.OfficialPluginID
 	} else {
-		pid, err = id.NewPluginID(string(i.ID), i.Version, sid)
+		pid, err = plugin.NewID(string(i.ID), i.Version, sid)
 		if err != nil {
 			return nil, errInvalidManifestWith(fmt.Errorf("invalid plugin id: %s %s %s", i.ID, i.Version, sid))
 		}
@@ -96,7 +95,7 @@ func (i *Root) manifest(sid *id.SceneID, tl *TranslatedRoot) (*Manifest, error) 
 	}, nil
 }
 
-func (i Extension) extension(pluginID id.PluginID, sys bool, te *TranslatedExtension) (*plugin.Extension, *property.Schema, error) {
+func (i Extension) extension(pluginID plugin.ID, sys bool, te *TranslatedExtension) (*plugin.Extension, *property.Schema, error) {
 	eid := string(i.ID)
 	var ts *TranslatedPropertySchema
 	if te != nil {
@@ -133,8 +132,6 @@ func (i Extension) extension(pluginID id.PluginID, sys bool, te *TranslatedExten
 		typ = plugin.ExtensionTypeVisualizer
 	case "infobox":
 		typ = plugin.ExtensionTypeInfobox
-	case "photoOverlay":
-		typ = plugin.ExtensionTypePhotoOverlay
 	case "infoboxBlock":
 		typ = plugin.ExtensionTypeInfoboxBlock
 	case "cluster":
@@ -169,7 +166,7 @@ func (i Extension) extension(pluginID id.PluginID, sys bool, te *TranslatedExten
 	desc = desc.WithDefaultRef(i.Description)
 
 	ext, err := plugin.NewExtension().
-		ID(id.PluginExtensionID(eid)).
+		ID(plugin.ExtensionID(eid)).
 		Name(name).
 		Description(desc).
 		Visualizer(viz).
@@ -218,8 +215,8 @@ func (l *WidgetLayout) layout() *plugin.WidgetLayout {
 	return plugin.NewWidgetLayout(horizontallyExtendable, verticallyExtendable, extended, l.Floating, dl).Ref()
 }
 
-func (i *PropertySchema) schema(pluginID id.PluginID, idstr string, ts *TranslatedPropertySchema) (*property.Schema, error) {
-	psid, err := id.PropertySchemaIDFrom(pluginID.String() + "/" + idstr)
+func (i *PropertySchema) schema(pluginID plugin.ID, idstr string, ts *TranslatedPropertySchema) (*property.Schema, error) {
+	psid, err := property.SchemaIDFrom(pluginID.String() + "/" + idstr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid id: %s", pluginID.String()+"/"+idstr)
 	}
@@ -277,8 +274,8 @@ func (p *PropertyPointer) pointer() *property.SchemaFieldPointer {
 		return nil
 	}
 	return &property.SchemaFieldPointer{
-		SchemaGroup: id.PropertySchemaGroupID(p.SchemaGroupID),
-		Field:       id.PropertyFieldID(p.FieldID),
+		SchemaGroup: property.SchemaGroupID(p.SchemaGroupID),
+		Field:       property.FieldID(p.FieldID),
 	}
 }
 
@@ -297,9 +294,9 @@ func (i PropertySchemaGroup) schemaGroup(tg *TranslatedPropertySchemaGroup) (*pr
 		collection = collection.WithDefault(*i.Collection)
 	}
 
-	var representativeField *id.PropertyFieldID
+	var representativeField *property.FieldID
 	if i.RepresentativeField != nil {
-		representativeField = id.PropertyFieldID(*i.RepresentativeField).Ref()
+		representativeField = property.FieldID(*i.RepresentativeField).Ref()
 	}
 
 	// fields
@@ -321,7 +318,7 @@ func (i PropertySchemaGroup) schemaGroup(tg *TranslatedPropertySchemaGroup) (*pr
 	}
 
 	return property.NewSchemaGroup().
-		ID(id.PropertySchemaGroupID(i.ID)).
+		ID(property.SchemaGroupID(i.ID)).
 		IsList(i.List).
 		Fields(fields).
 		Title(title).
@@ -336,7 +333,7 @@ func (o *PropertyCondition) condition() *property.Condition {
 		return nil
 	}
 	return &property.Condition{
-		Field: id.PropertyFieldID(o.Field),
+		Field: property.FieldID(o.Field),
 		Value: toValue(o.Value, o.Type),
 	}
 }
@@ -382,7 +379,7 @@ func (i PropertySchemaField) schemaField(tf *TranslatedPropertySchemaField) (*pr
 	}
 
 	f, err := property.NewSchemaField().
-		ID(id.PropertyFieldID(i.ID)).
+		ID(property.FieldID(i.ID)).
 		Name(title).
 		Description(desc).
 		Placeholder(plac).

@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gavv/httpexpect/v2"
-	"github.com/reearth/reearth-cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
 )
 
 func createItem(e *httpexpect.Expect, mID, sID string, metaId *string, fields []map[string]any) (string, *httpexpect.Value) {

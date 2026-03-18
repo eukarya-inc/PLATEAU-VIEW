@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/jarcoal/httpmock"
 	"github.com/labstack/echo/v4"
 	cms "github.com/reearth/reearth-cms-api/go"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/reearth/reearth-cms/worker/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/repo"
 )
 
 func New(ctx context.Context, webhook *Webhook, copier *Copier) (*repo.Container, error) {

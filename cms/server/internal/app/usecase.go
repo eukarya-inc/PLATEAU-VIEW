@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/labstack/echo/v4"
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/internal/adapter/publicapi"
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interactor"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/publicapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interactor"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
 	"github.com/reearth/reearthx/account/accountusecase/accountgateway"
 	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 )
@@ -29,7 +29,7 @@ func UsecaseMiddleware(r *repo.Container, g *gateway.Container, ar *accountrepo.
 
 		uc := interactor.New(r2, g, ar2, ag, config)
 		ctx = adapter.AttachUsecases(ctx, &uc)
-		ctx = publicapi.AttachController(ctx, publicapi.NewController(r2.Project, &uc, g.File.GetURL))
+		ctx = publicapi.AttachController(ctx, publicapi.NewController(r2.Project, &uc))
 		return ctx
 	})
 }

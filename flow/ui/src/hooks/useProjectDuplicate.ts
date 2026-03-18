@@ -1,26 +1,24 @@
 import { useCallback, useState } from "react";
-import { WebsocketProvider } from "y-websocket";
-import * as Y from "yjs";
 
-import { config } from "@flow/config";
-import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
-import { useAuth } from "@flow/lib/auth";
-import { useProject } from "@flow/lib/gql";
+import { useProject, useWorkflowVariables } from "@flow/lib/gql";
 import { useCurrentWorkspace } from "@flow/stores";
-import { Project, ProjectDocument } from "@flow/types";
+import { Project } from "@flow/types";
 
-export default () => {
-  const { getAccessToken } = useAuth();
+export default (projectToDuplicate?: Project) => {
   const [isDuplicating, setIsDuplicating] = useState<boolean>(false);
   const [currentWorkspace] = useCurrentWorkspace();
-  const { createProject } = useProject();
+  const { createProject, copyProject } = useProject();
+  const { useGetWorkflowVariables, updateMultipleWorkflowVariables } =
+    useWorkflowVariables();
+  const { workflowVariables } = useGetWorkflowVariables(
+    projectToDuplicate?.id ?? "",
+  );
 
   const handleProjectDuplication = useCallback(
-    async (project: Project, projectDocument?: ProjectDocument) => {
+    async (project: Project) => {
       if (!project || !currentWorkspace) {
         return;
       }
-      const { websocket } = config();
 
       try {
         setIsDuplicating(true);
@@ -31,49 +29,39 @@ export default () => {
           description: project.description,
         });
 
-        if (!projectDocument || !newProject) {
-          setIsDuplicating(false);
-          return;
+        if (workflowVariables && workflowVariables.length > 0 && newProject) {
+          await updateMultipleWorkflowVariables({
+            projectId: newProject.id,
+            creates: workflowVariables.map((pv, index) => ({
+              name: pv.name,
+              defaultValue: pv.defaultValue,
+              type: pv.type,
+              required: pv.required,
+              publicValue: pv.public,
+              index,
+              config: pv.config,
+            })),
+          });
         }
 
-        const updates = projectDocument?.updates;
-        if (!updates || !updates.length) {
-          setIsDuplicating(false);
-          return;
+        if (!newProject) {
+          throw new Error("Failed to create new project");
         }
 
-        const yDoc = new Y.Doc();
-        const convertedUpdates = new Uint8Array(updates);
-
-        if (websocket) {
-          const token = await getAccessToken();
-          const yWebSocketProvider = new WebsocketProvider(
-            websocket,
-            `${newProject.id}:${DEFAULT_ENTRY_GRAPH_ID}`,
-            yDoc,
-            { params: { token } },
-          );
-          try {
-            await new Promise<void>((resolve) => {
-              yWebSocketProvider.once("sync", () => {
-                yDoc.transact(() => {
-                  Y.applyUpdate(yDoc, convertedUpdates);
-                });
-
-                resolve();
-              });
-            });
-          } finally {
-            setIsDuplicating(false);
-            yWebSocketProvider?.destroy();
-          }
-        }
+        await copyProject(newProject.id, project.id, currentWorkspace.id);
       } catch (error) {
         console.error("Project duplication failed:", error);
+      } finally {
         setIsDuplicating(false);
       }
     },
-    [currentWorkspace, getAccessToken, createProject],
+    [
+      currentWorkspace,
+      workflowVariables,
+      createProject,
+      copyProject,
+      updateMultipleWorkflowVariables,
+    ],
   );
 
   return {

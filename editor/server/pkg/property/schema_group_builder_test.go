@@ -4,16 +4,15 @@ import (
 	"testing"
 
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSchemaGroupBuilder_Build(t *testing.T) {
-	gid := id.PropertySchemaGroupID("xx")
+	gid := SchemaGroupID("xx")
 	sf := NewSchemaField().ID("ff").Type(ValueTypeString).MustBuild()
 
 	type expected struct {
-		ID            id.PropertySchemaGroupID
+		ID            SchemaGroupID
 		Fields        []*SchemaField
 		List          bool
 		IsAvailableIf *Condition
@@ -22,7 +21,7 @@ func TestSchemaGroupBuilder_Build(t *testing.T) {
 
 	tests := []struct {
 		Name          string
-		ID            id.PropertySchemaGroupID
+		ID            SchemaGroupID
 		Fields        []*SchemaField
 		List          bool
 		IsAvailableIf *Condition
@@ -32,7 +31,7 @@ func TestSchemaGroupBuilder_Build(t *testing.T) {
 	}{
 		{
 			Name: "fail: invalid id",
-			Err:  id.ErrInvalidID,
+			Err:  ErrInvalidID,
 		},
 		{
 			Name:   "success",

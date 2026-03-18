@@ -139,6 +139,7 @@ export default () => {
       name: string,
       coreSupport: boolean,
       description?: string,
+      imageUrl?: string
     ): Promise<MutationReturn<Partial<Project>>> => {
       const { data: projectResults, errors: projectErrors } =
         await createNewProject({
@@ -147,6 +148,7 @@ export default () => {
             visualizer,
             name,
             description: description ?? "",
+            imageUrl: imageUrl ?? "",
             coreSupport: !!coreSupport
           }
         });

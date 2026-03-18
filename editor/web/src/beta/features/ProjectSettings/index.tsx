@@ -14,21 +14,12 @@ import { useMemo } from "react";
 import CursorStatus from "../CursorStatus";
 
 import useHooks from "./hooks";
-import Assets from "./innerPages/AssetSetting";
 import GeneralSettings from "./innerPages/GeneralSettings";
 import PluginSettings from "./innerPages/PluginSettings";
 import PublicSettings from "./innerPages/PublicSettings";
 import StorySettings from "./innerPages/StorySettings";
 
-export const projectSettingsTabs = [
-  "general",
-  "story",
-  "public",
-  "plugins",
-  "assets"
-] as const;
-
-export type ProjectSettingsTab = (typeof projectSettingsTabs)[number];
+export type ProjectSettingsTab = "general" | "story" | "public" | "plugins";
 
 type Props = {
   projectId: string;
@@ -53,7 +44,9 @@ const ProjectSettings: React.FC<Props> = ({ projectId, tab, subId }) => {
     handleUpdateProjectBasicAuth,
     handleUpdateProjectAlias,
     handleUpdateProjectGA,
-    handleUpdateStory
+    handleUpdateStory,
+    handleUpdateStoryBasicAuth,
+    handleUpdateStoryAlias
   } = useHooks({
     projectId,
     subId
@@ -78,12 +71,6 @@ const ProjectSettings: React.FC<Props> = ({ projectId, tab, subId }) => {
         text: t("Public"),
         icon: "paperPlaneTilt" as const,
         path: `/settings/projects/${projectId}/public`
-      },
-      {
-        id: "assets",
-        text: t("Assets"),
-        icon: "file" as const,
-        path: `/settings/projects/${projectId}/assets`
       },
       {
         id: "plugins",
@@ -122,7 +109,7 @@ const ProjectSettings: React.FC<Props> = ({ projectId, tab, subId }) => {
             <SidebarVersion />
           </SidebarWrapper>
         </LeftSidePanel>
-        <Content tab={tab}>
+        <Content>
           {tab === "general" && project && (
             <GeneralSettings
               project={project}
@@ -145,16 +132,14 @@ const ProjectSettings: React.FC<Props> = ({ projectId, tab, subId }) => {
               currentStory={currentStory}
               subId={subId}
               onUpdateStory={handleUpdateStory}
+              onUpdateStoryBasicAuth={handleUpdateStoryBasicAuth}
+              onUpdateStoryAlias={handleUpdateStoryAlias}
               onUpdateProject={handleUpdateProject}
               onUpdateProjectBasicAuth={handleUpdateProjectBasicAuth}
               onUpdateProjectAlias={handleUpdateProjectAlias}
               onUpdateProjectGA={handleUpdateProjectGA}
             />
           )}
-          {tab === "assets" && project && (
-            <Assets projectId={projectId} workspaceId={workspaceId} />
-          )}
-
           {tab === "plugins" && (
             <PluginSettings
               sceneId={sceneId}
@@ -200,17 +185,15 @@ const LeftSidePanel = styled("div")(({ theme }) => ({
   boxSizing: "border-box"
 }));
 
-const Content = styled("div")<{ tab?: ProjectSettingsTab }>(
-  ({ tab, theme }) => ({
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    overflow: "auto",
-    padding: tab === "assets" ? 0 : `${theme.spacing.super}px`
-  })
-);
+const Content = styled("div")(({ theme }) => ({
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  height: "100%",
+  alignItems: "center",
+  overflow: "auto",
+  padding: `${theme.spacing.super}px`
+}));
 
 export default ProjectSettings;

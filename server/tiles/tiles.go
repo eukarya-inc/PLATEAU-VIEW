@@ -50,12 +50,19 @@ func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 	return res, nil
 }
 
-func assetBaseURL(zipURL string) string {
-	u, err := url.Parse(zipURL)
+func assetBaseURL(assetURL string) string {
+	u, err := url.Parse(assetURL)
 	if err != nil {
 		return ""
 	}
 
+	ext := strings.ToLower(path.Ext(u.Path))
+	// For COG files (.tif, .tiff), keep the full URL
+	if ext == ".tif" || ext == ".tiff" {
+		return assetURL
+	}
+
+	// For other files (like .zip), strip the extension
 	u.Path = strings.TrimSuffix(u.Path, path.Ext(u.Path))
 	return u.String()
 }

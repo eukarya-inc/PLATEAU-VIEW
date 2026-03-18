@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	i18nFS "github.com/reearth/reearth-cms/server/i18n"
-	"github.com/reearth/reearth-cms/server/internal/adapter"
+	i18nFS "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/i18n"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
 	"github.com/reearth/reearthx/i18n"
 	"golang.org/x/text/language"
 )

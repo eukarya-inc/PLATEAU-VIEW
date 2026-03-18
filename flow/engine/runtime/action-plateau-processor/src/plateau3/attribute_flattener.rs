@@ -84,7 +84,7 @@ static FLATTEN_PREFIXES: Lazy<HashSet<String>> = Lazy::new(|| {
     flatten_attributes.iter().for_each(|(k1, k2)| {
         flatten_prefixes.insert(k1.to_string());
         if !k2.is_empty() {
-            flatten_prefixes.insert(format!("{}{}{}", k1, DELIM, k2));
+            flatten_prefixes.insert(format!("{k1}{DELIM}{k2}"));
         }
     });
     flatten_prefixes
@@ -148,7 +148,7 @@ impl Flattener {
                     Some(value) => value,
                     None => continue,
                 };
-                let name = format!("{}{}{}", basename, DELIM, k);
+                let name = format!("{basename}{DELIM}{k}");
                 let attribute_name = Attribute::new(name.clone());
                 result.insert(attribute_name, value.clone());
                 self.risk_to_attr_defs.entry("fld".to_string()).or_default();
@@ -210,7 +210,7 @@ impl Flattener {
                         Some(value) => value,
                         None => continue,
                     };
-                    let name = format!("{}_{}", basename, k);
+                    let name = format!("{basename}_{k}");
                     let attribute_name = Attribute::new(name.clone());
                     result.insert(attribute_name, value.clone());
                     self.risk_to_attr_defs
@@ -292,7 +292,7 @@ impl CommonAttributeProcessor {
                     let new_key = if value.len() == 1 {
                         key.to_string()
                     } else {
-                        format!("{}{}{}", key, DELIM, i)
+                        format!("{key}{DELIM}{i}")
                     };
                     let new_value = Self::flatten_attribute(new_key.as_str(), v);
                     result.extend(new_value);
@@ -302,7 +302,7 @@ impl CommonAttributeProcessor {
             AttributeValue::Map(value) => {
                 let mut result = HashMap::new();
                 for (k, v) in value {
-                    let new_key = format!("{}{}{}", key, DELIM, k);
+                    let new_key = format!("{key}{DELIM}{k}");
                     let new_value = Self::flatten_attribute(new_key.as_str(), v);
                     result.extend(new_value);
                 }
@@ -334,7 +334,7 @@ impl CommonAttributeProcessor {
         };
         let mut gml_max_lod = *self.gml_path_to_max_lod.get(&gml_path).unwrap_or(&0);
         for lod in 0..5 {
-            let key = format!("numLod{}", lod);
+            let key = format!("numLod{lod}");
             let attribute_name = Attribute::new(key.clone());
             let num_lod = match attributes.get(&attribute_name) {
                 Some(AttributeValue::Number(num_lod)) => num_lod,
@@ -380,7 +380,7 @@ impl CommonAttributeProcessor {
                 None => continue,
             };
             if s.to_string() == "2" || s.to_string() == "3" || s.to_string() == "4" {
-                let key = format!("lod_type_{}", s);
+                let key = format!("lod_type_{s}");
                 let attribute_name = Attribute::new(key.clone());
                 result.insert(attribute_name, lod_type.clone());
             }
@@ -398,7 +398,7 @@ impl ProcessorFactory for AttributeFlattenerFactory {
     }
 
     fn description(&self) -> &str {
-        "Flatten attributes for building feature"
+        "Flattens hierarchical PLATEAU3 building attributes into flat structure for analysis"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -451,8 +451,7 @@ impl Processor for AttributeFlattener {
         fw: &ProcessorChannelForwarder,
     ) -> Result<(), BoxedError> {
         let feature = &ctx.feature;
-        let Some(AttributeValue::Map(city_gml_attribute)) = feature.get(&"cityGmlAttributes")
-        else {
+        let Some(AttributeValue::Map(city_gml_attribute)) = feature.get("cityGmlAttributes") else {
             return Err(PlateauProcessorError::AttributeFlattener(format!(
                 "No cityGmlAttributes found with feature id = {:?}",
                 feature.id
@@ -549,16 +548,16 @@ impl Processor for AttributeFlattener {
             new_city_gml_attribute.extend(new_value);
         }
         let mut feature = feature.clone();
-        feature.attributes.extend(
+        feature.attributes_mut().extend(
             new_city_gml_attribute
                 .iter()
                 .map(|(k, v)| (Attribute::new(k.clone()), v.clone()))
                 .collect::<IndexMap<Attribute, AttributeValue>>(),
         );
-        feature.remove(&Attribute::new("cityGmlAttributes"));
-        feature.attributes.extend(flattened);
+        feature.remove("cityGmlAttributes");
+        feature.extend(flattened);
         let keys = feature.attributes.keys().cloned().collect_vec();
-        let attributes = &mut feature.attributes;
+        let attributes = feature.attributes_mut();
         for key in keys.iter() {
             if (key.to_string().starts_with("uro:") || key.to_string().starts_with("bldg:"))
                 && key.to_string().ends_with("_type")
@@ -575,7 +574,11 @@ impl Processor for AttributeFlattener {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

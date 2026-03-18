@@ -3,7 +3,7 @@ package cmsintrelated
 import (
 	"context"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 type plateauCMSMock struct {
@@ -86,7 +86,5 @@ func (p *plateauCMSMock) DatasetTypes(ctx context.Context) (plateaucms.DatasetTy
 }
 
 func (p *plateauCMSMock) Metadata(ctx context.Context, prj string, findDataCatalog, useDefault bool) (plateaucms.Metadata, plateaucms.MetadataList, error) {
-	return plateaucms.Metadata{
-		Converter: "fme",
-	}, nil, nil
+	return plateaucms.Metadata{}, nil, nil
 }

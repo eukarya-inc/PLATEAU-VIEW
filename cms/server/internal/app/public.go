@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	http1 "github.com/reearth/reearth-cms/server/internal/adapter/http"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	http1 "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/http"
 )
 
 func Ping() echo.HandlerFunc {

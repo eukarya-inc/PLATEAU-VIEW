@@ -4,10 +4,9 @@ import {
   PopupMenu,
   PopupMenuItem
 } from "@reearth/beta/lib/reearth-ui";
-import { useProjectFetcher } from "@reearth/services/api";
 import { useT } from "@reearth/services/i18n";
 import { styled } from "@reearth/services/theme";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { Project, Workspace } from "../types";
@@ -35,30 +34,14 @@ const LeftSection: React.FC<Props> = ({
 }) => {
   const t = useT();
 
-  const { useExportProject: exportProject } = useProjectFetcher();
-
-  const handleExportProject = useCallback(async () => {
-    if (!currentProject?.id) return;
-
-    await exportProject(currentProject.id);
-  }, [exportProject, currentProject?.id]);
-
   const menuItems: PopupMenuItem[] = useMemo(
     () => [
       {
         icon: "setting",
         id: "setting",
-        title: t("Settings"),
+        title: t("Project settings"),
         path: currentProject?.id
           ? `/settings/projects/${currentProject.id}`
-          : ""
-      },
-      {
-        id: "assets",
-        title: t("Assets"),
-        icon: "file" as const,
-        path: currentProject?.id
-          ? `/settings/projects/${currentProject.id}/assets`
           : ""
       },
       {
@@ -68,15 +51,9 @@ const LeftSection: React.FC<Props> = ({
         path: currentProject?.id
           ? `/settings/projects/${currentProject.id}/plugins`
           : ""
-      },
-      {
-        icon: "downloadSimple",
-        id: "export",
-        title: t("Export"),
-        onClick: handleExportProject
       }
     ],
-    [currentProject?.id, t, handleExportProject]
+    [currentProject?.id, t]
   );
 
   return (
@@ -86,21 +63,11 @@ const LeftSection: React.FC<Props> = ({
         to={`/dashboard/${currentWorkspace?.id}`}
         disabled={!currentWorkspace?.id}
       >
-        <IconButton
-          icon="grid"
-          appearance="simple"
-          size="large"
-          tooltipText={t("Dashboard")}
-        />
+        <IconButton icon="grid" appearance="simple" size="large" />
       </StyledLink>
       {page === "projectSettings" && (
         <StyledLink to={`/scene/${sceneId}/map`} disabled={!sceneId}>
-          <IconButton
-            icon="editor"
-            appearance="simple"
-            size="large"
-            tooltipText={t("Editor")}
-          />
+          <IconButton icon="editor" appearance="simple" size="large" />
         </StyledLink>
       )}
       <Profile

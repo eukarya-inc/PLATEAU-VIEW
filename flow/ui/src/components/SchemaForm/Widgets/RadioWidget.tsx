@@ -70,7 +70,7 @@ const RadioWidget = <
                 // label={option.label}
                 id={optionId(id, index)}
                 // name={id}
-                disabled={disabled || itemDisabled || readonly}
+                disabled={readonly || itemDisabled || disabled}
                 checked={checked}
                 required={required}
                 value={String(index)}
@@ -78,7 +78,7 @@ const RadioWidget = <
                 // onChange={_onChange}
                 // onBlur={_onBlur}
                 // onFocus={_onFocus}
-                aria-describedby={ariaDescribedByIds<T>(id)}
+                aria-describedby={ariaDescribedByIds(id)}
               />
               <Label htmlFor={optionId(id, index)}>{option.label}</Label>
             </div>

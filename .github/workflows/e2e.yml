@@ -1,0 +1,111 @@
+name: E2E VIEW
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Test type'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+      base-url:
+        description: 'Base URL for tests'
+        required: false
+        default: 'https://plateauview.mlit.go.jp'
+        type: string
+      record-video:
+        description: 'Record video for all tests (demo mode)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest # NOTE: use GPU runners for better performance
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./e2e
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ inputs.type }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browsers
+        working-directory: ./e2e
+        run: |
+          if [ "${{ inputs.type }}" = "smoke" ]; then
+            npx playwright install webkit --with-deps
+          else
+            npx playwright install --with-deps
+          fi
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright system dependencies
+        working-directory: ./e2e
+        run: |
+          if [ "${{ inputs.type }}" = "smoke" ]; then
+            npx playwright install-deps webkit
+          else
+            npx playwright install-deps
+          fi
+
+      - name: Run E2E tests
+        working-directory: ./e2e
+        env:
+          BASE_URL: ${{ inputs.base-url }}
+          SLOW_LOAD: 3
+          RECORD_VIDEO: ${{ inputs.record-video }}
+        run: |
+          if [ "${{ inputs.type }}" = "smoke" ]; then
+            echo "Running smoke tests with WebKit only (SLOW_LOAD=3 for non-GPU environment)"
+            echo "Video recording: ${{ inputs.record-video && 'all tests' || 'on failure only' }}"
+            npm run test:smoke
+          else
+            echo "Running full tests with all browsers (SLOW_LOAD=3 for non-GPU environment)"
+            echo "Video recording: ${{ inputs.record-video && 'all tests' || 'on failure only' }}"
+            npm test
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Test Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test Type**: ${{ inputs.type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base URL**: ${{ inputs.base-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "📊 [View detailed report in artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY

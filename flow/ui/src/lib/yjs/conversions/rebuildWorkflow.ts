@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 
+import { ProjectCorruptionError } from "@flow/errors";
 import { Workflow } from "@flow/types";
 import type { Edge, Node, NodeData, NodeType } from "@flow/types";
 
@@ -7,16 +8,23 @@ import type { YWorkflow, YEdge, YNode, YNodesMap, YEdgesMap } from "../types";
 
 export const reassembleNode = (yNode: YNode): Node => {
   const id = yNode.get("id")?.toString() as string;
+
+  const positionMap = yNode.get("position") as Y.Map<any>;
   const position = {
-    x: (yNode.get("position") as Y.Map<any>).get("x"),
-    y: (yNode.get("position") as Y.Map<any>).get("y"),
+    x: positionMap?.get("x") ?? 0,
+    y: positionMap?.get("y") ?? 0,
   };
+
   const type = yNode.get("type")?.toString() as NodeType;
   const dragging = yNode.get("dragging") as boolean;
+
+  const measuredMap = yNode.get("measured") as Y.Map<any>;
+
   const measured = {
-    width: (yNode.get("measured") as Y.Map<any>)?.get("width"),
-    height: (yNode.get("measured") as Y.Map<any>)?.get("height"),
+    width: measuredMap?.get("width") ?? 0,
+    height: measuredMap?.get("height") ?? 0,
   };
+
   const parentId = yNode.get("parentId")?.toString();
 
   const data: NodeData = {
@@ -24,12 +32,7 @@ export const reassembleNode = (yNode: YNode): Node => {
       ?.get("officialName")
       .toString(),
   };
-  // TODO: remove data.customName when subworkflow's renaming is re-implemented
-  if ((yNode.get("data") as Y.Map<any>)?.get("customName") !== undefined) {
-    data.customName = (yNode.get("data") as Y.Map<any>)
-      ?.get("customName")
-      .toString();
-  }
+
   if ((yNode.get("data") as Y.Map<any>)?.get("inputs") !== undefined) {
     data.inputs = (
       (yNode.get("data") as Y.Map<any>)?.get("inputs").toArray() as Y.Text[]
@@ -47,6 +50,17 @@ export const reassembleNode = (yNode: YNode): Node => {
     data.customizations = (yNode.get("data") as Y.Map<any>)?.get(
       "customizations",
     );
+  }
+  if ((yNode.get("data") as Y.Map<any>)?.get("isCollapsed") !== undefined) {
+    data.isCollapsed = (yNode.get("data") as Y.Map<any>)?.get("isCollapsed");
+  }
+  if ((yNode.get("data") as Y.Map<any>)?.get("workflowPath") !== undefined) {
+    data.workflowPath = (yNode.get("data") as Y.Map<any>)
+      ?.get("workflowPath")
+      .toString();
+  }
+  if ((yNode.get("data") as Y.Map<any>)?.get("isDisabled") !== undefined) {
+    data.isDisabled = (yNode.get("data") as Y.Map<any>)?.get("isDisabled");
   }
   // Subworkflow specific
   if ((yNode.get("data") as Y.Map<any>)?.get("subworkflowId") !== undefined) {
@@ -124,9 +138,16 @@ export const rebuildWorkflow = (yWorkflow: YWorkflow): Workflow => {
       workflow.name = value.toString();
     } else if (key === "nodes" && value instanceof Y.Map) {
       // Convert map of nodes to array of plain objects
-      workflow.nodes = Array.from(value as YNodesMap).map(([, yNode]) =>
-        reassembleNode(yNode as YNode),
-      );
+
+      try {
+        workflow.nodes = Array.from(value as YNodesMap).map(([, yNode]) =>
+          reassembleNode(yNode as YNode),
+        );
+      } catch {
+        throw new ProjectCorruptionError(
+          "Could not reassemble node. This project may be corrupted.",
+        );
+      }
     } else if (key === "edges" && value instanceof Y.Map) {
       // Convert map of edges to array of plain objects
       workflow.edges = Array.from(value as YEdgesMap).map(([, yEdge]) =>

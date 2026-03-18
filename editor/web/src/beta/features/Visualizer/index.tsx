@@ -1,9 +1,4 @@
 import styled from "@emotion/styled";
-import { ViewerProperty } from "@reearth/beta/features/Editor/Visualizer/type";
-import {
-  PhotoOverlayPreview,
-  SketchFeatureTooltip
-} from "@reearth/beta/utils/sketch";
 import {
   Camera,
   LatLng,
@@ -17,14 +12,13 @@ import {
   type ComputedLayer,
   type Layer,
   type EngineType,
+  type ViewerProperty,
   CoreVisualizer
 } from "@reearth/core";
-import { NLSLayer } from "@reearth/services/api/layersApi/utils";
 import { config } from "@reearth/services/config";
 import { WidgetAreaState } from "@reearth/services/state";
 import { FC, MutableRefObject, SetStateAction } from "react";
 
-import { VISUALIZER_CORE_DOM_ID } from "./constaints";
 import Crust from "./Crust";
 import { InstallableInfoboxBlock } from "./Crust/Infobox";
 import { InstallableStoryBlock, StoryPanelRef } from "./Crust/StoryPanel";
@@ -49,7 +43,6 @@ type VisualizerProps = {
   inEditor?: boolean;
   ready?: boolean;
   layers?: Layer[];
-  nlsLayers?: NLSLayer[];
   widgets?: {
     floating: (Omit<Widget, "layout" | "extended"> & {
       extended?: boolean;
@@ -66,8 +59,6 @@ type VisualizerProps = {
   currentCamera?: Camera;
   initialCamera?: Camera;
   interactionMode?: InteractionModeType;
-  photoOverlayPreview?: PhotoOverlayPreview;
-  sketchFeatureTooltip?: SketchFeatureTooltip;
   onCameraChange?: (camera: Camera) => void;
   onCoreLayerSelect?: (
     layerId: string | undefined,
@@ -168,7 +159,6 @@ const Visualizer: FC<VisualizerProps> = ({
   inEditor,
   ready,
   layers,
-  nlsLayers,
   widgets,
   viewerProperty,
   pluginProperty,
@@ -211,11 +201,7 @@ const Visualizer: FC<VisualizerProps> = ({
   handlePropertyValueUpdate,
   handlePropertyItemAdd,
   handlePropertyItemMove,
-  handlePropertyItemDelete,
-  // photoOverlay
-  photoOverlayPreview,
-  //sketchLayer
-  sketchFeatureTooltip
+  handlePropertyItemDelete
 }) => {
   const {
     shouldRender,
@@ -225,8 +211,7 @@ const Visualizer: FC<VisualizerProps> = ({
     visualizerCamera,
     handleCoreLayerSelect,
     mapAPIReady,
-    onCoreAPIReady,
-    currentCameraRef
+    onCoreAPIReady
   } = useHooks({
     ownBuiltinWidgets: widgets?.ownBuiltinWidgets,
     viewerProperty,
@@ -238,87 +223,76 @@ const Visualizer: FC<VisualizerProps> = ({
   return (
     <Wrapper storyPanelPosition={story?.position}>
       <StoryWrapper ref={storyWrapperRef} />
-      <CoreWrapper id={VISUALIZER_CORE_DOM_ID}>
-        <CoreVisualizer
-          ref={visualizerRef}
-          engine={engine}
+      <CoreVisualizer
+        ref={visualizerRef}
+        engine={engine}
+        isBuilt={!!isBuilt}
+        isEditable={!isBuilt}
+        layers={layers}
+        zoomedLayerId={zoomedLayerId}
+        viewerProperty={overriddenViewerProperty}
+        ready={ready}
+        meta={engineMeta}
+        camera={visualizerCamera}
+        interactionMode={interactionMode}
+        shouldRender={shouldRender}
+        displayCredits={false}
+        onCameraChange={onCameraChange}
+        onLayerSelect={handleCoreLayerSelect}
+        onLayerDrop={handleLayerDrop}
+        onZoomToLayer={handleZoomToLayer}
+        onSketchTypeChangeProp={handleSketchTypeChange}
+        onSketchFeatureCreate={handleSketchFeatureCreate}
+        onSketchFeatureUpdate={handleSketchFeatureUpdate}
+        onMount={handleMount}
+        onAPIReady={onCoreAPIReady}
+      >
+        <Crust
+          engineName={engine}
           isBuilt={!!isBuilt}
           isEditable={!isBuilt}
+          inEditor={inEditor}
+          mapRef={visualizerRef}
+          mapAPIReady={mapAPIReady}
           layers={layers}
-          zoomedLayerId={zoomedLayerId}
+          // Viewer
           viewerProperty={overriddenViewerProperty}
-          ready={ready}
-          meta={engineMeta}
-          camera={visualizerCamera}
-          interactionMode={interactionMode}
-          shouldRender={shouldRender}
-          displayCredits={false}
-          onCameraChange={onCameraChange}
-          onLayerSelect={handleCoreLayerSelect}
-          onLayerDrop={handleLayerDrop}
-          onZoomToLayer={handleZoomToLayer}
-          onSketchTypeChangeProp={handleSketchTypeChange}
-          onSketchFeatureCreate={handleSketchFeatureCreate}
-          onSketchFeatureUpdate={handleSketchFeatureUpdate}
-          onMount={handleMount}
-          onAPIReady={onCoreAPIReady}
-        >
-          <Crust
-            engineName={engine}
-            isBuilt={!!isBuilt}
-            isEditable={!isBuilt}
-            inEditor={inEditor}
-            mapRef={visualizerRef}
-            mapAPIReady={mapAPIReady}
-            layers={layers}
-            // Viewer
-            viewerProperty={overriddenViewerProperty}
-            overrideViewerProperty={overrideViewerProperty}
-            // Plugin
-            externalPlugin={{
-              pluginBaseUrl: config()?.plugins,
-              pluginProperty
-            }}
-            // Widget
-            initialCamera={initialCamera}
-            widgetThemeOptions={widgetThemeOptions}
-            widgetAlignSystem={widgets?.alignSystem}
-            widgetAlignSystemEditing={widgetAlignEditorActivated}
-            widgetLayoutConstraint={widgets?.layoutConstraint}
-            floatingWidgets={widgets?.floating}
-            selectedWidgetArea={selectedWidgetArea}
-            onWidgetLayoutUpdate={handleWidgetUpdate}
-            onWidgetAlignmentUpdate={handleWidgetAlignSystemUpdate}
-            onWidgetAreaSelect={selectWidgetArea}
-            // Infobox
-            installableInfoboxBlocks={installableInfoboxBlocks}
-            onInfoboxBlockCreate={handleInfoboxBlockCreate}
-            onInfoboxBlockMove={handleInfoboxBlockMove}
-            onInfoboxBlockDelete={handleInfoboxBlockRemove}
-            onPropertyUpdate={handlePropertyValueUpdate}
-            onPropertyItemAdd={handlePropertyItemAdd}
-            onPropertyItemMove={handlePropertyItemMove}
-            onPropertyItemDelete={handlePropertyItemDelete}
-            // Story
-            showStoryPanel={showStoryPanel}
-            storyPanelRef={storyPanelRef}
-            storyWrapperRef={storyWrapperRef}
-            selectedStory={story}
-            installableStoryBlocks={installableStoryBlocks}
-            onStoryPageChange={handleStoryPageChange}
-            onStoryBlockCreate={handleStoryBlockCreate}
-            onStoryBlockMove={handleStoryBlockMove}
-            onStoryBlockDelete={handleStoryBlockDelete}
-            onPropertyValueUpdate={handlePropertyValueUpdate}
-            // photoOverlay
-            photoOverlayPreview={photoOverlayPreview}
-            nlsLayers={nlsLayers}
-            currentCameraRef={currentCameraRef}
-            //sketchLayer
-            sketchFeatureTooltip={sketchFeatureTooltip}
-          />
-        </CoreVisualizer>
-      </CoreWrapper>
+          overrideViewerProperty={overrideViewerProperty}
+          // Plugin
+          externalPlugin={{ pluginBaseUrl: config()?.plugins, pluginProperty }}
+          // Widget
+          initialCamera={initialCamera}
+          widgetThemeOptions={widgetThemeOptions}
+          widgetAlignSystem={widgets?.alignSystem}
+          widgetAlignSystemEditing={widgetAlignEditorActivated}
+          widgetLayoutConstraint={widgets?.layoutConstraint}
+          floatingWidgets={widgets?.floating}
+          selectedWidgetArea={selectedWidgetArea}
+          onWidgetLayoutUpdate={handleWidgetUpdate}
+          onWidgetAlignmentUpdate={handleWidgetAlignSystemUpdate}
+          onWidgetAreaSelect={selectWidgetArea}
+          // Infobox
+          installableInfoboxBlocks={installableInfoboxBlocks}
+          onInfoboxBlockCreate={handleInfoboxBlockCreate}
+          onInfoboxBlockMove={handleInfoboxBlockMove}
+          onInfoboxBlockDelete={handleInfoboxBlockRemove}
+          onPropertyUpdate={handlePropertyValueUpdate}
+          onPropertyItemAdd={handlePropertyItemAdd}
+          onPropertyItemMove={handlePropertyItemMove}
+          onPropertyItemDelete={handlePropertyItemDelete}
+          // Story
+          showStoryPanel={showStoryPanel}
+          storyPanelRef={storyPanelRef}
+          storyWrapperRef={storyWrapperRef}
+          selectedStory={story}
+          installableStoryBlocks={installableStoryBlocks}
+          onStoryPageChange={handleStoryPageChange}
+          onStoryBlockCreate={handleStoryBlockCreate}
+          onStoryBlockMove={handleStoryBlockMove}
+          onStoryBlockDelete={handleStoryBlockDelete}
+          onPropertyValueUpdate={handlePropertyValueUpdate}
+        />
+      </CoreVisualizer>
     </Wrapper>
   );
 };
@@ -342,9 +316,4 @@ const StoryWrapper = styled("div")(() => ({
   position: "relative",
   flexShrink: 0,
   height: "100%"
-}));
-
-const CoreWrapper = styled("div")(() => ({
-  position: "relative",
-  flex: 1
 }));

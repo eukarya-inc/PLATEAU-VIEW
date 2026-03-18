@@ -3,8 +3,8 @@ package interfaces
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/pkg/workspacesettings"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/workspacesettings"
 	"github.com/reearth/reearthx/account/accountdomain"
 )
 

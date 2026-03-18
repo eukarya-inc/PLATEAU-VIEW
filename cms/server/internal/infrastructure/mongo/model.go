@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/reearth/reearth-cms/server/internal/infrastructure/mongo/mongodoc"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/infrastructure/mongo/mongodoc"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"
@@ -220,7 +220,7 @@ func sortModels(ms *model.Sort) *usecasex.Sort {
 	case model.ColumnUpdatedAt:
 		res.Key = "updatedat"
 	}
-	
+
 	if ms.Direction == model.DirectionDesc {
 		res.Reverted = true
 	}

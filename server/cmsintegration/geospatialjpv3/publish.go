@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
@@ -48,11 +48,12 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 
 	pkg, pkgCreated, err := h.createOrUpdatePackage(ctx, pkgSeed)
 	if err != nil {
-		return fmt.Errorf("G空間情報センターでパッケージの検索・作成に失敗しました: %w", err)
+		return fmt.Errorf("%s: %w", errMsgPackageSearchCreateFailed, err)
 	}
 
 	log.Debugfc(ctx, "geospatialjpv3: pkg: %s", pp.Sprint(pkg))
 	resources := []ckan.Resource{}
+	var resourceErrors []string
 
 	if seed.Index != "" {
 		log.Debugfc(ctx, "geospatialjpv3: index: %s", seed.Index)
@@ -62,9 +63,11 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.Index,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create or update resource (index): %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: failed to create or update resource (index): %v", err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("データ目録: %v", err))
+		} else {
+			resources = append(resources, r)
 		}
-		resources = append(resources, r)
 	}
 
 	if seed.IndexMapURL != "" {
@@ -75,9 +78,11 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: "データ整備範囲の標準地域メッシュ（２次メッシュ、３次メッシュ）のメッシュとメッシュ番号を示したPDFファイルです。",
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（索引図）: %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceCreateIndexFailed, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("索引図: %v", err))
+		} else {
+			resources = append(resources, r)
 		}
-		resources = append(resources, r)
 	}
 
 	if seed.CityGML != "" {
@@ -88,9 +93,11 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.CityGMLDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（CityGML）: %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceCreateCityGMLFailed, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("CityGML: %v", err))
+		} else {
+			resources = append(resources, r)
 		}
-		resources = append(resources, r)
 	}
 
 	if seed.Plateau != "" {
@@ -101,9 +108,11 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.PlateauDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（3D Tiles,MVT）: %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceCreate3DTilesFailed, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("3D Tiles, MVT: %v", err))
+		} else {
+			resources = append(resources, r)
 		}
-		resources = append(resources, r)
 	}
 
 	if seed.Related != "" {
@@ -114,9 +123,11 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 			Description: seed.RelatedDescription,
 		})
 		if err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（関連データセット）: %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceCreateRelatedFailed, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("関連データセット: %v", err))
+		} else {
+			resources = append(resources, r)
 		}
-		resources = append(resources, r)
 	}
 
 	if seed.Generics != nil {
@@ -128,12 +139,16 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 
 			url := g.Asset.URL
 			if g.Name == "" {
-				return fmt.Errorf("その他データセットの名前は必須です。: %#v", g)
+				log.Errorfc(ctx, "geospatialjpv3: その他データセットの名前は必須です。: %#v", g)
+				resourceErrors = append(resourceErrors, "その他データセット: 名前は必須です")
+				continue
 			}
 
 			size := g.Asset.TotalSize
 			if size == 0 {
-				return fmt.Errorf("その他データセットのアセットサイズを正しく取得できませんでした。: %#v", g)
+				log.Errorfc(ctx, "geospatialjpv3: その他データセットのアセットサイズを正しく取得できませんでした。: %#v", g)
+				resourceErrors = append(resourceErrors, fmt.Sprintf("その他データセット(%s): アセットサイズを正しく取得できませんでした", g.Name))
+				continue
 			}
 
 			r, err := h.createOrUpdateResource(ctx, pkg, ResourceInfo{
@@ -142,7 +157,9 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 				Description: replaceSize(g.Desc, uint64(size)),
 			})
 			if err != nil {
-				return fmt.Errorf("G空間情報センターでリソースの作成に失敗しました（その他データセット）: %w", err)
+				log.Errorfc(ctx, "geospatialjpv3: %s (%s): %v", errMsgResourceCreateOtherFailed, g.Name, err)
+				resourceErrors = append(resourceErrors, fmt.Sprintf("その他データセット(%s): %v", g.Name, err))
+				continue
 			}
 			resources = append(resources, r)
 		}
@@ -155,7 +172,8 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		})
 
 		if err := h.reorderResources(ctx, pkg.ID, resourceIDs); err != nil {
-			return fmt.Errorf("G空間情報センターでリソースの並び替えに失敗しました（リソースの登録・更新自体は既に完了しています）: %w", err)
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceReorderPartialSuccess, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("リソースの並び替え: %v", err))
 		}
 	}
 
@@ -164,6 +182,10 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		comment = fmt.Sprintf("G空間情報センターにデータセットを新規作成しました。 \n%s", h.packageURL(pkg))
 	} else {
 		comment = fmt.Sprintf("G空間情報センターのデータセットを更新しました。 \n%s", h.packageURL(pkg))
+	}
+
+	if len(resourceErrors) > 0 {
+		comment += "\n\n以下のリソースの登録に失敗しました:\n" + strings.Join(resourceErrors, "\n")
 	}
 
 	if err := h.cms.CommentToItem(ctx, seed.GspatialjpDataItemID, comment); err != nil {

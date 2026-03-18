@@ -3,12 +3,12 @@ package gql
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/group"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/group"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 )

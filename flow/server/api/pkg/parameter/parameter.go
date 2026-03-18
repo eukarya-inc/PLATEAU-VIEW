@@ -7,6 +7,7 @@ import (
 type Type string
 
 const (
+	TypeArray              Type = "ARRAY"
 	TypeChoice             Type = "CHOICE"
 	TypeColor              Type = "COLOR"
 	TypeDatetime           Type = "DATETIME"
@@ -25,15 +26,17 @@ const (
 )
 
 type Parameter struct {
-	id        ID
-	projectID ProjectID
-	name      string
-	typ       Type
-	required  bool
-	value     interface{}
-	index     int
-	createdAt time.Time
-	updatedAt time.Time
+	createdAt    time.Time
+	updatedAt    time.Time
+	defaultValue interface{}
+	config       interface{}
+	name         string
+	typ          Type
+	index        int
+	id           ID
+	projectID    ProjectID
+	required     bool
+	public       bool
 }
 
 func (p *Parameter) ID() ID {
@@ -56,8 +59,16 @@ func (p *Parameter) Required() bool {
 	return p.required
 }
 
-func (p *Parameter) Value() interface{} {
-	return p.value
+func (p *Parameter) Public() bool {
+	return p.public
+}
+
+func (p *Parameter) DefaultValue() interface{} {
+	return p.defaultValue
+}
+
+func (p *Parameter) Config() interface{} {
+	return p.config
 }
 
 func (p *Parameter) Index() int {
@@ -72,8 +83,33 @@ func (p *Parameter) UpdatedAt() time.Time {
 	return p.updatedAt
 }
 
-func (p *Parameter) SetValue(v interface{}) {
-	p.value = v
+func (p *Parameter) SetDefaultValue(v interface{}) {
+	p.defaultValue = v
+	p.updatedAt = time.Now()
+}
+
+func (p *Parameter) SetConfig(v interface{}) {
+	p.config = v
+	p.updatedAt = time.Now()
+}
+
+func (p *Parameter) SetName(name string) {
+	p.name = name
+	p.updatedAt = time.Now()
+}
+
+func (p *Parameter) SetType(typ Type) {
+	p.typ = typ
+	p.updatedAt = time.Now()
+}
+
+func (p *Parameter) SetRequired(required bool) {
+	p.required = required
+	p.updatedAt = time.Now()
+}
+
+func (p *Parameter) SetPublic(public bool) {
+	p.public = public
 	p.updatedAt = time.Now()
 }
 

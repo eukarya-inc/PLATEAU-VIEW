@@ -1,0 +1,45 @@
+name: ci-tile
+on:
+  workflow_call:
+jobs:
+  ci-tile-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92"
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tile
+      - name: Check formatting
+        working-directory: tile
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        working-directory: tile
+        run: cargo clippy --all-targets -- -D warnings
+  ci-tile-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tile
+      - name: Test
+        working-directory: tile
+        run: cargo test --all-targets
+  ci-tile-check:
+    runs-on: ubuntu-latest
+    needs: [ci-tile-lint, ci-tile-test]
+    if: always()
+    steps:
+      - name: Check if all jobs succeeded
+        run: |
+          if [[ "${{ needs.ci-tile-lint.result }}" != "success" ]] || [[ "${{ needs.ci-tile-test.result }}" != "success" ]]; then
+            echo "Lint or test failed"
+            exit 1
+          fi

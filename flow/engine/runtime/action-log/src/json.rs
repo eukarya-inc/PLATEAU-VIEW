@@ -1,5 +1,4 @@
 use serde::ser::SerializeMap;
-use serde::serde_if_integer128;
 use slog::o;
 use slog::Key;
 use slog::Record;
@@ -23,12 +22,9 @@ pub(crate) struct SerdeSerializer<S: serde::Serializer> {
 impl<S: serde::Serializer> SerdeSerializer<S> {
     /// Start serializing map of values
     fn start(ser: S, len: Option<usize>) -> result::Result<Self, slog::Error> {
-        let ser_map = ser.serialize_map(len).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("serde serialization error: {}", e),
-            )
-        })?;
+        let ser_map = ser
+            .serialize_map(len)
+            .map_err(|e| io::Error::other(format!("serde serialization error: {e}")))?;
         Ok(SerdeSerializer { ser_map })
     }
 
@@ -103,13 +99,11 @@ where
     fn emit_f64(&mut self, key: Key, val: f64) -> slog::Result {
         impl_m!(self, key, &val)
     }
-    serde_if_integer128! {
-        fn emit_u128(&mut self, key: Key, val: u128) -> slog::Result {
-            impl_m!(self, key, &val)
-        }
-        fn emit_i128(&mut self, key: Key, val: i128) -> slog::Result {
-            impl_m!(self, key, &val)
-        }
+    fn emit_u128(&mut self, key: Key, val: u128) -> slog::Result {
+        impl_m!(self, key, &val)
+    }
+    fn emit_i128(&mut self, key: Key, val: i128) -> slog::Result {
+        impl_m!(self, key, &val)
     }
     fn emit_str(&mut self, key: Key, val: &str) -> slog::Result {
         impl_m!(self, key, &val)
@@ -118,12 +112,8 @@ where
         TL_BUF.with(|buf| {
             let mut buf = buf.borrow_mut();
 
-            buf.write_fmt(*val).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Error formatting arguments: {}", e),
-                )
-            })?;
+            buf.write_fmt(*val)
+                .map_err(|e| io::Error::other(format!("Error formatting arguments: {e}")))?;
 
             let res = { || impl_m!(self, key, &*buf) }();
             buf.clear();
@@ -174,7 +164,7 @@ where
 
         let res = serializer.end();
 
-        res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        res.map_err(io::Error::other)?;
 
         Ok(())
     }
@@ -192,13 +182,9 @@ where
             let mut serializer = serde_json::Serializer::new(&mut buffer);
             self.log_impl(&mut serializer, record, values)?;
             serializer.into_inner();
-            let json_str = String::from_utf8(buffer).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Invalid UTF-8 sequence: {}", e),
-                )
-            })?;
-            writeln!(decorator, "{}", json_str)?;
+            let json_str = String::from_utf8(buffer)
+                .map_err(|e| io::Error::other(format!("Invalid UTF-8 sequence: {e}")))?;
+            writeln!(decorator, "{json_str}")?;
             decorator.flush()?;
             Ok(())
         })

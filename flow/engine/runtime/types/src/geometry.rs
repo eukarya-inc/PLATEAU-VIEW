@@ -1,15 +1,19 @@
 use std::fmt::Display;
 use std::hash::Hash;
 
+use nusamai_citygml::{GmlGeometryType, PropertyType};
 use nusamai_projection::vshift::Jgd2011ToWgs84;
+use reearth_flow_geometry::types::coordinate::Coordinate3D;
 use reearth_flow_geometry::types::coordnum::CoordNum;
-use reearth_flow_geometry::types::line_string::LineString3D;
+use reearth_flow_geometry::types::line_string::{LineString2D, LineString3D};
 use reearth_flow_geometry::types::traits::Elevation;
 
 use nusamai_projection::crs::EpsgCode;
 use reearth_flow_geometry::algorithm::hole::HoleCounter;
+use reearth_flow_geometry::types::multi_line_string::MultiLineString2D;
+use reearth_flow_geometry::types::multi_point::MultiPoint2D;
+use reearth_flow_geometry::types::point::{Point, Point2D};
 use reearth_flow_geometry::types::polygon::{Polygon2D, Polygon3D};
-use reearth_flow_geometry::utils::are_points_coplanar;
 use serde::{Deserialize, Serialize};
 
 use reearth_flow_geometry::types::geometry::Geometry2D as FlowGeometry2D;
@@ -17,8 +21,6 @@ use reearth_flow_geometry::types::geometry::Geometry3D as FlowGeometry3D;
 use reearth_flow_geometry::types::multi_polygon::MultiPolygon2D;
 
 use crate::material::{Texture, X3DMaterial};
-
-static EPSILON: f64 = 1e-10;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -96,7 +98,7 @@ pub struct CityGmlGeometry {
     pub textures: Vec<Texture>,
     pub polygon_materials: Vec<Option<u32>>,
     pub polygon_textures: Vec<Option<u32>>,
-    pub polygon_uvs: flatgeom::MultiPolygon<'static, [f64; 2]>,
+    pub polygon_uvs: MultiPolygon2D<f64>,
 }
 
 impl CityGmlGeometry {
@@ -111,16 +113,60 @@ impl CityGmlGeometry {
             textures,
             polygon_materials: Vec::new(),
             polygon_textures: Vec::new(),
-            polygon_uvs: flatgeom::MultiPolygon::default(),
+            polygon_uvs: MultiPolygon2D::default(),
         }
     }
 
     pub fn split_feature(&self) -> Vec<CityGmlGeometry> {
         self.gml_geometries
             .iter()
-            .map(|feature| CityGmlGeometry {
-                gml_geometries: vec![feature.clone()],
-                ..self.clone()
+            .map(|feature| {
+                let is_polygon_geometry = matches!(
+                    feature.ty,
+                    crate::geometry::GeometryType::Solid
+                        | crate::geometry::GeometryType::Surface
+                        | crate::geometry::GeometryType::Triangle
+                );
+
+                let (polygon_materials, polygon_textures, polygon_uvs) = if is_polygon_geometry {
+                    let pos = feature.pos as usize;
+                    let len = feature.len as usize;
+
+                    let materials = if pos + len <= self.polygon_materials.len() {
+                        self.polygon_materials[pos..pos + len].to_vec()
+                    } else {
+                        Vec::new()
+                    };
+
+                    let textures = if pos + len <= self.polygon_textures.len() {
+                        self.polygon_textures[pos..pos + len].to_vec()
+                    } else {
+                        Vec::new()
+                    };
+
+                    let uvs = if pos + len <= self.polygon_uvs.0.len() {
+                        MultiPolygon2D::new(self.polygon_uvs.0[pos..pos + len].to_vec())
+                    } else {
+                        MultiPolygon2D::default()
+                    };
+
+                    (materials, textures, uvs)
+                } else {
+                    // Non-polygon geometries don't have materials/textures/UVs
+                    (Vec::new(), Vec::new(), MultiPolygon2D::default())
+                };
+
+                let mut cloned_feature = feature.clone();
+                cloned_feature.pos = 0;
+
+                CityGmlGeometry {
+                    gml_geometries: vec![cloned_feature],
+                    materials: self.materials.clone(),
+                    textures: self.textures.clone(),
+                    polygon_materials,
+                    polygon_textures,
+                    polygon_uvs,
+                }
             })
             .collect()
     }
@@ -144,14 +190,6 @@ impl CityGmlGeometry {
                     .sum::<usize>()
             })
             .sum()
-    }
-    pub fn are_points_coplanar(&self) -> bool {
-        self.gml_geometries.iter().all(|feature| {
-            feature.polygons.iter().all(|poly| {
-                let result = are_points_coplanar(poly.clone().into(), EPSILON);
-                result.is_some()
-            })
-        })
     }
 
     pub fn elevation(&self) -> f64 {
@@ -210,6 +248,207 @@ impl CityGmlGeometry {
             .iter_mut()
             .for_each(|feature| feature.transform_offset(x, y, z));
     }
+
+    /// Transforms the X/Y coordinates of all geometries using the provided function.
+    /// The Z coordinate is passed through unchanged.
+    /// Returns an error if any transformation fails.
+    pub fn transform_horizontal<F, E>(&mut self, transform_fn: F) -> Result<(), E>
+    where
+        F: Fn(f64, f64) -> Result<(f64, f64), E>,
+    {
+        for gml_geometry in &mut self.gml_geometries {
+            gml_geometry.transform_horizontal(&transform_fn)?;
+        }
+        Ok(())
+    }
+
+    pub fn get_vertices(&self) -> Vec<Coordinate3D<f64>> {
+        let mut vertices = Vec::new();
+        for gml_geometry in &self.gml_geometries {
+            for polygon in &gml_geometry.polygons {
+                for line in &polygon.rings() {
+                    for point in line {
+                        vertices.push(*point);
+                    }
+                }
+            }
+            for line_string in &gml_geometry.line_strings {
+                for point in line_string {
+                    vertices.push(*point);
+                }
+            }
+        }
+        vertices
+    }
+
+    /// Filters gml_geometries by a predicate and extracts corresponding polygon data
+    /// with properly remapped indices.
+    pub fn filter_by_lod<F>(&self, predicate: F) -> CityGmlGeometry
+    where
+        F: Fn(&GmlGeometry) -> bool,
+    {
+        let mut filtered_gml_geometries = Vec::new();
+        let mut filtered_polygon_materials = Vec::new();
+        let mut filtered_polygon_textures = Vec::new();
+        let mut filtered_polygon_uvs = Vec::new();
+        let mut new_pos: u32 = 0;
+
+        for gml_geom in &self.gml_geometries {
+            if !predicate(gml_geom) {
+                continue;
+            }
+
+            let pos = gml_geom.pos as usize;
+            let len = gml_geom.len as usize;
+
+            // Verify that the geometry count matches len - this is critical for data consistency
+            // len represents the number of items in the primary geometry arrays
+            // (polygons for Solid/Surface/Triangle, line_strings for Curve, points for Point)
+            let actual_count = match gml_geom.ty {
+                crate::geometry::GeometryType::Solid
+                | crate::geometry::GeometryType::Surface
+                | crate::geometry::GeometryType::Triangle => gml_geom.polygons.len(),
+                crate::geometry::GeometryType::Curve => gml_geom.line_strings.len(),
+                crate::geometry::GeometryType::Point => gml_geom.points.len(),
+            };
+
+            if actual_count != len {
+                tracing::warn!(
+                    "Skipping geometry with mismatched counts: actual_count={} != len={} (type={:?})",
+                    actual_count,
+                    len,
+                    gml_geom.ty
+                );
+                continue;
+            }
+
+            // Non-polygon geometries don't have materials/textures/UVs
+            let is_polygon_geometry = matches!(
+                gml_geom.ty,
+                crate::geometry::GeometryType::Solid
+                    | crate::geometry::GeometryType::Surface
+                    | crate::geometry::GeometryType::Triangle
+            );
+
+            if !is_polygon_geometry {
+                let mut cloned_geom = gml_geom.clone();
+                cloned_geom.pos = 0; // pos is unused for non-polygon geometries
+                filtered_gml_geometries.push(cloned_geom);
+                continue;
+            }
+
+            // Verify bounds before extraction - skip geometry if data is missing
+            let has_materials = pos + len <= self.polygon_materials.len();
+            let has_textures = pos + len <= self.polygon_textures.len();
+            let has_uvs = pos + len <= self.polygon_uvs.0.len();
+
+            // Extract polygon_materials for this geometry
+            if has_materials {
+                filtered_polygon_materials
+                    .extend_from_slice(&self.polygon_materials[pos..pos + len]);
+            } else if !self.polygon_materials.is_empty() {
+                // Fill with None if source has materials but this range is out of bounds
+                filtered_polygon_materials.extend(std::iter::repeat_n(None, len));
+            }
+
+            // Extract polygon_textures for this geometry
+            if has_textures {
+                filtered_polygon_textures.extend_from_slice(&self.polygon_textures[pos..pos + len]);
+            } else if !self.polygon_textures.is_empty() {
+                // Fill with None if source has textures but this range is out of bounds
+                filtered_polygon_textures.extend(std::iter::repeat_n(None, len));
+            }
+
+            // Extract polygon_uvs for this geometry, verifying vertex counts match
+            if has_uvs {
+                // Check if UVs are compatible with polygons (vertex counts must match)
+                let uvs_slice = &self.polygon_uvs.0[pos..pos + len];
+                let mut all_match = true;
+                for (poly, uv) in gml_geom.polygons.iter().zip(uvs_slice.iter()) {
+                    let poly_ext_len = poly.exterior().0.len();
+                    let uv_ext_len = uv.exterior().0.len();
+                    if poly_ext_len != uv_ext_len {
+                        all_match = false;
+                        break;
+                    }
+                    // Check interiors
+                    if poly.interiors().len() != uv.interiors().len() {
+                        all_match = false;
+                        break;
+                    }
+                    for (poly_int, uv_int) in poly.interiors().iter().zip(uv.interiors().iter()) {
+                        if poly_int.0.len() != uv_int.0.len() {
+                            all_match = false;
+                            break;
+                        }
+                    }
+                    if !all_match {
+                        break;
+                    }
+                }
+
+                if all_match {
+                    filtered_polygon_uvs.extend(uvs_slice.iter().cloned());
+                } else {
+                    // UV vertex counts don't match, create new UVs matching polygon structure
+                    tracing::debug!(
+                        "Creating new UVs for geometry with mismatched vertex counts (lod={:?}, pos={}, len={})",
+                        gml_geom.lod, pos, len
+                    );
+                    for poly in &gml_geom.polygons {
+                        let exterior_len = poly.exterior().0.len();
+                        let exterior_uv: Vec<_> =
+                            std::iter::repeat_n([0.0, 0.0].into(), exterior_len).collect();
+                        let interiors_uv: Vec<Vec<_>> = poly
+                            .interiors()
+                            .iter()
+                            .map(|interior| {
+                                std::iter::repeat_n([0.0, 0.0].into(), interior.0.len()).collect()
+                            })
+                            .collect();
+                        filtered_polygon_uvs.push(Polygon2D::new(
+                            LineString2D::new(exterior_uv),
+                            interiors_uv.into_iter().map(LineString2D::new).collect(),
+                        ));
+                    }
+                }
+            } else if !self.polygon_uvs.0.is_empty() {
+                // Create dummy UVs matching the polygon structure if source has UVs but range is out of bounds
+                for poly in &gml_geom.polygons {
+                    let exterior_len = poly.exterior().0.len();
+                    let exterior_uv: Vec<_> =
+                        std::iter::repeat_n([0.0, 0.0].into(), exterior_len).collect();
+                    let interiors_uv: Vec<Vec<_>> = poly
+                        .interiors()
+                        .iter()
+                        .map(|interior| {
+                            std::iter::repeat_n([0.0, 0.0].into(), interior.0.len()).collect()
+                        })
+                        .collect();
+                    filtered_polygon_uvs.push(Polygon2D::new(
+                        LineString2D::new(exterior_uv),
+                        interiors_uv.into_iter().map(LineString2D::new).collect(),
+                    ));
+                }
+            }
+
+            // Clone the geometry and update pos to the new position
+            let mut cloned_geom = gml_geom.clone();
+            cloned_geom.pos = new_pos;
+            new_pos += len as u32;
+
+            filtered_gml_geometries.push(cloned_geom);
+        }
+
+        CityGmlGeometry {
+            gml_geometries: filtered_gml_geometries,
+            materials: self.materials.clone(),
+            textures: self.textures.clone(),
+            polygon_materials: filtered_polygon_materials,
+            polygon_textures: filtered_polygon_textures,
+            polygon_uvs: MultiPolygon2D::new(filtered_polygon_uvs),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -238,12 +477,41 @@ impl Default for MaxMinVertice {
 impl From<CityGmlGeometry> for FlowGeometry2D {
     fn from(geometry: CityGmlGeometry) -> Self {
         let mut polygons = Vec::<Polygon2D<f64>>::new();
+        let mut line_strings = Vec::<LineString2D<f64>>::new();
+        let mut points = Vec::<Point2D<f64>>::new();
+
         for gml_geometry in geometry.gml_geometries {
             for polygon in gml_geometry.polygons {
                 polygons.push(polygon.into());
             }
+            for line_string in gml_geometry.line_strings {
+                line_strings.push(line_string.into());
+            }
+            for point in gml_geometry.points {
+                // Convert Coordinate3D to Point2D: Coordinate3D -> Point3D -> Point2D
+                let point_3d: Point<f64, f64> = point.into();
+                points.push(point_3d.into());
+            }
         }
-        Self::MultiPolygon(MultiPolygon2D::from(polygons))
+
+        let has_polygons: u8 = if !polygons.is_empty() { 1 } else { 0 };
+        let has_line_strings: u8 = if !line_strings.is_empty() { 1 } else { 0 };
+        let has_points: u8 = if !points.is_empty() { 1 } else { 0 };
+        if has_polygons + has_line_strings + has_points > 1 {
+            tracing::warn!("CityGML feature contains multiple geometry types.");
+        }
+
+        // Return geometry based on what's available
+        if !polygons.is_empty() {
+            Self::MultiPolygon(MultiPolygon2D::from(polygons))
+        } else if !line_strings.is_empty() {
+            Self::MultiLineString(MultiLineString2D::new(line_strings))
+        } else if !points.is_empty() {
+            Self::MultiPoint(MultiPoint2D::from(points))
+        } else {
+            tracing::warn!("CityGML feature contains no supported geometries.");
+            Self::MultiPolygon(MultiPolygon2D::from(Vec::new()))
+        }
     }
 }
 
@@ -252,17 +520,34 @@ pub struct GmlGeometry {
     pub id: Option<String>,
     #[serde(rename = "type")]
     pub ty: GeometryType,
+    pub gml_trait: Option<GmlGeometryTrait>,
     pub lod: Option<u8>,
     pub pos: u32,
     pub len: u32,
     pub polygons: Vec<Polygon3D<f64>>,
     pub line_strings: Vec<LineString3D<f64>>,
+    pub points: Vec<Coordinate3D<f64>>,
     pub feature_id: Option<String>,
     pub feature_type: Option<String>,
-    pub composite_surfaces: Vec<GmlGeometry>,
 }
 
 impl GmlGeometry {
+    pub fn new(ty: GeometryType, lod: Option<u8>) -> Self {
+        Self {
+            id: None,
+            ty,
+            gml_trait: None,
+            lod,
+            pos: 0,
+            len: 0,
+            polygons: vec![],
+            line_strings: vec![],
+            points: vec![],
+            feature_id: None,
+            feature_type: None,
+        }
+    }
+
     pub fn name(&self) -> &str {
         self.ty.name()
     }
@@ -274,6 +559,9 @@ impl GmlGeometry {
         self.line_strings
             .iter_mut()
             .for_each(|line| line.transform_inplace(jgd2wgs));
+        self.points
+            .iter_mut()
+            .for_each(|point| point.transform_inplace(jgd2wgs));
     }
 
     pub fn transform_offset(&mut self, x: f64, y: f64, z: f64) {
@@ -283,6 +571,30 @@ impl GmlGeometry {
         self.line_strings
             .iter_mut()
             .for_each(|line| line.transform_offset(x, y, z));
+        self.points
+            .iter_mut()
+            .for_each(|point| point.transform_offset(x, y, z));
+    }
+
+    /// Transforms the X/Y coordinates of all geometries using the provided function.
+    /// The Z coordinate is passed through unchanged.
+    /// Returns an error if any transformation fails.
+    pub fn transform_horizontal<F, E>(&mut self, transform_fn: &F) -> Result<(), E>
+    where
+        F: Fn(f64, f64) -> Result<(f64, f64), E>,
+    {
+        for poly in &mut self.polygons {
+            poly.transform_horizontal(transform_fn)?;
+        }
+        for line in &mut self.line_strings {
+            line.transform_horizontal(transform_fn)?;
+        }
+        for point in &mut self.points {
+            let (new_x, new_y) = transform_fn(point.x, point.y)?;
+            point.x = new_x;
+            point.y = new_y;
+        }
+        Ok(())
     }
 }
 
@@ -365,7 +677,7 @@ impl GeometryType {
 impl Display for GmlGeometry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = format!("lod{}{:?}", self.lod.unwrap_or_default(), self.ty);
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 
@@ -375,14 +687,95 @@ impl From<nusamai_citygml::geometry::GeometryRef> for GmlGeometry {
         Self {
             id,
             ty: geometry.ty.into(),
+            gml_trait: GmlGeometryTrait::maybe_new(
+                geometry.property_name,
+                geometry.gml_geometry_type,
+            ),
             lod: Some(geometry.lod),
             pos: geometry.pos,
             len: geometry.len,
             polygons: Vec::new(),
             line_strings: Vec::new(),
+            points: Vec::new(),
             feature_id: geometry.feature_id,
             feature_type: geometry.feature_type,
-            composite_surfaces: Vec::new(),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GmlGeometryTrait {
+    pub property: PropertyType,
+    pub gml_geometry_type: GmlGeometryType,
+}
+
+impl GmlGeometryTrait {
+    pub fn maybe_new(
+        property: Option<PropertyType>,
+        gml_geometry_type: Option<GmlGeometryType>,
+    ) -> Option<Self> {
+        match (property, gml_geometry_type) {
+            (Some(prop), Some(ty)) => Some(Self {
+                property: prop,
+                gml_geometry_type: ty,
+            }),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reearth_flow_geometry::types::coordinate::Coordinate3D;
+    use reearth_flow_geometry::types::line_string::LineString3D;
+
+    fn minimal_polygon() -> Polygon3D<f64> {
+        Polygon3D::new(
+            LineString3D::new(vec![
+                Coordinate3D::new__(0.0, 0.0, 0.0),
+                Coordinate3D::new__(1.0, 0.0, 0.0),
+                Coordinate3D::new__(0.0, 1.0, 0.0),
+            ]),
+            vec![],
+        )
+    }
+
+    #[test]
+    fn test_filter_by_lod_with_mixed_geometry_types() {
+        // Regression test: filter_by_lod should handle mixed polygon + curve geometries
+        // without panicking on len vs polygons.len() mismatch
+        let surface = GmlGeometry {
+            polygons: vec![minimal_polygon(), minimal_polygon()],
+            len: 2,
+            ..GmlGeometry::new(GeometryType::Surface, Some(2))
+        };
+
+        let curve = GmlGeometry {
+            line_strings: vec![
+                LineString3D::new(vec![]),
+                LineString3D::new(vec![]),
+                LineString3D::new(vec![]),
+            ],
+            len: 3,
+            ..GmlGeometry::new(GeometryType::Curve, Some(2))
+        };
+
+        let geom = CityGmlGeometry {
+            gml_geometries: vec![surface, curve],
+            materials: vec![],
+            textures: vec![],
+            polygon_materials: vec![None, None],
+            polygon_textures: vec![None, None],
+            polygon_uvs: MultiPolygon2D::default(),
+        };
+
+        let filtered = geom.filter_by_lod(|g| g.lod == Some(2));
+
+        assert_eq!(filtered.gml_geometries.len(), 2);
+        assert_eq!(filtered.gml_geometries[0].ty, GeometryType::Surface);
+        assert_eq!(filtered.gml_geometries[0].pos, 0);
+        assert_eq!(filtered.gml_geometries[1].ty, GeometryType::Curve);
+        assert_eq!(filtered.gml_geometries[1].pos, 0);
     }
 }

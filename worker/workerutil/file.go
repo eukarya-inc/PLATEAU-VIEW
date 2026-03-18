@@ -13,7 +13,7 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
-var SkipDelete = fmt.Errorf("skip delete")
+var ErrSkipDelete = fmt.Errorf("skip delete")
 
 func DownloadAndConsumeZip(ctx context.Context, url, dir string, fn func(*zip.Reader, os.FileInfo) error) error {
 	return DownloadAndConsumeFile(ctx, url, dir, func(f *os.File, fi os.FileInfo) error {
@@ -110,7 +110,7 @@ func ConsumeFile(p string, fn func(f *os.File, fi os.FileInfo) error) (err error
 		if err == nil {
 			_ = os.Remove(p)
 		}
-		if err == SkipDelete {
+		if err == ErrSkipDelete {
 			err = nil
 		}
 	}()

@@ -1,2 +1,2 @@
-export { default as NodeContextMenu } from "./NodeContextMenu";
-export { default as SelectionContextMenu } from "./SelectionContextMenu";
+export { default as CanvasContextMenu } from "./CanvasContextMenu";
+export { default as Awareness } from "./Awareness";

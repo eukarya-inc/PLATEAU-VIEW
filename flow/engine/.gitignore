@@ -24,5 +24,14 @@ tools/czml/json/**
 output.png
 sample.xlsx
 metadata.json
+runtime/common/test.zip
+example.yml
 
 tmp/
+example.yml
+logs/
+/*.sh
+
+# Test-generated temporary files
+testing/data/testcases/quality-check/**/*.zip
+testing/data/results/

@@ -2,7 +2,9 @@ use std::{collections::HashMap, env, sync::Arc, time::Instant};
 
 use once_cell::sync::Lazy;
 use reearth_flow_action_log::factory::LoggerFactory;
-use reearth_flow_runtime::{event::EventHandler, node::NodeKind, shutdown};
+use reearth_flow_runtime::{
+    event::EventHandler, incremental::IncrementalRunConfig, node::NodeKind, shutdown,
+};
 use reearth_flow_state::State;
 use reearth_flow_storage::resolve::StorageResolver;
 use reearth_flow_types::workflow::Workflow;
@@ -25,6 +27,7 @@ static ASYNC_WORKER_NUM: Lazy<usize> = Lazy::new(|| {
 
 pub struct Runner;
 
+#[allow(clippy::too_many_arguments)]
 impl Runner {
     pub fn run(
         job_id: uuid::Uuid,
@@ -32,7 +35,9 @@ impl Runner {
         factories: HashMap<String, NodeKind>,
         logger_factory: Arc<LoggerFactory>,
         storage_resolver: Arc<StorageResolver>,
-        state: Arc<State>,
+        ingress_state: Arc<State>,
+        feature_state: Arc<State>,
+        incremental_run_config: Option<IncrementalRunConfig>,
     ) -> Result<(), crate::errors::Error> {
         Self::run_with_event_handler(
             job_id,
@@ -40,18 +45,23 @@ impl Runner {
             factories,
             logger_factory,
             storage_resolver,
-            state,
+            ingress_state,
+            feature_state,
+            incremental_run_config,
             vec![],
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run_with_event_handler(
         job_id: uuid::Uuid,
         workflow: Workflow,
         factories: HashMap<String, NodeKind>,
         logger_factory: Arc<LoggerFactory>,
         storage_resolver: Arc<StorageResolver>,
-        state: Arc<State>,
+        ingress_state: Arc<State>,
+        feature_state: Arc<State>,
+        incremental_run_config: Option<IncrementalRunConfig>,
         event_handlers: Vec<Arc<dyn EventHandler>>,
     ) -> Result<(), crate::errors::Error> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -60,8 +70,7 @@ impl Runner {
             .build()
             .map_err(|e| {
                 crate::errors::Error::RuntimeError(format!(
-                    "Failed to init tokio runtime with {:?}",
-                    e
+                    "Failed to init tokio runtime with {e:?}"
                 ))
             })?;
 
@@ -94,7 +103,9 @@ impl Runner {
                     factories,
                     shutdown_receiver,
                     storage_resolver,
-                    state,
+                    ingress_state,
+                    feature_state,
+                    incremental_run_config,
                     handlers,
                 )
                 .await
@@ -102,14 +113,17 @@ impl Runner {
 
         if let Err(e) = &result {
             error!(parent: &span, "Failed to workflow: {:?}", e);
+            info!(parent: &span, "Finish workflow = {:?} (failed), duration = {:?}", workflow_name.as_str(), start.elapsed());
+        } else {
+            info!(parent: &span, "Finish workflow = {:?} (success), duration = {:?}", workflow_name.as_str(), start.elapsed());
         }
-        info!(parent: &span, "Finish workflow = {:?}, duration = {:?}", workflow_name.as_str(), start.elapsed());
         result
     }
 }
 
 pub struct AsyncRunner;
 
+#[allow(clippy::too_many_arguments)]
 impl AsyncRunner {
     pub async fn run(
         job_id: uuid::Uuid,
@@ -117,7 +131,9 @@ impl AsyncRunner {
         factories: HashMap<String, NodeKind>,
         logger_factory: Arc<LoggerFactory>,
         storage_resolver: Arc<StorageResolver>,
-        state: Arc<State>,
+        ingress_state: Arc<State>,
+        feature_state: Arc<State>,
+        incremental_run_config: Option<IncrementalRunConfig>,
     ) -> Result<(), crate::errors::Error> {
         Self::run_with_event_handler(
             job_id,
@@ -125,19 +141,24 @@ impl AsyncRunner {
             factories,
             logger_factory,
             storage_resolver,
-            state,
+            ingress_state,
+            feature_state,
+            incremental_run_config,
             vec![],
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn run_with_event_handler(
         job_id: uuid::Uuid,
         workflow: Workflow,
         factories: HashMap<String, NodeKind>,
         logger_factory: Arc<LoggerFactory>,
         storage_resolver: Arc<StorageResolver>,
-        state: Arc<State>,
+        ingress_state: Arc<State>,
+        feature_state: Arc<State>,
+        incremental_run_config: Option<IncrementalRunConfig>,
         event_handlers: Vec<Arc<dyn EventHandler>>,
     ) -> Result<(), crate::errors::Error> {
         let start = Instant::now();
@@ -153,7 +174,7 @@ impl AsyncRunner {
         let workflow_name = workflow.name.clone();
         info!(parent: &span, "Start workflow = {:?}", workflow_name.as_str());
         let runtime = tokio::runtime::Handle::try_current()
-            .map_err(|e| crate::errors::Error::RuntimeError(format!("{:?}", e)))?;
+            .map_err(|e| crate::errors::Error::RuntimeError(format!("{e:?}")))?;
         let (_shutdown_sender, shutdown_receiver) = shutdown::new(&runtime);
         let orchestrator = Orchestrator::new(Arc::new(runtime));
         let mut handlers: Vec<Arc<dyn EventHandler>> = vec![Arc::new(LogEventHandler::new(
@@ -168,14 +189,18 @@ impl AsyncRunner {
                 factories,
                 shutdown_receiver,
                 storage_resolver,
-                state,
+                ingress_state,
+                feature_state,
+                incremental_run_config,
                 handlers,
             )
             .await;
         if let Err(e) = &result {
             error!("Failed to workflow: {:?}", e);
+            info!(parent: &span, "Finish workflow = {:?} (failed), duration = {:?}", workflow_name.as_str(), start.elapsed());
+        } else {
+            info!(parent: &span, "Finish workflow = {:?} (success), duration = {:?}", workflow_name.as_str(), start.elapsed());
         }
-        info!(parent: &span, "Finish workflow = {:?}, duration = {:?}", workflow_name.as_str(), start.elapsed());
         result
     }
 }

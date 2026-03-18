@@ -48,19 +48,19 @@ export const ControllersPage: FC = () => {
             <IconWrapper width={63}>
               <MouseLeftLegend />
             </IconWrapper>
-            <LegendText>トラッグ：画面移動</LegendText>
+            <LegendText>ドラッグ：画面移動</LegendText>
           </Legend>
           <Legend gap={3}>
             <IconWrapper width={63}>
               <MouseMiddleLegend />
             </IconWrapper>
-            <LegendText>トラッグ/回転：拡大縮小</LegendText>
+            <LegendText>ドラッグ/回転：拡大縮小</LegendText>
           </Legend>
           <Legend gap={3}>
             <IconWrapper width={63}>
               <MouseRightLegend />
             </IconWrapper>
-            <LegendText>トラッグ：視点移動</LegendText>
+            <LegendText>ドラッグ：視点移動</LegendText>
           </Legend>
         </LegendLine>
       </ItemWrapper>
@@ -79,8 +79,8 @@ export const ControllersPage: FC = () => {
             </IconWrapper>
             <LegendTextWrapper>
               <LegendText>クリック：対象建築物を選択</LegendText>
-              <LegendText>トラッグ：範囲内建築物を選択</LegendText>
-              <LegendText>Space + トラッグ：画面移動</LegendText>
+              <LegendText>ドラッグ：範囲内建築物を選択</LegendText>
+              <LegendText>Space + ドラッグ：画面移動</LegendText>
             </LegendTextWrapper>
           </Legend>
         </LegendLine>
@@ -94,8 +94,8 @@ export const ControllersPage: FC = () => {
           <Title>歩行者視点</Title>
         </LineWrapper>
         <LinkWrapper>
-          <Link disabled>
-            詳しいを見る <ArrowRightIcon />
+          <Link href="https://www.mlit.go.jp/plateau/learning/tpc02-1/#p2_3_2" target="_blank">
+            詳しい操作方法を見る <ArrowRightIcon />
           </Link>
         </LinkWrapper>
       </ItemWrapper>
@@ -108,8 +108,8 @@ export const ControllersPage: FC = () => {
           <Title>作図</Title>
         </LineWrapper>
         <LinkWrapper>
-          <Link disabled>
-            詳しいを見る <ArrowRightIcon />
+          <Link href="https://www.mlit.go.jp/plateau/learning/tpc02-2/#p2_7_3" target="_blank">
+            詳しい操作方法を見る <ArrowRightIcon />
           </Link>
         </LinkWrapper>
       </ItemWrapper>

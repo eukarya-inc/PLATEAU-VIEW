@@ -8,7 +8,7 @@ PROJ_NAME = "reearth-flow"
 [tasks.format]
 script = ['''
 #!/usr/bin/env bash -eux
-cargo fmt --all
+cargo fmt --all ${@:-}
 ''']
 
 [tasks.check]
@@ -23,10 +23,38 @@ script = ['''
 cargo clippy --workspace --all-targets --all-features --exclude plateau-gis-quality-checker -- -D warnings
 ''']
 
+[tasks.clippy-fix]
+script = ['''
+#!/usr/bin/env bash -eux
+cargo clippy --workspace --all-targets --all-features --exclude plateau-gis-quality-checker --fix ${@:-}
+''']
+
 [tasks.test]
 script = ['''
 #!/usr/bin/env bash -eux
-cargo test --workspace --all-targets --all-features --exclude plateau-gis-quality-checker
+cargo make test-rs ${@:-}
+cargo make test-qc ${@:-}
+cargo make test-conv ${@:-}
+''']
+
+[tasks.test-rs]
+script = ['''
+#!/usr/bin/env bash -eux
+cargo test --workspace --all-targets --all-features --exclude plateau-gis-quality-checker --exclude workflow-tests ${@:-}
+''']
+
+[tasks.test-qc]
+script = ['''
+#!/usr/bin/env bash -eux
+cargo test -p workflow-tests ${@:-}
+''']
+
+[tasks.test-conv]
+script = ['''
+#!/usr/bin/env bash -eux
+export RUST_LOG=warn,plateau_tiles_test=info # avoid engine info log flooding
+export PLATEAU_TILES_TEST_CLEANUP=1
+cargo run -p plateau-tiles-test --bin plateau-tiles-test ${@:-}
 ''']
 
 [tasks.doc]
@@ -89,6 +117,20 @@ done
 cargo run --package reearth-flow-cli -- doc-action > ./docs/mdbook/src/action.md
 ''']
 
+[tasks.check-doc-action]
+script = ['''
+#!/usr/bin/env bash -eux
+
+cargo make doc-action
+git add -N .
+line=$(git diff | wc -l)
+if [ "$line" -gt 0 ]; then
+  echo "Please run 'cargo make doc-action' and commit the changes."
+  git --no-pager diff
+  exit 1
+fi
+''']
+
 [tasks.doc-workflow]
 script = ['''
 #!/usr/bin/env bash -eux
@@ -105,7 +147,10 @@ mdbook serve docs/mdbook
 [tasks.format-taplo]
 script = ['''
 #!/usr/bin/env bash -eux
-taplo fmt
+if ! command -v taplo &> /dev/null; then
+  cargo install taplo-cli
+fi
+taplo fmt ${@:-}
 ''']
 
 [tasks.generate-cms-workflow]
@@ -126,4 +171,98 @@ for feature_type in "${FEATURES[@]}"; do
   fi
 done
 
+''']
+
+[tasks.generate-examples-cms-workflow]
+script = ['''
+#!/usr/bin/env bash -eux
+
+BASEPATH_CONV=./runtime/examples/fixture/workflow/data-convert/plateau4/
+WORKFLOW_CONV=(
+  "01-bldg"
+  "02-tran-rwy-trk-squr-wwy"
+  "03-frn-veg"
+  "04-luse-lsld"
+  "05-fld"
+  "06-area-urf"
+  "07-brid-tun-cons"
+  "08-ubld"
+  "09-unf"
+  "10-wtr"
+  "11-gen"
+)
+
+BASEPATH_QC=./runtime/examples/fixture/workflow/quality-check/plateau4/
+WORKFLOW_QC=(
+  "01-common"
+  "02-bldg"
+  "03-tran"
+  "04-frn-veg"
+  "05-luse-urf-area"
+  "06-fld"
+  "07-lsld"
+  "08-dem"
+  "09-brid-tun-ubld"
+  "10-cons"
+  "11-wtr"
+  "12-unf"
+  "13-gen"
+)
+
+process_workflows() {
+  local base_path="$1"
+  shift
+  for filename in "$@"; do
+    (
+      cd "$base_path"
+      yaml-include "${filename}/workflow.yml" > "${filename}.yml"
+    )
+  done
+}
+
+process_workflows "$BASEPATH_CONV" "${WORKFLOW_CONV[@]}"
+process_workflows "$BASEPATH_QC" "${WORKFLOW_QC[@]}"
+
+# Solar radiation workflow
+yaml-include ./runtime/examples/fixture/workflow/solar-radiation/workflow.yml > ./runtime/examples/fixture/workflow/solar-radiation/solar-radiation.yml
+''']
+
+[tasks.check-generate-examples-cms-workflow]
+script = ['''
+#!/usr/bin/env bash -eux
+
+cargo make generate-examples-cms-workflow
+git add -N .
+line=$(git diff | wc -l)
+if [ "$line" -gt 0 ]; then
+  echo "Please run 'cargo make generate-examples-cms-workflow' and commit the changes."
+  git --no-pager diff
+  exit 1
+fi
+''']
+
+[tasks.ci]
+script = ['''
+#!/usr/bin/env bash -eux
+
+# check
+cargo make check
+
+# rustfmt
+cargo make format --check
+
+# clippy
+cargo make clippy
+
+# taplo
+cargo make format-taplo --check
+
+# check generated schema
+cargo make check-doc-action
+
+# check generated cms workflows
+cargo make check-generate-examples-cms-workflow
+
+# run tests
+cargo make test
 ''']

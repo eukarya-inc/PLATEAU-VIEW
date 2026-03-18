@@ -7,8 +7,8 @@ import (
 )
 
 type Diff struct {
-	From                  id.PluginID
-	To                    id.PluginID
+	From                  plugin.ID
+	To                    plugin.ID
 	PropertySchemaDiff    property.SchemaDiff
 	PropertySchemaDeleted bool
 	DeletedExtensions     []DiffExtensionDeleted
@@ -16,15 +16,15 @@ type Diff struct {
 }
 
 type DiffExtensionUpdated struct {
-	ExtensionID        id.PluginExtensionID
+	ExtensionID        plugin.ExtensionID
 	OldType            plugin.ExtensionType
 	NewType            plugin.ExtensionType
 	PropertySchemaDiff property.SchemaDiff
 }
 
 type DiffExtensionDeleted struct {
-	ExtensionID      id.PluginExtensionID
-	PropertySchemaID id.PropertySchemaID
+	ExtensionID      plugin.ExtensionID
+	PropertySchemaID property.SchemaID
 }
 
 func DiffFrom(old, new Manifest) (d Diff) {

@@ -1,7 +1,14 @@
 import type { ApiResponse } from "./api";
 import type { Deployment } from "./deployment";
+import type { VarType } from "./workflowVariables";
 
 export type EventSourceType = "TIME_DRIVEN" | "API_DRIVEN";
+export enum TriggerOrderBy {
+  CreatedAt = "createdAt",
+  UpdatedAt = "updatedAt",
+  LastTriggered = "lastTriggered",
+  Description = "description",
+}
 
 export enum TimeIntervalEnum {
   EVERY_DAY = "EVERY_DAY",
@@ -11,6 +18,19 @@ export enum TimeIntervalEnum {
 }
 
 export type TimeInterval = keyof typeof TimeIntervalEnum;
+
+export type Variable = {
+  key: string;
+  type: VarType;
+  value: any;
+};
+
+export type TriggerVariableConfig = {
+  name: string;
+  type: VarType;
+  defaultValue: any;
+  deploymentDefault: any;
+};
 
 export type Trigger = {
   id: string;
@@ -24,6 +44,8 @@ export type Trigger = {
   authToken?: string;
   timeInterval?: TimeInterval;
   description?: string;
+  variables: Variable[];
+  enabled: boolean;
 };
 
 export type GetTriggers = {

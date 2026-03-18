@@ -3,12 +3,10 @@ package mongo
 import (
 	"context"
 	"errors"
-	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/reearth/reearth/server/internal/infrastructure/mongo/mongodoc"
-	"github.com/reearth/reearth/server/internal/usecase/gateway"
 	"github.com/reearth/reearth/server/internal/usecase/repo"
 	"github.com/reearth/reearth/server/pkg/builtin"
 	"github.com/reearth/reearth/server/pkg/id"
@@ -104,31 +102,6 @@ func (r *Plugin) Remove(ctx context.Context, id id.PluginID) error {
 	return r.client.RemoveOne(ctx, r.writeFilter(bson.M{"id": id.String()}))
 }
 
-func (r *Plugin) RemoveBySceneWithFile(ctx context.Context, sid id.SceneID, f gateway.File) error {
-	plugins, err := r.find(ctx, bson.M{"scene": sid.String()})
-	if err != nil {
-		return err
-	}
-
-	for _, pl := range plugins {
-
-		if p := builtin.GetPlugin(pl.ID()); p != nil {
-			continue
-		}
-
-		if err := f.RemovePlugin(ctx, pl.ID()); err != nil {
-			log.Print(err.Error())
-		}
-
-		if err := r.Remove(ctx, pl.ID()); err != nil {
-			log.Print(err.Error())
-		}
-
-	}
-
-	return nil
-}
-
 func (r *Plugin) find(ctx context.Context, filter any) ([]*plugin.Plugin, error) {
 	c := mongodoc.NewPluginConsumer(r.f.Readable)
 	if err := r.client.Find(ctx, filter, c); err != nil {
@@ -141,9 +114,6 @@ func (r *Plugin) findOne(ctx context.Context, filter any) (*plugin.Plugin, error
 	c := mongodoc.NewPluginConsumer(r.f.Readable)
 	if err := r.client.FindOne(ctx, filter, c); err != nil {
 		return nil, err
-	}
-	if len(c.Result) < 1 {
-		return nil, errors.New("plugin not found")
 	}
 	return c.Result[0], nil
 }

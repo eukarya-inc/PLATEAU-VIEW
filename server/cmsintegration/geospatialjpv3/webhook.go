@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
@@ -60,74 +60,76 @@ const publishFieldKey = "geospatialjp_publish"
 func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 	return func(req *http.Request, w *cmswebhook.Payload) error {
 		if req == nil || w == nil {
-			log.Debug("geospatialjpv3 webhook: invalid payload")
+			log.Debugf("geospatialjpv3 webhook: invalid payload")
 			return nil
 		}
 
 		ctx := req.Context()
+		ctx = log.WithPrefixMessage(ctx, "geospatialjpv3 webhook: ")
 
 		if !w.Operator.IsUser() && w.Operator.IsIntegrationBy(conf.CMSIntegration) {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid event operator: %+v", w.Operator)
+			log.Debugfc(ctx, "invalid event operator: %+v", w.Operator)
 			return nil
 		}
 
 		if w.Type != cmswebhook.EventItemUpdate {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid event type: %s", w.Type)
+			log.Debugfc(ctx, "invalid event type: %s", w.Type)
 			return nil
 		}
 
 		if w.ItemData == nil || w.ItemData.Item == nil || w.ItemData.Model == nil {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid event data: %+v", w.Data)
+			log.Debugfc(ctx, "invalid event data: %+v", w.Data)
 			return nil
 		}
 
 		if w.ItemData.Model.Key != modelKey {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid model id: %s, key: %s", w.ItemData.Item.ModelID, w.ItemData.Model.Key)
+			log.Debugfc(ctx, "invalid model id: %s, key: %s", w.ItemData.Item.ModelID, w.ItemData.Model.Key)
 			return nil
 		}
 
 		if !w.ItemData.Item.IsMetadata {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: not metadata item")
+			log.Debugfc(ctx, "not metadata item")
 			return nil
 		}
 
 		item, err := GetMainItemWithMetadata(ctx, h.cms, w.ItemData.Item)
 		if err != nil {
-			log.Errorfc(ctx, "geospatialjpv3 webhook: failed to get main item: %v", err)
+			log.Errorfc(ctx, "failed to get main item: %v", err)
 			return nil
 		}
 
 		// feature types
 		featureTypes, err := h.pcms.PlateauFeatureTypes(ctx)
-		featureTypeCodes := featureTypes.Codes()
 		if err != nil {
-			log.Errorfc(ctx, "geospatialjpv3 webhook: failed to get feature types: %v", err)
+			log.Errorfc(ctx, "failed to get feature types: %v", err)
 			return nil
 		}
+		featureTypeCodes := featureTypes.Codes()
+		featureTypeNames := featureTypes.CodeNameMap()
 
 		cityItem := CityItemFrom(item, featureTypeCodes)
 
 		if cityItem.ID == "" {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid city item id")
+			log.Debugfc(ctx, "invalid city item id")
 			return nil
 		}
 
 		if cityItem.CityCode == "" || cityItem.CityName == "" || cityItem.CityNameEn == "" {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: invalid city item")
+			log.Debugfc(ctx, "invalid city item")
 
 			comment := "この都市は都市名、都市コード、都市英名が入力されてないため、G空間情報センター公開に関する処理が行えません。"
 			if h.cms.CommentToItem(ctx, cityItem.ID, comment) != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to comment to city item: %v", err)
+				log.Errorfc(ctx, "failed to comment to city item: %v", err)
 			}
 			return nil
 		}
 
 		if cityItem.GeospatialjpData == "" || cityItem.GeospatialjpIndex == "" {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: no data and index id in city")
+			log.Debugfc(ctx, "no data and index id in city")
 
 			comment := "この都市はG空間情報センターに関するアイテムが正しくリンクされていないため、G空間情報センター公開に関する処理が行えません。"
 			if h.cms.CommentToItem(ctx, cityItem.ID, comment) != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to comment to city item: %v", err)
+				log.Errorfc(ctx, "failed to comment to city item: %v", err)
 			}
 			return nil
 		}
@@ -135,7 +137,7 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 		if cityItem.SpecVersionMajorInt() == 0 {
 			comment := "この都市は仕様書バージョンが正しく設定されていないため、G空間情報センター公開に関する処理が行えません。"
 			if h.cms.CommentToItem(ctx, cityItem.ID, comment) != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to comment to city item: %v", err)
+				log.Errorfc(ctx, "failed to comment to city item: %v", err)
 			}
 			return nil
 		}
@@ -143,34 +145,34 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 		if cityItem.YearInt() == 0 {
 			comment := "この都市は整備年度が正しく設定されていないため、G空間情報センター公開に関する処理が行えません。"
 			if h.cms.CommentToItem(ctx, cityItem.ID, comment) != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to comment to city item: %v", err)
+				log.Errorfc(ctx, "failed to comment to city item: %v", err)
 			}
 			return nil
 		}
 
-		log.Debugfc(ctx, "geospatialjpv3 webhook: %s", pp.Sprint(cityItem))
+		log.Debugfc(ctx, "%s", pp.Sprint(cityItem))
 
 		if b := getChangedBool(w, prepareFieldKey); b != nil && *b {
-			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes); err != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to prepare: %v", err)
+			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes, featureTypeNames); err != nil {
+				log.Errorfc(ctx, "failed to prepare: %v", err)
 			}
 		} else {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: prepare field not changed or not true")
+			log.Debugfc(ctx, "prepare field not changed or not true")
 		}
 
 		if b := getChangedBool(w, publishFieldKey); b != nil && *b {
 			if err := h.Publish(ctx, cityItem); err != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to publish: %v", err)
+				log.Errorfc(ctx, "failed to publish: %v", err)
 			}
 		} else if b != nil && !*b {
 			if err := h.Unpublish(ctx, cityItem); err != nil {
-				log.Errorfc(ctx, "geospatialjpv3 webhook: failed to unpublish: %v", err)
+				log.Errorfc(ctx, "failed to unpublish: %v", err)
 			}
 		} else {
-			log.Debugfc(ctx, "geospatialjpv3 webhook: publish field not changed or not true")
+			log.Debugfc(ctx, "publish field not changed or not true")
 		}
 
-		log.Debugfc(ctx, "geospatialjpv3 webhook: done")
+		log.Debugfc(ctx, "done")
 		return nil
 	}, nil
 }

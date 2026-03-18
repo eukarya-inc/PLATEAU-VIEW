@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	"github.com/reearth/reearthx/log"
 )
 

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogcommon"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
 )
@@ -18,6 +18,7 @@ const cityModel = "city"
 const relatedModel = "related"
 const genericModel = "generic"
 const sampleModel = "sample"
+const flowModel = "flow"
 const geospatialjpDataModel = "geospatialjp-data"
 const defaultSpec = "第3.2版"
 
@@ -189,6 +190,9 @@ type PlateauFeatureItem struct {
 	Group       string                    `json:"group,omitempty" cms:"group,text"`
 	MaxLOD      string                    `json:"maxlod,omitempty" cms:"maxlod,-"`
 	FeatureType string                    `json:"feature_type,omitempty" cms:"feature_type,select"`
+	// Priority: 同じ都市・同じベース地物型で複数アイテムがある場合、
+	// 優先度が高い(数値が大きい)方をデータカタログに表示。デフォルト: 0
+	Priority int `json:"priority,omitempty" cms:"priority,integer"`
 	// metadata
 	Sample bool     `json:"sample,omitempty" cms:"sample,bool,metadata"`
 	Status *cms.Tag `json:"status,omitempty" cms:"status,select,metadata"`

@@ -3,7 +3,7 @@ package gateway
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/pkg/task"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/task"
 )
 
 type TaskRunner interface {

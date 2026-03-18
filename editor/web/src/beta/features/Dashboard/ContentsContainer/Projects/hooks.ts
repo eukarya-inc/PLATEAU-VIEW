@@ -147,7 +147,7 @@ export default (workspaceId?: string) => {
   }, []);
 
   const handleProjectCreate = useCallback(
-    async (data: Pick<Project, "name" | "description">) => {
+    async (data: Pick<Project, "name" | "description" | "imageUrl">) => {
       if (!workspaceId) return;
       await useCreateProject(
         workspaceId,
@@ -155,6 +155,7 @@ export default (workspaceId?: string) => {
         data.name,
         true,
         data.description,
+        data.imageUrl || ""
       );
     },
     [useCreateProject, workspaceId]

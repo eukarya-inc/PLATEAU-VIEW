@@ -1,10 +1,10 @@
 package integrationapi
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/samber/lo"
 )
 
@@ -135,26 +135,19 @@ func ToValue(v *value.Value, sf *schema.Field, assets *AssetContext) any {
 }
 
 type AssetContext struct {
-	Map     asset.Map
-	Files   map[asset.ID]*asset.File
-	BaseURL func(a *asset.Asset) string
-	All     bool
+	Map   asset.Map
+	Files map[asset.ID]*asset.File
+	All   bool
 }
 
 func (c *AssetContext) ResolveAsset(id asset.ID) *Asset {
 	if c.Map != nil {
 		if a, ok := c.Map[id]; ok {
-			var aurl string
-			if c.BaseURL != nil {
-				aurl = c.BaseURL(a)
-			}
-
 			var f *asset.File
 			if c.Files != nil {
 				f = c.Files[id]
 			}
-
-			return NewAsset(a, f, aurl, c.All)
+			return NewAsset(a, f, c.All)
 		}
 	}
 	return nil

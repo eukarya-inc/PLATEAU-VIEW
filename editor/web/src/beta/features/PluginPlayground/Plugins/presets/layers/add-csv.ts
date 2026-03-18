@@ -36,12 +36,12 @@ const layerCsv = {
 };
 
 // Add the CSV layer from the URL to Re:Earth
-// Documentation on Layers "add" event: https://visualizer.developer.reearth.io/plugin-api/layers/#add
 reearth.layers.add(layerCsv);
 `
 };
 
 export const addCsv: PluginType = {
   id: "add-csv",
-  files: [yamlFile, widgetFile]
+  title: "Add CSV",
+  files: [widgetFile, yamlFile]
 };

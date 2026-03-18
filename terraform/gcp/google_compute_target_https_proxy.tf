@@ -38,6 +38,14 @@ resource "google_compute_target_https_proxy" "plateau_geo" {
   url_map         = google_compute_url_map.plateau_geo.id
 }
 
+resource "google_compute_target_https_proxy" "plateauview_tile" {
+  project = data.google_project.project.project_id
+
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.plateauview_tile.id}"
+  name            = "plateau-tile"
+  url_map         = google_compute_url_map.plateauview_tile.id
+}
+
 resource "google_compute_target_https_proxy" "plateau_api" {
   project = data.google_project.project.project_id
 

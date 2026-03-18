@@ -2,16 +2,17 @@ use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     fmt::{Debug, Formatter},
-    path::Path,
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
 };
 
+use bytes::Bytes;
+use fastxml::schema::fetcher::{DefaultFetcher, FileCachingFetcher, SchemaFetcher};
+use fastxml::schema::types::CompiledSchema;
+use fastxml::schema::xsd::{compile_schemas, register_builtin_types, SchemaResolver};
 use once_cell::sync::Lazy;
-use reearth_flow_common::{
-    uri::{Uri, PROTOCOL_SEPARATOR},
-    xml::{self, XmlDocument, XmlRoNamespace},
-};
+use reearth_flow_common::{uri::Uri, xml};
 use reearth_flow_runtime::{
     errors::BoxedError,
     event::EventHub,
@@ -19,72 +20,14 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::{Attribute, AttributeValue, Feature};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use reearth_flow_types::{AttributeValue, Feature};
 use serde_json::Value;
 
 use super::errors::{Result, XmlProcessorError};
+use super::types::{ValidationResult, ValidationType, XmlInputType, XmlValidatorParam};
 
 static SUCCESS_PORT: Lazy<Port> = Lazy::new(|| Port::new("success"));
 static FAILED_PORT: Lazy<Port> = Lazy::new(|| Port::new("failed"));
-
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
-struct ValidationResult {
-    error_type: String,
-    message: String,
-    line: Option<i32>,
-    col: Option<i32>,
-}
-
-impl ValidationResult {
-    fn new(error_type: &str, message: &str) -> Self {
-        ValidationResult {
-            error_type: error_type.to_string(),
-            message: message.to_string(),
-            line: None,
-            col: None,
-        }
-    }
-
-    fn new_with_line_and_col(
-        error_type: &str,
-        message: &str,
-        line: Option<i32>,
-        col: Option<i32>,
-    ) -> Self {
-        ValidationResult {
-            error_type: error_type.to_string(),
-            message: message.to_string(),
-            line,
-            col,
-        }
-    }
-}
-
-impl From<ValidationResult> for HashMap<String, AttributeValue> {
-    fn from(result: ValidationResult) -> Self {
-        let mut map = HashMap::new();
-        map.insert(
-            "errorType".to_string(),
-            AttributeValue::String(result.error_type),
-        );
-        map.insert(
-            "message".to_string(),
-            AttributeValue::String(result.message),
-        );
-        map.insert(
-            "line".to_string(),
-            AttributeValue::String(result.line.unwrap_or_default().to_string()),
-        );
-        map.insert(
-            "col".to_string(),
-            AttributeValue::String(result.col.unwrap_or_default().to_string()),
-        );
-        map
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct XmlValidatorFactory;
@@ -95,7 +38,7 @@ impl ProcessorFactory for XmlValidatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Validates XML content"
+        "Validates XML documents against XSD schemas with success/failure routing"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -124,14 +67,12 @@ impl ProcessorFactory for XmlValidatorFactory {
         let params: XmlValidatorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 XmlProcessorError::ValidatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 XmlProcessorError::ValidatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -143,41 +84,29 @@ impl ProcessorFactory for XmlValidatorFactory {
 
         let process = XmlValidator {
             params,
-            schema_store: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            schema_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
         };
         Ok(Box::new(process))
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-enum XmlInputType {
-    File,
-    Text,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-enum ValidationType {
-    Syntax,
-    SyntaxAndNamespace,
-    SyntaxAndSchema,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct XmlValidatorParam {
-    attribute: Attribute,
-    input_type: XmlInputType,
-    validation_type: ValidationType,
-}
-
-type SchemaStore = HashMap<Vec<(String, String)>, xml::XmlSchemaValidationContext>;
-
 #[derive(Clone)]
 pub struct XmlValidator {
     params: XmlValidatorParam,
-    schema_store: Arc<parking_lot::RwLock<SchemaStore>>,
+    /// Cache of compiled schemas keyed by sorted schema locations.
+    /// Shared across clones (threads) via Arc so that the ~27s compilation
+    /// cost is paid only once per unique set of schema locations.
+    schema_cache: Arc<parking_lot::RwLock<HashMap<String, Arc<CompiledSchema>>>>,
+}
+
+/// Build a deterministic cache key from schema locations.
+fn schema_cache_key(locations: &[(String, String)]) -> String {
+    let mut parts: Vec<String> = locations
+        .iter()
+        .map(|(ns, loc)| format!("{ns}={loc}"))
+        .collect();
+    parts.sort();
+    parts.join("|")
 }
 
 impl Debug for XmlValidator {
@@ -199,80 +128,65 @@ impl Processor for XmlValidator {
         fw: &ProcessorChannelForwarder,
     ) -> Result<(), BoxedError> {
         match self.params.validation_type {
-            ValidationType::Syntax => {
-                let feature = &ctx.feature;
-                let xml_content = self.get_xml_content(&ctx, feature)?;
-                let Ok(document) = xml::parse(xml_content) else {
-                    let mut feature = feature.clone();
-                    feature.attributes.insert(
-                        Attribute::new("xmlError"),
-                        AttributeValue::Array(vec![AttributeValue::Map(
-                            ValidationResult::new("SyntaxError", "Invalid document structure")
-                                .into(),
-                        )]),
-                    );
-                    fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                    return Ok(());
-                };
-                let Ok(_) = xml::get_root_node(&document) else {
-                    let mut feature = feature.clone();
-                    feature.attributes.insert(
-                        Attribute::new("xmlError"),
-                        AttributeValue::Array(vec![AttributeValue::Map(
-                            ValidationResult::new("SyntaxError", "Invalid document structure")
-                                .into(),
-                        )]),
-                    );
-                    fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                    return Ok(());
-                };
-                fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
-            }
-            ValidationType::SyntaxAndNamespace => {
-                let feature = &ctx.feature;
-                let xml_content = self.get_xml_content(&ctx, feature)?;
-                let document = match xml::parse(xml_content) {
-                    Ok(doc) => doc,
-                    Err(_) => {
-                        let mut feature = feature.clone();
-                        feature.attributes.insert(
-                            Attribute::new("xmlError"),
-                            AttributeValue::Array(vec![AttributeValue::Map(
-                                ValidationResult::new("SyntaxError", "Invalid document structure")
-                                    .into(),
-                            )]),
-                        );
-                        fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                        return Ok(());
-                    }
-                };
-                let root_node = match xml::get_root_readonly_node(&document) {
-                    Ok(node) => node,
-                    Err(_) => {
-                        let mut feature = feature.clone();
-                        feature.attributes.insert(
-                            Attribute::new("xmlError"),
-                            AttributeValue::Array(vec![AttributeValue::Map(
-                                ValidationResult::new("SyntaxError", "Invalid document structure")
-                                    .into(),
-                            )]),
-                        );
-                        fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                        return Ok(());
-                    }
-                };
-                let namespaces: Vec<XmlRoNamespace> = root_node
-                    .get_namespace_declarations()
-                    .into_iter()
-                    .map(|ns| ns.into())
-                    .collect::<Vec<_>>();
-                let result = recursive_check_namespace(root_node, &namespaces);
+            ValidationType::Syntax => self.validate_syntax_only(ctx, fw)?,
+            ValidationType::SyntaxAndNamespace => self.validate_syntax_and_namespace(ctx, fw)?,
+            ValidationType::SyntaxAndSchema => self.validate_syntax_and_schema(ctx, fw)?,
+        }
+        Ok(())
+    }
+
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
+        Ok(())
+    }
+
+    fn name(&self) -> &str {
+        "XMLValidator"
+    }
+}
+
+impl XmlValidator {
+    fn validate_syntax_only(
+        &self,
+        ctx: ExecutorContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<()> {
+        let feature = &ctx.feature;
+        let xml_content = self.get_xml_content(&ctx, feature)?;
+
+        let Ok(document) = xml::parse(xml_content) else {
+            Self::send_syntax_error(&ctx, fw, feature);
+            return Ok(());
+        };
+
+        let Ok(_) = xml::get_root_node(&document) else {
+            Self::send_syntax_error(&ctx, fw, feature);
+            return Ok(());
+        };
+
+        fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
+        Ok(())
+    }
+
+    fn validate_syntax_and_namespace(
+        &self,
+        ctx: ExecutorContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<()> {
+        let feature = &ctx.feature;
+        let xml_bytes = self.get_xml_content_bytes(&ctx, feature)?;
+
+        match Self::check_namespace_streaming(&xml_bytes) {
+            Ok(result) => {
                 if result.is_empty() {
                     fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
                 } else {
                     let mut feature = feature.clone();
-                    feature.attributes.insert(
-                        Attribute::new("xmlError"),
+                    feature.insert(
+                        "xmlError",
                         AttributeValue::Array(
                             result
                                 .into_iter()
@@ -283,67 +197,341 @@ impl Processor for XmlValidator {
                     fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
                 }
             }
-            ValidationType::SyntaxAndSchema => {
-                let feature = &ctx.feature;
-                let xml_content = self.get_xml_content(&ctx, feature)?;
-                let Ok(document) = xml::parse(xml_content) else {
-                    let mut feature = feature.clone();
-                    feature.attributes.insert(
-                        Attribute::new("xmlError"),
-                        AttributeValue::Array(vec![AttributeValue::Map(
-                            ValidationResult::new("SyntaxError", "Invalid document structure")
-                                .into(),
-                        )]),
-                    );
-                    fw.send(ctx.new_with_feature_and_port(feature.clone(), FAILED_PORT.clone()));
-                    return Ok(());
-                };
-                if let Ok(result) = self.check_schema(feature, &ctx, &document) {
-                    if result.is_empty() {
-                        fw.send(
-                            ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()),
-                        );
-                    } else {
-                        let mut feature = feature.clone();
-                        feature.attributes.insert(
-                            Attribute::new("xmlError"),
-                            AttributeValue::Array(
-                                result
-                                    .into_iter()
-                                    .map(|r| AttributeValue::Map(r.into()))
-                                    .collect::<Vec<_>>(),
-                            ),
-                        );
-                        fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                    }
-                    return Ok(());
+            Err(_) => {
+                Self::send_syntax_error(&ctx, fw, feature);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_syntax_and_schema(
+        &self,
+        ctx: ExecutorContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<()> {
+        let feature = &ctx.feature;
+        // Get XML as bytes for streaming validation (more memory efficient)
+        let xml_bytes = self.get_xml_content_bytes(&ctx, feature)?;
+
+        match self.check_schema_streaming(feature, &xml_bytes) {
+            Ok(result) => {
+                if result.is_empty() {
+                    fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
                 } else {
                     let mut feature = feature.clone();
-                    feature.attributes.insert(
-                        Attribute::new("xmlError"),
-                        AttributeValue::Array(vec![AttributeValue::Map(
-                            ValidationResult::new("SyntaxError", "Invalid document structure")
-                                .into(),
-                        )]),
+                    feature.insert(
+                        "xmlError",
+                        AttributeValue::Array(
+                            result
+                                .into_iter()
+                                .map(|r| AttributeValue::Map(r.into()))
+                                .collect::<Vec<_>>(),
+                        ),
                     );
                     fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
                 }
             }
+            Err(e) => {
+                let mut feature = feature.clone();
+                feature.insert(
+                    "xmlError",
+                    AttributeValue::Array(vec![AttributeValue::Map(
+                        ValidationResult::new(
+                            "SchemaError",
+                            &format!("Schema validation failed: {e}"),
+                        )
+                        .into(),
+                    )]),
+                );
+                fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
+            }
         }
+
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
-        Ok(())
+    fn get_xml_content(&self, ctx: &ExecutorContext, feature: &Feature) -> Result<String> {
+        match self.params.input_type {
+            XmlInputType::File => {
+                let uri = feature
+                    .attributes
+                    .get(&self.params.attribute)
+                    .ok_or(XmlProcessorError::Validator("Required Uri".to_string()))?;
+                let uri = match uri {
+                    AttributeValue::String(s) => Uri::from_str(s)
+                        .map_err(|_| XmlProcessorError::Validator("Invalid URI".to_string()))?,
+                    _ => {
+                        return Err(XmlProcessorError::Validator(
+                            "Invalid Attribute".to_string(),
+                        ))
+                    }
+                };
+                let storage = ctx
+                    .storage_resolver
+                    .resolve(&uri)
+                    .map_err(|e| XmlProcessorError::Validator(format!("{e:?}")))?;
+                let content = storage
+                    .get_sync(uri.path().as_path())
+                    .map_err(|e| XmlProcessorError::Validator(format!("{e:?}")))?;
+                String::from_utf8(content.to_vec())
+                    .map_err(|_| XmlProcessorError::Validator("Invalid UTF-8".to_string()))
+            }
+            XmlInputType::Text => {
+                let content = feature
+                    .attributes
+                    .get(&self.params.attribute)
+                    .ok_or(XmlProcessorError::Validator("No Attribute".to_string()))?;
+                let content = match content {
+                    AttributeValue::String(s) => s,
+                    _ => {
+                        return Err(XmlProcessorError::Validator(
+                            "Invalid Attribute".to_string(),
+                        ))
+                    }
+                };
+                Ok(content.to_string())
+            }
+        }
     }
 
-    fn name(&self) -> &str {
-        "XMLValidator"
+    /// Get XML content as bytes for streaming validation (more memory efficient)
+    fn get_xml_content_bytes(&self, ctx: &ExecutorContext, feature: &Feature) -> Result<Bytes> {
+        let result = match self.params.input_type {
+            XmlInputType::File => {
+                let uri = feature
+                    .attributes
+                    .get(&self.params.attribute)
+                    .ok_or(XmlProcessorError::Validator("Required Uri".to_string()))?;
+                let uri = match uri {
+                    AttributeValue::String(s) => Uri::from_str(s)
+                        .map_err(|_| XmlProcessorError::Validator("Invalid URI".to_string()))?,
+                    _ => {
+                        return Err(XmlProcessorError::Validator(
+                            "Invalid Attribute".to_string(),
+                        ))
+                    }
+                };
+                let storage = ctx
+                    .storage_resolver
+                    .resolve(&uri)
+                    .map_err(|e| XmlProcessorError::Validator(format!("{e:?}")))?;
+                let content = storage
+                    .get_sync(uri.path().as_path())
+                    .map_err(|e| XmlProcessorError::Validator(format!("{e:?}")))?;
+                Ok(content)
+            }
+            XmlInputType::Text => {
+                let content = feature
+                    .attributes
+                    .get(&self.params.attribute)
+                    .ok_or(XmlProcessorError::Validator("No Attribute".to_string()))?;
+                let content = match content {
+                    AttributeValue::String(s) => s,
+                    _ => {
+                        return Err(XmlProcessorError::Validator(
+                            "Invalid Attribute".to_string(),
+                        ))
+                    }
+                };
+                Ok(Bytes::from(content.as_bytes().to_vec()))
+            }
+        };
+        result
     }
-}
 
-impl XmlValidator {
-    fn get_base_path(&self, feature: &Feature) -> Option<Uri> {
+    fn send_syntax_error(ctx: &ExecutorContext, fw: &ProcessorChannelForwarder, feature: &Feature) {
+        let mut feature = feature.clone();
+        feature.insert(
+            "xmlError",
+            AttributeValue::Array(vec![AttributeValue::Map(
+                ValidationResult::new("SyntaxError", "Invalid document structure").into(),
+            )]),
+        );
+        fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
+    }
+
+    fn check_namespace_streaming(xml_bytes: &[u8]) -> Result<Vec<ValidationResult>> {
+        use quick_xml::events::Event;
+        use quick_xml::Reader;
+
+        let mut reader = Reader::from_reader(xml_bytes);
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut root_prefixes: HashSet<String> = HashSet::new();
+        let mut has_default_ns = false;
+        let mut is_root = true;
+        let mut errors: Vec<ValidationResult> = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                    if is_root {
+                        for attr in e.attributes().flatten() {
+                            let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
+                            if let Some(prefix) = key.strip_prefix("xmlns:") {
+                                root_prefixes.insert(prefix.to_string());
+                            } else if key == "xmlns" {
+                                has_default_ns = true;
+                            }
+                        }
+                        is_root = false;
+                    }
+                    let name_bytes = e.name();
+                    let name = std::str::from_utf8(name_bytes.as_ref()).unwrap_or("");
+                    if let Some((prefix, _)) = name.split_once(':') {
+                        if !root_prefixes.contains(prefix) {
+                            errors.push(ValidationResult::new(
+                                "NamespaceError",
+                                &format!("No namespace declaration for {prefix}"),
+                            ));
+                        }
+                    } else if !has_default_ns {
+                        errors.push(ValidationResult::new(
+                            "NamespaceError",
+                            "No namespace declaration",
+                        ));
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(XmlProcessorError::Validator(format!(
+                        "Failed to parse XML: {e}"
+                    )));
+                }
+            }
+            buf.clear();
+        }
+
+        Ok(errors)
+    }
+
+    /// Streaming schema validation.
+    fn check_schema_streaming(
+        &self,
+        feature: &Feature,
+        xml_bytes: &[u8],
+    ) -> Result<Vec<ValidationResult>> {
+        use fastxml::schema::validator::StreamValidator;
+
+        // Determine base directory for relative schema resolution
+        let base_dir = self.get_xml_base_url(feature).and_then(|uri| {
+            uri.path()
+                .to_str()
+                .map(PathBuf::from)
+                .filter(|p| p.exists())
+        });
+
+        // --- Step 1: Extract schema locations (streaming, no DOM) ---
+        let schema_locations =
+            fastxml::parser::parse_schema_locations_from_reader(std::io::Cursor::new(xml_bytes))
+                .map_err(|e| {
+                    XmlProcessorError::Validator(format!("Failed to extract schema locations: {e}"))
+                })?;
+
+        if schema_locations.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // --- Step 2: Fetch + resolve + compile schemas (with cache) ---
+        let cache_key = schema_cache_key(&schema_locations);
+
+        // Check cache first
+        let cached = {
+            let cache = self.schema_cache.read();
+            cache.get(&cache_key).cloned()
+        };
+
+        let compiled = if let Some(compiled) = cached {
+            compiled
+        } else {
+            // Cache miss - compile from scratch
+            let inner = match &base_dir {
+                Some(dir) => DefaultFetcher::with_base_dir(dir),
+                None => DefaultFetcher::new(),
+            };
+            let fetcher = FileCachingFetcher::new(inner).map_err(|e| {
+                XmlProcessorError::Validator(format!("Failed to create caching fetcher: {e:?}"))
+            })?;
+
+            let mut resolver = SchemaResolver::new(&fetcher);
+            for (_namespace, location) in &schema_locations {
+                // Per W3C spec, xsi:schemaLocation URLs are hints.
+                // Remote schemas that are unreachable (404, DNS failure, etc.)
+                // are skipped. This may cause false positives if the skipped
+                // schema defines types used elsewhere.
+                let is_remote = location.starts_with("http://") || location.starts_with("https://");
+
+                let fetch_result = match fetcher.fetch(location) {
+                    Ok(r) => r,
+                    Err(e) if is_remote => {
+                        tracing::warn!(url = %location, error = ?e, "Skipping unreachable remote schema");
+                        continue;
+                    }
+                    Err(e) => {
+                        return Err(XmlProcessorError::Validator(format!(
+                            "Failed to fetch schema {location}: {e:?}"
+                        )));
+                    }
+                };
+
+                let base_uri = &fetch_result.final_url;
+                match resolver.resolve_entry(&fetch_result.content, base_uri) {
+                    Ok(()) => {}
+                    Err(e) if is_remote => {
+                        tracing::warn!(url = %location, error = ?e, "Skipping unresolvable remote schema");
+                        continue;
+                    }
+                    Err(e) => {
+                        return Err(XmlProcessorError::Validator(format!(
+                            "Failed to resolve schema imports for {location}: {e:?}"
+                        )));
+                    }
+                }
+            }
+            let all_schemas = resolver.take_all_schemas();
+
+            let mut compiled = compile_schemas(all_schemas).map_err(|e| {
+                XmlProcessorError::Validator(format!("Failed to compile schemas: {e:?}"))
+            })?;
+            register_builtin_types(&mut compiled);
+            let compiled = Arc::new(compiled);
+
+            // Store in cache
+            {
+                let mut cache = self.schema_cache.write();
+                cache.insert(cache_key, Arc::clone(&compiled));
+            }
+
+            compiled
+        };
+
+        // --- Step 3: Streaming validation ---
+        let reader = std::io::BufReader::new(std::io::Cursor::new(xml_bytes));
+        let validator = StreamValidator::new(Arc::clone(&compiled));
+        let errors = validator.validate(reader).map_err(|e| {
+            XmlProcessorError::Validator(format!("Streaming validation failed: {e:?}"))
+        })?;
+
+        // Convert errors to ValidationResult and deduplicate
+        let validation_results: HashSet<_> = errors
+            .into_iter()
+            .map(|err| {
+                ValidationResult::new_with_line_and_col(
+                    "SchemaError",
+                    &err.message,
+                    err.line().map(|l| l as i32),
+                    err.column().map(|c| c as i32),
+                )
+            })
+            .collect();
+
+        Ok(validation_results.into_iter().collect())
+    }
+
+    fn get_xml_base_url(&self, feature: &Feature) -> Option<Uri> {
         match self.params.input_type {
             XmlInputType::File => feature
                 .attributes
@@ -367,169 +555,598 @@ impl XmlValidator {
             XmlInputType::Text => None,
         }
     }
-
-    fn get_xml_content(&self, ctx: &ExecutorContext, feature: &Feature) -> Result<String> {
-        match self.params.input_type {
-            XmlInputType::File => {
-                let uri = feature
-                    .attributes
-                    .get(&self.params.attribute)
-                    .ok_or(XmlProcessorError::Validator("Required Uri".to_string()))?;
-                let uri = match uri {
-                    AttributeValue::String(s) => Uri::from_str(s)
-                        .map_err(|_| XmlProcessorError::Validator("Invalid URI".to_string()))?,
-                    _ => {
-                        return Err(XmlProcessorError::Validator(
-                            "Invalid Attribute".to_string(),
-                        ))
-                    }
-                };
-                let storage = ctx
-                    .storage_resolver
-                    .resolve(&uri)
-                    .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?;
-                let content = storage
-                    .get_sync(uri.path().as_path())
-                    .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?;
-                String::from_utf8(content.to_vec())
-                    .map_err(|_| XmlProcessorError::Validator("Invalid UTF-8".to_string()))
-            }
-            XmlInputType::Text => {
-                let content = feature
-                    .attributes
-                    .get(&self.params.attribute)
-                    .ok_or(XmlProcessorError::Validator("No Attribute".to_string()))?;
-                let content = match content {
-                    AttributeValue::String(s) => s,
-                    _ => {
-                        return Err(XmlProcessorError::Validator(
-                            "Invalid Attribute".to_string(),
-                        ))
-                    }
-                };
-                Ok(content.to_string())
-            }
-        }
-    }
-
-    fn check_schema(
-        &self,
-        feature: &Feature,
-        _ctx: &ExecutorContext,
-        document: &XmlDocument,
-    ) -> Result<Vec<ValidationResult>> {
-        let schema_locations = xml::parse_schema_locations(document)
-            .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?;
-
-        let result = if !self.schema_store.read().contains_key(&schema_locations) {
-            let mut combined_schema = String::from(
-                r#"<?xml version="1.0" encoding="UTF-8"?>
-                <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">"#,
-            );
-            for (ns, location) in schema_locations.iter() {
-                let target = if !location.contains(PROTOCOL_SEPARATOR) && !location.starts_with('/')
-                {
-                    let base_path = self.get_base_path(feature);
-                    let Some(base_path) = base_path else {
-                        continue;
-                    };
-                    let joined = base_path.join(Path::new(location));
-                    let Ok(joined) = joined else {
-                        continue;
-                    };
-                    joined.path().to_str().unwrap().to_string()
-                } else {
-                    location.clone()
-                };
-                if target.is_empty() {
-                    continue;
-                }
-                combined_schema.push_str(&format!(
-                    r#"<xs:import namespace="{}" schemaLocation="{}"/>"#,
-                    ns, target
-                ));
-            }
-            combined_schema.push_str("</xs:schema>");
-            let schema_context =
-                xml::create_xml_schema_validation_context_from_buffer(combined_schema.as_bytes())
-                    .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?;
-
-            let result = xml::validate_document_by_schema_context(document, &schema_context)
-                .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?;
-            self.schema_store
-                .write()
-                .insert(schema_locations, schema_context);
-            result
-        } else {
-            xml::validate_document_by_schema_context(
-                document,
-                self.schema_store.read().get(&schema_locations).unwrap(),
-            )
-            .map_err(|e| XmlProcessorError::Validator(format!("{:?}", e)))?
-        };
-        let result = result
-            .into_iter()
-            .map(|err| {
-                ValidationResult::new_with_line_and_col(
-                    "SchemaError",
-                    err.message.unwrap_or_default().as_str(),
-                    err.line,
-                    err.col,
-                )
-            })
-            .collect::<Vec<_>>();
-        let set: HashSet<_> = result.into_iter().collect();
-        let vec_without_duplicates: Vec<_> = set.into_iter().collect();
-        Ok(vec_without_duplicates)
-    }
 }
 
-fn recursive_check_namespace(
-    node: xml::XmlRoNode,
-    namespaces: &Vec<XmlRoNamespace>,
-) -> Vec<ValidationResult> {
-    let mut result = Vec::new();
-    match node.get_namespace() {
-        Some(ns) => {
-            if !namespaces.iter().any(|n| n.get_prefix() == ns.get_prefix()) {
-                result.push(ValidationResult::new(
-                    "NamespaceError",
-                    format!("No namespace declaration for {}", ns.get_prefix()).as_str(),
-                ));
-            }
-        }
-        None => {
-            let tag = xml::get_readonly_node_tag(&node);
-            if tag.contains(':') {
-                let prefix = tag.split(':').collect::<Vec<&str>>()[0];
-                if !namespaces.iter().any(|n| n.get_prefix() == prefix) {
-                    result.push(ValidationResult::new(
-                        "NamespaceError",
-                        format!("No namespace declaration for {}", prefix).as_str(),
-                    ));
-                }
-            } else {
-                result.push(ValidationResult::new(
-                    "NamespaceError",
-                    "No namespace declaration",
-                ));
-            }
-        }
-    };
-    let child_node = node.get_child_nodes();
-    let child_nodes = child_node
-        .into_iter()
-        .filter(|n| {
-            if let Some(typ) = n.get_type() {
-                typ == xml::XmlNodeType::ElementNode
-            } else {
-                false
-            }
-        })
-        .collect::<Vec<_>>();
-    for child in child_nodes {
-        let child_result = recursive_check_namespace(child, namespaces);
-        result.extend(child_result);
+#[cfg(test)]
+mod tests {
+    use std::{path::Path, sync::Arc};
+
+    use super::*;
+    use crate::tests::utils;
+    use indexmap::IndexMap;
+    use reearth_flow_runtime::forwarder::{NoopChannelForwarder, ProcessorChannelForwarder};
+    use reearth_flow_types::{Attribute, AttributeValue, Feature, Geometry};
+
+    #[test]
+    fn test_xml_validator_syntax_validation() {
+        let xml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<root>
+    <element>test</element>
+</root>"#;
+
+        let (port, _features) = run_validator_test(xml_content, ValidationType::Syntax);
+        assert_eq!(port, *SUCCESS_PORT, "Should output to success port");
     }
-    result
+
+    #[test]
+    fn test_xml_validator_invalid_syntax() {
+        let xml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<root>
+    <element>test</element>
+    <unclosed_tag>
+</root>"#;
+
+        let (port, features) = run_validator_test(xml_content, ValidationType::Syntax);
+        assert_eq!(
+            port, *FAILED_PORT,
+            "Should output to failed port for invalid XML"
+        );
+
+        // Verify error information is present
+        match features[0].attributes.get(&Attribute::new("xmlError")) {
+            Some(AttributeValue::Array(errors)) => {
+                assert!(
+                    !errors.is_empty(),
+                    "Should have validation error information"
+                );
+                match errors.first() {
+                    Some(AttributeValue::Map(error_map)) => {
+                        assert!(
+                            error_map.contains_key("errorType"),
+                            "Should have error type"
+                        );
+                        assert!(
+                            error_map.contains_key("message"),
+                            "Should have error message"
+                        );
+                    }
+                    _ => panic!("Expected error map in first array element"),
+                }
+            }
+            _ => panic!("Should have xmlError attribute with validation errors"),
+        }
+    }
+
+    #[test]
+    fn test_xml_validator_malformed_xml() {
+        let xml_content = r#"This is not XML at all!
+<random>unclosed tag
+&invalid;entity;
+<>"#;
+
+        let (port, features) = run_validator_test(xml_content, ValidationType::Syntax);
+        assert_eq!(
+            port, *FAILED_PORT,
+            "Should output to failed port for malformed XML"
+        );
+
+        // Verify error information is present
+        match features[0].attributes.get(&Attribute::new("xmlError")) {
+            Some(AttributeValue::Array(errors)) => {
+                assert!(
+                    !errors.is_empty(),
+                    "Should have validation error information"
+                );
+                match errors.first() {
+                    Some(AttributeValue::Map(error_map)) => {
+                        match error_map.get("errorType") {
+                            Some(AttributeValue::String(error_type)) => {
+                                assert_eq!(error_type, "SyntaxError", "Should be syntax error");
+                            }
+                            _ => panic!("Expected errorType to be a string"),
+                        }
+                        match error_map.get("message") {
+                            Some(AttributeValue::String(message)) => {
+                                assert_eq!(
+                                    message, "Invalid document structure",
+                                    "Should have proper error message"
+                                );
+                            }
+                            _ => panic!("Expected message to be a string"),
+                        }
+                    }
+                    _ => panic!("Expected error map in first array element"),
+                }
+            }
+            _ => panic!("Should have xmlError attribute with validation errors"),
+        }
+    }
+
+    #[test]
+    fn test_xml_validator_missing_local_schema() {
+        let xml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://example.com/schema ./test-schema.xsd">
+    <element>test</element>
+</root>"#;
+
+        let (port, features) = run_validator_test(xml_content, ValidationType::SyntaxAndSchema);
+
+        // Since local schema file doesn't exist, this should fail
+        assert_eq!(
+            port, *FAILED_PORT,
+            "Should output to failed port for missing schema"
+        );
+
+        // Verify error information is present
+        match features[0].attributes.get(&Attribute::new("xmlError")) {
+            Some(AttributeValue::Array(errors)) => {
+                assert!(
+                    !errors.is_empty(),
+                    "Should have validation error information"
+                );
+            }
+            _ => panic!("Should have xmlError attribute with validation errors"),
+        }
+    }
+
+    #[test]
+    fn test_xml_validator_in_async_context() {
+        // Verify that lazy initialization prevents panic when creating reqwest::blocking::Client in async context
+        use reearth_flow_eval_expr::engine::Engine;
+        use reearth_flow_runtime::{
+            event::EventHub,
+            executor_operation::{ExecutorContext, NodeContext},
+            forwarder::{NoopChannelForwarder, ProcessorChannelForwarder},
+            kvs::create_kv_store,
+            node::ProcessorFactory,
+        };
+        use reearth_flow_storage::resolve::StorageResolver;
+
+        // Create a runtime to simulate the actual execution environment
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        // Test that XmlValidator can be created and executed within runtime.block_on
+        runtime.block_on(async {
+            let factory = XmlValidatorFactory {};
+
+            // Create required dependencies for NodeContext
+            let expr_engine = Arc::new(Engine::new());
+            let storage_resolver = Arc::new(StorageResolver::new());
+            let kv_store = Arc::new(create_kv_store());
+            let event_hub = EventHub::new(1024);
+
+            let ctx = NodeContext::new(
+                expr_engine.clone(),
+                storage_resolver.clone(),
+                kv_store.clone(),
+                event_hub.clone(),
+            );
+
+            let mut with = HashMap::new();
+            with.insert(
+                "attribute".to_string(),
+                serde_json::Value::String("xml_content".to_string()),
+            );
+            with.insert(
+                "inputType".to_string(),
+                serde_json::Value::String("text".to_string()),
+            );
+            with.insert(
+                "validationType".to_string(),
+                serde_json::Value::String("syntaxAndSchema".to_string()),
+            );
+
+            // This should not panic with our lazy initialization
+            let result = factory.build(ctx, event_hub, "xmlValidator".to_string(), Some(with));
+
+            assert!(
+                result.is_ok(),
+                "Should be able to create XmlValidator in async context"
+            );
+
+            let mut processor = result.unwrap();
+
+            // Create a feature with XML content that includes HTTPS schema reference
+            let mut feature = Feature::new_with_attributes(IndexMap::new());
+            feature.insert(
+                Attribute::new("xml_content"),
+                AttributeValue::String(
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+                    <note xmlns="http://example.com/note"
+                          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                          xsi:schemaLocation="http://example.com/note https://raw.githubusercontent.com/reearth/reearth-flow/main/engine/runtime/action-processor/fixtures/xml/simple_note_schema.xsd">
+                      <to>Tove</to>
+                      <from>Jani</from>
+                      <heading>Reminder</heading>
+                      <body>Don't forget me this weekend!</body>
+                    </note>"#.to_string()
+                )
+            );
+
+            // Execute the processor in spawn_blocking to simulate real runtime behavior
+            let handle = tokio::task::spawn_blocking(move || {
+                let exec_ctx = ExecutorContext::new(
+                    feature,
+                    DEFAULT_PORT.clone(),
+                    expr_engine,
+                    storage_resolver,
+                    kv_store,
+                    EventHub::new(1024),
+                );
+                let fw = ProcessorChannelForwarder::Noop(NoopChannelForwarder::default());
+
+                // This should not panic - HTTP client creation happens here in blocking context
+                let result = processor.process(exec_ctx, &fw);
+
+                (result, fw)
+            });
+
+            let (process_result, fw) = handle.await.unwrap();
+
+            assert!(process_result.is_ok(), "Processing should complete without panic");
+
+            // Check that we received output
+            match &fw {
+                ProcessorChannelForwarder::Noop(noop_fw) => {
+                    let send_ports = noop_fw.send_ports.lock().unwrap();
+                    assert!(!send_ports.is_empty(), "Should have sent output");
+
+                    // The output should be on either success or failed port
+                    assert!(
+                        send_ports[0] == *SUCCESS_PORT || send_ports[0] == *FAILED_PORT,
+                        "Should output to success or failed port"
+                    );
+                }
+                _ => panic!("Expected Noop forwarder for testing"),
+            }
+        });
+    }
+
+    #[test]
+    fn test_xml_validator_schema_unreachable_url_should_not_error() {
+        // xsi:schemaLocation URLs are hints per W3C spec.
+        // When a remote schema URL is unreachable (404, etc.), the validator
+        // should skip it and succeed instead of routing to the failed port.
+        let xml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns="http://example.com/test"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://example.com/test http://example.invalid/nonexistent.xsd">
+    <element>test</element>
+</root>"#;
+
+        let (port, _features) = run_validator_test(xml_content, ValidationType::SyntaxAndSchema);
+        assert_eq!(
+            port, *SUCCESS_PORT,
+            "Should succeed when remote schema URL is unreachable"
+        );
+    }
+
+    // Regression test for L02 false positive:
+    // "element 'bldg:opening' is not declared in schema" is incorrectly reported
+    // for valid PLATEAU CityGML files. The root cause is that check_schema_streaming
+    // creates a new SchemaResolver per xsi:schemaLocation entry, producing duplicate
+    // schemas that corrupt the type-children cache and cause WallSurfaceType to lose
+    // the inherited 'opening' element from AbstractBoundarySurfaceType.
+    #[test]
+    fn test_xml_validator_bldg_opening_false_positive_l02() {
+        init_tracing();
+        // Minimal valid PLATEAU CityGML with bldg:opening inside WallSurface.
+        // The header and namespace declarations are copied from real data that
+        // triggered the false positive (53394509_bldg_6697_op.gml).
+        // Multiple schemaLocation entries are required to trigger the bug.
+        let gml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<core:CityModel
+    xmlns:app="http://www.opengis.net/citygml/appearance/2.0"
+    xmlns:bldg="http://www.opengis.net/citygml/building/2.0"
+    xmlns:brid="http://www.opengis.net/citygml/bridge/2.0"
+    xmlns:core="http://www.opengis.net/citygml/2.0"
+    xmlns:dem="http://www.opengis.net/citygml/relief/2.0"
+    xmlns:frn="http://www.opengis.net/citygml/cityfurniture/2.0"
+    xmlns:gen="http://www.opengis.net/citygml/generics/2.0"
+    xmlns:gml="http://www.opengis.net/gml"
+    xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0"
+    xmlns:luse="http://www.opengis.net/citygml/landuse/2.0"
+    xmlns:pbase="http://www.opengis.net/citygml/profiles/base/2.0"
+    xmlns:sch="http://www.ascc.net/xml/schematron"
+    xmlns:smil20="http://www.w3.org/2001/SMIL20/"
+    xmlns:smil20lang="http://www.w3.org/2001/SMIL20/Language"
+    xmlns:tex="http://www.opengis.net/citygml/texturedsurface/2.0"
+    xmlns:tran="http://www.opengis.net/citygml/transportation/2.0"
+    xmlns:tun="http://www.opengis.net/citygml/tunnel/2.0"
+    xmlns:uro="https://www.geospatial.jp/iur/uro/3.2"
+    xmlns:veg="http://www.opengis.net/citygml/vegetation/2.0"
+    xmlns:wtr="http://www.opengis.net/citygml/waterbody/2.0"
+    xmlns:xAL="urn:oasis:names:tc:ciq:xsdschema:xAL:2.0"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        https://www.geospatial.jp/iur/uro/3.2 ../../schemas/iur/uro/3.2/urbanObject.xsd
+        http://www.opengis.net/citygml/building/2.0 http://schemas.opengis.net/citygml/building/2.0/building.xsd
+        http://www.opengis.net/citygml/2.0 http://schemas.opengis.net/citygml/2.0/cityGMLBase.xsd
+        http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/base/gml.xsd
+        http://www.opengis.net/citygml/appearance/2.0 http://schemas.opengis.net/citygml/appearance/2.0/appearance.xsd
+        http://www.opengis.net/citygml/generics/2.0 http://schemas.opengis.net/citygml/generics/2.0/generics.xsd
+    ">
+    <gml:boundedBy>
+        <gml:Envelope srsName="http://www.opengis.net/def/crs/EPSG/0/6697" srsDimension="3">
+            <gml:lowerCorner>35.6 139.7 0</gml:lowerCorner>
+            <gml:upperCorner>35.7 139.8 100</gml:upperCorner>
+        </gml:Envelope>
+    </gml:boundedBy>
+    <core:cityObjectMember>
+        <bldg:Building gml:id="bldg_00000000-0000-0000-0000-000000000001">
+            <core:creationDate>2025-03-01</core:creationDate>
+            <bldg:measuredHeight uom="m">10.0</bldg:measuredHeight>
+            <bldg:lod0RoofEdge>
+                <gml:MultiSurface>
+                    <gml:surfaceMember>
+                        <gml:Polygon>
+                            <gml:exterior>
+                                <gml:LinearRing>
+                                    <gml:posList>35.6 139.7 0 35.6 139.71 0 35.61 139.71 0 35.61 139.7 0 35.6 139.7 0</gml:posList>
+                                </gml:LinearRing>
+                            </gml:exterior>
+                        </gml:Polygon>
+                    </gml:surfaceMember>
+                </gml:MultiSurface>
+            </bldg:lod0RoofEdge>
+            <bldg:boundedBy>
+                <bldg:WallSurface gml:id="surface-00000000-0000-0000-0000-000000000001">
+                    <bldg:lod3MultiSurface>
+                        <gml:MultiSurface>
+                            <gml:surfaceMember>
+                                <gml:Polygon>
+                                    <gml:exterior>
+                                        <gml:LinearRing>
+                                            <gml:posList>35.6 139.7 0 35.6 139.7 10 35.6 139.71 10 35.6 139.71 0 35.6 139.7 0</gml:posList>
+                                        </gml:LinearRing>
+                                    </gml:exterior>
+                                </gml:Polygon>
+                            </gml:surfaceMember>
+                        </gml:MultiSurface>
+                    </bldg:lod3MultiSurface>
+                    <bldg:opening>
+                        <bldg:Window gml:id="wnd_00000000-0000-0000-0000-000000000001">
+                            <bldg:lod3MultiSurface>
+                                <gml:MultiSurface>
+                                    <gml:surfaceMember>
+                                        <gml:Polygon>
+                                            <gml:exterior>
+                                                <gml:LinearRing>
+                                                    <gml:posList>35.6 139.7 2 35.6 139.7 5 35.6 139.705 5 35.6 139.705 2 35.6 139.7 2</gml:posList>
+                                                </gml:LinearRing>
+                                            </gml:exterior>
+                                        </gml:Polygon>
+                                    </gml:surfaceMember>
+                                </gml:MultiSurface>
+                            </bldg:lod3MultiSurface>
+                        </bldg:Window>
+                    </bldg:opening>
+                </bldg:WallSurface>
+            </bldg:boundedBy>
+        </bldg:Building>
+    </core:cityObjectMember>
+</core:CityModel>"#;
+
+        let layout = PlateauTestLayout {
+            udx_subdir: "bldg",
+            gml_filename: "53394509_bldg_6697_op.gml",
+            citymodel_name: "13101_chiyoda-ku_pref_2025_citygml_1_op",
+        };
+        let (_tmp_dir, port, features) =
+            run_file_validator_test(gml_content, &layout, ValidationType::SyntaxAndSchema);
+
+        // Extract validator error messages so they appear in the test output on failure
+        let error_messages: Vec<String> = features
+            .first()
+            .and_then(|f| f.attributes.get(&Attribute::new("xmlError")))
+            .and_then(|v| {
+                if let AttributeValue::Array(arr) = v {
+                    Some(arr)
+                } else {
+                    None
+                }
+            })
+            .map(|errors| {
+                errors
+                    .iter()
+                    .filter_map(|e| {
+                        if let AttributeValue::Map(m) = e {
+                            m.get("message").and_then(|v| {
+                                if let AttributeValue::String(s) = v {
+                                    tracing::error!("xmlError: {s}");
+                                    Some(s.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        assert_eq!(
+            port, *SUCCESS_PORT,
+            "Valid CityGML with bldg:opening in WallSurface should pass schema validation.\n\
+             Validator errors: {error_messages:?}"
+        );
+    }
+
+    //
+    // Test utilities
+    //
+
+    fn init_tracing() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+            )
+            .with_test_writer()
+            .try_init();
+    }
+
+    fn create_xml_validator(validation_type: ValidationType) -> XmlValidator {
+        let params = XmlValidatorParam {
+            attribute: Attribute::new("xml_content"),
+            input_type: XmlInputType::Text,
+            validation_type,
+        };
+
+        XmlValidator {
+            params,
+            schema_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+        }
+    }
+
+    fn create_feature_with_xml(xml_content: &str) -> Feature {
+        let mut attributes = IndexMap::new();
+        attributes.insert(
+            Attribute::new("xml_content"),
+            AttributeValue::String(xml_content.to_string()),
+        );
+
+        Feature::new_with_attributes_and_geometry(attributes, Geometry::new(), Default::default())
+    }
+
+    fn run_validator_test(
+        xml_content: &str,
+        validation_type: ValidationType,
+    ) -> (Port, Vec<Feature>) {
+        let feature = create_feature_with_xml(xml_content);
+        let mut validator = create_xml_validator(validation_type);
+
+        let ctx = utils::create_default_execute_context(&feature);
+        let fw = ProcessorChannelForwarder::Noop(NoopChannelForwarder::default());
+
+        let result = validator.process(ctx, &fw);
+        assert!(result.is_ok(), "XML validation processing should succeed");
+
+        match fw {
+            ProcessorChannelForwarder::Noop(noop_fw) => {
+                let send_ports = noop_fw.send_ports.lock().unwrap();
+                let send_features = noop_fw.send_features.lock().unwrap();
+                assert!(!send_ports.is_empty(), "Should have sent output");
+
+                (send_ports[0].clone(), send_features.clone())
+            }
+            _ => panic!("Expected Noop forwarder for testing"),
+        }
+    }
+
+    /// Parameters for setting up a PLATEAU citymodel temp directory.
+    struct PlateauTestLayout {
+        /// GML filename (e.g. "53394509_bldg_6697_op.gml").
+        gml_filename: &'static str,
+        /// Subdirectory under `udx/` where the GML file is placed (e.g. "bldg", "tran").
+        udx_subdir: &'static str,
+        /// Fixture directory name under `testing/data/fixtures/plateau-citymodel/`.
+        citymodel_name: &'static str,
+    }
+
+    /// Set up a temp directory mimicking the PLATEAU citymodel structure for
+    /// file-based schema validation tests:
+    ///   <tmp>/
+    ///     udx/<subdir>/<filename>   (GML content written here)
+    ///     codelists -> <fixture>/codelists
+    ///     schemas   -> <fixture>/schemas
+    ///
+    /// Returns `(TempDir, Port, Vec<Feature>)` just like `run_validator_test`.
+    /// The caller must keep `TempDir` alive so the temp files are not deleted.
+    fn run_file_validator_test(
+        gml_content: &str,
+        layout: &PlateauTestLayout,
+        validation_type: ValidationType,
+    ) -> (tempfile::TempDir, Port, Vec<Feature>) {
+        let tmp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path();
+
+        let data_dir = tmp_path.join("udx").join(layout.udx_subdir);
+        std::fs::create_dir_all(&data_dir).expect("Failed to create udx subdirectory");
+
+        let fixture_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../testing/data/fixtures/plateau-citymodel")
+            .join(layout.citymodel_name);
+        let fixture_base = fixture_base.canonicalize().expect("Fixture base not found");
+
+        link_fixture_dir(&fixture_base.join("codelists"), &tmp_path.join("codelists"));
+        link_fixture_dir(&fixture_base.join("schemas"), &tmp_path.join("schemas"));
+
+        let gml_path = data_dir.join(layout.gml_filename);
+        std::fs::write(&gml_path, gml_content).expect("Failed to write GML file");
+
+        let params = XmlValidatorParam {
+            attribute: Attribute::new("xml_path"),
+            input_type: XmlInputType::File,
+            validation_type,
+        };
+
+        let mut validator = XmlValidator {
+            params,
+            schema_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+        };
+
+        let file_uri = format!("file://{}", gml_path.display());
+        let mut attributes = IndexMap::new();
+        attributes.insert(Attribute::new("xml_path"), AttributeValue::String(file_uri));
+        let feature = Feature::new_with_attributes_and_geometry(
+            attributes,
+            Geometry::new(),
+            Default::default(),
+        );
+
+        let ctx = utils::create_default_execute_context(&feature);
+        let fw = ProcessorChannelForwarder::Noop(NoopChannelForwarder::default());
+
+        let result = validator.process(ctx, &fw);
+        assert!(result.is_ok(), "XML validation processing should succeed");
+
+        match fw {
+            ProcessorChannelForwarder::Noop(noop_fw) => {
+                let send_ports = noop_fw.send_ports.lock().unwrap();
+                let send_features = noop_fw.send_features.lock().unwrap();
+                assert!(!send_ports.is_empty(), "Should have sent output");
+
+                (tmp_dir, send_ports[0].clone(), send_features.clone())
+            }
+            _ => panic!("Expected Noop forwarder for testing"),
+        }
+    }
+
+    /// Link (or copy on non-unix) a fixture subdirectory into the temp directory.
+    fn link_fixture_dir(fixture_src: &Path, dest: &Path) {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(fixture_src, dest).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to symlink {} -> {}: {e}",
+                    fixture_src.display(),
+                    dest.display()
+                )
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            fn copy_dir_recursive(src: &Path, dst: &Path) {
+                std::fs::create_dir_all(dst).expect("Failed to create directory");
+                for entry in std::fs::read_dir(src).expect("Failed to read directory") {
+                    let entry = entry.expect("Failed to read entry");
+                    let dest_path = dst.join(entry.file_name());
+                    if entry.file_type().expect("Failed to get file type").is_dir() {
+                        copy_dir_recursive(&entry.path(), &dest_path);
+                    } else {
+                        std::fs::copy(entry.path(), &dest_path).expect("Failed to copy file");
+                    }
+                }
+            }
+            copy_dir_recursive(fixture_src, dest);
+        }
+    }
 }

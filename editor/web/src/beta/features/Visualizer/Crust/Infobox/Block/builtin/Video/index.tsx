@@ -11,9 +11,7 @@ import useExpressionEval from "../useExpressionEval";
 
 const VideoBlock: FC<CommonBlockProps<InfoboxBlock>> = ({
   block,
-  layer,
   isSelected,
-  selectedFeature,
   ...props
 }) => {
   const [aspectRatio, setAspectRatio] = useState(56.25);
@@ -24,12 +22,6 @@ const VideoBlock: FC<CommonBlockProps<InfoboxBlock>> = ({
   );
 
   const evaluatedSrc = useExpressionEval(src);
-  const propertyNames = Object.keys(selectedFeature?.properties).filter(
-    (key) => {
-      const defaultProperty = ["extrudedHeight", "id", "positions", "type"];
-      return !defaultProperty.includes(key);
-    }
-  );
 
   const handleVideoReady = useCallback((player: ReactPlayer) => {
     const height = player.getInternalPlayer().videoHeight;
@@ -45,7 +37,6 @@ const VideoBlock: FC<CommonBlockProps<InfoboxBlock>> = ({
       isSelected={isSelected}
       propertyId={block?.propertyId}
       property={block?.property}
-      propertyNames={propertyNames}
       {...props}
     >
       {evaluatedSrc !== undefined ? (

@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/visualizer"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ func TestNew(t *testing.T) {
 
 func TestBuilder_ID(t *testing.T) {
 	var tb = New()
-	res := tb.ID(id.NewProjectID()).MustBuild()
+	res := tb.ID(NewID()).MustBuild()
 	assert.NotNil(t, res.ID())
 }
 
@@ -163,7 +162,7 @@ func TestBuilder_PublicNoIndex(t *testing.T) {
 func TestBuilder_Build(t *testing.T) {
 	d := time.Date(1900, 1, 1, 00, 00, 0, 1, time.UTC)
 	i, _ := url.Parse("ttt://xxx.aa/")
-	pid := id.NewProjectID()
+	pid := NewID()
 	tid := accountdomain.NewWorkspaceID()
 
 	type args struct {
@@ -171,13 +170,13 @@ func TestBuilder_Build(t *testing.T) {
 		alias, publicTitle string
 		publicDescription  string
 		publicImage        string
-		id                 id.ProjectID
+		id                 ID
 		isArchived         bool
 		updatedAt          time.Time
 		publishedAt        time.Time
 		imageURL           *url.URL
 		publicNoIndex      bool
-		workspace          accountdomain.WorkspaceID
+		workspace          WorkspaceID
 		visualizer         visualizer.Visualizer
 		publishmentStatus  PublishmentStatus
 	}
@@ -237,12 +236,12 @@ func TestBuilder_Build(t *testing.T) {
 		},
 		{
 			name: "failed invalid id",
-			err:  id.ErrInvalidID,
+			err:  ErrInvalidID,
 		},
 		{
 			name: "failed invalid alias",
 			args: args{
-				id:    id.NewProjectID(),
+				id:    NewID(),
 				alias: "xxx.aaa",
 			},
 			expected: nil,
@@ -284,7 +283,7 @@ func TestBuilder_Build(t *testing.T) {
 func TestBuilder_MustBuild(t *testing.T) {
 	d := time.Date(1900, 1, 1, 00, 00, 0, 1, time.UTC)
 	i, _ := url.Parse("ttt://xxx.aa/")
-	pid := id.NewProjectID()
+	pid := NewID()
 	tid := accountdomain.NewWorkspaceID()
 
 	type args struct {
@@ -292,13 +291,13 @@ func TestBuilder_MustBuild(t *testing.T) {
 		alias, publicTitle string
 		publicDescription  string
 		publicImage        string
-		id                 id.ProjectID
+		id                 ID
 		isArchived         bool
 		updatedAt          time.Time
 		publishedAt        time.Time
 		imageURL           *url.URL
 		publicNoIndex      bool
-		workspace          accountdomain.WorkspaceID
+		workspace          WorkspaceID
 		visualizer         visualizer.Visualizer
 		publishmentStatus  PublishmentStatus
 		trackingId         string
@@ -367,12 +366,12 @@ func TestBuilder_MustBuild(t *testing.T) {
 		},
 		{
 			name: "failed invalid id",
-			err:  id.ErrInvalidID,
+			err:  ErrInvalidID,
 		},
 		{
 			name: "failed invalid alias",
 			args: args{
-				id:    id.NewProjectID(),
+				id:    NewID(),
 				alias: "xxx.aaa",
 			},
 			err: ErrInvalidAlias,

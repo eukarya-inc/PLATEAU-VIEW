@@ -1,7 +1,13 @@
-import { Database, Disc, Graph, Lightning } from "@phosphor-icons/react";
+import {
+  DatabaseIcon,
+  DiscIcon,
+  GraphIcon,
+  LightningIcon,
+} from "@phosphor-icons/react";
 import { NodeProps } from "@xyflow/react";
 import { memo } from "react";
 
+import { useAwarenessNodeSelections } from "@flow/features/Editor/editorContext";
 import type { Node } from "@flow/types";
 
 import { Handles } from "./components";
@@ -11,55 +17,66 @@ export type GeneralNodeProps = NodeProps<Node> & {
   className?: string;
 };
 
-const typeIconClasses = "w-[10px] h-[100%]";
+const typeIconClasses = "w-[15px] text-white/80";
 
 const GeneralNode: React.FC<GeneralNodeProps> = ({
-  className,
   data,
   type,
   selected,
+  id,
 }) => {
   const {
     officialName,
-    customName,
     inputs,
     outputs,
     // status,
     // intermediateDataUrl,
+    backgroundColor,
     borderColor,
     selectedColor,
     selectedBackgroundColor,
-  } = useHooks({ data, type });
+    handleCollapsedToggle,
+  } = useHooks({ data, type, nodeId: id });
+
+  const awarenessSelections = useAwarenessNodeSelections(id);
+  const remoteColor = awarenessSelections[0]?.color;
 
   return (
-    <div className="rounded-sm bg-secondary">
-      {/* <div
-          className={`rounded-sm bg-secondary ${status === "processing" ? "active-node-status-shadow" : status === "pending" ? "queued-node-status-shadow" : ""}`}> */}
-      <div className="relative z-[1001] flex h-[25px] w-[150px] rounded-sm">
-        <div
-          className={`flex w-4 justify-center rounded-l-sm border-y border-l ${selected ? selectedColor : borderColor} ${selected ? selectedBackgroundColor : className}`}>
-          {type === "reader" ? (
-            <Database className={typeIconClasses} />
-          ) : type === "writer" ? (
-            <Disc className={typeIconClasses} />
-          ) : type === "transformer" ? (
-            <Lightning className={typeIconClasses} />
-          ) : type === "subworkflow" ? (
-            <Graph className={typeIconClasses} />
-          ) : null}
+    <div
+      className={`max-w-[200px] min-w-[150px] rounded-lg border bg-secondary shadow-md shadow-[black]/10 backdrop-blur-xs dark:shadow-secondary ${selected ? selectedColor : borderColor} ${data.isDisabled ? "opacity-70" : ""}`}>
+      <div
+        style={remoteColor ? { outline: `solid ${remoteColor}` } : undefined}
+        className={`rounded-[6px] border p-1 ${
+          selected ? selectedColor : "border-transparent"
+        }`}>
+        <div className="relative flex h-[25px] items-center gap-1 rounded-sm">
+          <div
+            className={`flex justify-center self-center rounded-lg border p-1 align-middle ${selected ? `${selectedColor} ${selectedBackgroundColor} border-opacity-100` : `${borderColor} ${backgroundColor} border-opacity-0`}`}>
+            {type === "reader" ? (
+              <DatabaseIcon className={typeIconClasses} />
+            ) : type === "writer" ? (
+              <DiscIcon className={typeIconClasses} />
+            ) : type === "transformer" ? (
+              <LightningIcon className={typeIconClasses} />
+            ) : type === "subworkflow" ? (
+              <GraphIcon className={typeIconClasses} />
+            ) : null}
+          </div>
+          <div className="flex flex-1 items-center justify-between gap-2 truncate rounded-r-sm px-1 leading-none">
+            <p className="self-center truncate text-xs dark:text-gray-200">
+              {data.customizations?.customName || officialName}
+            </p>
+          </div>
+          {/* <CaretRight weight="fill" /> */}
         </div>
-        <div
-          className={`flex flex-1 items-center justify-between gap-2 truncate rounded-r-sm border-y border-r px-1 leading-none ${selected ? selectedColor : borderColor}`}>
-          <p className="self-center truncate text-xs dark:font-light">
-            {data.customizations?.customName || customName || officialName}
-          </p>
-          {/* {status === "failed" && <X className="size-4 text-destructive" />} */}
-          {/* {status === "completed" && intermediateDataUrl && (
-                <Table className="size-4 text-success" />
-              )} */}
-        </div>
+        <Handles
+          nodeType={type}
+          inputs={inputs}
+          outputs={outputs}
+          isCollapsed={data.isCollapsed}
+          onCollapsedToggle={handleCollapsedToggle}
+        />
       </div>
-      <Handles nodeType={type} inputs={inputs} outputs={outputs} />
     </div>
   );
 };

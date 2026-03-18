@@ -4,9 +4,10 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use approx::{AbsDiffEq, RelativeEq, UlpsEq};
 use geo_types::Coord as GeoCoord;
 use nalgebra::{Point2 as NaPoint2, Point3 as NaPoint3};
-use num_traits::Zero;
+use num_traits::{Float, NumCast, Zero};
 use nusamai_projection::vshift::Jgd2011ToWgs84;
 use serde::{Deserialize, Serialize};
+use std::ops::Index;
 
 use super::coordnum::{CoordFloat, CoordNum};
 use super::no_value::NoValue;
@@ -14,6 +15,7 @@ use super::point::Point;
 use super::traits::Elevation;
 use crate::algorithm::GeoFloat;
 use crate::coord;
+use crate::utils::{are_points_coplanar, PointsCoplanar};
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Debug, Hash, Default)]
 pub struct Coordinate<T: CoordNum = f64, Z: CoordNum = f64> {
@@ -317,6 +319,72 @@ impl<T: CoordNum, Z: CoordNum> Coordinate<T, Z> {
     }
 }
 
+impl<T: CoordNum + Copy + From<Z>, Z: CoordNum> Coordinate<T, Z> {
+    pub fn dot(&self, other: &Self) -> T {
+        self.x * other.x + self.y * other.y + (self.z * other.z).into()
+    }
+}
+
+impl<T: CoordNum + Float + From<Z>, Z: CoordNum> Coordinate<T, Z> {
+    pub fn norm(&self) -> T {
+        (self.x * self.x + self.y * self.y + (self.z * self.z).into()).sqrt()
+    }
+}
+
+impl<T, Z> Coordinate<T, Z>
+where
+    T: CoordNum + Float + From<Z>,
+    Z: CoordNum + Div<T, Output = Z>,
+{
+    pub fn normalize(&self) -> Self {
+        let norm = self.norm();
+        if norm.is_zero() {
+            *self
+        } else {
+            *self / norm
+        }
+    }
+}
+
+impl<T: CoordNum + Float + From<Z>, Z: CoordNum> Coordinate<T, Z> {
+    pub fn cross(&self, other: &Self) -> Self {
+        coord! {
+            x: self.y * other.z.into() - other.y * self.z.into(),
+            y: other.x * self.z.into() - self.x * other.z.into(),
+            z: Z::from(self.x * other.y - self.y * other.x).unwrap(),
+        }
+    }
+}
+
+impl<T: CoordNum + Float + From<Z>, Z: CoordNum> Coordinate<T, Z> {
+    /// Returns the smaller angle (in radians) between this vector and another.
+    pub fn angle(&self, other: &Self) -> T {
+        let norms = self.norm() * other.norm();
+        if norms.is_zero() {
+            T::zero()
+        } else {
+            let dot = self.dot(other);
+            let cos_theta = (dot / norms).clamp(-T::one(), T::one());
+            let out = cos_theta.to_f64().unwrap().acos();
+            <T as NumCast>::from(out).unwrap()
+        }
+    }
+}
+
+impl<T: CoordNum> Index<usize> for Coordinate3D<T> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: usize) -> &T {
+        match index {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!("Index out of bounds for Coordinate"),
+        }
+    }
+}
+
 impl<T: CoordNum, Z: CoordNum> Zero for Coordinate<T, Z> {
     #[inline]
     fn zero() -> Self {
@@ -459,4 +527,8 @@ impl<T: CoordNum> From<Coordinate2D<T>> for GeoCoord<T> {
             y: coord.y,
         }
     }
+}
+
+pub fn are_coplanar(points: &[Coordinate3D<f64>], tolerance: f64) -> Option<PointsCoplanar> {
+    are_points_coplanar(points, tolerance)
 }

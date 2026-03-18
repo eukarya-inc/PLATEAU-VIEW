@@ -15,6 +15,7 @@ import (
 
 	"github.com/kennygrant/sanitize"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
+	"github.com/reearth/reearth-flow/api/pkg/asset"
 	"github.com/reearth/reearth-flow/api/pkg/file"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/workflow"
@@ -47,6 +48,10 @@ func (f *fileRepo) CheckJobLogExists(ctx context.Context, jobID string) (bool, e
 
 func (f *fileRepo) GetJobLogURL(jobID string) string {
 	return fmt.Sprintf("file://%s/job-%s.log", metadataDir, jobID)
+}
+
+func (f *fileRepo) GetJobWorkerLogURL(jobID string) string {
+	return fmt.Sprintf("file://%s/job-%s-worker.log", metadataDir, jobID)
 }
 
 func (f *fileRepo) ListJobArtifacts(ctx context.Context, jobID string) ([]string, error) {
@@ -161,7 +166,7 @@ func (f *fileRepo) UploadAsset(ctx context.Context, file *file.File) (*url.URL, 
 	return getFileURL(f.assetUrlBase, filename), size, nil
 }
 
-func (f *fileRepo) RemoveAsset(ctx context.Context, u *url.URL) error {
+func (f *fileRepo) DeleteAsset(ctx context.Context, u *url.URL) error {
 	if u == nil {
 		return nil
 	}
@@ -194,6 +199,36 @@ func (f *fileRepo) RemoveWorkflow(ctx context.Context, u *url.URL) error {
 		return gateway.ErrInvalidFile
 	}
 	return f.delete(ctx, filepath.Join(workflowsDir, filepath.Base(p)))
+}
+
+func (f *fileRepo) CheckJobWorkerLogExists(ctx context.Context, jobID string) (bool, error) {
+	logPath := filepath.Join(metadataDir, fmt.Sprintf("job-%s-worker.log", jobID))
+	exists, err := afero.Exists(f.fs, logPath)
+	if err != nil {
+		return false, rerror.ErrInternalByWithContext(ctx, err)
+	}
+	return exists, nil
+}
+
+func (f *fileRepo) GetJobUserFacingLogURL(jobID string) string {
+	return fmt.Sprintf("file://%s/job-%s-user-facing.log", metadataDir, jobID)
+}
+
+func (f *fileRepo) CheckJobUserFacingLogExists(ctx context.Context, jobID string) (bool, error) {
+	logPath := filepath.Join(metadataDir, fmt.Sprintf("job-%s-user-facing.log", jobID))
+	exists, err := afero.Exists(f.fs, logPath)
+	if err != nil {
+		return false, rerror.ErrInternalByWithContext(ctx, err)
+	}
+	return exists, nil
+}
+
+func (f *fileRepo) UploadedAsset(_ context.Context, _ *asset.Upload) (*file.File, error) {
+	return nil, gateway.ErrUnsupportedOperation
+}
+
+func (f *fileRepo) GetPublicAssetURL(uuid string, filename string) (*url.URL, error) {
+	return nil, gateway.ErrUnsupportedOperation
 }
 
 // helpers
@@ -277,7 +312,18 @@ func (f *fileRepo) validateURL(u *url.URL, base *url.URL) bool {
 	if u == nil || base == nil {
 		return false
 	}
+
+	// Handle the case where base path is empty (e.g., https://example.com)
+	basePath := base.Path
+	if basePath == "" {
+		basePath = "/"
+	}
+
 	return u.Scheme == base.Scheme &&
 		u.Host == base.Host &&
-		path.Dir(u.Path) == base.Path
+		path.Dir(u.Path) == basePath
+}
+
+func (f *fileRepo) IssueUploadAssetLink(_ context.Context, _ gateway.IssueUploadAssetParam) (*gateway.UploadAssetLink, error) {
+	return nil, gateway.ErrUnsupportedOperation
 }

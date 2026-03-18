@@ -124,10 +124,6 @@ func (r *PropertySchema) RemoveAll(ctx context.Context, ids []id.PropertySchemaI
 	}))
 }
 
-func (r *PropertySchema) RemoveByScene(ctx context.Context, id id.SceneID) error {
-	return r.client.RemoveAll(ctx, r.writeFilter(bson.M{"scene": id.String()}))
-}
-
 func (r *PropertySchema) find(ctx context.Context, dst property.SchemaList, filter any) (property.SchemaList, error) {
 	c := mongodoc.NewPropertySchemaConsumer(r.f.Readable)
 	if err := r.client.Find(ctx, filter, c); err != nil {
@@ -140,9 +136,6 @@ func (r *PropertySchema) findOne(ctx context.Context, filter any) (*property.Sch
 	c := mongodoc.NewPropertySchemaConsumer(r.f.Readable)
 	if err := r.client.FindOne(ctx, filter, c); err != nil {
 		return nil, err
-	}
-	if len(c.Result) < 1 {
-		return nil, errors.New("property schema not found")
 	}
 	return c.Result[0], nil
 }

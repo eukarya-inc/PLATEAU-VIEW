@@ -2,9 +2,9 @@ package integrationapi
 
 import (
 	"github.com/oapi-codegen/runtime/types"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 )

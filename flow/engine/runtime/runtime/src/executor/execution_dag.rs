@@ -16,7 +16,7 @@ use crate::{
     executor_operation::ExecutorOperation,
     feature_store::{create_feature_writer, FeatureWriter, FeatureWriterKey},
     forwarder::SenderWithPortMapping,
-    node::{GraphId, NodeHandle, Port},
+    node::{EdgeId, GraphId, NodeHandle, Port},
 };
 use crossbeam::channel::{bounded, Receiver, Sender};
 use petgraph::{visit::EdgeRef, Direction};
@@ -24,13 +24,21 @@ use petgraph::{visit::EdgeRef, Direction};
 #[derive(Debug)]
 pub struct NodeType {
     pub handle: NodeHandle,
+    pub name: String,
     pub kind: Option<NodeKind>,
+    /// Snapshot of the node role (e.g., Source/Processor/Sink).
+    /// Although this is derivable from `kind`, we persist it here because `kind` is moved (`take()`) during execution graph construction (e.g., in ProcessorNode::new),
+    /// making it unavailable later. Keeping this immutable snapshot avoids timing issues.
+    /// TODO: refactor to remove duplication once initialization no longer requires taking `kind`.
+    pub is_source: bool,
 }
 
 type SharedFeatureWriter = Arc<Mutex<Box<dyn FeatureWriter>>>;
 
 #[derive(Clone)]
 pub struct EdgeType {
+    /// Edge ID.
+    pub edge_id: EdgeId,
     /// Output port handle.
     pub output_port: Port,
     /// Edge kind.
@@ -47,9 +55,12 @@ pub struct EdgeType {
 
 pub struct ExecutionDag {
     pub(crate) id: GraphId,
+    /// Unique identifier for this workflow execution, used for cache isolation.
+    pub(crate) executor_id: uuid::Uuid,
     /// Nodes will be moved into execution threads.
     graph: petgraph::graph::DiGraph<NodeType, EdgeType>,
     event_hub: EventHub,
+    ingress_state: Arc<State>,
 }
 
 impl ExecutionDag {
@@ -57,7 +68,9 @@ impl ExecutionDag {
         builder_dag: BuilderDag,
         channel_buffer_sz: usize,
         feature_flush_threshold: usize,
-        state: Arc<State>,
+        ingress_state: Arc<State>,
+        feature_state: Arc<State>,
+        executor_id: uuid::Uuid,
     ) -> Result<Self, ExecutionError> {
         let graph_id = builder_dag.id;
         // We only create record writer once for every output port. Every `HashMap` in this `Vec` tracks if a node's output ports already have the record writer created.
@@ -83,24 +96,29 @@ impl ExecutionDag {
             let edge_kind = edge.edge_kind.clone();
 
             // Create or get feature writer.
-            let feature_writer = match all_feature_writers[source_node_index.index()]
-                .entry(input_port.clone())
-            {
-                Entry::Vacant(entry) => {
-                    let feature_writer =
-                        create_feature_writer(edge_id, Arc::clone(&state), feature_flush_threshold);
-                    let feature_writer = Arc::new(Mutex::new(feature_writer));
-                    entry.insert(vec![feature_writer.clone()]);
-                    feature_writer
-                }
-                Entry::Occupied(mut entry) => {
-                    let feature_writer =
-                        create_feature_writer(edge_id, Arc::clone(&state), feature_flush_threshold);
-                    let feature_writer = Arc::new(Mutex::new(feature_writer));
-                    entry.get_mut().push(feature_writer.clone());
-                    feature_writer
-                }
-            };
+            let feature_writer =
+                match all_feature_writers[source_node_index.index()].entry(input_port.clone()) {
+                    Entry::Vacant(entry) => {
+                        let feature_writer = create_feature_writer(
+                            edge_id.clone(),
+                            Arc::clone(&feature_state),
+                            feature_flush_threshold,
+                        );
+                        let feature_writer = Arc::new(Mutex::new(feature_writer));
+                        entry.insert(vec![feature_writer.clone()]);
+                        feature_writer
+                    }
+                    Entry::Occupied(mut entry) => {
+                        let feature_writer = create_feature_writer(
+                            edge_id.clone(),
+                            Arc::clone(&feature_state),
+                            feature_flush_threshold,
+                        );
+                        let feature_writer = Arc::new(Mutex::new(feature_writer));
+                        entry.get_mut().push(feature_writer.clone());
+                        feature_writer
+                    }
+                };
 
             // Create or get channel.
             let (sender, receiver) = match channels.entry((source_node_index, target_node_index)) {
@@ -114,6 +132,7 @@ impl ExecutionDag {
 
             // Create edge.
             let edge = EdgeType {
+                edge_id,
                 output_port,
                 edge_kind,
                 sender,
@@ -129,14 +148,14 @@ impl ExecutionDag {
         let graph = graph.map(
             |_, node| NodeType {
                 handle: node.handle.clone(),
-                kind: {
-                    match &node.kind {
-                        NodeKind::Source(source) => Some(NodeKind::Source(source.clone())),
-                        NodeKind::Processor(processor) => {
-                            Some(NodeKind::Processor(processor.clone()))
-                        }
-                        NodeKind::Sink(sink) => Some(NodeKind::Sink(sink.clone())),
-                    }
+                name: node.name.clone(),
+                // Persist role early. `kind` will be taken later (e.g., in ProcessorNode::new),
+                // so we cannot reliably derive the role at that time.
+                is_source: matches!(node.kind, NodeKind::Source(_)),
+                kind: match &node.kind {
+                    NodeKind::Source(source) => Some(NodeKind::Source(source.clone())),
+                    NodeKind::Processor(processor) => Some(NodeKind::Processor(processor.clone())),
+                    NodeKind::Sink(sink) => Some(NodeKind::Sink(sink.clone())),
                 },
             },
             |edge_index, _| {
@@ -147,13 +166,19 @@ impl ExecutionDag {
         );
         Ok(ExecutionDag {
             id: graph_id,
+            executor_id,
             graph,
             event_hub,
+            ingress_state,
         })
     }
 
     pub fn graph(&self) -> &petgraph::graph::DiGraph<NodeType, EdgeType> {
         &self.graph
+    }
+
+    pub fn executor_id(&self) -> uuid::Uuid {
+        self.executor_id
     }
 
     pub fn node_weight_mut(&mut self, node_index: petgraph::graph::NodeIndex) -> &mut NodeType {
@@ -162,6 +187,14 @@ impl ExecutionDag {
 
     pub fn event_hub(&self) -> &EventHub {
         &self.event_hub
+    }
+
+    pub fn feature_state(&self) -> Arc<State> {
+        Arc::clone(&self.ingress_state)
+    }
+
+    pub fn ingress_state(&self) -> &Arc<State> {
+        &self.ingress_state
     }
 
     pub fn collect_senders(
@@ -201,8 +234,21 @@ impl ExecutionDag {
         node_index: petgraph::graph::NodeIndex,
     ) -> HashMap<FeatureWriterKey, Vec<Box<dyn FeatureWriter>>> {
         let mut feature_writers = HashMap::<FeatureWriterKey, Vec<Box<dyn FeatureWriter>>>::new();
+
+        // Check if this node is a Source (Reader)
+        let is_source_node = self.graph[node_index].is_source;
+
         for edge in self.graph.edges(node_index) {
             let weight = edge.weight();
+
+            // Skip creating feature_writers for Source→Processor edges
+            // ProcessorNode handles Reader intermediate data writes directly
+            if is_source_node {
+                continue;
+            }
+
+            // Note: Despite the confusing names, weight.input_port is actually the SOURCE output port
+            // and weight.output_port is actually the DOWNSTREAM input port (see lines 91-92 where they're swapped)
             let writer_key =
                 FeatureWriterKey(weight.input_port.clone(), weight.output_port.clone());
             let edge_type = self

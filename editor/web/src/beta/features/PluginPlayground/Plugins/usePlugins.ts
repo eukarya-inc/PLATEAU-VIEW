@@ -1,25 +1,20 @@
-import { useT } from "@reearth/services/i18n";
 import { useNotification } from "@reearth/services/state";
 import JSZip from "jszip";
 import LZString from "lz-string";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import useFileInput from "use-file-input";
 import { v4 as uuidv4 } from "uuid";
 
-import { PluginType, SHARED_PLUGIN_ID } from "./constants";
+import { PluginType } from "./constants";
 import { presetPlugins } from "./presets";
 import { validateFileTitle } from "./utils";
 
 export default () => {
-  const [, setNotification] = useNotification();
   const [searchParams] = useSearchParams();
-  const t = useT();
-  const pluginIdParam = searchParams.get("plugin-id");
-  const sharedPluginURLParam = searchParams.get("shared-plugin");
-  const presetPluginsArray = presetPlugins
-    .map((category) => category.plugins)
-    .flat();
+  const [, setNotification] = useNotification();
+
+  const sharedPluginUrl = searchParams.get("plugin");
 
   const decodePluginURL = useCallback((encoded: string) => {
     const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
@@ -29,33 +24,30 @@ export default () => {
     return JSON.parse(decompressed);
   }, []);
 
-  const sharedPlugin: PluginType = sharedPluginURLParam
+  const sharedPlugin = sharedPluginUrl
     ? (() => {
         try {
-          return decodePluginURL(sharedPluginURLParam);
+          const decoded = decodePluginURL(sharedPluginUrl);
+          return {
+            ...decoded,
+            id: `shared-${decoded.id}`
+          };
         } catch (_error) {
-          setNotification({
-            type: "error",
-            text: t("Invalid shared plugin URL")
-          });
+          setNotification({ type: "error", text: "Invalid shared plugin URL" });
           return null;
         }
       })()
     : null;
 
+  const presetPluginsArray = presetPlugins
+    .map((category) => category.plugins)
+    .flat();
+
   const [plugins, setPlugins] = useState<PluginType[]>(
-    sharedPlugin && sharedPlugin.id === SHARED_PLUGIN_ID
-      ? [sharedPlugin, ...presetPluginsArray]
-      : presetPluginsArray
-  );
-  const [selectedPluginId, setSelectedPluginId] = useState(
-    sharedPlugin
-      ? sharedPlugin.id
-      : pluginIdParam
-        ? pluginIdParam
-        : plugins[0].id
+    sharedPlugin ? [sharedPlugin, ...presetPluginsArray] : presetPluginsArray
   );
 
+  const [selectedPluginId, setSelectedPluginId] = useState(plugins[0].id);
   const [selectedFileId, setSelectedFileId] = useState<string>(
     plugins[0]?.files[0]?.id ?? ""
   );
@@ -72,10 +64,6 @@ export default () => {
       selectedPlugin.files[0],
     [selectedPlugin, selectedFileId]
   );
-
-  useEffect(() => {
-    window.history.replaceState({}, "", `?plugin-id=${selectedPluginId}`);
-  }, [selectedPluginId]);
 
   const selectPlugin = useCallback((pluginId: string) => {
     setSelectedPluginId(pluginId);
@@ -186,14 +174,14 @@ export default () => {
     (fileList) => {
       const file = fileList?.[0];
       if (!file) {
-        setNotification({ type: "error", text: t("File not found") });
+        setNotification({ type: "error", text: "File not found" });
         return;
       }
 
-      if (!file.name.toLowerCase().endsWith(".zip")) {
+      if (file.type !== "application/zip") {
         setNotification({
           type: "error",
-          text: t("Only zip files are supported")
+          text: "Only zip files are supported"
         });
         return;
       }
@@ -203,7 +191,7 @@ export default () => {
         const files = Object.values(zip.files).filter((file) => !file.dir);
 
         if (files.length === 0) {
-          setNotification({ type: "error", text: t("Zip file is empty") });
+          setNotification({ type: "error", text: "Zip file is empty" });
           return;
         }
 
@@ -219,6 +207,7 @@ export default () => {
 
             const newPlugin = {
               id: "my-plugin", // NOTE: id of the custom plugin
+              title: file.name,
               files: pluginFiles
             };
 
@@ -243,7 +232,7 @@ export default () => {
   const handlePluginDownload = useCallback(async () => {
     try {
       const zip = new JSZip();
-      const pluginFolder = zip.folder(selectedPlugin.id);
+      const pluginFolder = zip.folder(selectedPlugin.title);
       if (!pluginFolder) {
         throw new Error("Failed to create plugin folder");
       }
@@ -256,7 +245,7 @@ export default () => {
       const zipUrl = URL.createObjectURL(zipBlob);
       const link = document.createElement("a");
       link.href = zipUrl;
-      link.download = `${selectedPlugin.id}.zip`;
+      link.download = `${selectedPlugin.title}.zip`;
       link.click();
       URL.revokeObjectURL(zipUrl);
     } catch (error) {
@@ -267,25 +256,31 @@ export default () => {
   }, [selectedPlugin, setNotification]);
 
   const encodeAndSharePlugin = useCallback(
-    (pluginId: string) => {
-      try {
-        const pluginToShare = plugins.find((plugin) => plugin.id === pluginId);
-        const selectedPluginCopy = { ...pluginToShare, id: SHARED_PLUGIN_ID };
+    (pluginId: string): string | undefined => {
+      selectPlugin(pluginId);
+      // Need to do a find here as the selectedPlugin does not get updated immediately
+      const sharedPlugin = plugins.find((plugin) => plugin.id === pluginId);
 
+      // Note: We can't use the same id for a shared plugin
+      const selectedPluginCopy = { ...sharedPlugin, id: uuidv4() };
+
+      // First compress the code
+      try {
         const compressed = LZString.compressToBase64(
           JSON.stringify(selectedPluginCopy)
         )
-          .replace(/\+/g, "-")
-          .replace(/\//g, "_")
-          .replace(/=/g, "");
+          .replace(/\+/g, "-") // Convert + to -
+          .replace(/\//g, "_") // Convert / to _
+          .replace(/=/g, ""); // Remove padding =
 
-        const shareUrl = `${window.location.origin}${window.location.pathname}?shared-plugin=${compressed}`;
+        const shareUrl = `${window.location.origin}${window.location.pathname}?plugin=${compressed}`;
         navigator.clipboard.writeText(shareUrl);
 
         setNotification({
           type: "success",
-          text: t("Plugin link copied to clipboard")
+          text: "Plugin link copied to clipboard"
         });
+        return compressed;
       } catch (error) {
         if (error instanceof Error) {
           setNotification({ type: "error", text: error.message });
@@ -293,7 +288,7 @@ export default () => {
         return;
       }
     },
-    [setNotification, t, plugins]
+    [plugins, selectPlugin, setNotification]
   );
 
   return {

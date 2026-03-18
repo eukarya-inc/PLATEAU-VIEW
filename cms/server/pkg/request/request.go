@@ -3,7 +3,7 @@ package request
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"

@@ -65,7 +65,7 @@ impl ProcessorFactory for FeatureCounterFactory {
     }
 
     fn description(&self) -> &str {
-        "Counts features"
+        "Count Features and Add Counter to Attribute"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -94,14 +94,12 @@ impl ProcessorFactory for FeatureCounterFactory {
         let params: FeatureCounterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::CounterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::CounterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -125,14 +123,19 @@ struct FeatureCounter {
     params: FeatureCounterParam,
 }
 
+/// # Feature Counter Parameters
+/// Configure how features are counted and grouped, and where to store the count
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct FeatureCounterParam {
-    /// # Start count
+    /// # Start Count
+    /// Starting value for the counter
     count_start: i64,
-    /// # Attributes to group by
+    /// # Group By Attributes
+    /// List of attribute names to group features by before counting
     group_by: Option<Vec<Attribute>>,
-    /// # Attribute to output the count
+    /// # Output Attribute
+    /// Name of the attribute where the count will be stored
     output_attribute: String,
 }
 
@@ -146,7 +149,7 @@ impl Processor for FeatureCounter {
         if let Some(group_by) = &self.params.group_by {
             let key = group_by
                 .iter()
-                .map(|k| feature.get(&k).map(|v| v.to_string()).unwrap_or_default())
+                .map(|k| feature.get(k).map(|v| v.to_string()).unwrap_or_default())
                 .collect::<Vec<_>>()
                 .join(",");
             let count = self.counter.increment(&key);
@@ -168,7 +171,11 @@ impl Processor for FeatureCounter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

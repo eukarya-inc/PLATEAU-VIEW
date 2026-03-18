@@ -1,7 +1,7 @@
 package gqlmodel
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
 	"github.com/samber/lo"
 )
 

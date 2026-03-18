@@ -1,0 +1,106 @@
+package cmsintlodstat
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/gcptaskrunner"
+	cms "github.com/reearth/reearth-cms-api/go"
+	"github.com/reearth/reearth-cms-api/go/cmswebhook"
+	"github.com/reearth/reearthx/log"
+	"github.com/samber/lo"
+)
+
+func extractMaxLOD(ctx context.Context, s *Services, w *cmswebhook.Payload) error {
+	if s.TaskRunner == nil {
+		return nil
+	}
+
+	// if event type is "item.create" and payload is metadata, skip it
+	if w.Type == cmswebhook.EventItemCreate && w.ItemData.Item.OriginalItemID != nil ||
+		w.ItemData == nil || w.ItemData.Item == nil || w.ItemData.Model == nil {
+		return nil
+	}
+
+	// feature types
+	modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
+	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
+	if err != nil {
+		return fmt.Errorf("maxlod: failed to get feature types: %w", err)
+	}
+
+	ft, ok := featureTypes.GetByCode(modelName)
+	if !ok {
+		log.Debugfc(ctx, "invalid feature type: %s", modelName)
+		return nil
+	}
+
+	if !ft.LODStat {
+		log.Debugfc(ctx, "maxlod: lodstat is false: %s", modelName)
+		return nil
+	}
+
+	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
+	if err != nil {
+		return fmt.Errorf("maxlod: failed to get main item: %w", err)
+	}
+
+	if tag := mainItem.MetadataFieldByKey("maxlod_status").GetValue().Tag(); tag == nil {
+		log.Debugfc(ctx, "maxlod_status metadata is missing")
+		return nil
+	} else if tag.Name != "" && tag.Name != "未実行" {
+		log.Debugfc(ctx, "already running")
+		return nil
+	}
+
+	city := lo.FromPtr(mainItem.FieldByKey("city").GetValue().String())
+	if city == "" {
+		log.Debugfc(ctx, "city not found")
+		return nil
+	}
+
+	asset := *mainItem.FieldByKey("citygml").GetValue().String()
+	if asset == "" {
+		log.Debugfc(ctx, "citygml not updated")
+		return nil
+	}
+
+	assetURL := ""
+	if a, err := s.CMS.Asset(ctx, asset); err == nil {
+		assetURL = a.URL
+	} else {
+		log.Debugfc(ctx, "asset not found: %v", err)
+		return nil
+	}
+
+	if err := s.TaskRunner.Run(ctx, gcptaskrunner.Task{
+		Args: []string{
+			"lodstat",
+			"-src=" + assetURL,
+			"-project=" + w.ProjectID(),
+			"-item=" + mainItem.ID,
+			"-feature=" + ft.Code,
+		},
+	}, &gcptaskrunner.Config{
+		Tags: []string{"lodstat"},
+	}); err != nil {
+		return fmt.Errorf("maxlod: failed to run task: %w", err)
+	}
+
+	if _, err := s.CMS.UpdateItem(ctx, mainItem.ID, nil, []*cms.Field{
+		{
+			ID:    "maxlod_status",
+			Type:  "tag",
+			Value: "実行中",
+		},
+	}); err != nil {
+		log.Warnfc(ctx, "failed to update item to make maxlod_status running (%s): %v", mainItem.ID, err)
+	}
+
+	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "LOD抽出を開始しました。")
+
+	log.Debugfc(ctx, "done")
+	return nil
+}

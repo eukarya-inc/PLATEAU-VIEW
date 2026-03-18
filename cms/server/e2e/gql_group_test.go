@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
-	"github.com/reearth/reearth-cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
 )
 
 func createGroup(e *httpexpect.Expect, pID, name, desc, key string) (string, *httpexpect.Value) {

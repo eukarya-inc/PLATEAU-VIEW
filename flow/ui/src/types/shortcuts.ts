@@ -1,6 +1,7 @@
 export type GeneralKeys =
   | "f" // fullscreen
   | "/" // keyboard shortcuts dialog
+  | "s" // manual hard save
   | "r" // reader dialog
   | "t" // transformer dialog
   | "w" // writer dialog
@@ -16,12 +17,15 @@ export type EditorKeys =
   | "a" // SHIFT + a = left panel actions list
   | "r" // SHIFT + r = left panel resources
   | "c" // SHIFT + c = left panel canvas navigator
-  | "s"; // new subworkflow with select nodes
+  | "s" // new subworkflow with select nodes
+  | "k"; // Open Search
 
 export type CanvasKeys =
   | "c" // w CMD = Copy, wout CMD = left panel canvas navigator
+  | "x" // cut
   | "v" // paste
   | "z" // w CMD = undo, w CMD + SHIFT = redo
+  | "e" // disable/enable node
   | "+" // zoom in
   | "=" // zoom in (alternative - depends on keyboard layout)
   | "-" // zoom out
@@ -34,18 +38,22 @@ type PossibleActions =
   | "zoomOut"
   | "fitView"
   | "copy"
+  | "cut"
   | "paste"
   | "undo"
   | "redo"
+  | "disableNode"
   | "fullscreen"
   | "shortcutsDialog"
+  | "save"
   | "readerDialog"
   | "transformerDialog"
   | "writerDialog"
   | "leftPanelCanvasNavigator"
   | "leftPanelActionsList"
   | "leftPanelResources"
-  | "groupToSubWorkFlow";
+  | "groupToSubWorkFlow"
+  | "openSearch";
 
 export type KeyBinding<K extends PossibleKeys = PossibleKeys> = {
   key: K;
@@ -68,6 +76,7 @@ export const GeneralKeyBindings: Partial<
   Record<PossibleActions, KeyBinding<GeneralKeys>>
 > = {
   shortcutsDialog: { key: "/", commandKey: true },
+  save: { key: "s", commandKey: true },
 };
 
 export const EditorKeyBindings: Partial<
@@ -80,16 +89,19 @@ export const EditorKeyBindings: Partial<
   leftPanelCanvasNavigator: { key: "c", shiftKey: true },
   leftPanelActionsList: { key: "a", shiftKey: true },
   leftPanelResources: { key: "r", shiftKey: true },
-  groupToSubWorkFlow: { key: "s" },
+  groupToSubWorkFlow: { key: "s", shiftKey: true, commandKey: true },
+  openSearch: { key: "k", shiftKey: false, commandKey: true },
 };
 
 export const CanvasKeyBindings: Partial<
   Record<PossibleActions, KeyBinding<CanvasKeys>>
 > = {
   copy: { key: "c", commandKey: true },
+  cut: { key: "x", commandKey: true },
   paste: { key: "v", commandKey: true },
   undo: { key: "z", commandKey: true },
   redo: { key: "z", commandKey: true, shiftKey: true },
+  disableNode: { key: "e", commandKey: true },
   zoomIn: { key: "+" },
   zoomOut: { key: "-" },
   fitView: { key: "0", commandKey: true },

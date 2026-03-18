@@ -3,14 +3,13 @@ package scene
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewWidgets(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	wid := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name     string
@@ -58,9 +57,9 @@ func TestNewWidgets(t *testing.T) {
 }
 
 func TestWidgets_Add(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	wid := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name     string
@@ -108,15 +107,15 @@ func TestWidgets_Add(t *testing.T) {
 }
 
 func TestWidgets_Remove(t *testing.T) {
-	wid := id.NewWidgetID()
-	wid2 := id.NewWidgetID()
-	pid := id.MustPluginID("xxx~1.1.1")
-	pid2 := id.MustPluginID("xxx~1.1.2")
-	pr := id.NewPropertyID()
+	wid := NewWidgetID()
+	wid2 := NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pid2 := MustPluginID("xxx~1.1.2")
+	pr := NewPropertyID()
 
 	tests := []struct {
 		Name  string
-		Input id.WidgetID
+		Input WidgetID
 		Nil   bool
 	}{
 		{
@@ -149,18 +148,18 @@ func TestWidgets_Remove(t *testing.T) {
 }
 
 func TestWidgets_RemoveAllByPlugin(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pid2 := id.MustPluginID("xxx~1.1.2")
-	w1 := MustWidget(id.NewWidgetID(), pid, "e1", id.NewPropertyID(), true, false)
-	w2 := MustWidget(id.NewWidgetID(), pid, "e2", id.NewPropertyID(), true, false)
-	w3 := MustWidget(id.NewWidgetID(), pid2, "e1", id.NewPropertyID(), true, false)
+	pid := MustPluginID("xxx~1.1.1")
+	pid2 := MustPluginID("xxx~1.1.2")
+	w1 := MustWidget(NewWidgetID(), pid, "e1", NewPropertyID(), true, false)
+	w2 := MustWidget(NewWidgetID(), pid, "e2", NewPropertyID(), true, false)
+	w3 := MustWidget(NewWidgetID(), pid2, "e1", NewPropertyID(), true, false)
 
 	tests := []struct {
 		Name             string
-		ArgsPID          id.PluginID
-		ArgsEID          *id.PluginExtensionID
+		ArgsPID          PluginID
+		ArgsEID          *PluginExtensionID
 		Target, Expected *Widgets
-		ExpectedResult   []id.PropertyID
+		ExpectedResult   []PropertyID
 	}{
 		{
 			Name:           "remove widgets",
@@ -168,15 +167,15 @@ func TestWidgets_RemoveAllByPlugin(t *testing.T) {
 			ArgsEID:        nil,
 			Target:         NewWidgets([]*Widget{w1, w2, w3}, nil),
 			Expected:       NewWidgets([]*Widget{w3}, nil),
-			ExpectedResult: []id.PropertyID{w1.Property(), w2.Property()},
+			ExpectedResult: []PropertyID{w1.Property(), w2.Property()},
 		},
 		{
 			Name:           "remove widgets of extension",
 			ArgsPID:        pid,
-			ArgsEID:        id.PluginExtensionID("e2").Ref(),
+			ArgsEID:        PluginExtensionID("e2").Ref(),
 			Target:         NewWidgets([]*Widget{w1, w2, w3}, nil),
 			Expected:       NewWidgets([]*Widget{w1, w3}, nil),
-			ExpectedResult: []id.PropertyID{w2.Property()},
+			ExpectedResult: []PropertyID{w2.Property()},
 		},
 		{
 			Name:           "remove from nil widgets",
@@ -197,14 +196,14 @@ func TestWidgets_RemoveAllByPlugin(t *testing.T) {
 }
 
 func TestWidgets_UpgradePlugin(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pid2 := id.MustPluginID("zzz~1.1.1")
-	pr := id.NewPropertyID()
-	wid := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pid2 := MustPluginID("zzz~1.1.1")
+	pr := NewPropertyID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name         string
-		PID, NewID   id.PluginID
+		PID, NewID   PluginID
 		WS, Expected *Widgets
 	}{
 		{
@@ -238,16 +237,16 @@ func TestWidgets_UpgradePlugin(t *testing.T) {
 }
 
 func TestWidgets_Properties(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	pr2 := id.NewPropertyID()
-	wid := id.NewWidgetID()
-	wid2 := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	pr2 := NewPropertyID()
+	wid := NewWidgetID()
+	wid2 := NewWidgetID()
 
 	tests := []struct {
 		Name     string
 		WS       *Widgets
-		Expected []id.PropertyID
+		Expected []PropertyID
 	}{
 		{
 			Name: "get properties",
@@ -255,7 +254,7 @@ func TestWidgets_Properties(t *testing.T) {
 				MustWidget(wid, pid, "eee", pr, true, false),
 				MustWidget(wid2, pid, "eee", pr2, true, false),
 			}, nil),
-			Expected: []id.PropertyID{pr, pr2},
+			Expected: []PropertyID{pr, pr2},
 		},
 		{
 			Name:     "get properties from nil widgets",
@@ -275,11 +274,11 @@ func TestWidgets_Properties(t *testing.T) {
 }
 
 func TestWidgets_Widgets(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	pr2 := id.NewPropertyID()
-	wid := id.NewWidgetID()
-	wid2 := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	pr2 := NewPropertyID()
+	wid := NewWidgetID()
+	wid2 := NewWidgetID()
 
 	tests := []struct {
 		Name     string
@@ -315,13 +314,13 @@ func TestWidgets_Widgets(t *testing.T) {
 }
 
 func TestWidgets_Widget(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	wid := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name     string
-		ID       id.WidgetID
+		ID       WidgetID
 		WS       *Widgets
 		Expected *Widget
 	}{
@@ -356,13 +355,13 @@ func TestWidgets_Widget(t *testing.T) {
 }
 
 func TestWidgets_Has(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID()
-	wid := id.NewWidgetID()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID()
+	wid := NewWidgetID()
 
 	tests := []struct {
 		Name     string
-		ID       id.WidgetID
+		ID       WidgetID
 		WS       *Widgets
 		Expected bool
 	}{

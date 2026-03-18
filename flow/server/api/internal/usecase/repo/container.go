@@ -3,7 +3,7 @@ package repo
 import (
 	"errors"
 
-	"github.com/reearth/reearthx/account/accountdomain"
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"github.com/reearth/reearthx/authserver"
 	"github.com/reearth/reearthx/usecasex"
@@ -13,8 +13,10 @@ var ErrOperationDenied = errors.New("operation denied")
 
 type Container struct {
 	Asset         Asset
+	AssetUpload   AssetUpload
 	AuthRequest   authserver.RequestRepo
 	Config        Config
+	WorkerConfig  WorkerConfig
 	Deployment    Deployment
 	EdgeExecution EdgeExecution
 	Job           Job
@@ -27,18 +29,19 @@ type Container struct {
 	Role          accountrepo.Role // TODO: Delete this once the permission check migration is complete.
 	Transaction   usecasex.Transaction
 	Trigger       Trigger
-	User          accountrepo.User
+	User          accountrepo.User // TODO: Remove this once the replace user management is complete.
 	Workflow      Workflow
-	Workspace     accountrepo.Workspace
+	Workspace     accountrepo.Workspace // TODO: Remove this once the replace user management is complete.
 }
 
+// TODO: Remove this once the replace user management is complete.
 func (c *Container) AccountRepos() *accountrepo.Container {
 	return &accountrepo.Container{
 		Workspace:   c.Workspace,
 		User:        c.User,
 		Transaction: c.Transaction,
-		Role:        c.Role,        // TODO: Delete this once the permission check migration is complete.
-		Permittable: c.Permittable, // TODO: Delete this once the permission check migration is complete.
+		Role:        c.Role,
+		Permittable: c.Permittable,
 	}
 }
 
@@ -48,8 +51,10 @@ func (c *Container) Filtered(workspace WorkspaceFilter) *Container {
 	}
 	return &Container{
 		Asset:         c.Asset.Filtered(workspace),
+		AssetUpload:   c.AssetUpload.Filtered(workspace),
 		AuthRequest:   c.AuthRequest,
 		Config:        c.Config,
+		WorkerConfig:  c.WorkerConfig,
 		Deployment:    c.Deployment.Filtered(workspace),
 		EdgeExecution: c.EdgeExecution,
 		Job:           c.Job.Filtered(workspace),
@@ -67,8 +72,8 @@ func (c *Container) Filtered(workspace WorkspaceFilter) *Container {
 }
 
 type WorkspaceFilter struct {
-	Readable accountdomain.WorkspaceIDList
-	Writable accountdomain.WorkspaceIDList
+	Readable accountsid.WorkspaceIDList
+	Writable accountsid.WorkspaceIDList
 }
 
 func (f WorkspaceFilter) Clone() WorkspaceFilter {
@@ -79,7 +84,7 @@ func (f WorkspaceFilter) Clone() WorkspaceFilter {
 }
 
 func (f WorkspaceFilter) Merge(g WorkspaceFilter) WorkspaceFilter {
-	var r, w accountdomain.WorkspaceIDList
+	var r, w accountsid.WorkspaceIDList
 	if f.Readable != nil || g.Readable != nil {
 		if f.Readable == nil {
 			r = g.Readable.Clone()
@@ -102,10 +107,10 @@ func (f WorkspaceFilter) Merge(g WorkspaceFilter) WorkspaceFilter {
 	}
 }
 
-func (f WorkspaceFilter) CanRead(id accountdomain.WorkspaceID) bool {
+func (f WorkspaceFilter) CanRead(id accountsid.WorkspaceID) bool {
 	return f.Readable == nil || f.Readable.Has(id)
 }
 
-func (f WorkspaceFilter) CanWrite(id accountdomain.WorkspaceID) bool {
+func (f WorkspaceFilter) CanWrite(id accountsid.WorkspaceID) bool {
 	return f.Writable == nil || f.Writable.Has(id)
 }

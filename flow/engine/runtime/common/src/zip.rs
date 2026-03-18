@@ -21,8 +21,7 @@ where
             Ok(p) => p,
             Err(e) => {
                 return Err(crate::Error::zip(format!(
-                    "Failed to strip prefix with err: {:?}",
-                    e
+                    "Failed to strip prefix with err: {e:?}"
                 )))
             }
         };
@@ -63,5 +62,7 @@ mod tests {
         let subfile_path = subdir.join("subfile");
         std::fs::File::create(subfile_path).unwrap();
         assert!(write(std::fs::File::create("test.zip").unwrap(), temp_dir.path(),).is_ok());
+        // clean up
+        std::fs::remove_file("test.zip").unwrap();
     }
 }

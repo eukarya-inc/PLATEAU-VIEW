@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/jarcoal/httpmock"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
@@ -30,6 +30,7 @@ func TestSendRequestToFME(t *testing.T) {
 					Year:            2023,
 					MaxMinorVersion: 5,
 					FMEURL:          "https://example.com/v3",
+					Converter:       plateaucms.ConverterFME,
 				},
 			}, nil
 		},
@@ -65,6 +66,13 @@ func TestSendRequestToFME(t *testing.T) {
 				Value: &cms.Asset{
 					ID:  "codelistID",
 					URL: "codelists",
+				},
+			},
+			{
+				Key: "schemas",
+				Value: &cms.Asset{
+					ID:  "schemasID",
+					URL: "schemas",
 				},
 			},
 			{
@@ -114,7 +122,7 @@ func TestSendRequestToFME(t *testing.T) {
 		c.Reset()
 
 		err := sendRequestToFME(ctx, s, conf, w)
-		assert.ErrorContains(t, err, "invalid webhook payload")
+		assert.ErrorContains(t, err, "invalid item")
 	})
 
 	t.Run("already converted", func(t *testing.T) {
@@ -149,7 +157,7 @@ func TestSendRequestToFME(t *testing.T) {
 
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("skip qc and convert", func(t *testing.T) {
@@ -187,7 +195,7 @@ func TestSendRequestToFME(t *testing.T) {
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
 
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("skip qc and convert with tags", func(t *testing.T) {
@@ -223,7 +231,7 @@ func TestSendRequestToFME(t *testing.T) {
 		err := sendRequestToFME(ctx, s, conf, w)
 		assert.NoError(t, err)
 
-		assert.Contains(t, log(), "skip qc and convert")
+		assert.Contains(t, log(), "skip: qc and convert are skipped by item setting")
 	})
 
 	t.Run("failed to get citygml asset", func(t *testing.T) {
@@ -366,7 +374,7 @@ func TestSendRequestToFME(t *testing.T) {
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, "conv_status", metadataFields[0].Key)
-			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), metadataFields[0].Value)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusNotStarted), metadataFields[0].Value)
 			return nil, nil
 		}
 		c.MockCommentToItem = func(ctx context.Context, assetID, content string) error {
@@ -387,6 +395,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)
@@ -460,6 +469,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)
@@ -519,7 +529,7 @@ func TestSendRequestToFME(t *testing.T) {
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, "conv_status", metadataFields[0].Key)
-			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), metadataFields[0].Value)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusNotStarted), metadataFields[0].Value)
 			return nil, nil
 		}
 		c.MockCommentToItem = func(ctx context.Context, assetID, content string) error {
@@ -540,6 +550,7 @@ func TestSendRequestToFME(t *testing.T) {
 				}.String("secret"),
 				Target:    "target",
 				Codelists: "codelists",
+				Schemas:   "schemas",
 				ResultURL: "/notify_fme/v3",
 			},
 		}, f.called)
@@ -827,6 +838,13 @@ func TestReceiveResultFromFME(t *testing.T) {
 			return url, nil
 		}
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+			// QC完了 → conv_status=実行中 になること
+			convField, _ := lo.Find(metadataFields, func(f *cms.Field) bool { return f.Key == "conv_status" })
+			assert.NotNil(t, convField)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusRunning), convField.Value)
+			qcField, _ := lo.Find(metadataFields, func(f *cms.Field) bool { return f.Key == "qc_status" })
+			assert.NotNil(t, qcField)
+			assert.Equal(t, string(cmsintegrationcommon.ConvertionStatusSuccess), qcField.Value)
 			return nil, nil
 		}
 		err := receiveResultFromFME(ctx, s, conf, r)
@@ -949,7 +967,5 @@ func (p *plateauCMSMock) PlateauFeatureTypes(ctx context.Context) (plateaucms.Pl
 }
 
 func (p *plateauCMSMock) Metadata(ctx context.Context, prj string, findDataCatalog, useDefault bool) (plateaucms.Metadata, plateaucms.MetadataList, error) {
-	return plateaucms.Metadata{
-		Converter: "fme",
-	}, nil, nil
+	return plateaucms.Metadata{}, nil, nil
 }

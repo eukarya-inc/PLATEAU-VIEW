@@ -1,0 +1,154 @@
+use std::{collections::HashMap, sync::Arc};
+
+use reearth_flow_common::csv::Delimiter;
+use reearth_flow_runtime::{
+    errors::BoxedError,
+    event::EventHub,
+    executor_operation::NodeContext,
+    node::{IngestionMessage, Port, Source, SourceFactory, DEFAULT_PORT},
+};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::sync::mpsc::Sender;
+
+use super::reader::csv;
+use super::reader::runner::get_content;
+use crate::{errors::SourceError, file::reader::runner::FileReaderCommonParam};
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CsvReaderFactory;
+
+impl SourceFactory for CsvReaderFactory {
+    fn name(&self) -> &str {
+        "CsvReader"
+    }
+
+    fn description(&self) -> &str {
+        "Read Features from CSV or TSV File"
+    }
+
+    fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
+        Some(schemars::schema_for!(CsvReaderParam))
+    }
+
+    fn categories(&self) -> &[&'static str] {
+        &["File"]
+    }
+
+    fn get_output_ports(&self) -> Vec<Port> {
+        vec![DEFAULT_PORT.clone()]
+    }
+
+    fn build(
+        &self,
+        _ctx: NodeContext,
+        _event_hub: EventHub,
+        _action: String,
+        with: Option<HashMap<String, Value>>,
+        _state: Option<Vec<u8>>,
+    ) -> Result<Box<dyn Source>, BoxedError> {
+        let params = if let Some(with) = with {
+            let value: Value = serde_json::to_value(with).map_err(|e| {
+                SourceError::CsvReaderFactory(format!("Failed to serialize `with` parameter: {e}"))
+            })?;
+            serde_json::from_value(value).map_err(|e| {
+                SourceError::CsvReaderFactory(format!(
+                    "Failed to deserialize `with` parameter: {e}"
+                ))
+            })?
+        } else {
+            return Err(SourceError::CsvReaderFactory(
+                "Missing required parameter `with`".to_string(),
+            )
+            .into());
+        };
+        let reader = CsvReader { params };
+        Ok(Box::new(reader))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct CsvReader {
+    params: CsvReaderParam,
+}
+
+/// # CsvReader Parameters
+/// Configure how CSV and TSV files are processed and read
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct CsvReaderParam {
+    #[serde(flatten)]
+    pub(super) common_property: FileReaderCommonParam,
+    #[serde(flatten)]
+    property: csv::CsvReaderParam,
+    /// # File Format
+    /// Choose the delimiter format for the input file
+    format: CsvFormat,
+    /// # Character Encoding
+    ///
+    /// Character encoding for the CSV/TSV file.
+    /// If not specified, defaults to UTF-8.
+    ///
+    /// Supported encodings include:
+    /// - **UTF-8** - Unicode UTF-8 (default)
+    /// - **Shift-JIS** - Japanese encoding
+    /// - **EUC-JP** - Japanese encoding
+    /// - **Windows Code Pages** - Windows-1250 through Windows-1258
+    /// - **ISO-8859 family** - ISO-8859-1 through ISO-8859-16
+    ///
+    /// All encoding labels are case-insensitive.
+    encoding: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum CsvFormat {
+    /// # CSV (Comma-Separated Values)
+    /// File with comma-separated values
+    Csv,
+    /// # TSV (Tab-Separated Values)
+    /// File with tab-separated values
+    Tsv,
+}
+
+impl CsvFormat {
+    fn delimiter(&self) -> Delimiter {
+        match self {
+            CsvFormat::Csv => Delimiter::Comma,
+            CsvFormat::Tsv => Delimiter::Tab,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Source for CsvReader {
+    async fn initialize(&self, _ctx: NodeContext) {}
+
+    fn name(&self) -> &str {
+        "CsvReader"
+    }
+
+    async fn serialize_state(&self) -> Result<Vec<u8>, BoxedError> {
+        Ok(vec![])
+    }
+
+    async fn start(
+        &mut self,
+        ctx: NodeContext,
+        sender: Sender<(Port, IngestionMessage)>,
+    ) -> Result<(), BoxedError> {
+        let storage_resolver = Arc::clone(&ctx.storage_resolver);
+
+        let content = get_content(&ctx, &self.params.common_property, storage_resolver).await?;
+        csv::read_csv(
+            self.params.format.delimiter(),
+            &content,
+            &self.params.property,
+            self.params.encoding.as_deref(),
+            sender,
+        )
+        .await
+        .map_err(Into::<BoxedError>::into)
+    }
+}

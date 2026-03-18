@@ -3,7 +3,7 @@ package item
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"

@@ -1,0 +1,25 @@
+{
+  "name": "plateau-view-e2e",
+  "version": "1.0.0",
+  "description": "E2E tests for PLATEAU VIEW",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:install": "playwright install",
+    "test:smoke": "playwright test --grep @smoke --project=webkit",
+    "test:smoke:all": "playwright test --grep @smoke",
+    "codegen": "playwright codegen",
+    "report": "playwright show-report",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.1",
+    "@types/node": "^24.1.0",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.8.3"
+  }
+}

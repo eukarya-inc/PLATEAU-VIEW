@@ -3,7 +3,7 @@ package mongodoc
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/workspacesettings"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/workspacesettings"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
@@ -50,7 +50,7 @@ func Test_WorkspaceSettingsDocument_Model(t *testing.T) {
 	res, err := wsd.Model()
 	assert.NoError(t, err)
 	assert.Equal(t, ws, res)
-	
+
 	wsd2 := &WorkspaceSettingsDocument{
 		ID:       "",
 		Tiles:    ToResourceListDocument(nil),
@@ -59,7 +59,7 @@ func Test_WorkspaceSettingsDocument_Model(t *testing.T) {
 	res2, err2 := wsd2.Model()
 	assert.ErrorIs(t, err2, workspacesettings.ErrInvalidID)
 	assert.Nil(t, res2)
-	
+
 	wsid := workspacesettings.NewID()
 	wsd3 := &WorkspaceSettingsDocument{
 		ID:       wsid.String(),

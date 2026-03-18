@@ -1,33 +1,60 @@
 // import { Viewer as CesiumViewerType } from "cesium";
-import { SceneMode } from "cesium";
-import { useEffect, useState } from "react";
-import { Viewer, ViewerProps } from "resium";
+import {
+  BoundingSphere,
+  defined,
+  SceneMode,
+  ScreenSpaceEventType,
+} from "cesium";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ScreenSpaceEvent,
+  ScreenSpaceEventHandler,
+  Viewer,
+  ViewerProps,
+} from "resium";
 
-import { SupportedDataTypes } from "@flow/utils/fetchAndReadGeoData";
-
+import CityGmlData from "./CityGmlData";
 import GeoJsonData from "./GeoJson";
-
-const dummyCredit = document.createElement("div");
 
 const defaultCesiumProps: Partial<ViewerProps> = {
   // timeline: false,
   // baseLayerPicker: false,
   // sceneModePicker: false,
-  sceneMode: SceneMode.COLUMBUS_VIEW,
-  homeButton: false,
   fullscreenButton: false,
+  sceneModePicker: false,
+  infoBox: false,
+  homeButton: false,
   geocoder: false,
   animation: false,
+  requestRenderMode: true,
+  maximumRenderTimeChange: Infinity,
   navigationHelpButton: false,
-  creditContainer: dummyCredit,
+  creditContainer: document.createElement("none"),
 };
 
 type Props = {
   fileContent: any | null;
-  fileType: SupportedDataTypes | null;
+  visualizerType: "2d-map" | "3d-map";
+  viewerRef?: React.RefObject<any>;
+  selectedFeatureId?: string | null;
+  detailsOverlayOpen: boolean;
+  showSelectedFeatureOnly: boolean;
+  onSelectedFeature?: (featureId: string | null) => void;
+  onShowFeatureDetailsOverlay: (value: boolean) => void;
+  setCityGmlBoundingSphere: (value: BoundingSphere | null) => void;
 };
 
-const CesiumViewer: React.FC<Props> = ({ fileContent, fileType }) => {
+const CesiumViewer: React.FC<Props> = ({
+  fileContent,
+  visualizerType,
+  viewerRef,
+  selectedFeatureId,
+  detailsOverlayOpen,
+  showSelectedFeatureOnly,
+  onSelectedFeature,
+  onShowFeatureDetailsOverlay,
+  setCityGmlBoundingSphere,
+}) => {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -35,10 +62,133 @@ const CesiumViewer: React.FC<Props> = ({ fileContent, fileType }) => {
     setIsLoaded(true);
   }, [isLoaded]);
 
+  const handleSingleClick = useCallback(
+    (movement: any) => {
+      if (!onSelectedFeature || !viewerRef?.current?.cesiumElement) return;
+
+      const cesiumViewer = viewerRef.current.cesiumElement;
+      const pickedObject = cesiumViewer.scene.pick(movement.position);
+
+      if (defined(pickedObject) && defined(pickedObject.id)) {
+        const pickedId = pickedObject.id;
+        // Support both Entity (PropertyBag) and Primitive (plain object) ids
+        const originalId =
+          pickedId?.properties?.getValue?.()?.["_originalId"] ??
+          pickedId?._originalId;
+        if (originalId) {
+          try {
+            onSelectedFeature(originalId);
+          } catch (e) {
+            console.error("Cesium viewer error:", e);
+          }
+        }
+      } else {
+        onSelectedFeature(null);
+        onShowFeatureDetailsOverlay(false);
+      }
+    },
+    [onSelectedFeature, onShowFeatureDetailsOverlay, viewerRef],
+  );
+
+  const handleDoubleClick = useCallback(
+    (movement: any) => {
+      if (!onSelectedFeature || !viewerRef?.current?.cesiumElement) return;
+
+      const cesiumViewer = viewerRef.current.cesiumElement;
+      const pickedObject = cesiumViewer.scene.pick(movement.position);
+
+      if (defined(pickedObject) && defined(pickedObject.id)) {
+        const pickedId = pickedObject.id;
+        // Support both Entity (PropertyBag) and Primitive (plain object) ids
+        const originalId =
+          pickedId?.properties?.getValue?.()?.["_originalId"] ??
+          pickedId?._originalId;
+        if (originalId) {
+          try {
+            onSelectedFeature(originalId);
+            onShowFeatureDetailsOverlay(true);
+          } catch (e) {
+            console.error("Cesium viewer error:", e);
+          }
+        }
+      } else {
+        onSelectedFeature(null);
+        onShowFeatureDetailsOverlay(false);
+      }
+    },
+    [onSelectedFeature, onShowFeatureDetailsOverlay, viewerRef],
+  );
+
+  // Separate features by geometry type
+  const { geoJsonData, cityGmlData } = useMemo(() => {
+    const features = fileContent?.features || [];
+
+    const geoJsonFeatures: any[] = [];
+    const cityGmlFeatures: any[] = [];
+
+    for (const feature of features) {
+      if (feature?.geometry?.type === "CityGmlGeometry") {
+        cityGmlFeatures.push(feature);
+      } else {
+        geoJsonFeatures.push(feature);
+      }
+    }
+
+    return {
+      geoJsonData:
+        geoJsonFeatures.length > 0
+          ? { type: "FeatureCollection" as const, features: geoJsonFeatures }
+          : null,
+      cityGmlData:
+        cityGmlFeatures.length > 0
+          ? { type: "FeatureCollection" as const, features: cityGmlFeatures }
+          : null,
+    };
+  }, [fileContent]);
+
   return (
-    <Viewer full {...defaultCesiumProps}>
-      {isLoaded && fileType === "geojson" && (
-        <GeoJsonData geoJsonData={fileContent} />
+    <Viewer
+      ref={viewerRef}
+      sceneMode={
+        visualizerType === "2d-map" ? SceneMode.SCENE2D : SceneMode.SCENE3D
+      }
+      full
+      {...defaultCesiumProps}>
+      {onSelectedFeature && (
+        <ScreenSpaceEventHandler>
+          <ScreenSpaceEvent
+            action={handleSingleClick}
+            type={ScreenSpaceEventType.LEFT_CLICK}
+          />
+          <ScreenSpaceEvent
+            action={handleDoubleClick}
+            type={ScreenSpaceEventType.LEFT_DOUBLE_CLICK}
+          />
+        </ScreenSpaceEventHandler>
+      )}
+
+      {isLoaded && (
+        <>
+          {/* Standard GeoJSON features */}
+          {geoJsonData && (
+            <GeoJsonData
+              geoJsonData={geoJsonData}
+              selectedFeatureId={selectedFeatureId}
+              showSelectedFeatureOnly={showSelectedFeatureOnly}
+            />
+          )}
+
+          {/* CityGML features */}
+          {cityGmlData && (
+            <CityGmlData
+              cityGmlData={cityGmlData}
+              setCityGmlBoundingSphere={setCityGmlBoundingSphere}
+              selectedFeatureId={selectedFeatureId}
+              detailsOverlayOpen={detailsOverlayOpen}
+              showSelectedFeatureOnly={showSelectedFeatureOnly}
+            />
+          )}
+        </>
       )}
     </Viewer>
   );

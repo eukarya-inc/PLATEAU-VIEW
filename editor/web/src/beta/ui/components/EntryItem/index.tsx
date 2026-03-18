@@ -5,7 +5,6 @@ import {
   PopupMenu,
   PopupMenuItem
 } from "@reearth/beta/lib/reearth-ui";
-import { useT } from "@reearth/services/i18n";
 import { styled } from "@reearth/services/theme";
 import {
   FC,
@@ -43,7 +42,6 @@ export const EntryItem: FC<EntryItemProps> = ({
   actions,
   onClick
 }) => {
-  const t = useT();
   const [hovered, setHovered] = useState(false);
   const handleMouseEnter = useCallback(() => {
     if (!disableHover) {
@@ -98,8 +96,6 @@ export const EntryItem: FC<EntryItemProps> = ({
                   icon="dotsThreeVertical"
                   size="small"
                   appearance="simple"
-                  placement="top"
-                  tooltipText={t("More")}
                 />
               }
               placement="bottom-start"

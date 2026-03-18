@@ -6,13 +6,11 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-xs overflow-auto", className)}
-      {...props}
-    />
-  </div>
+  <table
+    ref={ref}
+    className={cn("w-full caption-bottom overflow-auto text-xs", className)}
+    {...props}
+  />
 ));
 Table.displayName = "Table";
 
@@ -58,7 +56,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-primary/50 data-[state=selected]:bg-secondary/50",
+      "border-b transition-colors hover:bg-primary/50 data-[state=selected]:bg-primary",
       className,
     )}
     {...props}
@@ -73,7 +71,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      " h-10 px-2 text-left align-middle font-medium [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className,
     )}
     {...props}
@@ -88,7 +86,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-2 py-1 align-middle dark:font-light truncate [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "truncate px-2 py-1 align-middle dark:font-light [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className,
     )}
     {...props}

@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"

@@ -4,7 +4,6 @@ import SelectableArea from "@reearth/beta/features/Visualizer/shared/components/
 import { useElementOnScreen } from "@reearth/beta/features/Visualizer/shared/hooks/useElementOnScreen";
 import { DragAndDropList } from "@reearth/beta/lib/reearth-ui";
 import type { ValueType, ValueTypes } from "@reearth/beta/utils/value";
-import { NLSLayer } from "@reearth/services/api/layersApi/utils";
 import type { InstallableStoryBlock } from "@reearth/services/api/storytellingApi/blocks";
 import { useT } from "@reearth/services/i18n";
 import { styled } from "@reearth/services/theme";
@@ -78,7 +77,6 @@ type Props = {
     itemId?: string
   ) => Promise<void>;
   renderBlock?: (block: BlockProps<StoryBlockType>) => ReactNode;
-  nlsLayers?: NLSLayer[];
 };
 const PAGE_DRAG_HANDLE_CLASS_NAME =
   "reearth-visualizer-editor-page-drag-handle";
@@ -105,8 +103,7 @@ const StoryPanel: FC<Props> = ({
   onPropertyItemAdd,
   onPropertyItemMove,
   onPropertyItemDelete,
-  renderBlock,
-  nlsLayers
+  renderBlock
 }) => {
   const t = useT();
 
@@ -183,7 +180,6 @@ const StoryPanel: FC<Props> = ({
               onPropertyItemDelete={onPropertyItemDelete}
               renderBlock={renderBlock}
               padding={panelSettings?.padding?.value}
-              nlsLayers={nlsLayers}
             />
             {isEditable && !disableSelection && (
               <BlockAddBar
@@ -213,7 +209,6 @@ const StoryPanel: FC<Props> = ({
       renderBlock,
       panelSettings?.padding?.value,
       panelSettings?.gap?.value,
-      nlsLayers,
       disableSelection,
       openBlocksIndex,
       installableStoryBlocks,
@@ -276,7 +271,6 @@ const StoryPanel: FC<Props> = ({
               onPropertyItemMove={onPropertyItemMove}
               onPropertyItemDelete={onPropertyItemDelete}
               renderBlock={renderBlock}
-              nlsLayers={nlsLayers}
             />
           )}
           {isEditable && !disableSelection && (

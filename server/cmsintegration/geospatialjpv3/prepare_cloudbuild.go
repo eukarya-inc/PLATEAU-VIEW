@@ -16,6 +16,7 @@ type prepareOnCloudBuildConfig struct {
 	CMSURL                string
 	CMSToken              string
 	FeatureTypes          []string
+	FeatureTypeNames      map[string]string
 	CloudBuildImage       string
 	CloudBuildMachineType string
 	CloudBuildProject     string
@@ -34,7 +35,7 @@ func prepareOnCloudBuild(ctx context.Context, conf prepareOnCloudBuildConfig) er
 		conf.CloudBuildDiskSizeGb = defaultDiskSizeGb
 	}
 
-	log.Debugfc(ctx, "geospatialjp webhook: prepare (cloud build): %s", pp.Sprint(conf))
+	log.Debugfc(ctx, "prepare (cloud build): %s", pp.Sprint(conf))
 
 	return runCloudBuild(ctx, CloudBuildConfig{
 		Image: conf.CloudBuildImage,
@@ -42,7 +43,7 @@ func prepareOnCloudBuild(ctx context.Context, conf prepareOnCloudBuildConfig) er
 			"prepare-gspatialjp",
 			"--city=" + conf.City,
 			"--project=" + conf.Project,
-			"--feature-types=" + strings.Join(conf.FeatureTypes, ","),
+			"--feature-types=" + encodeFeatureTypes(conf.FeatureTypes, conf.FeatureTypeNames),
 			"--wetrun",
 		},
 		Env: []string{
@@ -107,4 +108,16 @@ func runCloudBuild(ctx context.Context, conf CloudBuildConfig) error {
 		return err
 	}
 	return nil
+}
+
+func encodeFeatureTypes(codes []string, names map[string]string) string {
+	parts := make([]string, 0, len(codes))
+	for _, code := range codes {
+		if name, ok := names[code]; ok && name != "" {
+			parts = append(parts, code+":"+name)
+		} else {
+			parts = append(parts, code)
+		}
+	}
+	return strings.Join(parts, ",")
 }

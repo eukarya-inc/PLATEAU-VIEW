@@ -7,8 +7,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/file"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/file"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/samber/lo"
@@ -64,10 +64,15 @@ type File interface {
 	ReadAsset(context.Context, string, string, map[string]string) (io.ReadCloser, map[string]string, error)
 	GetAssetFiles(context.Context, string) ([]FileEntry, error)
 	UploadAsset(context.Context, *file.File) (string, int64, error)
+	Read(context.Context, string, map[string]string) (io.ReadCloser, map[string]string, error)
+	Upload(context.Context, *file.File, string) (int64, error)
 	DeleteAsset(context.Context, string, string) error
-	// DeleteAssets deletes assets in batch based on multiple asset IDs
 	DeleteAssets(context.Context, []string) error
-	GetURL(*asset.Asset) string
+	PublishAsset(context.Context, string, string) error
+	UnpublishAsset(context.Context, string, string) error
+	GetAccessInfoResolver() asset.AccessInfoResolver
+	GetAccessInfo(*asset.Asset) *asset.AccessInfo
+	GetBaseURL() string
 	IssueUploadAssetLink(context.Context, IssueUploadAssetParam) (*UploadAssetLink, error)
 	UploadedAsset(context.Context, *asset.Upload) (*file.File, error)
 }

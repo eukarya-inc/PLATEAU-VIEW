@@ -20,6 +20,7 @@ use super::{
 
 static ADMIN_CODE_LIST: &str = "Common_localPublicAuthorities.xml";
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Schema {
@@ -65,14 +66,12 @@ impl ProcessorFactory for DictionariesInitiatorFactory {
         let params: DictionariesInitiatorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 PlateauProcessorError::DictionariesInitiatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 PlateauProcessorError::DictionariesInitiatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -131,12 +130,11 @@ impl Processor for DictionariesInitiator {
     ) -> Result<(), BoxedError> {
         let feature = &ctx.feature;
         // Codelist dictionary creation
-        let dir_codelists = match feature.get(&Attribute::new("dirCodelists")) {
+        let dir_codelists = match feature.get("dirCodelists") {
             Some(AttributeValue::String(dir)) => dir,
             v => {
                 return Err(PlateauProcessorError::DictionariesInitiator(format!(
-                    "No dirCodelists value with {:?}",
-                    v
+                    "No dirCodelists value with {v:?}"
                 ))
                 .into())
             }
@@ -144,8 +142,7 @@ impl Processor for DictionariesInitiator {
         if !self.codelists_map.contains_key(dir_codelists) {
             let dir = Uri::from_str(dir_codelists).map_err(|e| {
                 PlateauProcessorError::DictionariesInitiator(format!(
-                    "Cannot parse uri with error = {:?}",
-                    e
+                    "Cannot parse uri with error = {e:?}"
                 ))
             })?;
             if dir.is_dir() {
@@ -212,7 +209,11 @@ impl Processor for DictionariesInitiator {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

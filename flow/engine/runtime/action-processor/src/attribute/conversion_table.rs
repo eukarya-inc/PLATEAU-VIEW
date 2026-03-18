@@ -25,7 +25,7 @@ impl ProcessorFactory for AttributeConversionTableFactory {
     }
 
     fn description(&self) -> &str {
-        "Converts attributes from conversion table"
+        "Transform Feature Attributes Using Lookup Tables"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -54,14 +54,12 @@ impl ProcessorFactory for AttributeConversionTableFactory {
         let params: AttributeConversionTableParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::ConversionTableFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::ConversionTableFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -83,18 +81,17 @@ impl ProcessorFactory for AttributeConversionTableFactory {
                 .eval::<String>(dataset.to_string().as_str())
                 .map_err(|e| {
                     super::errors::AttributeProcessorError::ConversionTable(format!(
-                        "Failed to evaluate expr: {}",
-                        e
+                        "Failed to evaluate expr: {e}"
                     ))
                 })?;
             let input_path = Uri::from_str(input_path.as_str()).map_err(|e| {
-                super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e))
+                super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}"))
             })?;
             let storage = storage_resolver.resolve(&input_path).map_err(|e| {
-                super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e))
+                super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}"))
             })?;
             storage.get_sync(input_path.path().as_path()).map_err(|e| {
-                super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e))
+                super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}"))
             })?
         } else if let Some(inline) = params.inline {
             Bytes::from(inline.into_bytes())
@@ -150,16 +147,21 @@ struct AttributeConversionTable {
     conversion_table_indexes: HashMap<String, HashMap<AttributeValue, uuid::Uuid>>,
 }
 
+/// # AttributeConversionTable Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeConversionTableParam {
-    /// # Rules to convert attributes
+    /// # Conversion Rules
+    /// List of rules defining how to map attributes using the conversion table
     rules: Vec<AttributeConversionTableRule>,
     /// # Dataset URI
+    /// Path or URI to external conversion table file
     dataset: Option<Expr>,
-    /// # Inline conversion table
+    /// # Inline Table Data
+    /// Conversion table data provided directly as string content
     inline: Option<String>,
-    /// # Format of conversion table
+    /// # Table Format
+    /// Format of the conversion table (CSV, TSV, or JSON)
     format: ConversionTableFormat,
 }
 
@@ -213,13 +215,17 @@ impl Processor for AttributeConversionTable {
             } else {
                 AttributeValue::Null
             };
-            feature.attributes.insert(rule.feature_to.clone(), value);
+            feature.insert(&rule.feature_to, value);
         }
         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -245,11 +251,11 @@ fn read_csv(
         .deserialize()
         .next()
         .unwrap_or(Ok(Vec::<String>::new()))
-        .map_err(|e| super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e)))?;
+        .map_err(|e| super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}")))?;
     let mut rows = HashMap::new();
     for rd in rdr.deserialize() {
         let record: Vec<String> = rd.map_err(|e| {
-            super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e))
+            super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}"))
         })?;
         if record.len() < header.len() {
             return Err(super::errors::AttributeProcessorError::ConversionTable(
@@ -278,9 +284,9 @@ fn read_json(
 > {
     let value: serde_json::Value =
         serde_json::from_str(std::str::from_utf8(&byte).map_err(|e| {
-            super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e))
+            super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}"))
         })?)
-        .map_err(|e| super::errors::AttributeProcessorError::ConversionTable(format!("{:?}", e)))?;
+        .map_err(|e| super::errors::AttributeProcessorError::ConversionTable(format!("{e:?}")))?;
     let mut rows = HashMap::new();
     match value {
         serde_json::Value::Array(arr) => {
@@ -342,7 +348,7 @@ fn generate_index_key(keys: &[String]) -> String {
 fn generate_index_value(row: &HashMap<String, AttributeValue>, keys: &[String]) -> String {
     keys.iter().fold("".to_string(), |acc, key| {
         if let Some(AttributeValue::String(value)) = row.get(key) {
-            format!("{}{}", acc, value)
+            format!("{acc}{value}")
         } else {
             acc
         }
@@ -352,7 +358,7 @@ fn generate_index_value(row: &HashMap<String, AttributeValue>, keys: &[String]) 
 fn generate_index_value_by_attribute_value(values: &[AttributeValue]) -> AttributeValue {
     let value = values.iter().fold("".to_string(), |acc, value| {
         if let AttributeValue::String(value) = value {
-            format!("{}{}", acc, value)
+            format!("{acc}{value}")
         } else {
             acc
         }

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/jarcoal/httpmock"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
@@ -40,7 +40,7 @@ func TestRepos(t *testing.T) {
 	repos := NewRepos(pcms)
 	err := repos.Prepare(ctx, "prj", 2023, true, cms)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"plateau bldg2 bldg: invalid city: city2", "plateau bldg2: city not found: city2"}, repos.Warnings("prj"))
+	assert.Equal(t, []string{"dataset type landmark (ランドマーク) has no datasets, filtering out", "global dataset type not found", "plateau bldg2 bldg: invalid city: city2", "plateau bldg2: city not found: city2"}, repos.Warnings("prj"))
 
 	assertRes := func(t *testing.T, ctx context.Context, r plateauapi.Repo, cityName, cityCode, itemID string, admin bool, stage *string, isPref, found, noCity bool) {
 		t.Helper()
@@ -382,6 +382,14 @@ var bldg = j(`{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
 				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
+				}
 			]
 		},
 		{
@@ -395,6 +403,14 @@ var bldg = j(`{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
 				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
+				}
 			]
 		},
 		{
@@ -407,6 +423,14 @@ var bldg = j(`{
 				{
 					"key": "data",
 					"value": [{"url": "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1.zip"}]
+				}
+			],
+			"metadataFields": [
+				{
+					"key": "status",
+					"value": {
+						"name": "確認可能"
+					}
 				}
 			]
 		}

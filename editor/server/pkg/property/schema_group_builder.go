@@ -2,7 +2,6 @@ package property
 
 import (
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 type SchemaGroupBuilder struct {
@@ -17,7 +16,7 @@ func NewSchemaGroup() *SchemaGroupBuilder {
 
 func (b *SchemaGroupBuilder) Build() (*SchemaGroup, error) {
 	if b.p.id == "" {
-		return nil, id.ErrInvalidID
+		return nil, ErrInvalidID
 	}
 	return b.p, nil
 }
@@ -30,7 +29,7 @@ func (b *SchemaGroupBuilder) MustBuild() *SchemaGroup {
 	return p
 }
 
-func (b *SchemaGroupBuilder) ID(id id.PropertySchemaGroupID) *SchemaGroupBuilder {
+func (b *SchemaGroupBuilder) ID(id SchemaGroupID) *SchemaGroupBuilder {
 	b.p.id = id
 	return b
 }
@@ -42,7 +41,7 @@ func (b *SchemaGroupBuilder) Fields(fields []*SchemaField) *SchemaGroupBuilder {
 	}
 
 	newFields := []*SchemaField{}
-	ids := map[id.PropertyFieldID]struct{}{}
+	ids := map[FieldID]struct{}{}
 	for _, f := range fields {
 		if f == nil {
 			continue
@@ -77,7 +76,7 @@ func (b *SchemaGroupBuilder) Collection(collection i18n.String) *SchemaGroupBuil
 	return b
 }
 
-func (b *SchemaGroupBuilder) RepresentativeField(representativeField *id.PropertyFieldID) *SchemaGroupBuilder {
+func (b *SchemaGroupBuilder) RepresentativeField(representativeField *FieldID) *SchemaGroupBuilder {
 	b.p.representativeField = representativeField.CloneRef()
 	return b
 }

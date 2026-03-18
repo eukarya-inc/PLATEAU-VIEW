@@ -1,5 +1,4 @@
 import { ValueType, ValueTypes } from "@reearth/beta/utils/value";
-import { NLSLayer } from "@reearth/services/api/layersApi/utils";
 import type { InstallableStoryBlock } from "@reearth/services/api/storytellingApi/blocks";
 import { styled } from "@reearth/services/theme";
 import { FC, MutableRefObject, ReactNode } from "react";
@@ -65,7 +64,6 @@ export type Props = {
     itemId?: string
   ) => Promise<void>;
   renderBlock?: (block: BlockProps<StoryBlock>) => ReactNode;
-  nlsLayers?: NLSLayer[];
 };
 
 const StoryContent: FC<Props> = ({
@@ -89,8 +87,7 @@ const StoryContent: FC<Props> = ({
   onPropertyItemAdd,
   onPropertyItemMove,
   onPropertyItemDelete,
-  renderBlock,
-  nlsLayers
+  renderBlock
 }) => {
   const {
     pageGap,
@@ -133,7 +130,6 @@ const StoryContent: FC<Props> = ({
           onPropertyItemMove={onPropertyItemMove}
           onPropertyItemDelete={onPropertyItemDelete}
           renderBlock={renderBlock}
-          nlsLayers={nlsLayers}
         >
           <PageGap height={pageGap} onClick={() => onPageSelect?.(p.id)} />
         </StoryPage>

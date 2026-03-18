@@ -3,21 +3,22 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/job"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 )
 
 type Job struct {
-	lock sync.Mutex
 	data map[id.JobID]*job.Job
 	f    repo.WorkspaceFilter
+	lock sync.Mutex
 }
 
 func NewJob() *Job {
@@ -33,7 +34,7 @@ func (r *Job) Filtered(f repo.WorkspaceFilter) repo.Job {
 	}
 }
 
-func (r *Job) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, pagination *interfaces.PaginationParam) ([]*job.Job, *interfaces.PageBasedInfo, error) {
+func (r *Job) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, pagination *interfaces.PaginationParam, keyword *string) ([]*job.Job, *interfaces.PageBasedInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -43,9 +44,17 @@ func (r *Job) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID,
 
 	result := []*job.Job{}
 	for _, j := range r.data {
-		if j.Workspace() == id {
-			result = append(result, j)
+		if j.Workspace() != id {
+			continue
 		}
+
+		if keyword != nil && *keyword != "" {
+			if !strings.Contains(strings.ToLower(j.ID().String()), strings.ToLower(*keyword)) {
+				continue
+			}
+		}
+
+		result = append(result, j)
 	}
 
 	total := int64(len(result))

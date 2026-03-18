@@ -1,35 +1,35 @@
 package project
 
 import (
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 type (
 	ID          = id.ProjectID
-	WorkspaceID = accountdomain.WorkspaceID
+	WorkspaceID = accountsid.WorkspaceID
 	WorkflowID  = id.WorkflowID
 )
 
 var (
 	NewID          = id.NewProjectID
-	NewWorkspaceID = accountdomain.NewWorkspaceID
+	NewWorkspaceID = accountsid.NewWorkspaceID
 	NewWorkflowID  = id.NewWorkflowID
 )
 
 var (
 	MustID          = id.MustProjectID
-	MustWorkspaceID = id.MustWorkspaceID
+	MustWorkspaceID = accountsid.MustWorkspaceID
 )
 
 var (
 	IDFrom          = id.ProjectIDFrom
-	WorkspaceIDFrom = accountdomain.WorkspaceIDFrom
+	WorkspaceIDFrom = accountsid.WorkspaceIDFrom
 )
 
 var (
 	IDFromRef          = id.ProjectIDFromRef
-	WorkspaceIDFromRef = accountdomain.WorkspaceIDFromRef
+	WorkspaceIDFromRef = accountsid.WorkspaceIDFromRef
 )
 
 var ErrInvalidID = id.ErrInvalidID

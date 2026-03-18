@@ -21,6 +21,10 @@ export default () => {
         keyBinding: GeneralKeyBindings["shortcutsDialog"],
         description: t("Open the Keyboard Shortcuts Dialog"),
       },
+      {
+        keyBinding: GeneralKeyBindings["save"],
+        description: t("Manually Save the Project"),
+      },
     ],
   };
 
@@ -32,6 +36,10 @@ export default () => {
         description: t("Toggle Fullscreen Mode"),
       },
       {
+        keyBinding: EditorKeyBindings["writerDialog"],
+        description: t("Open the Writer Dialog"),
+      },
+      {
         keyBinding: EditorKeyBindings["readerDialog"],
         description: t("Open the Reader Dialog"),
       },
@@ -40,25 +48,13 @@ export default () => {
         description: t("Open the Transformer Dialog"),
       },
       {
-        keyBinding: EditorKeyBindings["writerDialog"],
-        description: t("Open the Writer Dialog"),
-      },
-      // {
-      //   keyBinding: EditorKeyBindings["groupToSubWorkFlow"],
-      //   description: t("Create new subworkflow from selected nodes"),
-      // },
-      {
-        keyBinding: EditorKeyBindings["leftPanelCanvasNavigator"],
-        description: t("Toggle the Canvas Navigator Panel"),
+        keyBinding: EditorKeyBindings["openSearch"],
+        description: t("Open Canvas Search"),
       },
       {
-        keyBinding: EditorKeyBindings["leftPanelActionsList"],
-        description: t("Toggle the Actions List Panel"),
+        keyBinding: EditorKeyBindings["groupToSubWorkFlow"],
+        description: t("Group Selected Actions into a Sub-Workflow"),
       },
-      // {
-      //   keyBinding: EditorKeyBindings["leftPanelResources"],
-      //   description: t("Toggle the resources panel"),
-      // },
     ],
   };
 
@@ -67,11 +63,15 @@ export default () => {
     shortcuts: [
       {
         keyBinding: CanvasKeyBindings["copy"],
-        description: t("Copy the Selected Nodes"),
+        description: t("Copy the Selected Actions"),
+      },
+      {
+        keyBinding: CanvasKeyBindings["cut"],
+        description: t("Cut the Selected Actions"),
       },
       {
         keyBinding: CanvasKeyBindings["paste"],
-        description: t("Paste the Copied Nodes"),
+        description: t("Paste the Copied Actions"),
       },
       {
         keyBinding: CanvasKeyBindings["undo"],
@@ -80,6 +80,10 @@ export default () => {
       {
         keyBinding: CanvasKeyBindings["redo"],
         description: t("Redo the Last Action"),
+      },
+      {
+        keyBinding: CanvasKeyBindings["disableNode"],
+        description: t("Disable/Enable the Selected Actions"),
       },
       {
         keyBinding: CanvasKeyBindings["zoomIn"],

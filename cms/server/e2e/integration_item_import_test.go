@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
-	"github.com/reearth/reearth-cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
 )
 
 func IntegrationModelImportMultiPart(e *httpexpect.Expect, mId string, format string, strategy string, mutateSchema bool, geometryFieldKey string, content string) *httpexpect.Value {

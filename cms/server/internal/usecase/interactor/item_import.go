@@ -7,15 +7,15 @@ import (
 	"reflect"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/project"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/task"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/task"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
@@ -120,7 +120,7 @@ func (i Item) Import(ctx context.Context, param interfaces.ImportItemsParam, ope
 		count++
 
 		if err := decoder.Decode(&rawJSON); err != nil {
-			return res.Into(), fmt.Errorf("Error decoding raw message: %v\n", err)
+			return res.Into(), fmt.Errorf("error decoding raw message: %v", err)
 		}
 
 		// guess schema fields from first object using ordered map to keep fields order
@@ -225,10 +225,7 @@ func (i Item) saveChunk(ctx context.Context, prj *project.Project, m *model.Mode
 		return err
 	}
 
-	isMetadata := false
-	if m.Metadata() != nil && s.ID() == *m.Metadata() {
-		isMetadata = true
-	}
+	isMetadata := m.Metadata() != nil && s.ID() == *m.Metadata()
 
 	type itemChanges struct {
 		oldFields item.Fields
@@ -521,9 +518,9 @@ func itemsParamsFrom(chunk []map[string]any, isGeoJson bool, geoField *string, s
 	if isGeoJson && geoField == nil {
 		return nil, rerror.ErrInvalidParams
 	}
-	items := make([]interfaces.ImportItemParam, 0)
+	params := make([]interfaces.ImportItemParam, 0)
 	for _, o := range chunk {
-		item := interfaces.ImportItemParam{}
+		param := interfaces.ImportItemParam{}
 		if isGeoJson {
 			if geoField == nil {
 				return nil, rerror.ErrInvalidParams
@@ -539,17 +536,19 @@ func itemsParamsFrom(chunk []map[string]any, isGeoJson bool, geoField *string, s
 				return nil, rerror.ErrInvalidParams
 			}
 
-			v, err := json.Marshal(o["geometry"])
-			if err != nil {
-				return nil, err
+			if g := o["geometry"]; g != nil {
+				v, err := json.Marshal(g)
+				if err != nil {
+					return nil, rerror.ErrInvalidParams
+				}
+				param.Fields = append(param.Fields, interfaces.ItemFieldParam{
+					Field: f.ID().Ref(),
+					Key:   f.Key().Ref(),
+					Value: string(v),
+					// Group is not supported
+					Group: nil,
+				})
 			}
-			item.Fields = append(item.Fields, interfaces.ItemFieldParam{
-				Field: f.ID().Ref(),
-				Key:   f.Key().Ref(),
-				Value: string(v),
-				// Group is not supported
-				Group: nil,
-			})
 
 			props, ok := o["properties"].(map[string]any)
 			if !ok {
@@ -562,13 +561,13 @@ func itemsParamsFrom(chunk []map[string]any, isGeoJson bool, geoField *string, s
 				var iId *id.ItemID
 				idStr, ok := v.(string)
 				if !ok {
-					return nil, rerror.ErrInvalidParams
+					continue
 				}
 				iId = id.ItemIDFromRef(&idStr)
 				if iId.IsEmpty() || iId.IsNil() {
-					return nil, rerror.ErrInvalidParams
+					continue
 				}
-				item.ItemId = iId
+				param.ItemId = iId
 				continue
 			}
 			key := id.NewKey(k)
@@ -576,7 +575,7 @@ func itemsParamsFrom(chunk []map[string]any, isGeoJson bool, geoField *string, s
 				return nil, rerror.ErrInvalidParams
 			}
 
-			item.Fields = append(item.Fields, interfaces.ItemFieldParam{
+			param.Fields = append(param.Fields, interfaces.ItemFieldParam{
 				Field: nil,
 				Key:   key.Ref(),
 				Value: v,
@@ -584,7 +583,7 @@ func itemsParamsFrom(chunk []map[string]any, isGeoJson bool, geoField *string, s
 				Group: nil,
 			})
 		}
-		items = append(items, item)
+		params = append(params, param)
 	}
-	return items, nil
+	return params, nil
 }

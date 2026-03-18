@@ -66,7 +66,7 @@ const IFrame: ForwardRefRenderFunction<Ref, Props> = (
   return html ? (
     <iframe
       frameBorder="no"
-      scrolling={"no"}
+      scrolling={autoResize ? undefined : "no"}
       data-testid="iframe"
       srcDoc={srcDoc}
       key={html}

@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	CMS_BaseURL string
-	CMS_Token   string
+	CMS_BaseURL       string
+	CMS_Token         string
+	CMS_SystemProject string
 }
 
 func Main(conf *Config, args []string) {

@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"github.com/reearth/reearth-cms/worker/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/pkg/asset"
 	"github.com/reearth/reearthx/log"
 )
 

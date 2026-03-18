@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/internal/infrastructure/memory"
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/integrationapi"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/project"
-	"github.com/reearth/reearth-cms/server/pkg/request"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/infrastructure/memory"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integrationapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/request"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
@@ -1172,7 +1172,7 @@ func TestItem_ItemsAsCSV(t *testing.T) {
 			seedsItems:  item.List{i1},
 			seedSchemas: s1,
 			seedModels:  m1,
-			want:        []byte("id,location_lat,location_lng\n" + i1IDStr + ",139.28179282584915,36.58570985749664\n"),
+			want:        []byte("id,location_lat,location_lng\n" + i1IDStr + ",36.58570985749664,139.28179282584915\n"),
 			wantError:   nil,
 		},
 		{

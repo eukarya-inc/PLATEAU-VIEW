@@ -1,0 +1,45 @@
+name: 🔄 Run Server Job production
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project name(s) to generate cache for (empty for all v3 projects, or e.g., plateau-2024)'
+        required: false
+        type: string
+env:
+  JOB_NAME: plateauview-server-job
+  OUTPUT_BUCKET: gs://plateau-prod-server-cache
+jobs:
+  run_job:
+    runs-on: ubuntu-latest
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Execute Cloud Run Job
+        run: |
+          if [ -n "${{ inputs.project }}" ]; then
+            # プロジェクト指定ありの場合はargsをoverrideする
+            gcloud run jobs execute $JOB_NAME \
+              --region ${{ vars.GCP_REGION }} \
+              --args="--generate-datacatalog,${{ inputs.project }},--output,$OUTPUT_BUCKET" \
+              --wait \
+              --quiet
+          else
+            # プロジェクト指定なしの場合はデフォルトargsを使用（全v3プロジェクト）
+            gcloud run jobs execute $JOB_NAME \
+              --region ${{ vars.GCP_REGION }} \
+              --wait \
+              --quiet
+          fi
+      - name: Check job status
+        if: failure()
+        run: |
+          echo "Job execution failed. Check Cloud Run logs for details."
+          gcloud run jobs executions list --job=$JOB_NAME --region=${{ vars.GCP_REGION }} --limit=1

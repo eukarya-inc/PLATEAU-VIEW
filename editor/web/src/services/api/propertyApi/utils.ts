@@ -44,7 +44,7 @@ export type SchemaFieldType<T extends ValueType = ValueType> = {
   defaultValue?: ValueTypes[T];
   prefix?: string;
   suffix?: string;
-  title?: string;
+  name?: string;
   description?: string;
   placeholder?: string;
   isLinkable?: boolean;
@@ -63,9 +63,7 @@ export type SchemaFieldType<T extends ValueType = ValueType> = {
     | "cameraPose"
     | "padding"
     | "margin"
-    | "datetime"
-    | "zoomLevel"
-    | "propertySelector";
+    | "datetime";
   choices?: {
     key: string;
     label: string;
@@ -178,7 +176,7 @@ const toItem = (
           type: t,
           defaultValue: f.defaultValue,
           suffix: f.suffix ?? undefined,
-          title: f.translatedTitle,
+          name: f.translatedTitle,
           description: f.translatedDescription,
           placeholder: f.translatedPlaceholder,
           only: toCond(f.isAvailableIf),
@@ -244,7 +242,10 @@ const toField = (
   field?: Pick<PropertyField, "fieldId" | "value"> & {
     links?: Links;
   },
-  merged?: Pick<MergedPropertyField, "fieldId" | "overridden"> & {
+  merged?: Pick<
+    MergedPropertyField,
+    "fieldId" | "actualValue" | "overridden"
+  > & {
     links?: Links;
   }
 ): Field | undefined => {
@@ -258,12 +259,14 @@ const toField = (
 
   const { value, type } = valueFromGQL(field?.value, schemaField.type) ?? {};
   if (!type) return;
+  const mergedValue = valueFromGQL(merged?.actualValue, schemaField.type);
   const links = merged?.links ?? field?.links ?? undefined;
 
   return {
     id: schemaField.fieldId,
     type,
     value: value,
+    mergedValue: mergedValue?.value,
     overridden: !!merged?.overridden,
     link:
       links?.length && links[0].datasetSchemaId && links[0].datasetSchemaFieldId
@@ -310,10 +313,6 @@ export const toUi = (
       return "padding";
     case PropertySchemaFieldUi.Datetime:
       return "datetime";
-    case PropertySchemaFieldUi.Zoomlevel:
-      return "zoomLevel";
-    case PropertySchemaFieldUi.PropertySelector:
-      return "propertySelector";
   }
   return undefined;
 };

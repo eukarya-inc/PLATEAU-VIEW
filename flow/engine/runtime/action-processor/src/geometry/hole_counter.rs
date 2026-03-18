@@ -24,7 +24,7 @@ impl ProcessorFactory for HoleCounterFactory {
     }
 
     fn description(&self) -> &str {
-        "Counts the number of holes in a geometry and adds it as an attribute."
+        "Count Polygon Holes to Attribute"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +52,12 @@ impl ProcessorFactory for HoleCounterFactory {
         let params: HoleCounterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::HoleCounterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::HoleCounterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -74,9 +72,13 @@ impl ProcessorFactory for HoleCounterFactory {
     }
 }
 
+/// # Hole Counter Parameters
+/// Configure where to store the count of holes found in polygon geometries
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HoleCounterParam {
+    /// # Output Attribute
+    /// Name of the attribute where the hole count will be stored as a number
     output_attribute: Attribute,
 }
 
@@ -103,7 +105,7 @@ impl Processor for HoleCounter {
             }
             GeometryValue::FlowGeometry2D(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
+                feature.attributes_mut().insert(
                     self.output_attribute.clone(),
                     AttributeValue::Number(geometry.hole_count().into()),
                 );
@@ -111,7 +113,7 @@ impl Processor for HoleCounter {
             }
             GeometryValue::FlowGeometry3D(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
+                feature.attributes_mut().insert(
                     self.output_attribute.clone(),
                     AttributeValue::Number(geometry.hole_count().into()),
                 );
@@ -119,7 +121,7 @@ impl Processor for HoleCounter {
             }
             GeometryValue::CityGmlGeometry(geometry) => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
+                feature.attributes_mut().insert(
                     self.output_attribute.clone(),
                     AttributeValue::Number(geometry.hole_count().into()),
                 );
@@ -129,7 +131,11 @@ impl Processor for HoleCounter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

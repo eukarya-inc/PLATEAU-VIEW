@@ -15,7 +15,7 @@ impl SinkFactory for EchoSinkFactory {
     }
 
     fn description(&self) -> &str {
-        "Echo features"
+        "Debug Echo Features to Logs"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,7 +55,8 @@ impl Sink for EchoSink {
 
     fn process(&mut self, ctx: ExecutorContext) -> Result<(), BoxedError> {
         let span = ctx.info_span();
-        let feature: serde_json::Value = ctx.feature.clone().into();
+        let feature =
+            serde_json::to_value(&ctx.feature).unwrap_or_else(|_| serde_json::Value::Null);
         ctx.event_hub.info_log(
             Some(span.clone()),
             format!(

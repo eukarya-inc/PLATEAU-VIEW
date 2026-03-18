@@ -25,7 +25,7 @@ const LeftPanel: React.FC = () => {
   const route: RouteOption = getRoute(pathname);
 
   return (
-    <div className="flex w-[240px] flex-col justify-between gap-[8px] border-r border-primary bg-secondary">
+    <div className="m-2 flex w-[260px] flex-col justify-between gap-[8px] rounded-xl border bg-secondary px-2 shadow-md shadow-secondary backdrop-blur-xs">
       <div className="flex flex-1 flex-col">
         <TopSection route={route} />
         <BottomSection route={route} />
@@ -49,5 +49,7 @@ const getRoute = (pathname: string): RouteOption => {
             ? "jobs"
             : pathname.includes("triggers")
               ? "triggers"
-              : "projects";
+              : pathname.includes("assets")
+                ? "assets"
+                : "projects";
 };

@@ -3,8 +3,8 @@ package interfaces
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/pkg/item/view"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item/view"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 )
@@ -27,9 +27,9 @@ type UpdateViewParam struct {
 }
 
 var (
-	ErrLastView = rerror.NewE(i18n.T("model should have at least one view"))
+	ErrLastView                  = rerror.NewE(i18n.T("model should have at least one view"))
 	ErrViewsAreNotInTheSameModel = rerror.NewE(i18n.T("views are not in the same model"))
-	ErrViewsLengthMismatch = rerror.NewE(i18n.T("views length mismatch"))
+	ErrViewsLengthMismatch       = rerror.NewE(i18n.T("views length mismatch"))
 )
 
 type View interface {

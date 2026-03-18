@@ -8,10 +8,8 @@ import (
 	"github.com/reearth/reearth/server/pkg/i18n/message"
 	"github.com/reearth/reearth/server/pkg/i18n/message/entitymsg"
 	"github.com/reearth/reearth/server/pkg/i18n/message/errmsg"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/verror"
 	"github.com/reearth/reearth/server/pkg/visualizer"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"golang.org/x/text/language"
 )
 
@@ -30,7 +28,7 @@ var (
 )
 
 type Project struct {
-	id                id.ProjectID
+	id                ID
 	isArchived        bool
 	isBasicAuthActive bool
 	basicAuthUsername string
@@ -45,18 +43,18 @@ type Project struct {
 	publicDescription string
 	publicImage       string
 	publicNoIndex     bool
-	workspace         accountdomain.WorkspaceID
+	workspace         WorkspaceID
 	visualizer        visualizer.Visualizer
 	publishmentStatus PublishmentStatus
 	coreSupport       bool
 	enableGa          bool
 	trackingId        string
-	sceneId           id.SceneID
+	sceneId           SceneID
 	starred           bool
 	isDeleted         bool
 }
 
-func (p *Project) ID() id.ProjectID {
+func (p *Project) ID() ID {
 	return p.id
 }
 
@@ -133,7 +131,7 @@ func (p *Project) TrackingID() string {
 	return p.trackingId
 }
 
-func (p *Project) Scene() id.SceneID {
+func (p *Project) Scene() SceneID {
 	return p.sceneId
 }
 
@@ -141,7 +139,7 @@ func (p *Project) PublishmentStatus() PublishmentStatus {
 	return p.publishmentStatus
 }
 
-func (p *Project) Workspace() accountdomain.WorkspaceID {
+func (p *Project) Workspace() WorkspaceID {
 	return p.workspace
 }
 
@@ -236,7 +234,7 @@ func (p *Project) UpdatePublicNoIndex(publicNoIndex bool) {
 	p.publicNoIndex = publicNoIndex
 }
 
-func (p *Project) UpdateWorkspace(workspace accountdomain.WorkspaceID) {
+func (p *Project) UpdateWorkspace(workspace WorkspaceID) {
 	p.workspace = workspace
 }
 
@@ -256,7 +254,7 @@ func (p *Project) UpdateTrackingID(trackingId string) {
 	p.trackingId = trackingId
 }
 
-func (p *Project) UpdateSceneID(sceneId id.SceneID) {
+func (p *Project) UpdateSceneID(sceneId SceneID) {
 	p.sceneId = sceneId
 }
 

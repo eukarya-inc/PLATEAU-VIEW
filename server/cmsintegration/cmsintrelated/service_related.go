@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/dataconv"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/dataconv"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	geojson "github.com/paulmach/go.geojson"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
@@ -206,9 +206,10 @@ func convRelatedType(ctx context.Context, project, target, assetID string, s *Se
 
 	// conv
 	var res any
-	if target == "border" {
+	switch target {
+	case "border":
 		res, err = dataconv.ConvertBorder(fc, id)
-	} else if target == "landmark" || target == "station" {
+	case "landmark", "station":
 		res, err = dataconv.ConvertLandmark(fc, id)
 	}
 

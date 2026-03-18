@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/item/view"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/project"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item/view"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/stretchr/testify/assert"
 )

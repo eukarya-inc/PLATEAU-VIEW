@@ -9,6 +9,8 @@ use object_store::Result;
 use reearth_flow_common::uri::Protocol;
 use reearth_flow_common::uri::Uri;
 
+use tracing::debug;
+
 use crate::storage::format_object_store_error;
 use crate::storage::Storage;
 
@@ -16,7 +18,7 @@ impl Storage {
     pub fn put_sync(&self, location: &Path, bytes: Bytes) -> Result<()> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         let _ = self
@@ -30,11 +32,11 @@ impl Storage {
     pub fn create_dir_sync(&self, location: &Path) -> Result<()> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         let p = if !p.ends_with('/') {
-            format!("{}/", p)
+            format!("{p}/")
         } else {
             p.to_string()
         };
@@ -47,7 +49,7 @@ impl Storage {
     pub fn append_sync(&self, location: &Path, bytes: Bytes) -> Result<()> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         let mut w = self
@@ -58,7 +60,9 @@ impl Storage {
             .call()
             .map_err(|err| format_object_store_error(err, p))?;
         w.write(bytes)
-            .map_err(|err| format_object_store_error(err, p))
+            .map_err(|err| format_object_store_error(err, p))?;
+        w.close().map_err(|err| format_object_store_error(err, p))?;
+        Ok(())
     }
 
     pub fn get_sync(&self, location: &Path) -> Result<Bytes> {
@@ -66,31 +70,63 @@ impl Storage {
             Protocol::Http | Protocol::Https => {
                 let result = location.to_str().unwrap();
                 let url = format!("{}{}", self.base_uri, result);
-                let client = reqwest::blocking::Client::builder()
-                    .timeout(Duration::from_secs(30))
-                    .build()
-                    .map_err(|err| object_store::Error::Generic {
-                        store: "HttpError",
-                        source: Box::new(err),
-                    })?;
-                let res =
-                    client
-                        .get(url.clone())
-                        .send()
+
+                // Use std::thread to avoid creating nested Tokio runtime
+                // Clone URL for error reporting since it moves into closure
+                let url_for_error = url.clone();
+                let handle = std::thread::spawn(move || -> Result<Bytes> {
+                    let client = reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(600))
+                        .build()
                         .map_err(|err| object_store::Error::Generic {
                             store: "HttpError",
                             source: Box::new(err),
                         })?;
-                let buf = res.bytes().map_err(|err| object_store::Error::Generic {
+                    let res = client
+                        .get(url)
+                        .send()
+                        .map_err(|err| object_store::Error::Generic {
+                            store: "HttpError",
+                            source: Box::new(err),
+                        })?
+                        .error_for_status()
+                        .map_err(|err| object_store::Error::Generic {
+                            store: "HttpError",
+                            source: format!("HTTP request failed: {err}").into(),
+                        })?;
+
+                    let status = res.status();
+                    let content_length = res
+                        .content_length()
+                        .map(|l| {
+                            let len = l as f64 / 1024_f64.powi(2);
+                            format!("{len:.2} MB")
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let buf = res.bytes().map_err(|err| {
+                        let detail = format!(
+                            "failed to read response body (status={status}, content_length={content_length}): {err}",
+                        );
+                        object_store::Error::Generic {
+                            store: "HttpError",
+                            source: detail.into(),
+                        }
+                    })?;
+
+                    Ok(buf)
+                });
+
+                handle.join().map_err(|_| object_store::Error::Generic {
                     store: "HttpError",
-                    source: Box::new(err),
-                })?;
-                Ok(buf)
+                    source: Box::new(std::io::Error::other(format!(
+                        "HTTP request thread panicked while fetching {url_for_error}"
+                    ))),
+                })?
             }
             _ => {
                 let p = location.to_str().ok_or(object_store::Error::InvalidPath {
                     source: object_store::path::Error::InvalidPath {
-                        path: format!("{:?}", location).into(),
+                        path: format!("{location:?}").into(),
                     },
                 })?;
                 let r = self
@@ -106,7 +142,7 @@ impl Storage {
     pub fn exists_sync(&self, location: &Path) -> Result<bool> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         fs::exists(p).map_err(|err| object_store::Error::Generic {
@@ -118,7 +154,7 @@ impl Storage {
     pub fn get_range_sync(&self, location: &Path, range: Range<usize>) -> Result<Bytes> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         let bs = self
@@ -135,7 +171,7 @@ impl Storage {
     pub fn head_sync(&self, location: &Path) -> Result<ObjectMeta> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         let meta = self
@@ -147,7 +183,7 @@ impl Storage {
         Ok(ObjectMeta {
             location: object_store::path::Path::parse(p)?,
             last_modified: meta.last_modified().unwrap_or_default(),
-            size: meta.content_length() as u64,
+            size: meta.content_length(),
             e_tag: None,
             version: None,
         })
@@ -156,7 +192,7 @@ impl Storage {
     pub fn delete_sync(&self, location: &Path) -> Result<()> {
         let p = location.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", location).into(),
+                path: format!("{location:?}").into(),
             },
         })?;
         self.inner
@@ -169,17 +205,17 @@ impl Storage {
     pub fn list_sync(&self, prefix: Option<&Path>, recursive: bool) -> Result<Vec<Uri>> {
         let p = prefix.ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", prefix).into(),
+                path: format!("{prefix:?}").into(),
             },
         })?;
-        let path =
-            p.to_str()
-                .map(|v| format!("{}/", v))
-                .ok_or(object_store::Error::InvalidPath {
-                    source: object_store::path::Error::InvalidPath {
-                        path: format!("{:?}", prefix).into(),
-                    },
-                })?;
+        let path = p
+            .to_str()
+            .map(|v| format!("{v}/"))
+            .ok_or(object_store::Error::InvalidPath {
+                source: object_store::path::Error::InvalidPath {
+                    path: format!("{prefix:?}").into(),
+                },
+            })?;
         let ds = self
             .inner
             .blocking()
@@ -200,15 +236,104 @@ impl Storage {
         Ok(result)
     }
 
+    /// Stream the contents of `location` directly into `dest` without loading
+    /// the full file into memory.
+    ///
+    /// - **HTTP/HTTPS**: streams via `reqwest` (spawns a thread to avoid
+    ///   nested-Tokio-runtime issues, same pattern as `get_sync`).
+    /// - **All other backends (GCS, local, …)**: uses OpenDAL's blocking
+    ///   reader so data flows in chunks directly to `dest`.
+    ///
+    /// On success `dest`'s file position is at the end of the written data;
+    /// callers that need to read back from the beginning must seek to 0.
+    pub fn stream_to_file_sync(&self, location: &Path, dest: &mut std::fs::File) -> Result<()> {
+        let p = location.to_str().ok_or(object_store::Error::InvalidPath {
+            source: object_store::path::Error::InvalidPath {
+                path: format!("{location:?}").into(),
+            },
+        })?;
+
+        match self.base_uri.protocol() {
+            Protocol::Http | Protocol::Https => {
+                let url = format!("{}{}", self.base_uri, p);
+                let url_for_error = url.clone();
+                // Clone the file handle so ownership can move into the thread.
+                // Both handles share the same underlying file and offset.
+                let mut dest_clone =
+                    dest.try_clone().map_err(|e| object_store::Error::Generic {
+                        store: "IoError",
+                        source: Box::new(e),
+                    })?;
+                let handle = std::thread::spawn(move || -> std::io::Result<u64> {
+                    let client = reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(600))
+                        .build()
+                        .map_err(|e| std::io::Error::other(format!("reqwest build error: {e}")))?;
+                    let mut res = client
+                        .get(&url)
+                        .send()
+                        .map_err(|e| std::io::Error::other(format!("{e}")))?
+                        .error_for_status()
+                        .map_err(|e| std::io::Error::other(format!("HTTP request failed: {e}")))?;
+
+                    let status = res.status();
+                    let content_length = res
+                        .content_length()
+                        .map(|l| {
+                            let len = l as f64 / 1024_f64.powi(2);
+                            format!("{len:.2} MB")
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
+                    debug!(
+                        %url,
+                        %status,
+                        content_length,
+                        "streaming HTTP response to file"
+                    );
+
+                    std::io::copy(&mut res, &mut dest_clone)
+                });
+                handle
+                    .join()
+                    .map_err(|_| object_store::Error::Generic {
+                        store: "HttpError",
+                        source: Box::new(std::io::Error::other(format!(
+                            "HTTP request thread panicked while fetching {url_for_error}"
+                        ))),
+                    })?
+                    .map_err(|e| object_store::Error::Generic {
+                        store: "HttpError",
+                        source: Box::new(e),
+                    })?;
+                Ok(())
+            }
+            _ => {
+                let reader = self
+                    .inner
+                    .blocking()
+                    .reader(p)
+                    .map_err(|err| format_object_store_error(err, p))?;
+                let mut std_reader = reader
+                    .into_std_read(..)
+                    .map_err(|err| format_object_store_error(err, p))?;
+                std::io::copy(&mut std_reader, dest).map_err(|e| object_store::Error::Generic {
+                    store: "IoError",
+                    source: Box::new(e),
+                })?;
+                Ok(())
+            }
+        }
+    }
+
     pub fn copy_sync(&self, from: &Path, to: &Path) -> Result<()> {
         let from = from.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", from).into(),
+                path: format!("{from:?}").into(),
             },
         })?;
         let to = to.to_str().ok_or(object_store::Error::InvalidPath {
             source: object_store::path::Error::InvalidPath {
-                path: format!("{:?}", to).into(),
+                path: format!("{to:?}").into(),
             },
         })?;
         self.inner

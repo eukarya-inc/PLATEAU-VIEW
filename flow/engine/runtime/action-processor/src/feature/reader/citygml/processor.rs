@@ -1,9 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{mpsc::Receiver, Arc},
-};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
+use nusamai_citygml::GeometryStore;
+use nusamai_plateau::appearance::AppearanceStore;
 use reearth_flow_runtime::{
+    cache::executor_cache_subdir,
     errors::BoxedError,
     event::EventHub,
     executor_operation::{ExecutorContext, NodeContext},
@@ -14,9 +14,14 @@ use reearth_flow_types::Expr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::RwLock;
+use url::Url;
 
-use crate::feature::errors;
 use crate::feature::errors::FeatureProcessorError;
+
+use super::reader::{emit_buffered, parse_and_register};
+
+type StorePool = Vec<(Arc<RwLock<GeometryStore>>, Arc<RwLock<AppearanceStore>>)>;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FeatureCityGmlReaderFactory;
@@ -27,7 +32,7 @@ impl ProcessorFactory for FeatureCityGmlReaderFactory {
     }
 
     fn description(&self) -> &str {
-        "Reads features from citygml file"
+        "Reads and processes features from CityGML files with optional flattening"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -56,14 +61,12 @@ impl ProcessorFactory for FeatureCityGmlReaderFactory {
         let params: FeatureCityGmlReaderParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::FileCityGmlReaderFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::FileCityGmlReaderFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -73,62 +76,107 @@ impl ProcessorFactory for FeatureCityGmlReaderFactory {
             .into());
         };
         let expr_engine = Arc::clone(&ctx.expr_engine);
-        let params = CompiledFeatureCityGmlReaderParam {
+        let codelists_path = params
+            .codelists_path
+            .as_ref()
+            .map(|p| expr_engine.compile(p.as_ref()))
+            .transpose()
+            .map_err(|e| FeatureProcessorError::FileCityGmlReaderFactory(format!("{e:?}")))?;
+        let compiled_params = CompiledFeatureCityGmlReaderParam {
             dataset: expr_engine
                 .compile(params.dataset.as_ref())
-                .map_err(|e| FeatureProcessorError::FileCityGmlReaderFactory(format!("{:?}", e)))?,
+                .map_err(|e| FeatureProcessorError::FileCityGmlReaderFactory(format!("{e:?}")))?,
+            original_dataset: params.dataset.clone(),
             flatten: params.flatten,
+            codelists_path,
         };
-        let threads_num = {
-            let size = (num_cpus::get() as f32 / 4_f32).trunc() as usize;
-            if size < 1 {
-                1
-            } else {
-                std::cmp::min(size, 4) as usize
-            }
-        };
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads_num)
-            .build()
-            .unwrap();
         let process = FeatureCityGmlReader {
             global_params: with,
-            params,
-            join_handles: Vec::new(),
-            thread_pool: Arc::new(parking_lot::Mutex::new(pool)),
+            params: compiled_params,
+            geom_registry: HashMap::new(),
+            app_registry: HashMap::new(),
+            store_pool: Vec::new(),
+            cache_paths: Vec::new(),
+            cache_dir: None,
         };
         Ok(Box::new(process))
     }
 }
 
-type JoinHandle = Arc<parking_lot::Mutex<Receiver<Result<(), errors::FeatureProcessorError>>>>;
-
-#[derive(Debug, Clone)]
 pub struct FeatureCityGmlReader {
     global_params: Option<HashMap<String, serde_json::Value>>,
     params: CompiledFeatureCityGmlReaderParam,
-    join_handles: Vec<JoinHandle>,
-    thread_pool: Arc<parking_lot::Mutex<rayon::ThreadPool>>,
+    /// Pass 1 registry: polygon URL → owning GeometryStore (needed for cross-file ref resolution)
+    geom_registry: HashMap<Url, Arc<RwLock<GeometryStore>>>,
+    /// Pass 1 registry: polygon URL → owning AppearanceStore
+    app_registry: HashMap<Url, Arc<RwLock<AppearanceStore>>>,
+    /// One entry per top-level city object parsed; indexed by store_id in the JSONL cache.
+    store_pool: StorePool,
+    /// Per-file JSONL cache paths written during pass 1.
+    cache_paths: Vec<PathBuf>,
+    /// Root of the executor-specific cache directory, set on first process() call.
+    cache_dir: Option<PathBuf>,
 }
 
+impl std::fmt::Debug for FeatureCityGmlReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FeatureCityGmlReader")
+            .field("cache_paths", &self.cache_paths.len())
+            .field("store_pool", &self.store_pool.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for FeatureCityGmlReader {
+    fn clone(&self) -> Self {
+        Self {
+            global_params: self.global_params.clone(),
+            params: self.params.clone(),
+            geom_registry: HashMap::new(),
+            app_registry: HashMap::new(),
+            store_pool: Vec::new(),
+            cache_paths: Vec::new(),
+            cache_dir: None,
+        }
+    }
+}
+
+impl Drop for FeatureCityGmlReader {
+    fn drop(&mut self) {
+        if let Some(ref dir) = self.cache_dir {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
+/// # FeatureCityGmlReader Parameters
+///
+/// Configuration for reading and processing CityGML files as features.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureCityGmlReaderParam {
-    /// # Dataset to read
+    /// # Dataset
+    /// Path or expression to the CityGML dataset file to be read
     dataset: Expr,
-    /// # Flatten the dataset
+    /// # Flatten
+    /// Whether to flatten the hierarchical structure of the CityGML data
     flatten: Option<bool>,
+    /// # Codelists Path
+    /// Optional path to the codelists directory for resolving codelist values
+    codelists_path: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
 struct CompiledFeatureCityGmlReaderParam {
     dataset: rhai::AST,
+    original_dataset: Expr,
     flatten: Option<bool>,
+    codelists_path: Option<rhai::AST>,
 }
 
 impl Processor for FeatureCityGmlReader {
     fn num_threads(&self) -> usize {
-        2
+        1
     }
 
     fn process(
@@ -136,56 +184,70 @@ impl Processor for FeatureCityGmlReader {
         ctx: ExecutorContext,
         fw: &ProcessorChannelForwarder,
     ) -> Result<(), BoxedError> {
-        let fw = fw.clone();
         let feature = ctx.feature.clone();
         let ctx = ctx.as_context();
         let global_params = self.global_params.clone();
         let dataset = self.params.dataset.clone();
+        let original_dataset = self.params.original_dataset.clone();
         let flatten = self.params.flatten;
-        let pool = self.thread_pool.lock();
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.join_handles
-            .push(Arc::new(parking_lot::Mutex::new(rx)));
-        pool.spawn(move || {
-            let result = super::reader::read_citygml(
-                ctx,
-                fw,
-                feature,
-                dataset,
-                flatten,
-                global_params.clone(),
-            );
-            tx.send(result).unwrap();
+        let codelists_url = self.params.codelists_path.clone().and_then(|ast| {
+            let expr_engine = Arc::clone(&ctx.expr_engine);
+            let scope = feature.new_scope(expr_engine.clone(), &global_params);
+            scope
+                .eval_ast::<String>(&ast)
+                .ok()
+                .and_then(|s| Url::from_str(&s).ok())
         });
+        // Initialize cache directory on first call.
+        // Each reader instance gets its own subdirectory to avoid corruption when multiple instances read the same files in parallel.
+        if self.cache_dir.is_none() {
+            static INSTANCE_COUNTER: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
+            let instance = INSTANCE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let executor_id = fw.executor_id();
+            let dir =
+                executor_cache_subdir(executor_id, "citygml-reader").join(instance.to_string());
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| FeatureProcessorError::FileCityGmlReader(format!("{e:?}")))?;
+            self.cache_dir = Some(dir);
+        }
+        // Pass 1: parse file, populate registries, write entities to per-file JSONL cache
+        let cache_path = parse_and_register(
+            ctx,
+            feature,
+            dataset,
+            original_dataset,
+            flatten,
+            global_params,
+            codelists_url,
+            &mut self.geom_registry,
+            &mut self.app_registry,
+            &mut self.store_pool,
+            self.cache_dir.as_deref().unwrap(),
+        )
+        .map_err(|e| -> BoxedError { e.into() })?;
+        self.cache_paths.push(cache_path);
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
-        let timeout = std::time::Duration::from_secs(60 * 60);
-        let mut errors = Vec::new();
-
-        for (i, join) in self.join_handles.iter().enumerate() {
-            match join.lock().recv_timeout(timeout) {
-                Ok(_) => continue,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    errors.push(format!("Worker thread {} timed out after {:?}", i, timeout));
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    ctx.event_hub.warn_log(
-                        None,
-                        format!("Worker thread {} disconnected unexpectedly", i),
-                    );
-                }
-            }
-        }
-        if !errors.is_empty() {
-            return Err(errors::FeatureProcessorError::FileCityGmlReader(format!(
-                "Failed to complete all worker threads: {}",
-                errors.join("; ")
-            ))
-            .into());
-        }
-        Ok(())
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
+        let Some(cache_dir) = self.cache_dir.as_deref() else {
+            return Ok(());
+        };
+        // Pass 2: stream per-file, resolve cross-file refs, emit
+        emit_buffered(
+            ctx.as_context(),
+            fw,
+            cache_dir,
+            &self.cache_paths,
+            &self.store_pool,
+            &self.geom_registry,
+            &self.app_registry,
+        )
     }
 
     fn name(&self) -> &str {

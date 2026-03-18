@@ -46,22 +46,6 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
         value = var.gcp_region
       }
 
-      dynamic "env" {
-        for_each = var.chiitiler_url != "" ? [""] : []
-        content {
-          name  = "REEARTH_PLATEAUVIEW_CHIITILER_URL"
-          value = var.chiitiler_url
-        }
-      }
-
-      dynamic "env" {
-        for_each = var.chiitiler_bucket != "" ? [""] : []
-        content {
-          name  = "REEARTH_PLATEAUVIEW_CHIITILER_BUCKET"
-          value = var.chiitiler_bucket
-        }
-      }
-
       env {
         name  = "REEARTH_PLATEAUVIEW_CMS_BASEURL"
         value = "https://${local.api_cms_domain}"
@@ -87,13 +71,18 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
         value = var.plateauview.cms_system_project
       }
 
-      env {
-        name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHEGCPARCENT"
-        value = var.plateauview.datacatalog_cache_percent
+      dynamic "env" {
+        for_each = var.plateauview.datacatalog_cache_percent != 0 ? [""] : []
+        content {
+          name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHEGCPARCENT"
+          value = var.plateauview.datacatalog_cache_percent
+        }
       }
 
-      env {
-        name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHESIZE"
+      dynamic "env" {
+        for_each = var.plateauview.datacatalog_cache_size != "" ? [""] : []
+        content {
+          name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHESIZE"
         value = var.plateauview.datacatalog_cache_size
       }
 
@@ -115,6 +104,16 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
       env {
         name  = "REEARTH_PLATEAUVIEW_OPINION_FROM"
         value = var.plateauview.option_from
+      }
+
+      env {
+        name  = "REEARTH_PLATEAUVIEW_FLOW_TOKEN"
+        value = random_password.plateauview_env["REEARTH_PLATEUVIEW_FLOW_TOKEN"].result
+      }
+
+      env {
+        name  = "REEARTH_PLATEAUVIEW_FLOW_BASEURL"
+        value = var.flow_base_url
       }
     }
 

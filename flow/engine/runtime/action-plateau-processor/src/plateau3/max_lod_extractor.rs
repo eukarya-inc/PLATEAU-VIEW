@@ -13,6 +13,7 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 static DIGITS_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+").unwrap());
 
@@ -78,10 +79,7 @@ impl Processor for MaxLodExtractor {
             .clone();
 
         let path_uri = Uri::from_str(city_gml_path.to_string().as_str()).map_err(|err| {
-            PlateauProcessorError::MaxLodExtractor(format!(
-                "cityGmlPath is not a valid uri: {}",
-                err
-            ))
+            PlateauProcessorError::MaxLodExtractor(format!("cityGmlPath is not a valid uri: {err}"))
         })?;
 
         let file_name = path_uri
@@ -113,7 +111,7 @@ impl Processor for MaxLodExtractor {
         let attribute_max_lod = Attribute::new("maxLod");
         let attribute_file = Attribute::new("file");
 
-        let mut attributes = feature.attributes.clone();
+        let mut attributes = (*feature.attributes).clone();
 
         for (k, _) in feature.attributes.iter() {
             attributes.swap_remove(k);
@@ -131,7 +129,7 @@ impl Processor for MaxLodExtractor {
         );
 
         let feature = Feature {
-            attributes,
+            attributes: Arc::new(attributes),
             ..feature.clone()
         };
 
@@ -139,7 +137,11 @@ impl Processor for MaxLodExtractor {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

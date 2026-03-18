@@ -9,7 +9,7 @@ import (
 	"net/textproto"
 	"strings"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
 	"github.com/reearth/reearthx/log"
 )
 
@@ -72,9 +72,9 @@ func (m *message) encodeContent() (string, error) {
 
 func (m *message) encodeMessage() ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
-	buf.WriteString(fmt.Sprintf("Subject: %s\n", m.subject))
-	buf.WriteString(fmt.Sprintf("From: %s\n", m.from))
-	buf.WriteString(fmt.Sprintf("To: %s\n", strings.Join(m.to, ",")))
+	fmt.Fprintf(buf, "Subject: %s\n", m.subject)
+	fmt.Fprintf(buf, "From: %s\n", m.from)
+	fmt.Fprintf(buf, "To: %s\n", strings.Join(m.to, ","))
 	content, err := m.encodeContent()
 	if err != nil {
 		return nil, err

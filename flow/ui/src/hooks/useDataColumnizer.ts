@@ -1,8 +1,24 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useState } from "react";
 
-import { Polygon, PolygonCoordinateRing } from "@flow/types/gisTypes/geoJSON";
-import { SupportedDataTypes } from "@flow/utils/fetchAndReadGeoData";
+import { SupportedDataTypes } from "@flow/hooks/useStreamingDebugRunQuery";
+
+// Fully serialize a value to a string for use as the accessor value.
+// Keeping the full string ensures global filtering can match any part of the data.
+function serializeValue(value: any): string {
+  if (value === undefined) return "-";
+  if (value === null) return "null";
+  return JSON.stringify(value);
+}
+
+// Truncate a pre-serialized string for display only, to prevent large payloads
+// from degrading render performance.
+const DISPLAY_MAX_CHARS = 100;
+function truncateDisplayValue(str: string): string {
+  if (!str) return "";
+  if (str.length <= DISPLAY_MAX_CHARS) return str;
+  return str.slice(0, DISPLAY_MAX_CHARS) + "…";
+}
 
 export default ({
   parsedData,
@@ -18,7 +34,6 @@ export default ({
     if (type === "geojson") {
       // Extract features and their properties from GeoJSON
       const features = parsedData.features || [];
-
       if (features.length > 0) {
         // Get unique properties from all geometries
         const allGeometry = new Set<string>();
@@ -39,56 +54,51 @@ export default ({
 
         // Create columns for table
         const tableColumns: ColumnDef<any>[] = [
-          { accessorKey: "id", header: "id" },
+          {
+            accessorKey: "id",
+            header: "id",
+            size: 200,
+            maxSize: 400,
+            minSize: 100,
+          },
           ...Array.from(allGeometry).map(
             (geometry) =>
               ({
                 accessorKey: `geometry${geometry}`,
                 header: `geometry.${geometry}`,
+                size: 200,
+                maxSize: 400,
+                minSize: 100,
+                cell: (info: any) => truncateDisplayValue(info.getValue()),
               }) as ColumnDef<any>,
           ),
           ...Array.from(allProps).map(
             (prop) =>
               ({
-                accessorKey: `properties${prop}`,
-                header: `properties.${prop}`,
+                accessorKey: `attributes${prop}`,
+                header: `attributes.${prop}`,
+                size: 200,
+                maxSize: 400,
+                minSize: 100,
+                cell: (info: any) => truncateDisplayValue(info.getValue()),
               }) as ColumnDef<any>,
           ),
         ];
 
-        // Transform features for table display
+        // Store fully serialized strings as accessor values so global filtering
+        // can match any part of the data. Truncation happens only in the cell renderer.
         const tableData = features.map((feature: any, index: number) => ({
           id: JSON.stringify(feature.id || index),
           ...Object.fromEntries(
-            Array.from(allGeometry).map((geometry) => {
-              if (
-                geometry === "coordinates" &&
-                feature.geometry.type === "Polygon"
-              ) {
-                return [
-                  `geometry${geometry}`,
-                  simplifyPolygonCoordinates(feature.geometry),
-                ];
-              }
-              if (
-                geometry === "coordinates" &&
-                feature.geometry.type === "LineString"
-              ) {
-                return [
-                  `geometry${geometry}`,
-                  JSON.stringify(feature.geometry?.[geometry] || null),
-                ];
-              }
-              return [
-                `geometry${geometry}`,
-                JSON.stringify(feature.geometry?.[geometry] || null),
-              ];
-            }),
+            Array.from(allGeometry).map((geometry) => [
+              `geometry${geometry}`,
+              serializeValue(feature.geometry?.[geometry] ?? null),
+            ]),
           ),
           ...Object.fromEntries(
             Array.from(allProps).map((prop) => [
-              `properties${prop}`,
-              JSON.stringify(feature.properties?.[prop] || null),
+              `attributes${prop}`,
+              serializeValue(feature.properties?.[prop] ?? null),
             ]),
           ),
         }));
@@ -124,58 +134,3 @@ export default ({
     tableColumns: columns,
   };
 };
-
-// simplifyPolygonCoordinates: Simplify GeoJSON Polygon coordinates for display. Output looks like this:
-// [
-//   [
-//     [
-//       [100, 0],
-//       "...",
-//       [100, 0]
-//     ],
-//     [
-//       [100, 0],
-//       "...",
-//       [100, 0]
-//     ]
-//   ],
-//   "...",
-//   [
-//     [
-//       [100, 0],
-//       "...",
-//       [100, 0]
-//     ],
-//     [
-//       [100, 0],
-//       "...",
-//       [100, 0]
-//     ]
-//   ]
-// ]
-function simplifyPolygonCoordinates(polygon: Polygon) {
-  if (
-    !polygon ||
-    polygon.type !== "Polygon" ||
-    !Array.isArray(polygon.coordinates)
-  ) {
-    throw new Error("Invalid GeoJSON Polygon");
-  }
-
-  const rings = polygon.coordinates;
-  if (rings.length <= 4) {
-    return rings.map((ring) => simplifyRing(ring));
-  }
-
-  const firstTwo = rings.slice(0, 2).map((ring) => simplifyRing(ring));
-  const lastTwo = rings.slice(-2).map((ring) => simplifyRing(ring));
-
-  return [...firstTwo, "...", ...lastTwo];
-}
-
-function simplifyRing(ring: PolygonCoordinateRing) {
-  if (ring.length <= 4) {
-    return ring; // Keep as is if 4 or fewer points
-  }
-  return JSON.stringify([ring[0], "...", ring[ring.length - 1]]);
-}

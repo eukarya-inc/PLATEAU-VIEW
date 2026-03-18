@@ -10,8 +10,8 @@ import {
 } from "../../../prototypes/view/states/selection";
 import {
   ancestorsKey,
-  attributesKey,
   makePropertyForFeatureInspector,
+  retrieveAttributes,
 } from "../../plateau/featureInspector";
 import { GENERAL_FEATURE } from "../../reearth/layers";
 import { Feature } from "../../reearth/types/layer";
@@ -66,7 +66,8 @@ export const GeneralFeaturePropertiesSection: FC<GeneralFeaturePropertiesSection
 
   const featureType = useMemo(() => layers[0].features[0]?.properties["feature_type"], [layers]);
   const ancestorsFeatureType = useMemo(
-    () => layers[0].features[0]?.properties[attributesKey]?.[ancestorsKey]?.[0]?.["feature_type"],
+    () =>
+      retrieveAttributes(layers[0].features[0]?.properties)?.[ancestorsKey]?.[0]?.["feature_type"],
     [layers],
   );
 

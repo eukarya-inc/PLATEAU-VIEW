@@ -3,21 +3,19 @@ package property
 type SchemaFieldUI string
 
 const (
-	SchemaFieldUIMultiline        SchemaFieldUI = "multiline"
-	SchemaFieldUISelection        SchemaFieldUI = "selection"
-	SchemaFieldUIColor            SchemaFieldUI = "color"
-	SchemaFieldUIRange            SchemaFieldUI = "range"
-	SchemaFieldUISlider           SchemaFieldUI = "slider"
-	SchemaFieldUIImage            SchemaFieldUI = "image"
-	SchemaFieldUIVideo            SchemaFieldUI = "video"
-	SchemaFieldUIFile             SchemaFieldUI = "file"
-	SchemaFieldUILayer            SchemaFieldUI = "layer"
-	SchemaFieldUICameraPose       SchemaFieldUI = "camera_pose"
-	SchemaFieldUIDateTime         SchemaFieldUI = "datetime"
-	SchemaFieldUIMargin           SchemaFieldUI = "margin"
-	SchemaFieldUIPadding          SchemaFieldUI = "padding"
-	SchemaFieldUIPropertySelector SchemaFieldUI = "property_selector"
-	SchemaFieldUIzoomLevel        SchemaFieldUI = "zoomLevel"
+	SchemaFieldUIMultiline  SchemaFieldUI = "multiline"
+	SchemaFieldUISelection  SchemaFieldUI = "selection"
+	SchemaFieldUIColor      SchemaFieldUI = "color"
+	SchemaFieldUIRange      SchemaFieldUI = "range"
+	SchemaFieldUISlider     SchemaFieldUI = "slider"
+	SchemaFieldUIImage      SchemaFieldUI = "image"
+	SchemaFieldUIVideo      SchemaFieldUI = "video"
+	SchemaFieldUIFile       SchemaFieldUI = "file"
+	SchemaFieldUILayer      SchemaFieldUI = "layer"
+	SchemaFieldUICameraPose SchemaFieldUI = "camera_pose"
+	SchemaFieldUIDateTime   SchemaFieldUI = "datetime"
+	SchemaFieldUIMargin     SchemaFieldUI = "margin"
+	SchemaFieldUIPadding    SchemaFieldUI = "padding"
 	// DON'T FORGET ADDING A NEW UI TO schemaFieldUIs ALSO!
 )
 
@@ -36,8 +34,6 @@ var (
 		SchemaFieldUIDateTime,
 		SchemaFieldUIMargin,
 		SchemaFieldUIPadding,
-		SchemaFieldUIPropertySelector,
-		SchemaFieldUIzoomLevel,
 		// DON'T FORGET ADDING A NEW UI HERE ALSO!
 	}
 )

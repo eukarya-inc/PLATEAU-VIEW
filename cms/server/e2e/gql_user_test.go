@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/internal/app"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
@@ -18,7 +19,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-func baseSeederUser(ctx context.Context, r *repo.Container) error {
+func baseSeederUser(ctx context.Context, r *repo.Container, _ *gateway.Container) error {
 	auth := user.ReearthSub(uId1.String())
 	u := user.New().ID(uId1).
 		Name("e2e").

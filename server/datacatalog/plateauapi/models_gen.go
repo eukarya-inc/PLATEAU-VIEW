@@ -3,6 +3,7 @@
 package plateauapi
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -78,7 +79,7 @@ type Dataset interface {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	GetAr() bool
 	// 管理者用
-	GetAdmin() interface{}
+	GetAdmin() any
 }
 
 // データセットのアイテム。
@@ -248,6 +249,8 @@ type CityGMLDataset struct {
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// CityGMLのzip形式のファイルのURL。
 	URL string `json:"url"`
+	// G空間情報センターへのURL。
+	GspatialjpDatasetURL *string `json:"gspatialjpDatasetUrl,omitempty"`
 	// データセットが属する都道府県。
 	Prefecture *Prefecture `json:"prefecture"`
 	// データセットが属する市。
@@ -259,7 +262,7 @@ type CityGMLDataset struct {
 	// CityGMLのメタデータを含むzipファイルURLのリスト。
 	MetadataZipUrls []string `json:"metadataZipUrls"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (CityGMLDataset) IsNode() {}
@@ -348,7 +351,7 @@ type GenericDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (GenericDataset) IsDataset()     {}
@@ -433,7 +436,7 @@ func (this GenericDataset) GetItems() []DatasetItem {
 func (this GenericDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this GenericDataset) GetAdmin() interface{} { return this.Admin }
+func (this GenericDataset) GetAdmin() any { return this.Admin }
 
 func (GenericDataset) IsNode() {}
 
@@ -538,6 +541,73 @@ func (GenericDatasetType) IsNode() {}
 
 // オブジェクトのID
 
+// 全球（グローバル）エリア。特定の地域に属さない全球データを扱うための特殊なエリア。
+type GlobalArea struct {
+	ID ID `json:"id"`
+	// 地域の種類
+	Type AreaType `json:"type"`
+	// 地域コード。"global" という固定値。
+	Code AreaCode `json:"code"`
+	// 地域名。"全球" という固定値。
+	Name string `json:"name"`
+	// 全球データセット（DatasetInput内のareasCodeの指定は無視されます）。
+	Datasets []Dataset `json:"datasets"`
+	// 地域の親となる地域のID。GlobalAreaの場合は常にnull。
+	ParentID *ID `json:"parentId,omitempty"`
+	// 地域の親となる地域。GlobalAreaの場合は常にnull。
+	Parent Area `json:"parent,omitempty"`
+	// 地域に属する子地域。GlobalAreaの場合は常に空配列。
+	Children []Area `json:"children"`
+}
+
+func (GlobalArea) IsArea()        {}
+func (this GlobalArea) GetID() ID { return this.ID }
+
+// 地域の種類
+func (this GlobalArea) GetType() AreaType { return this.Type }
+
+// 地域コード。行政コードや市区町村コードとも呼ばれます。
+// 都道府県の場合は二桁の数字から成る文字列です。
+// 市区町村の場合は、先頭に都道府県コードを含む5桁の数字から成る文字列です。
+func (this GlobalArea) GetCode() AreaCode { return this.Code }
+
+// 地域名
+func (this GlobalArea) GetName() string { return this.Name }
+
+// 地域に属するデータセット（DatasetInput内のareasCodeの指定は無視されます）。
+func (this GlobalArea) GetDatasets() []Dataset {
+	if this.Datasets == nil {
+		return nil
+	}
+	interfaceSlice := make([]Dataset, 0, len(this.Datasets))
+	for _, concrete := range this.Datasets {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
+// 地域の親となる地域のID。市区町村の親は都道府県です。政令指定都市の区の親は市です。
+func (this GlobalArea) GetParentID() *ID { return this.ParentID }
+
+// 地域の親となる地域。
+func (this GlobalArea) GetParent() Area { return this.Parent }
+
+// 地域に属する子地域。
+func (this GlobalArea) GetChildren() []Area {
+	if this.Children == nil {
+		return nil
+	}
+	interfaceSlice := make([]Area, 0, len(this.Children))
+	for _, concrete := range this.Children {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
+func (GlobalArea) IsNode() {}
+
+// オブジェクトのID
+
 // PLATEAU都市モデルの通常のデータセット。例えば、地物型が建築物モデル（bldg）などのデータセットです。
 type PlateauDataset struct {
 	ID ID `json:"id"`
@@ -588,7 +658,7 @@ type PlateauDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 	// データセットが準拠するPLATEAU都市モデルの仕様のマイナーバージョンへのID。
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// データセットが準拠するPLATEAU都市モデルの仕様。
@@ -679,7 +749,7 @@ func (this PlateauDataset) GetItems() []DatasetItem {
 func (this PlateauDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this PlateauDataset) GetAdmin() interface{} { return this.Admin }
+func (this PlateauDataset) GetAdmin() any { return this.Admin }
 
 func (PlateauDataset) IsNode() {}
 
@@ -962,7 +1032,7 @@ type RelatedDataset struct {
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
-	Admin interface{} `json:"admin,omitempty"`
+	Admin any `json:"admin,omitempty"`
 }
 
 func (RelatedDataset) IsDataset()     {}
@@ -1047,7 +1117,7 @@ func (this RelatedDataset) GetItems() []DatasetItem {
 func (this RelatedDataset) GetAr() bool { return this.Ar }
 
 // 管理者用
-func (this RelatedDataset) GetAdmin() interface{} { return this.Admin }
+func (this RelatedDataset) GetAdmin() any { return this.Admin }
 
 func (RelatedDataset) IsNode() {}
 
@@ -1254,17 +1324,20 @@ const (
 	AreaTypeCity AreaType = "CITY"
 	// 区（政令指定都市のみ）
 	AreaTypeWard AreaType = "WARD"
+	// 全球（グローバル）
+	AreaTypeGlobal AreaType = "GLOBAL"
 )
 
 var AllAreaType = []AreaType{
 	AreaTypePrefecture,
 	AreaTypeCity,
 	AreaTypeWard,
+	AreaTypeGlobal,
 }
 
 func (e AreaType) IsValid() bool {
 	switch e {
-	case AreaTypePrefecture, AreaTypeCity, AreaTypeWard:
+	case AreaTypePrefecture, AreaTypeCity, AreaTypeWard, AreaTypeGlobal:
 		return true
 	}
 	return false
@@ -1274,7 +1347,7 @@ func (e AreaType) String() string {
 	return string(e)
 }
 
-func (e *AreaType) UnmarshalGQL(v interface{}) error {
+func (e *AreaType) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1289,6 +1362,20 @@ func (e *AreaType) UnmarshalGQL(v interface{}) error {
 
 func (e AreaType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AreaType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AreaType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // データセットのフォーマット。
@@ -1342,7 +1429,7 @@ func (e DatasetFormat) String() string {
 	return string(e)
 }
 
-func (e *DatasetFormat) UnmarshalGQL(v interface{}) error {
+func (e *DatasetFormat) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1357,6 +1444,20 @@ func (e *DatasetFormat) UnmarshalGQL(v interface{}) error {
 
 func (e DatasetFormat) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DatasetFormat) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DatasetFormat) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // データセットの種類のカテゴリ。
@@ -1389,7 +1490,7 @@ func (e DatasetTypeCategory) String() string {
 	return string(e)
 }
 
-func (e *DatasetTypeCategory) UnmarshalGQL(v interface{}) error {
+func (e *DatasetTypeCategory) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1404,6 +1505,20 @@ func (e *DatasetTypeCategory) UnmarshalGQL(v interface{}) error {
 
 func (e DatasetTypeCategory) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DatasetTypeCategory) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DatasetTypeCategory) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 浸水想定区域モデルにおける浸水規模。
@@ -1433,7 +1548,7 @@ func (e FloodingScale) String() string {
 	return string(e)
 }
 
-func (e *FloodingScale) UnmarshalGQL(v interface{}) error {
+func (e *FloodingScale) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1448,6 +1563,20 @@ func (e *FloodingScale) UnmarshalGQL(v interface{}) error {
 
 func (e FloodingScale) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FloodingScale) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FloodingScale) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 河川の管理区間
@@ -1477,7 +1606,7 @@ func (e RiverAdmin) String() string {
 	return string(e)
 }
 
-func (e *RiverAdmin) UnmarshalGQL(v interface{}) error {
+func (e *RiverAdmin) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1492,6 +1621,20 @@ func (e *RiverAdmin) UnmarshalGQL(v interface{}) error {
 
 func (e RiverAdmin) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RiverAdmin) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RiverAdmin) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // 建築物モデルのテクスチャの種類。
@@ -1521,7 +1664,7 @@ func (e Texture) String() string {
 	return string(e)
 }
 
-func (e *Texture) UnmarshalGQL(v interface{}) error {
+func (e *Texture) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -1536,4 +1679,18 @@ func (e *Texture) UnmarshalGQL(v interface{}) error {
 
 func (e Texture) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Texture) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Texture) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

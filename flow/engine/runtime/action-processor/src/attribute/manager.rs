@@ -26,7 +26,7 @@ impl ProcessorFactory for AttributeManagerFactory {
     }
 
     fn description(&self) -> &str {
-        "Manages attributes"
+        "Create, Convert, Rename, and Remove Feature Attributes"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +55,12 @@ impl ProcessorFactory for AttributeManagerFactory {
         let params: AttributeManagerParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::ManagerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::ManagerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -89,10 +87,12 @@ struct AttributeManager {
     operations: Vec<Operate>,
 }
 
+/// # AttributeManager Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeManagerParam {
-    /// # Operations to perform
+    /// # Attribute Operations
+    /// List of operations to perform on feature attributes (create, convert, rename, remove)
     operations: Vec<Operation>,
 }
 
@@ -103,7 +103,8 @@ struct Operation {
     attribute: String,
     /// # Operation to perform
     method: Method,
-    /// # Value to use for the operation
+    /// # Value
+    /// Value to use for the operation
     value: Option<Expr>,
 }
 
@@ -152,7 +153,11 @@ impl Processor for AttributeManager {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -186,7 +191,7 @@ fn process_feature(
                         }
                     } else if let Err(e) = new_value {
                         ctx.event_hub
-                            .warn_log(None, format!("convert error with: {:?}", e));
+                            .warn_log(None, format!("convert error with: {e:?}"));
                     }
                 }
             }
@@ -200,7 +205,7 @@ fn process_feature(
                         }
                     } else if let Err(e) = new_value {
                         ctx.event_hub
-                            .warn_log(None, format!("create error with: {:?}", e));
+                            .warn_log(None, format!("create error with: {e:?}"));
                     }
                 }
             }
@@ -239,7 +244,7 @@ fn convert_single_operation(
             Some(
                 expr_engine
                     .compile(expr.as_ref())
-                    .map_err(|e| AttributeProcessorError::ManagerFactory(format!("{:?}", e)))?,
+                    .map_err(|e| AttributeProcessorError::ManagerFactory(format!("{e:?}")))?,
             )
         } else {
             None

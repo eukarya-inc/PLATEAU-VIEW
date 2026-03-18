@@ -6,7 +6,6 @@ import { Typography } from "../Typography";
 
 export type CollapseProps = {
   title?: string;
-  titleSuffix?: ReactNode;
   background?: string;
   headerBg?: string;
   size?: "normal" | "small" | "large";
@@ -14,8 +13,8 @@ export type CollapseProps = {
   weight?: "medium" | "regular" | "bold";
   collapsed?: boolean;
   noPadding?: boolean;
-  noShrink?: boolean;
   disabled?: boolean;
+
   actions?: ReactNode;
   children: ReactNode;
   onCollapse?: (collapsed: boolean) => void;
@@ -23,7 +22,6 @@ export type CollapseProps = {
 
 export const Collapse: FC<CollapseProps> = ({
   title,
-  titleSuffix,
   background,
   headerBg,
   size = "normal",
@@ -32,7 +30,6 @@ export const Collapse: FC<CollapseProps> = ({
   collapsed,
   disabled,
   noPadding,
-  noShrink,
   actions,
   children,
   onCollapse
@@ -50,7 +47,7 @@ export const Collapse: FC<CollapseProps> = ({
   }, [disabled, isCollapsed, onCollapse]);
 
   return (
-    <StyledWrapper isCollapsed={isCollapsed} noShrink={noShrink}>
+    <StyledWrapper>
       <StyledHeader
         onClick={handleCollapse}
         isCollapsed={isCollapsed}
@@ -59,18 +56,13 @@ export const Collapse: FC<CollapseProps> = ({
         iconPosition={iconPosition}
         disabled={disabled}
       >
-        <TitleWrapper>
-          <Typography
-            size="body"
-            weight={weight}
-            otherProperties={{
-              whiteSpace: "nowrap"
-            }}
-          >
-            {title}
-          </Typography>
-          {titleSuffix}
-        </TitleWrapper>
+        <Typography
+          size="body"
+          weight={weight}
+          otherProperties={{ whiteSpace: "nowrap" }}
+        >
+          {title}
+        </Typography>
         <ActionsWrapper>
           {actions}
           {!disabled && (
@@ -91,13 +83,11 @@ export const Collapse: FC<CollapseProps> = ({
 
 const StyledWrapper = styled("div")<{
   background?: string;
-  isCollapsed?: boolean;
-  noShrink?: boolean;
-}>(({ theme, isCollapsed, noShrink }) => ({
+}>(({ theme }) => ({
   position: "relative",
   borderRadius: `${theme.radius.small}px`,
-  flexGrow: isCollapsed ? 0 : 1,
-  flexShrink: noShrink ? 0 : 1,
+  flexGrow: 1,
+  flexShrink: 1,
   display: "flex",
   flexDirection: "column",
   minHeight: 0
@@ -130,13 +120,6 @@ const StyledHeader = styled("div")<{
   backgroundColor: headerBg ? headerBg : `${theme.bg[1]}`,
   fontSize: 0,
   boxSizing: "border-box"
-}));
-
-const TitleWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: theme.spacing.small,
-  overflow: "hidden"
 }));
 
 const ActionsWrapper = styled("div")(({ theme }) => ({

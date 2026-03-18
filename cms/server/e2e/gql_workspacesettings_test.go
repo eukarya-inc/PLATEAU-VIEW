@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
-	"github.com/reearth/reearth-cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
 )
 
 func updateWorkspaceSettings(e *httpexpect.Expect, wID string, tiles map[string]any, terrains map[string]any) *httpexpect.Value {

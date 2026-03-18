@@ -1,20 +1,20 @@
 <p align="center">
-  <a href="https://github.com/reearth/reearth-visualizer">
+  <a href="https://github.com/eukarya-inc/PLATEAU-VIEW">
     <img src="./public/visualizer-logo.svg" alt="Logo" width="300" height="300">
   </a>
 </p>
 
-[![GitHub stars](https://img.shields.io/github/stars/reearth/reearth.svg?style=social&label=Star&maxAge=2592000)](https://github.com/reearth/reearth-visualizer/stargazers/)
+[![GitHub stars](https://img.shields.io/github/stars/reearth/reearth.svg?style=social&label=Star&maxAge=2592000)](https://github.com/eukarya-inc/PLATEAU-VIEW/stargazers/)
 [![issues](https://img.shields.io/github/issues/reearth/reearth)](https://img.shields.io/github/issues/reearth/reearth)
-[![license](https://img.shields.io/github/license/reearth/reearth)](https://github.com/reearth/reearth-visualizer/blob/main/LICENSE)
-[![release](https://img.shields.io/github/release/reearth/reearth.svg)](https://github.com/reearth/reearth-visualizer/releases/)
+[![license](https://img.shields.io/github/license/reearth/reearth)](https://github.com/eukarya-inc/PLATEAU-VIEW/blob/main/LICENSE)
+[![release](https://img.shields.io/github/release/reearth/reearth.svg)](https://github.com/eukarya-inc/PLATEAU-VIEW/releases/)
 
 <p align="center">
   <a href="https://renewal2025.reearth.io/">Website</a>
   ·
   <a href="https://visualizer.developer.reearth.io/">Documentation</a>
   ·
-  <a href="https://github.com/reearth/reearth-visualizer/issues">Issues</a>
+  <a href="https://github.com/eukarya-inc/PLATEAU-VIEW/issues">Issues</a>
 </p>
 
 ---
@@ -122,7 +122,7 @@ See [the contributing guide](CONTRIBUTING.md).
 
 ## Contributers
 
-[![Contributers](https://contrib.rocks/image?repo=reearth/reearth)](https://github.com/reearth/reearth-visualizer/graphs/contributors)
+[![Contributers](https://contrib.rocks/image?repo=reearth/reearth)](https://github.com/eukarya-inc/PLATEAU-VIEW/graphs/contributors)
 
 Made with [contrib.rocks](https://contrib.rocks).
 

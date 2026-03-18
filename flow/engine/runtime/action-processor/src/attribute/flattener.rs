@@ -23,7 +23,7 @@ impl ProcessorFactory for AttributeFlattenerFactory {
     }
 
     fn description(&self) -> &str {
-        "Flattens features by attributes"
+        "Flatten Nested Object Attributes into Top-Level Attributes"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +52,12 @@ impl ProcessorFactory for AttributeFlattenerFactory {
         let params: AttributeFlattenerParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::FlattenerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::FlattenerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -79,10 +77,12 @@ struct AttributeFlattener {
     params: AttributeFlattenerParam,
 }
 
+/// # AttributeFlattener Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeFlattenerParam {
-    /// # Attributes to flatten
+    /// # Attributes to Flatten
+    /// Map/object attributes that should be flattened - their nested properties will become top-level attributes
     attributes: Vec<Attribute>,
 }
 
@@ -94,8 +94,8 @@ impl Processor for AttributeFlattener {
     ) -> Result<(), BoxedError> {
         let mut feature = ctx.feature.clone();
         for attribute in &self.params.attributes {
-            if feature.attributes.contains_key(attribute) {
-                if let Some(AttributeValue::Map(value)) = feature.attributes.get(attribute) {
+            if feature.get(attribute).is_some() {
+                if let Some(AttributeValue::Map(value)) = feature.get(attribute).cloned() {
                     let new_attributes = value
                         .iter()
                         .map(|(k, v)| (Attribute::new(k.clone()), v.clone()))
@@ -111,7 +111,11 @@ impl Processor for AttributeFlattener {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

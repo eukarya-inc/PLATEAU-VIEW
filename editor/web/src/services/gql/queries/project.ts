@@ -52,6 +52,7 @@ export const CREATE_PROJECT = gql(`
     $visualizer: Visualizer!
     $name: String!
     $description: String!
+    $imageUrl: URL
     $coreSupport: Boolean
   ) {
     createProject(
@@ -60,6 +61,7 @@ export const CREATE_PROJECT = gql(`
         visualizer: $visualizer
         name: $name
         description: $description
+        imageUrl: $imageUrl
         coreSupport: $coreSupport
       }
     ) {
@@ -67,6 +69,7 @@ export const CREATE_PROJECT = gql(`
         id
         name
         description
+        imageUrl
         coreSupport
       }
     }

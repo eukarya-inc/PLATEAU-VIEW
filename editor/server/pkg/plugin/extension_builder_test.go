@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/visualizer"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +23,7 @@ func TestExtensionBuilder_Description(t *testing.T) {
 func TestExtensionBuilder_ID(t *testing.T) {
 	var b = NewExtension()
 	res := b.ID("xxx").MustBuild()
-	assert.Equal(t, id.PluginExtensionID("xxx"), res.ID())
+	assert.Equal(t, ExtensionID("xxx"), res.ID())
 }
 
 func TestExtensionBuilder_Type(t *testing.T) {
@@ -47,8 +46,8 @@ func TestExtensionBuilder_SingleOnly(t *testing.T) {
 
 func TestExtensionBuilder_Schema(t *testing.T) {
 	var b = NewExtension()
-	res := b.ID("xxx").Schema(id.MustPropertySchemaID("hoge~0.1.0/fff")).MustBuild()
-	assert.Equal(t, id.MustPropertySchemaID("hoge~0.1.0/fff"), res.Schema())
+	res := b.ID("xxx").Schema(MustPropertySchemaID("hoge~0.1.0/fff")).MustBuild()
+	assert.Equal(t, MustPropertySchemaID("hoge~0.1.0/fff"), res.Schema())
 }
 
 func TestExtensionBuilder_Visualizer(t *testing.T) {
@@ -69,12 +68,12 @@ func TestExtensionBuilder_WidgetLayout(t *testing.T) {
 func TestExtensionBuilder_Build(t *testing.T) {
 	type args struct {
 		icon          string
-		id            id.PluginExtensionID
+		id            ExtensionID
 		extensionType ExtensionType
 		system        bool
 		ename         i18n.String
 		description   i18n.String
-		schema        id.PropertySchemaID
+		schema        PropertySchemaID
 		visualizer    visualizer.Visualizer
 		widgetLayout  *WidgetLayout
 	}
@@ -94,7 +93,7 @@ func TestExtensionBuilder_Build(t *testing.T) {
 				system:        false,
 				ename:         i18n.StringFrom("nnn"),
 				description:   i18n.StringFrom("ddd"),
-				schema:        id.MustPropertySchemaID("foo~1.1.1/hhh"),
+				schema:        MustPropertySchemaID("foo~1.1.1/hhh"),
 				visualizer:    "vvv",
 				widgetLayout: NewWidgetLayout(
 					false, false, true, false, &WidgetLocation{
@@ -110,7 +109,7 @@ func TestExtensionBuilder_Build(t *testing.T) {
 				name:          i18n.StringFrom("nnn"),
 				description:   i18n.StringFrom("ddd"),
 				icon:          "ttt",
-				schema:        id.MustPropertySchemaID("foo~1.1.1/hhh"),
+				schema:        MustPropertySchemaID("foo~1.1.1/hhh"),
 				visualizer:    "vvv",
 				widgetLayout: NewWidgetLayout(
 					false, false, true, false, &WidgetLocation{
@@ -126,18 +125,18 @@ func TestExtensionBuilder_Build(t *testing.T) {
 			args: args{
 				extensionType: ExtensionTypeVisualizer,
 			},
-			err: id.ErrInvalidID,
+			err: ErrInvalidID,
 		},
 		{
 			name: "fail not system type infobox",
 			args: args{
 				extensionType: ExtensionTypeInfobox,
 			},
-			err: id.ErrInvalidID,
+			err: ErrInvalidID,
 		},
 		{
 			name: "fail nil id",
-			err:  id.ErrInvalidID,
+			err:  ErrInvalidID,
 		},
 	}
 
@@ -168,12 +167,12 @@ func TestExtensionBuilder_Build(t *testing.T) {
 func TestExtensionBuilder_MustBuild(t *testing.T) {
 	type args struct {
 		icon          string
-		id            id.PluginExtensionID
+		id            ExtensionID
 		extensionType ExtensionType
 		system        bool
 		ename         i18n.String
 		description   i18n.String
-		schema        id.PropertySchemaID
+		schema        PropertySchemaID
 		visualizer    visualizer.Visualizer
 		widgetLayout  *WidgetLayout
 		singleOnly    bool
@@ -194,7 +193,7 @@ func TestExtensionBuilder_MustBuild(t *testing.T) {
 				system:        false,
 				ename:         i18n.StringFrom("nnn"),
 				description:   i18n.StringFrom("ddd"),
-				schema:        id.MustPropertySchemaID("foo~1.1.1/hhh"),
+				schema:        MustPropertySchemaID("foo~1.1.1/hhh"),
 				visualizer:    "vvv",
 				singleOnly:    true,
 				widgetLayout: NewWidgetLayout(
@@ -210,7 +209,7 @@ func TestExtensionBuilder_MustBuild(t *testing.T) {
 				name:          i18n.StringFrom("nnn"),
 				description:   i18n.StringFrom("ddd"),
 				icon:          "ttt",
-				schema:        id.MustPropertySchemaID("foo~1.1.1/hhh"),
+				schema:        MustPropertySchemaID("foo~1.1.1/hhh"),
 				visualizer:    "vvv",
 				singleOnly:    true,
 				widgetLayout: NewWidgetLayout(
@@ -226,18 +225,18 @@ func TestExtensionBuilder_MustBuild(t *testing.T) {
 			args: args{
 				extensionType: ExtensionTypeVisualizer,
 			},
-			err: id.ErrInvalidID,
+			err: ErrInvalidID,
 		},
 		{
 			name: "fail not system type infobox",
 			args: args{
 				extensionType: ExtensionTypeInfobox,
 			},
-			err: id.ErrInvalidID,
+			err: ErrInvalidID,
 		},
 		{
 			name: "fail nil id",
-			err:  id.ErrInvalidID,
+			err:  ErrInvalidID,
 		},
 	}
 

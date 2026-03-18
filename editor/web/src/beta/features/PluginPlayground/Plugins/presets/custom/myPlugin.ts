@@ -64,7 +64,7 @@ const demoInfoboxBlock2File: FileType = {
 \`); `
 };
 
-const demoStoryBlockFile: FileType = {
+const demoStoryFile: FileType = {
   id: "custom-my-plugin-demo-story",
   title: "demo-story-block.js",
   sourceCode: `reearth.ui.show(\`
@@ -77,11 +77,12 @@ const demoStoryBlockFile: FileType = {
 
 export const myPlugin: PluginType = {
   id: "my-plugin",
+  title: "My Plugin",
   files: [
-    yamlFile,
     widgetFile,
     demoInfoboxBlock1File,
     demoInfoboxBlock2File,
-    demoStoryBlockFile
+    demoStoryFile,
+    yamlFile
   ]
 };

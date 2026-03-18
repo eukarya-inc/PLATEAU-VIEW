@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
 )
 

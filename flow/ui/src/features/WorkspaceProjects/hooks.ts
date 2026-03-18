@@ -10,8 +10,12 @@ export default () => {
   const ref = useRef<HTMLDivElement>(null);
 
   const [workspace] = useCurrentWorkspace();
+  const [duplicateProject, setDuplicateProject] = useState<undefined | Project>(
+    undefined,
+  );
 
-  const { isDuplicating, handleProjectDuplication } = useProjectDuplicate();
+  const { isDuplicating, handleProjectDuplication } =
+    useProjectDuplicate(duplicateProject);
 
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const { deleteProject, updateProject } = useProject();
@@ -21,10 +25,15 @@ export default () => {
     projects,
     totalPages,
     isFetching,
-    currentOrder,
+    currentOrderBy,
+    currentSortValue,
+    searchTerm,
     orderDirections,
+    sortOptions,
+    isDebouncingSearch,
     setCurrentPage,
-    handleOrderChange,
+    setSearchTerm,
+    handleSortChange,
   } = useProjectPagination({ workspace });
 
   const [openProjectAddDialog, setOpenProjectAddDialog] = useState(false);
@@ -36,9 +45,6 @@ export default () => {
     string | undefined
   >(undefined);
   const [editProject, setEditProject] = useState<undefined | Project>(
-    undefined,
-  );
-  const [duplicateProject, setDuplicateProject] = useState<undefined | Project>(
     undefined,
   );
 
@@ -93,8 +99,13 @@ export default () => {
     totalPages,
     isFetching,
     isDuplicating,
-    currentOrder,
+    currentOrderBy,
+    currentSortValue,
     orderDirections,
+    searchTerm,
+    sortOptions,
+    isDebouncingSearch,
+    setSearchTerm,
     setOpenProjectAddDialog,
     setOpenProjectDuplicateDialog,
     setEditProject,
@@ -106,6 +117,6 @@ export default () => {
     handleDeleteProject,
     handleUpdateValue,
     handleUpdateProject,
-    handleOrderChange,
+    handleSortChange,
   };
 };

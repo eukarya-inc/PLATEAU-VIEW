@@ -44,6 +44,7 @@ export const useQueries = () => {
 
   const useGetProjectsQuery = (
     workspaceId?: string,
+    keyword?: string,
     paginationOptions?: PaginationOptions,
   ) => {
     return useQuery({
@@ -51,6 +52,7 @@ export const useQueries = () => {
       queryFn: async () => {
         const data = await graphQLContext?.GetProjects({
           workspaceId: workspaceId ?? "",
+          keyword,
           pagination: {
             page: paginationOptions?.page ?? 1,
             pageSize: PROJECT_FETCH_AMOUNT,
@@ -126,12 +128,20 @@ export const useQueries = () => {
   });
 
   const runProjectMutation = useMutation({
-    mutationFn: async ({ projectId, workspaceId, file }: RunProjectInput) => {
+    mutationFn: async ({
+      projectId,
+      workspaceId,
+      file,
+      previousJobId,
+      startNodeId,
+    }: RunProjectInput) => {
       const data = await graphQLContext?.RunProject({
         input: {
           projectId,
           workspaceId,
           file: file.get("file"),
+          previousJobId,
+          startNodeId,
         },
       });
       if (!data?.runProject?.job) return { workspaceId };
@@ -146,11 +156,61 @@ export const useQueries = () => {
       }),
   });
 
+  const copyProjectMutation = useMutation({
+    mutationFn: async ({
+      projectId,
+      source,
+      workspaceId,
+    }: {
+      projectId: string;
+      source: string;
+      workspaceId: string;
+    }) => {
+      const data = await graphQLContext?.CopyProject({ projectId, source });
+      return {
+        success: data?.copyProject,
+        workspaceId,
+      };
+    },
+    onSuccess: ({ workspaceId }) =>
+      queryClient.invalidateQueries({
+        queryKey: [ProjectQueryKeys.GetWorkspaceProjects, workspaceId],
+      }),
+  });
+
+  const importProjectMutation = useMutation({
+    mutationFn: async ({
+      projectId,
+      data: projectData,
+      workspaceId,
+    }: {
+      projectId: string;
+      data: Uint8Array;
+      workspaceId: string;
+    }) => {
+      const dataArray = Array.from(projectData);
+      const data = await graphQLContext?.ImportProject({
+        projectId,
+        data: dataArray,
+      });
+      return {
+        success: data?.importProject,
+        workspaceId,
+      };
+    },
+    onSuccess: ({ workspaceId }) =>
+      queryClient.invalidateQueries({
+        queryKey: [ProjectQueryKeys.GetWorkspaceProjects, workspaceId],
+      }),
+  });
+
   return {
     createProjectMutation,
     deleteProjectMutation,
     updateProjectMutation,
     runProjectMutation,
+    copyProjectMutation,
+    importProjectMutation,
     useGetProjectsQuery,
     useGetProjectByIdQuery,
   };

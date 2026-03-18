@@ -3,7 +3,7 @@ package asset
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/file"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/file"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
@@ -292,7 +292,7 @@ func TestPreviewType_String(t *testing.T) {
 
 func TestPreviewType_StringRef(t *testing.T) {
 	var pt1 *PreviewType
-	var pt2 *PreviewType = lo.ToPtr(PreviewTypeImage)
+	var pt2 = lo.ToPtr(PreviewTypeImage)
 	s := string(*pt2)
 
 	tests := []struct {

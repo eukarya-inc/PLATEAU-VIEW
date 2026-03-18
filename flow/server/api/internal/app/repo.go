@@ -7,13 +7,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/reearth/reearth-flow/api/internal/app/config"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/auth0"
+	"github.com/reearth/reearth-flow/api/internal/infrastructure/cms"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/fs"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/gcpbatch"
+	"github.com/reearth/reearth-flow/api/internal/infrastructure/gcpscheduler"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/gcs"
 	mongorepo "github.com/reearth/reearth-flow/api/internal/infrastructure/mongo"
 	redisrepo "github.com/reearth/reearth-flow/api/internal/infrastructure/redis"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
-	"github.com/reearth/reearth-flow/api/internal/usecase/interactor"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearthx/account/accountinfrastructure/accountmongo"
 	"github.com/reearth/reearthx/account/accountusecase/accountgateway"
@@ -26,14 +27,12 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 )
 
-const databaseName = "reearth-flow"
-const accountDatabaseName = "reearth-account"
+const (
+	databaseName        = "reearth-flow"
+	accountDatabaseName = "reearth-account"
+)
 
 func initReposAndGateways(ctx context.Context, conf *config.Config, _ bool) (*repo.Container, *gateway.Container, *accountrepo.Container, *accountgateway.Container) {
-	interactor.InitWebsocket(
-		conf.WebsocketThriftServerURL,
-	)
-
 	gateways := &gateway.Container{}
 	acGateways := &accountgateway.Container{}
 
@@ -84,10 +83,15 @@ func initReposAndGateways(ctx context.Context, conf *config.Config, _ bool) (*re
 	// Batch
 	gateways.Batch = initBatch(ctx, conf)
 
+	// Scheduler
+	gateways.Scheduler = initScheduler(ctx, conf)
+
 	// Auth0
 	auth0 := auth0.New(conf.Auth0.Domain, conf.Auth0.ClientID, conf.Auth0.ClientSecret)
-	gateways.Authenticator = auth0
 	acGateways.Authenticator = auth0
+
+	// CMS
+	gateways.CMS = initCMS(ctx, conf)
 
 	return repos, gateways, accountRepos, acGateways
 }
@@ -96,7 +100,7 @@ func initFile(ctx context.Context, conf *config.Config) (fileRepo gateway.File) 
 	var err error
 	if conf.GCS.IsConfigured() {
 		log.Infofc(ctx, "file: GCS storage is used: %s\n", conf.GCS.BucketName)
-		fileRepo, err = gcs.NewFile(conf.GCS.BucketName, conf.AssetBaseURL, conf.GCS.PublicationCacheControl)
+		fileRepo, err = gcs.NewFile(conf.GCS.BucketName, conf.AssetBaseURL, conf.GCS.PublicationCacheControl, conf.AssetUploadURLReplacement)
 		if err != nil {
 			log.Warnf("file: failed to init GCS storage: %s\n", err.Error())
 		}
@@ -112,7 +116,7 @@ func initFile(ctx context.Context, conf *config.Config) (fileRepo gateway.File) 
 	return fileRepo
 }
 
-func initBatch(ctx context.Context, conf *config.Config) (batchRepo gateway.Batch) {
+func initBatch(ctx context.Context, conf *config.Config) gateway.Batch {
 	if conf.Worker_ImageURL == "" {
 		return nil
 	}
@@ -144,13 +148,28 @@ func initBatch(ctx context.Context, conf *config.Config) (batchRepo gateway.Batc
 		log.Fatalf("invalid task count: %v", err)
 	}
 
+	maxRunDurationSeconds, err := strconv.Atoi(conf.Worker_MaxRunDurationSeconds)
+	if err != nil {
+		log.Fatalf("invalid max run duration seconds: %v", err)
+	}
+
+	maxRetryCount, err := strconv.Atoi(conf.Worker_MaxRetries)
+	if err != nil {
+		log.Fatalf("invalid max retries: %v", err)
+	}
+	if maxRetryCount < 0 {
+		log.Fatalf("invalid max retries: must be non-negative, got %d", maxRetryCount)
+	}
+
 	config := gcpbatch.BatchConfig{
 		AllowedLocations:                conf.Worker_AllowedLocations,
 		BinaryPath:                      conf.Worker_BinaryPath,
 		BootDiskSizeGB:                  bootDiskSize,
 		BootDiskType:                    conf.Worker_BootDiskType,
+		ChannelBufferSize:               conf.Worker_ChannelBufferSize,
 		ComputeCpuMilli:                 computeCpuMilli,
 		ComputeMemoryMib:                computeMemoryMib,
+		FeatureFlushThreshold:           conf.Worker_FeatureFlushThreshold,
 		ImageURI:                        conf.Worker_ImageURL,
 		MachineType:                     conf.Worker_MachineType,
 		NodeStatusPropagationDelayMS:    conf.Worker_NodeStatusPropagationDelayMS,
@@ -158,18 +177,26 @@ func initBatch(ctx context.Context, conf *config.Config) (batchRepo gateway.Batc
 		PubSubLogStreamTopic:            conf.Worker_PubSubLogStreamTopic,
 		PubSubJobCompleteTopic:          conf.Worker_PubSubJobCompleteTopic,
 		PubSubNodeStatusTopic:           conf.Worker_PubSubNodeStatusTopic,
+		PubSubUserFacingLogTopic:        conf.Worker_PubSubUserFacingLogTopic,
 		ProjectID:                       conf.GCPProject,
 		Region:                          conf.GCPRegion,
+		RustLog:                         conf.Worker_RustLog,
 		SAEmail:                         conf.Worker_BatchSAEmail,
+		MaxRetryCount:                   maxRetryCount,
+		MaxRunDurationSeconds:           maxRunDurationSeconds,
 		TaskCount:                       taskCount,
+		ThreadPoolSize:                  conf.Worker_ThreadPoolSize,
+		CompressIntermediateData:        conf.Worker_CompressIntermediateData,
+		FeatureWriterDisable:            conf.Worker_FeatureWriterDisable,
+		UseSpotVMs:                      conf.Worker_UseSpotVMs,
 	}
 
-	batchRepo, err = gcpbatch.NewBatch(ctx, config)
+	batchRepo, err := gcpbatch.NewBatch(ctx, config)
 	if err != nil {
 		log.Fatalf("failed to create Batch repository: %v", err)
 	}
 
-	return
+	return batchRepo
 }
 
 func initRedis(ctx context.Context, conf *config.Config) gateway.Redis {
@@ -188,4 +215,46 @@ func initRedis(ctx context.Context, conf *config.Config) gateway.Redis {
 		log.Warnf("log: failed to init redis storage: %s\n", err.Error())
 	}
 	return RedisRepo
+}
+
+func initScheduler(ctx context.Context, conf *config.Config) gateway.Scheduler {
+	if conf.GCPProject == "" || conf.GCPRegion == "" {
+		log.Info("Scheduler disabled: GCP project or region not configured")
+		return nil
+	}
+
+	config := gcpscheduler.SchedulerConfig{
+		ProjectID: conf.GCPProject,
+		Location:  conf.GCPRegion,
+		Host:      conf.Host,
+	}
+
+	scheduler, err := gcpscheduler.NewScheduler(ctx, config)
+	if err != nil {
+		log.Errorf("failed to create Scheduler: %v", err)
+		return nil
+	}
+
+	log.Infofc(ctx, "Scheduler enabled for project %s in region %s targeting %s", conf.GCPProject, conf.GCPRegion, conf.Host)
+	return scheduler
+}
+
+func initCMS(ctx context.Context, conf *config.Config) gateway.CMS {
+	if conf.CMS_Endpoint == "" {
+		log.Info("CMS disabled: endpoint not configured")
+		return nil
+	}
+
+	if conf.CMS_Token == "" {
+		log.Warn("CMS: no authentication token provided")
+	}
+
+	cmsClient, err := cms.NewGRPCClient(conf.CMS_Endpoint, conf.CMS_Token, conf.CMS_UseTLS)
+	if err != nil {
+		log.Errorf("failed to create CMS client: %v", err)
+		return nil
+	}
+
+	log.Infofc(ctx, "CMS enabled: endpoint=%s", conf.CMS_Endpoint)
+	return cmsClient
 }

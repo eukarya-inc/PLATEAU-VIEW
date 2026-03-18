@@ -15,7 +15,6 @@ type PropertySchema interface {
 	SaveAll(context.Context, property.SchemaList) error
 	Remove(context.Context, id.PropertySchemaID) error
 	RemoveAll(context.Context, []id.PropertySchemaID) error
-	RemoveByScene(context.Context, id.SceneID) error
 }
 
 func PropertySchemaLoaderFrom(r PropertySchema) property.SchemaLoader {

@@ -11,7 +11,7 @@ use serde_json::Number;
 
 use reearth_flow_common::str::base64_encode;
 use reearth_flow_common::uri::Uri;
-use reearth_flow_common::xml::XmlXpathValue;
+use reearth_flow_common::xml::{xpath_value_to_json, XmlXpathValue};
 
 use crate::datetime::DateTime;
 use crate::error;
@@ -43,6 +43,7 @@ impl Attribute {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
 pub enum AttributeValue {
     Null,
     Bool(bool),
@@ -50,8 +51,8 @@ pub enum AttributeValue {
     String(String),
     DateTime(DateTime),
     Array(Vec<AttributeValue>),
-    Bytes(Bytes),
     Map(HashMap<String, AttributeValue>),
+    Bytes(Bytes),
 }
 
 impl AttributeValue {
@@ -144,7 +145,7 @@ impl AttributeValue {
     }
 
     pub fn convertible_nusamai_type_ref(&self) -> bool {
-        matches!(self, Self::String(_) | Self::Number(_))
+        matches!(self, Self::String(_) | Self::Number(_) | Self::DateTime(_))
     }
 }
 
@@ -244,22 +245,32 @@ impl Display for AttributeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AttributeValue::Null => write!(f, "null"),
-            AttributeValue::Bool(v) => write!(f, "{}", v),
-            AttributeValue::Number(v) => write!(f, "{}", v),
-            AttributeValue::String(v) => write!(f, "{}", v),
+            AttributeValue::Bool(v) => write!(f, "{v}"),
+            AttributeValue::Number(v) => write!(f, "{v}"),
+            AttributeValue::String(v) => write!(f, "{v}"),
             AttributeValue::Array(v) => {
                 for (i, value) in v.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", value)?;
+                    write!(f, "{value}")?;
                 }
                 Ok(())
             }
-            AttributeValue::Bytes(v) => write!(f, "{:?}", v),
-            AttributeValue::Map(v) => write!(f, "{:?}", v),
+            AttributeValue::Bytes(v) => write!(f, "{v:?}"),
+            AttributeValue::Map(v) => write!(f, "{v:?}"),
             AttributeValue::DateTime(v) => write!(f, "{}", v.to_rfc3339()),
         }
+    }
+}
+
+impl TryFrom<f64> for AttributeValue {
+    type Error = error::Error;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        Number::from_f64(value)
+            .map(AttributeValue::Number)
+            .ok_or_else(|| error::Error::validate("f64 value is NaN or infinite"))
     }
 }
 
@@ -269,13 +280,7 @@ impl From<serde_json::Value> for AttributeValue {
             serde_json::Value::Null => AttributeValue::Null,
             serde_json::Value::Bool(v) => AttributeValue::Bool(v),
             serde_json::Value::Number(v) => AttributeValue::Number(v),
-            serde_json::Value::String(v) => {
-                if let Ok(v) = DateTime::try_from(v.as_str()) {
-                    AttributeValue::DateTime(DateTime(v.into()))
-                } else {
-                    AttributeValue::String(v)
-                }
-            }
+            serde_json::Value::String(v) => AttributeValue::String(v),
             serde_json::Value::Array(v) => {
                 AttributeValue::Array(v.into_iter().map(AttributeValue::from).collect::<Vec<_>>())
             }
@@ -324,7 +329,7 @@ impl From<nusamai_citygml::Value> for AttributeValue {
                 AttributeValue::Number(Number::from_f64(v).unwrap())
             }
             nusamai_citygml::Value::Measure(v) => {
-                AttributeValue::Number(Number::from_f64(v.value()).unwrap())
+                AttributeValue::Number(Number::from_string_unchecked(v.value().to_string()))
             }
             nusamai_citygml::Value::Boolean(v) => AttributeValue::Bool(v),
             nusamai_citygml::Value::Uri(v) => AttributeValue::String(v.value().to_string()),
@@ -371,9 +376,7 @@ impl From<nusamai_citygml::Value> for AttributeValue {
 
 impl From<XmlXpathValue> for AttributeValue {
     fn from(value: XmlXpathValue) -> Self {
-        std::convert::Into::<AttributeValue>::into(
-            value.to_string().parse::<serde_json::Value>().unwrap(),
-        )
+        std::convert::Into::<AttributeValue>::into(xpath_value_to_json(&value))
     }
 }
 
@@ -392,6 +395,12 @@ impl TryFrom<rhai::Dynamic> for AttributeValue {
     type Error = error::Error;
 
     fn try_from(value: rhai::Dynamic) -> std::result::Result<Self, Self::Error> {
+        // Skip UNIT (null) values - they should not create attributes
+        if value.is_unit() {
+            return Err(error::Error::internal_runtime(
+                "UNIT value cannot be converted to AttributeValue",
+            ));
+        }
         let value: serde_json::Value =
             from_dynamic(&value).map_err(error::Error::internal_runtime)?;
         let value: Self = value.into();
@@ -553,52 +562,6 @@ impl AttributeValue {
             }
         }
         values
-    }
-
-    pub fn convert_array_attributes(
-        attributes: &HashMap<String, AttributeValue>,
-    ) -> HashMap<String, AttributeValue> {
-        let mut result = HashMap::new();
-        for (k, v) in attributes.iter() {
-            match v {
-                AttributeValue::Array(arr) if arr.len() == 1 => {
-                    let value = arr.first().cloned().unwrap_or(AttributeValue::Null);
-                    match value {
-                        AttributeValue::Map(map) => {
-                            result.insert(
-                                k.clone(),
-                                AttributeValue::Map(Self::convert_array_attributes(&map)),
-                            );
-                        }
-                        _ => {
-                            result.insert(k.clone(), value);
-                        }
-                    }
-                }
-                AttributeValue::Array(arr) => {
-                    let mut new_arr = Vec::new();
-                    for item in arr.iter() {
-                        new_arr.push(match item {
-                            AttributeValue::Map(map) => {
-                                AttributeValue::Map(Self::convert_array_attributes(map))
-                            }
-                            _ => item.clone(),
-                        });
-                    }
-                    result.insert(k.clone(), AttributeValue::Array(new_arr));
-                }
-                AttributeValue::Map(map) => {
-                    result.insert(
-                        k.clone(),
-                        AttributeValue::Map(Self::convert_array_attributes(map)),
-                    );
-                }
-                _ => {
-                    result.insert(k.clone(), v.clone());
-                }
-            }
-        }
-        result
     }
 }
 

@@ -1,14 +1,16 @@
-import { PencilLine, Play, Plus, Trash } from "@phosphor-icons/react";
+import {
+  PencilLineIcon,
+  PlayIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import { ColumnDef } from "@tanstack/react-table";
 
 import {
   Button,
   ButtonWithTooltip,
-  FlowLogo,
-  LoadingSkeleton,
   DataTable as Table,
 } from "@flow/components";
-import BasicBoiler from "@flow/components/BasicBoiler";
 import { DEPLOYMENT_FETCH_RATE } from "@flow/lib/gql/deployment/useQueries";
 import { useT } from "@flow/lib/i18n";
 import type { Deployment } from "@flow/types";
@@ -19,6 +21,7 @@ import {
   DeploymentDeletionDialog,
   DeploymentDetails,
   DeploymentEditDialog,
+  DeploymentRunDialog,
 } from "./components";
 import useHooks from "./hooks";
 
@@ -28,20 +31,26 @@ const DeploymentManager: React.FC = () => {
     deployments,
     selectedDeployment,
     deploymentToBeDeleted,
+    deploymentToBeRun,
     openDeploymentAddDialog,
     deploymentToBeEdited,
     isFetching,
+    isDebouncingSearch,
+    sortOptions,
+    currentSortValue,
     currentPage,
     totalPages,
-    currentOrder,
     setDeploymentToBeEdited,
     setOpenDeploymentAddDialog,
     setDeploymentToBeDeleted,
+    setDeploymentToBeRun,
+    setSearchTerm,
     handleDeploymentSelect,
     handleDeploymentDelete,
     handleDeploymentRun,
+    handleDeploymentRunConfirmed,
+    handleSortChange,
     setCurrentPage,
-    setCurrentOrder,
   } = useHooks();
   const resultsPerPage = DEPLOYMENT_FETCH_RATE;
   const columns: ColumnDef<Deployment>[] = [
@@ -72,21 +81,21 @@ const DeploymentManager: React.FC = () => {
             size="icon"
             tooltipText={t("Run Deployment")}
             onClick={() => handleDeploymentRun(row.row.original)}>
-            <Play />
+            <PlayIcon />
           </ButtonWithTooltip>
           <ButtonWithTooltip
             variant="outline"
             size="icon"
             tooltipText={t("Edit Deployment")}
             onClick={() => setDeploymentToBeEdited(row.row.original)}>
-            <PencilLine />
+            <PencilLineIcon />
           </ButtonWithTooltip>
           <ButtonWithTooltip
             variant="destructive"
             size="icon"
             tooltipText={t("Delete Deployment")}
             onClick={() => setDeploymentToBeDeleted(row.row.original)}>
-            <Trash />
+            <TrashIcon />
           </ButtonWithTooltip>
         </div>
       ),
@@ -104,45 +113,44 @@ const DeploymentManager: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="flex h-full flex-1 flex-col">
-          <div className="flex flex-1 flex-col gap-4 overflow-scroll px-6 pb-2 pt-4">
+        <>
+          <div className="flex flex-1 flex-col gap-1 pt-4 pr-3 pb-2 pl-2">
             <div className="flex h-[50px] items-center justify-between gap-2 border-b pb-4">
-              <p className="text-lg dark:font-extralight">{t("Deployments")}</p>
+              <p className="text-lg font-light dark:font-extralight">
+                {t("Deployments")}
+              </p>
               <Button
                 className="flex gap-2"
                 onClick={() => setOpenDeploymentAddDialog(true)}>
-                <Plus weight="thin" />
+                <PlusIcon weight="thin" />
                 <p className="text-xs dark:font-light">{t("New Deployment")}</p>
               </Button>
             </div>
-            {isFetching ? (
-              <LoadingSkeleton />
-            ) : deployments && deployments.length > 0 ? (
+            <div className="h-full flex-1 overflow-hidden">
               <Table
                 columns={columns}
                 data={deployments}
                 selectColumns
-                showFiltering
                 enablePagination
-                onRowClick={handleDeploymentSelect}
                 currentPage={currentPage}
-                setCurrentPage={setCurrentPage}
                 totalPages={totalPages}
                 resultsPerPage={resultsPerPage}
-                currentOrder={currentOrder}
-                setCurrentOrder={setCurrentOrder}
+                currentSortValue={currentSortValue}
+                sortOptions={sortOptions}
+                showFiltering
+                isFetching={isDebouncingSearch || isFetching}
+                noResultsMessage={t("No Deployments")}
+                onRowClick={handleDeploymentSelect}
+                onSortChange={handleSortChange}
+                setCurrentPage={setCurrentPage}
+                setSearchTerm={setSearchTerm}
               />
-            ) : (
-              <BasicBoiler
-                text={t("No Deployments")}
-                icon={<FlowLogo className="size-16 text-accent" />}
-              />
-            )}
+            </div>
           </div>
           {openDeploymentAddDialog && (
             <DeploymentAddDialog setShowDialog={setOpenDeploymentAddDialog} />
           )}
-        </div>
+        </>
       )}
       {deploymentToBeEdited && (
         <DeploymentEditDialog
@@ -155,6 +163,13 @@ const DeploymentManager: React.FC = () => {
           deploymentToBeDeleted={deploymentToBeDeleted}
           setDeploymentToBeDeleted={setDeploymentToBeDeleted}
           onDeploymentDelete={handleDeploymentDelete}
+        />
+      )}
+      {deploymentToBeRun && (
+        <DeploymentRunDialog
+          deployment={deploymentToBeRun}
+          onDeploymentRun={handleDeploymentRunConfirmed}
+          onDialogClose={() => setDeploymentToBeRun(undefined)}
         />
       )}
     </>

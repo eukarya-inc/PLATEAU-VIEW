@@ -3,14 +3,15 @@ package gql
 import (
 	"context"
 
+	"github.com/google/uuid"
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 func (r *mutationResolver) CreateProject(ctx context.Context, input gqlmodel.CreateProjectInput) (*gqlmodel.ProjectPayload, error) {
-	tid, err := gqlmodel.ToID[accountdomain.Workspace](input.WorkspaceID)
+	tid, err := gqlmodel.ToID[accountsid.Workspace](input.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +70,34 @@ func (r *mutationResolver) RunProject(ctx context.Context, input gqlmodel.RunPro
 		return nil, err
 	}
 
-	_, err = gqlmodel.ToID[accountdomain.Workspace](input.WorkspaceID)
+	_, err = gqlmodel.ToID[accountsid.Workspace](input.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
 
+	var prevJobID *id.JobID
+	if input.PreviousJobID != nil {
+		pjid, err := id.JobIDFrom(string(*input.PreviousJobID))
+		if err != nil {
+			return nil, err
+		}
+		prevJobID = &pjid
+	}
+
+	var startNodeUUID *uuid.UUID
+	if input.StartNodeID != nil {
+		nid, err := uuid.Parse(string(*input.StartNodeID))
+		if err != nil {
+			return nil, err
+		}
+		startNodeUUID = &nid
+	}
+
 	res, err := usecases(ctx).Project.Run(ctx, interfaces.RunProjectParam{
-		ProjectID: pid,
-		Workflow:  gqlmodel.FromFile(&input.File),
+		ProjectID:     pid,
+		Workflow:      gqlmodel.FromFile(&input.File),
+		PreviousJobID: prevJobID,
+		StartNodeID:   startNodeUUID,
 	})
 	if err != nil {
 		return nil, err

@@ -4,12 +4,18 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
+	"github.com/google/uuid"
+	"github.com/reearth/reearth-accounts/server/pkg/gqlclient"
+	"github.com/reearth/reearth-accounts/server/pkg/gqlclient/user"
+	"github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace"
 	"github.com/reearth/reearth-flow/api/internal/app"
 	"github.com/reearth/reearth-flow/api/internal/app/config"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/fs"
+	"github.com/reearth/reearth-flow/api/internal/infrastructure/gql"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/memory"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/mongo"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
@@ -23,18 +29,21 @@ import (
 	"github.com/spf13/afero"
 )
 
-type Seeder func(ctx context.Context, r *repo.Container) error
+type TestMocks struct {
+	UserRepo      user.Repo
+	WorkspaceRepo workspace.WorkspaceRepo
+}
 
 func init() {
 	mongotest.Env = "REEARTH_FLOW_DB"
 }
 
-func StartServer(t *testing.T, cfg *config.Config, useMongo bool, seeder Seeder, allowPermission bool) *httpexpect.Expect {
-	e, _, _ := StartServerAndRepos(t, cfg, useMongo, seeder, allowPermission)
+func StartServer(t *testing.T, cfg *config.Config, useMongo bool, allowPermission bool, mock *TestMocks) *httpexpect.Expect {
+	e, _, _ := StartServerAndRepos(t, cfg, useMongo, allowPermission, mock)
 	return e
 }
 
-func initRepos(t *testing.T, useMongo bool, seeder Seeder) (repos *repo.Container) {
+func initRepos(t *testing.T, useMongo bool) (repos *repo.Container) {
 	ctx := context.Background()
 
 	if useMongo {
@@ -43,12 +52,6 @@ func initRepos(t *testing.T, useMongo bool, seeder Seeder) (repos *repo.Containe
 		repos = lo.Must(mongo.New(ctx, db, accountRepos, false))
 	} else {
 		repos = memory.New()
-	}
-
-	if seeder != nil {
-		if err := seeder(ctx, repos); err != nil {
-			t.Fatalf("failed to seed the db: %s", err)
-		}
 	}
 
 	return repos
@@ -60,13 +63,13 @@ func initGateway() *gateway.Container {
 	}
 }
 
-func StartServerAndRepos(t *testing.T, cfg *config.Config, useMongo bool, seeder Seeder, allowPermission bool) (*httpexpect.Expect, *repo.Container, *gateway.Container) {
-	repos := initRepos(t, useMongo, seeder)
+func StartServerAndRepos(t *testing.T, cfg *config.Config, useMongo bool, allowPermission bool, mock *TestMocks) (*httpexpect.Expect, *repo.Container, *gateway.Container) {
+	repos := initRepos(t, useMongo)
 	gateways := initGateway()
-	return StartServerWithRepos(t, cfg, repos, gateways, allowPermission), repos, gateways
+	return StartServerWithRepos(t, cfg, repos, gateways, allowPermission, mock), repos, gateways
 }
 
-func StartServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Container, gateways *gateway.Container, allowPermission bool) *httpexpect.Expect {
+func StartServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Container, gateways *gateway.Container, allowPermission bool, mock *TestMocks) *httpexpect.Expect {
 	t.Helper()
 
 	if testing.Short() {
@@ -84,6 +87,15 @@ func StartServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Containe
 	mockPermissionChecker := gateway.NewMockPermissionChecker()
 	mockPermissionChecker.Allow = allowPermission
 
+	// mockAccountGQLClient
+	var accountGQLClient *gqlclient.Client
+	if mock != nil {
+		accountGQLClient = gql.NewMockClient(&gql.MockClientParam{
+			UserRepo:      mock.UserRepo,
+			WorkspaceRepo: mock.WorkspaceRepo,
+		})
+	}
+
 	srv := app.NewServer(ctx, &app.ServerConfig{
 		Config:            cfg,
 		Repos:             repos,
@@ -91,6 +103,7 @@ func StartServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Containe
 		Debug:             true,
 		AccountRepos:      repos.AccountRepos(),
 		PermissionChecker: mockPermissionChecker,
+		AccountGQLClient:  accountGQLClient,
 	})
 
 	ch := make(chan error)
@@ -115,23 +128,23 @@ func StartServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Containe
 }
 
 type GraphQLRequest struct {
+	Variables     map[string]any `json:"variables"`
 	OperationName string         `json:"operationName"`
 	Query         string         `json:"query"`
-	Variables     map[string]any `json:"variables"`
 }
 
-func StartGQLServer(t *testing.T, cfg *config.Config, useMongo bool, seeder Seeder, allowPermission bool) (*httpexpect.Expect, *accountrepo.Container) {
-	e, r := StartGQLServerAndRepos(t, cfg, useMongo, seeder, allowPermission)
+func StartGQLServer(t *testing.T, cfg *config.Config, useMongo bool, allowPermission bool, mock *TestMocks) (*httpexpect.Expect, *accountrepo.Container) {
+	e, r := StartGQLServerAndRepos(t, cfg, useMongo, allowPermission, mock)
 	return e, r
 }
 
-func StartGQLServerAndRepos(t *testing.T, cfg *config.Config, useMongo bool, seeder Seeder, allowPermission bool) (*httpexpect.Expect, *accountrepo.Container) {
-	repos := initRepos(t, useMongo, seeder)
+func StartGQLServerAndRepos(t *testing.T, cfg *config.Config, useMongo bool, allowPermission bool, mock *TestMocks) (*httpexpect.Expect, *accountrepo.Container) {
+	repos := initRepos(t, useMongo)
 	acRepos := repos.AccountRepos()
-	return StartGQLServerWithRepos(t, cfg, repos, acRepos, allowPermission), acRepos
+	return StartGQLServerWithRepos(t, cfg, repos, acRepos, allowPermission, mock), acRepos
 }
 
-func StartGQLServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Container, accountrepos *accountrepo.Container, allowPermission bool) *httpexpect.Expect {
+func StartGQLServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Container, accountrepos *accountrepo.Container, allowPermission bool, mock *TestMocks) *httpexpect.Expect {
 	t.Helper()
 
 	if testing.Short() {
@@ -149,19 +162,33 @@ func StartGQLServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Conta
 	mockPermissionChecker := gateway.NewMockPermissionChecker()
 	mockPermissionChecker.Allow = allowPermission
 
+	// mockAccountGQLClient
+	var accountGQLClient *gqlclient.Client
+	if mock != nil {
+		accountGQLClient = gql.NewMockClient(&gql.MockClientParam{
+			UserRepo:      mock.UserRepo,
+			WorkspaceRepo: mock.WorkspaceRepo,
+		})
+	}
+
 	cfg.SkipPermissionCheck = true
+	base := lo.Must(fs.NewFile(afero.NewMemMapFs(), "https://example.com", "https://example2.com"))
 	srv := app.NewServer(ctx, &app.ServerConfig{
 		Config:       cfg,
 		Repos:        repos,
 		AccountRepos: accountrepos,
 		Gateways: &gateway.Container{
-			File: lo.Must(fs.NewFile(afero.NewMemMapFs(), "https://example.com", "https://example2.com")),
+			File: &UploadableFileRepo{
+				File:      base,
+				DummyBase: "http://localhost:4443",
+			},
 		},
 		AccountGateways: &accountgateway.Container{
 			Mailer: mailer.New(ctx, &mailer.Config{}),
 		},
 		Debug:             true,
 		PermissionChecker: mockPermissionChecker,
+		AccountGQLClient:  accountGQLClient,
 	})
 
 	ch := make(chan error)
@@ -181,4 +208,26 @@ func StartGQLServerWithRepos(t *testing.T, cfg *config.Config, repos *repo.Conta
 		}
 	})
 	return httpexpect.Default(t, "http://"+l.Addr().String())
+}
+
+type UploadableFileRepo struct {
+	gateway.File
+	DummyBase string
+}
+
+func (t *UploadableFileRepo) IssueUploadAssetLink(_ context.Context, p gateway.IssueUploadAssetParam) (*gateway.UploadAssetLink, error) {
+	u, _ := url.Parse(t.DummyBase)
+	if u.Scheme == "" {
+		u.Scheme = "http"
+	}
+	u.Path = "/dummy-upload/" + uuid.New().String()
+
+	ct := p.GetOrGuessContentType()
+	return &gateway.UploadAssetLink{
+		URL:             u.String(),
+		ContentType:     ct,
+		ContentLength:   p.ContentLength,
+		ContentEncoding: p.ContentEncoding,
+		Next:            "",
+	}, nil
 }

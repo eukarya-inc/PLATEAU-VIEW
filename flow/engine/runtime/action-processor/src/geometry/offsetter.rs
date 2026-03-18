@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use reearth_flow_runtime::{
     errors::BoxedError,
@@ -23,7 +24,7 @@ impl ProcessorFactory for OffsetterFactory {
     }
 
     fn description(&self) -> &str {
-        "Adds offsets to the feature's coordinates."
+        "Apply Coordinate Offsets to Geometry"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -51,14 +52,12 @@ impl ProcessorFactory for OffsetterFactory {
         let params: OffsetterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::OffsetterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::OffsetterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -71,11 +70,19 @@ impl ProcessorFactory for OffsetterFactory {
     }
 }
 
+/// # Offsetter Parameters
+/// Configure the X, Y, and Z coordinate offsets to apply to all geometry coordinates
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OffsetterParam {
+    /// # X Offset
+    /// Offset to add to all X coordinates (longitude)
     offset_x: Option<f64>,
+    /// # Y Offset
+    /// Offset to add to all Y coordinates (latitude)
     offset_y: Option<f64>,
+    /// # Z Offset
+    /// Offset to add to all Z coordinates (elevation)
     offset_z: Option<f64>,
 }
 
@@ -104,10 +111,10 @@ impl Processor for Offsetter {
                     self.params.offset_y.unwrap_or(0f64),
                     self.params.offset_z.unwrap_or(0f64),
                 );
-                feature.geometry = Geometry {
+                feature.geometry = Arc::new(Geometry {
                     epsg,
                     value: GeometryValue::CityGmlGeometry(geos),
-                };
+                });
             }
             GeometryValue::FlowGeometry3D(mut geos) => {
                 geos.transform_offset(
@@ -115,10 +122,10 @@ impl Processor for Offsetter {
                     self.params.offset_y.unwrap_or(0f64),
                     self.params.offset_z.unwrap_or(0f64),
                 );
-                feature.geometry = Geometry {
+                feature.geometry = Arc::new(Geometry {
                     epsg,
                     value: GeometryValue::FlowGeometry3D(geos),
-                };
+                });
             }
             GeometryValue::None | GeometryValue::FlowGeometry2D(..) => {}
         }
@@ -126,7 +133,11 @@ impl Processor for Offsetter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DEFAULT_ENTRY_GRAPH_ID } from "@flow/global-constants";
 import { Workflow } from "@flow/types";
@@ -13,22 +13,29 @@ export default ({
   rawWorkflows: Workflow[];
   setCurrentWorkflowId: (id: string) => void;
 }) => {
-  const isMainWorkflow = useMemo(
-    () => currentWorkflowId === DEFAULT_ENTRY_GRAPH_ID,
-    [currentWorkflowId],
-  );
+  const isMainWorkflow = useMemo(() => {
+    return currentWorkflowId === DEFAULT_ENTRY_GRAPH_ID;
+  }, [currentWorkflowId]);
 
+  const [workflowNames, setWorkflowsNames] = useState(
+    rawWorkflows.map((w) => ({ id: w.id, name: w.name })),
+  );
+  // Length check is used to for adding and removing workflows.
   // This works as a semi-static base for the rest of the state in this hook.
   // Without this state (aka using rawWorkflows directly), performance drops
   // due to the state updating on every change to a node (which is a lot)
-  const workflows = useMemo(
-    () =>
-      rawWorkflows.filter(isDefined).map((w2) => ({
-        id: w2.id as string,
-        name: w2.name as string,
-      })),
-    [rawWorkflows.length], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  useEffect(() => {
+    if (rawWorkflows.length !== workflowNames.length) {
+      setWorkflowsNames(rawWorkflows.map((w) => ({ id: w.id, name: w.name })));
+    }
+  }, [rawWorkflows.length, workflowNames.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const workflows = useMemo(() => {
+    return workflowNames.filter(isDefined).map((w2) => ({
+      id: w2.id as string,
+      name: w2.name as string,
+    }));
+  }, [workflowNames]);
 
   const handleCurrentWorkflowIdChange = useCallback(
     (id?: string) => {
@@ -69,26 +76,23 @@ export default ({
       setOpenWorkflowIds((ids) => {
         const index = ids.findIndex((id) => id === workflowId);
         const filteredIds = ids.filter((id) => id !== workflowId);
-        const currentWorkflowIndex = openWorkflowIds.findIndex(
-          (wid) => wid === currentWorkflowId,
-        );
-        if (
-          workflowId !== DEFAULT_ENTRY_GRAPH_ID &&
-          index === currentWorkflowIndex
-        ) {
+        if (workflowId !== DEFAULT_ENTRY_GRAPH_ID) {
           handleCurrentWorkflowIdChange(ids[index - 1]);
         }
         return filteredIds;
       });
     },
-    [openWorkflowIds, currentWorkflowId, handleCurrentWorkflowIdChange],
+    [handleCurrentWorkflowIdChange],
   );
 
   return {
-    openWorkflows,
     isMainWorkflow,
+    openWorkflows,
+    openWorkflowIds,
+    workflowNames,
     handleWorkflowOpen,
     handleWorkflowClose,
     handleCurrentWorkflowIdChange,
+    setWorkflowsNames,
   };
 };

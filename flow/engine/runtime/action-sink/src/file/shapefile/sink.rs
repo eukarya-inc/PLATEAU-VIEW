@@ -26,7 +26,7 @@ impl SinkFactory for ShapefileWriterFactory {
     }
 
     fn description(&self) -> &str {
-        "Writes features to a Shapefile"
+        "Writes geographic features to ESRI Shapefile format with optional grouping"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +55,12 @@ impl SinkFactory for ShapefileWriterFactory {
         let params = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 SinkError::ShapefileWriterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 SinkError::ShapefileWriterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -86,10 +84,15 @@ pub(crate) struct ShapefileWriter {
     pub(super) buffer: HashMap<AttributeValue, Vec<Feature>>,
 }
 
+/// # ShapefileWriter Parameters
+///
+/// Configuration for writing features to ESRI Shapefile format.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ShapefileWriterParam {
+    /// Output path or expression for the Shapefile to create
     pub(super) output: Expr,
+    /// Optional attributes to group features by, creating separate files for each group
     pub(super) group_by: Option<Vec<Attribute>>,
 }
 
@@ -107,7 +110,7 @@ impl Sink for ShapefileWriter {
             } else {
                 let key = group_by
                     .iter()
-                    .map(|k| feature.get(&k).cloned().unwrap_or(AttributeValue::Null))
+                    .map(|k| feature.get(k).cloned().unwrap_or(AttributeValue::Null))
                     .collect::<Vec<_>>();
                 AttributeValue::Array(key)
             }

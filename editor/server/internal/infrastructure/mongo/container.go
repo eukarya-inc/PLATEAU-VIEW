@@ -5,11 +5,13 @@ import (
 
 	"github.com/reearth/reearth/server/internal/infrastructure/adapter"
 	"github.com/reearth/reearth/server/internal/infrastructure/memory"
+	"github.com/reearth/reearth/server/internal/infrastructure/mongo/migration"
 	"github.com/reearth/reearth/server/internal/usecase/repo"
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/plugin"
 	"github.com/reearth/reearth/server/pkg/plugin/manifest"
 	"github.com/reearth/reearth/server/pkg/property"
+	"github.com/reearth/reearth/server/pkg/scene"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/reearth/reearthx/account/accountinfrastructure/accountmongo"
 	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
@@ -37,6 +39,9 @@ func New(ctx context.Context, db *mongo.Database, account *accountrepo.Container
 		Asset:          NewAsset(client),
 		AuthRequest:    authserver.NewMongo(client.WithCollection("authRequest")),
 		Config:         NewConfig(db.Collection("config"), lock),
+		DatasetSchema:  NewDatasetSchema(client),
+		Dataset:        NewDataset(client),
+		Layer:          NewLayer(client),
 		NLSLayer:       NewNLSLayer(client),
 		Style:          NewStyle(client),
 		Plugin:         NewPlugin(client),
@@ -44,6 +49,7 @@ func New(ctx context.Context, db *mongo.Database, account *accountrepo.Container
 		PropertySchema: NewPropertySchema(client),
 		Property:       NewProperty(client),
 		Scene:          NewScene(client),
+		Tag:            NewTag(client),
 		SceneLock:      NewSceneLock(client),
 		Policy:         NewPolicy(client),
 		Storytelling:   NewStorytelling(client),
@@ -55,6 +61,11 @@ func New(ctx context.Context, db *mongo.Database, account *accountrepo.Container
 
 	// init
 	if err := Init(c); err != nil {
+		return nil, err
+	}
+
+	// migration
+	if err := migration.Do(ctx, client, c.Config); err != nil {
 		return nil, err
 	}
 
@@ -108,12 +119,16 @@ func Init(r *repo.Container) error {
 	return util.Try(
 		func() error { return r.Asset.(*Asset).Init(ctx) },
 		func() error { return r.AuthRequest.(*authserver.Mongo).Init(ctx) },
+		func() error { return r.Dataset.(*Dataset).Init(ctx) },
+		func() error { return r.DatasetSchema.(*DatasetSchema).Init(ctx) },
+		func() error { return r.Layer.(*Layer).Init(ctx) },
 		func() error { return r.Plugin.(*Plugin).Init(ctx) },
 		func() error { return r.Policy.(*Policy).Init(ctx) },
 		func() error { return r.Project.(*Project).Init(ctx) },
 		func() error { return r.Property.(*Property).Init(ctx) },
 		func() error { return r.PropertySchema.(*PropertySchema).Init(ctx) },
 		func() error { return r.Scene.(*Scene).Init(ctx) },
+		func() error { return r.Tag.(*Tag).Init(ctx) },
 		func() error { return r.User.(*accountmongo.User).Init() },
 		func() error { return r.Workspace.(*accountmongo.Workspace).Init() },
 	)
@@ -126,14 +141,14 @@ func applyWorkspaceFilter(filter interface{}, ids user.WorkspaceIDList) interfac
 	return mongox.And(filter, "team", bson.M{"$in": ids.Strings()})
 }
 
-func applySceneFilter(filter interface{}, ids id.SceneIDList) interface{} {
+func applySceneFilter(filter interface{}, ids scene.IDList) interface{} {
 	if ids == nil {
 		return filter
 	}
 	return mongox.And(filter, "scene", bson.M{"$in": ids.Strings()})
 }
 
-func applyOptionalSceneFilter(filter interface{}, ids id.SceneIDList) interface{} {
+func applyOptionalSceneFilter(filter interface{}, ids scene.IDList) interface{} {
 	if ids == nil {
 		return filter
 	}

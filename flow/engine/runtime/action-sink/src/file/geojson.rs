@@ -26,7 +26,7 @@ impl SinkFactory for GeoJsonWriterFactory {
     }
 
     fn description(&self) -> &str {
-        "Writes features to a geojson file"
+        "Writes geographic features to GeoJSON files with optional grouping"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +55,12 @@ impl SinkFactory for GeoJsonWriterFactory {
         let params = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 SinkError::GeoJsonWriterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 SinkError::GeoJsonWriterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -86,10 +84,15 @@ pub(super) struct GeoJsonWriter {
     pub(super) buffer: HashMap<AttributeValue, Vec<Feature>>,
 }
 
+/// # GeoJsonWriter Parameters
+///
+/// Configuration for writing features to GeoJSON files.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GeoJsonWriterParam {
+    /// Output path or expression for the GeoJSON file to create
     pub(super) output: Expr,
+    /// Optional attributes to group features by, creating separate files for each group
     pub(super) group_by: Option<Vec<Attribute>>,
 }
 
@@ -107,7 +110,7 @@ impl Sink for GeoJsonWriter {
             } else {
                 let key = group_by
                     .iter()
-                    .map(|k| feature.get(&k).cloned().unwrap_or(AttributeValue::Null))
+                    .map(|k| feature.get(k).cloned().unwrap_or(AttributeValue::Null))
                     .collect::<Vec<_>>();
                 AttributeValue::Array(key)
             }
@@ -151,7 +154,7 @@ impl Sink for GeoJsonWriter {
                     buffer.push(b',');
                 }
                 let bytes = serde_json::to_vec(&geojson)
-                    .map_err(|e| crate::errors::SinkError::GeoJsonWriter(format!("{}", e)))?;
+                    .map_err(|e| crate::errors::SinkError::GeoJsonWriter(format!("{e}")))?;
                 buffer.extend(bytes);
             }
             buffer.extend(Vec::from(b"]}\n"));

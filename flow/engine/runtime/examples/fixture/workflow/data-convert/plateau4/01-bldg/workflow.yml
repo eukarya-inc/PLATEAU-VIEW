@@ -4,11 +4,13 @@ name: "PLATEAU4-DataConvert-01-bldg-workflow"
 entryGraphId: 34bf873b-3364-46b0-8153-efeb9568bb3c
 with:
   cityGmlPath:
+  codelistsPath:
+  schemasPath:
   codelists:
   schemas:
   targetPackages:
     - bldg
-  outputPath:
+  workerArtifactPath:
 graphs:
   - !include ../../../../graphs/plateau4/folder_and_file_path_reader.yml
   - id: 34bf873b-3364-46b0-8153-efeb9568bb3c
@@ -25,8 +27,8 @@ graphs:
                 cityGmlPath: env.get("cityGmlPath"),
                 cityCode: env.get("cityCode") ?? file::extract_filename(env.get("cityGmlPath"))[0..5],
                 baseCityCode: env.get("cityCode") ?? file::extract_filename(env.get("cityGmlPath"))[0..5],
-                codelists: env.get("codelists"),
-                schemas: env.get("schemas"),
+                codelists: env.get("codelistsPath") ?? env.get("codelists"),
+                schemas: env.get("schemasPath") ?? env.get("schemas"),
               },
             ]
 
@@ -40,9 +42,19 @@ graphs:
         type: action
         action: FeatureCityGmlReader
         with:
-          format: citygml
+          codelistsPath: env.get("__value").codelists
           dataset: |
             env.get("__value")["path"]
+
+      - id: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
+        name: TargetPackagesFilter
+        type: action
+        action: FeatureFilter
+        with:
+          conditions:
+            - expr: |
+                (env.get("targetPackages") ?? []).is_empty() || env.get("__value")["package"] in env.get("targetPackages")
+              outputPort: default
 
       - id: 33e32a91-5ade-4265-8665-b061f552839c
         name: AttributeManagerForCityCodeAndCityName
@@ -54,16 +66,25 @@ graphs:
               method: convert
               value: |
                 let attributes = env.get("__value").cityGmlAttributes;
-                let buildingIdAttributes = attributes["uro:BuildingIDAttribute"] ?? {};
-                buildingIdAttributes["uro:city_code"] ?? env.get("__value").cityCode
+                let building_id_attributes = attributes["uro:BuildingIDAttribute"][0] ?? {};
+                let gml_city_code = building_id_attributes["uro:city_code"];
+                if gml_city_code != () && gml_city_code != "" {
+                  gml_city_code
+                } else {
+                  let feature_city_code = env.get("__value").cityCode;
+                  if feature_city_code != () && feature_city_code != "" {
+                    feature_city_code
+                  } else {
+                    env.get("cityCode")
+                  }
+                }
 
             - attribute: cityName
-              method: convert
+              method: create
               value: |
                 let attributes = env.get("__value").cityGmlAttributes;
-                let buildingIdAttributes = attributes["uro:BuildingIDAttribute"] ?? {};
-                buildingIdAttributes["uro:city"] ?? env.get("__value").cityName
-
+                let building_id_attributes = attributes["uro:BuildingIDAttribute"][0] ?? {};
+                building_id_attributes["uro:city"] ?? env.get("__value").cityName
 
       - id: ae9c558d-ce05-4b40-ae04-a4477d96db5a
         name: AttributeConversionTable
@@ -77,6 +98,22 @@ graphs:
               featureTo: "cityNameEn"
               conversionTableKeys: ["ward_code"]
               conversionTableTo: "ward_name_en"
+            - featureFroms: ["cityCode"]
+              featureTo: "__wardParentCode"
+              conversionTableKeys: ["ward_code"]
+              conversionTableTo: "city_code"
+
+      - id: f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c
+        name: CityCodeBoundaryFilter
+        type: action
+        action: FeatureFilter
+        with:
+          conditions:
+            - expr: |
+                let code = env.get("__value").cityCode;
+                let base = env.get("__value").baseCityCode;
+                code == base || env.get("__value").__wardParentCode == base
+              outputPort: default
 
       - id: 4ffbb8a3-371e-4938-aa73-c142f11bb04b
         name: FeatureSorter
@@ -87,85 +124,13 @@ graphs:
             - path
           order: ascending
 
-      - id: dc498449-5478-4bff-abaa-59f2d160925f
-        name: PLATEAU4.MaxLodExtractor
-        type: action
-        action: PLATEAU4.MaxLodExtractor
-        with:
-          cityGmlPathAttribute: path
-          maxLodAttribute: maxLod
-
-      - id: 1fb4ce1c-538a-436d-8dfa-79185e032de3
-        name: AttributeAggregatorByMaxLod
-        type: action
-        action: AttributeAggregator
-        with:
-          aggregateAttributes:
-          - newAttribute: file
-            attributeValue: |
-              file::extract_filename(env.get("__value")["path"])
-          - newAttribute: type
-            attributeValue: |
-              env.get("__feature_type")
-          - newAttribute: maxLod
-            attributeValue: |
-              env.get("__value").maxLod
-          calculation: |
-            1
-          calculationAttribute: count
-          method: count
-
-      - id: 52ff7b3c-5fbb-4ad2-86d9-5df50429e3b4
-        name: AttributeMapperByMaxLod
-        type: action
-        action: AttributeMapper
-        with:
-          mappers:
-          - attribute: code
-            expr: |
-              env.get("__value").file.split("_")[0]
-          - attribute: type
-            expr: |
-              env.get("__value")["type"].split(":")[0]
-          - attribute: maxLod
-            expr: |
-              env.get("__value").maxLod
-          - attribute: file
-            expr: |
-              env.get("__value").file
-
-      - id: 65074ffc-9113-4fbf-8957-9ba1de4c56ab
-        name: FileWriterTsvFilePath
-        type: action
-        action: FileWriter
-        with:
-          format: csv
-          output: |
-            file::join_path(env.get("outputPath"), "maxLod.csv")
 
       - id: 5daabfc0-2bda-4f8d-b206-d7a388469f7a
         name: AttributeFlattener
         type: action
         action: PLATEAU4.AttributeFlattener
-
-      - id: dc85a21b-4356-4a29-a862-270029071234
-        name: BoundsExtractor
-        type: action
-        action: BoundsExtractor
         with:
-          xmin: _xmin
-          ymin: _ymin
-          xmax: _xmax
-          ymax: _ymax
-          zmin: _zmin
-          zmax: _zmax
-
-      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
-        name: VerticalReprojector
-        type: action
-        action: VerticalReprojector
-        with:
-          reprojectorType: jgd2011ToWgs84
+          existingFlattenAttributes: true
 
       - id: 3e637368-48dc-48c2-aade-253d5b0cfeeb
         name: AttributeManagerRemoveUnnecessaryAttributes
@@ -181,17 +146,14 @@ graphs:
               method: create
               value: |
                 env.get("__lod")
-            - attribute: _x
+            - attribute: _lod_type
               method: create
               value: |
-                 (env.get("__value")["_xmin"] + env.get("__value")["_xmax"]) * 0.5
-            - attribute: _y
+                env.get("__lod_type")
+            - attribute: feature_type
               method: create
               value: |
-                 (env.get("__value")["_ymin"] + env.get("__value")["_ymax"]) * 0.5
-            - attribute: type
-              method: rename
-              value: "feature_type"
+                env.get("__feature_type")
             - attribute: path
               method: rename
               value: "_path"
@@ -238,7 +200,245 @@ graphs:
         type: action
         action: FeatureLodFilter
         with:
-          filterKey: _path
+          filterKey: city_code
+
+      - id: dc85a21b-4356-4a29-a862-270029071234
+        name: BoundsExtractorByLod1
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789011
+        name: AttributeManagerXYByLod1
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
+        name: VerticalReprojectorByLod1
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071235
+        name: BoundsExtractorByLod2
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789012
+        name: AttributeManagerXYByLod2
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d2
+        name: VerticalReprojectorByLod2
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071236
+        name: BoundsExtractorByLod2NoTexture
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789013
+        name: AttributeManagerXYByLod2NoTexture
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d3
+        name: VerticalReprojectorByLod2NoTexture
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071237
+        name: BoundsExtractorByLod3
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789014
+        name: AttributeManagerXYByLod3
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d4
+        name: VerticalReprojectorByLod3
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071238
+        name: BoundsExtractorByLod3NoTexture
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789015
+        name: AttributeManagerXYByLod3NoTexture
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d5
+        name: VerticalReprojectorByLod3NoTexture
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071239
+        name: BoundsExtractorByLod4
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789016
+        name: AttributeManagerXYByLod4
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d6
+        name: VerticalReprojectorByLod4
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
+
+      - id: dc85a21b-4356-4a29-a862-270029071240
+        name: BoundsExtractorByLod4NoTexture
+        type: action
+        action: BoundsExtractor
+        with:
+          xmin: _xmin
+          ymin: _ymin
+          xmax: _xmax
+          ymax: _ymax
+          zmin: _zmin
+          zmax: _zmax
+
+      - id: fe1daa11-2b3c-4e52-8a1f-123456789017
+        name: AttributeManagerXYByLod4NoTexture
+        type: action
+        action: AttributeManager
+        with:
+          operations:
+            - attribute: _x
+              method: create
+              value: |
+                 (env.get("__value")._xmin + env.get("__value")._xmax) * 0.5
+            - attribute: _y
+              method: create
+              value: |
+                 (env.get("__value")._ymin + env.get("__value")._ymax) * 0.5
+
+      - id: 8b05f9d4-1cb2-4071-a1da-c968431bc0d7
+        name: VerticalReprojectorByLod4NoTexture
+        type: action
+        action: VerticalReprojector
+        with:
+          reprojectorType: jgd2011ToWgs84
 
       - id: 41d69f1f-2a4d-4bc1-a5d0-175698273571
         name: cesium3DTilesWriterByLod1
@@ -249,16 +449,26 @@ graphs:
           maxZoom: 18
           attachTexture: false
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod1")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod1")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod1_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod1_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod1.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod1.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod1.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod1.zip")
             }
 
       - id: a61799d5-176e-4fb9-aa64-5d350adf0bb8
@@ -270,16 +480,26 @@ graphs:
           maxZoom: 18
           attachTexture: true
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod2")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod2")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod2_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod2_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod2.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod2.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod2.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod2.zip")
             }
 
       - id: fc4c3817-6efe-4d6e-8e82-ebd84d5e6e19
@@ -291,16 +511,26 @@ graphs:
           maxZoom: 18
           attachTexture: false
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod2_no_texture")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod2_no_texture")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod2_no_texture_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod2_no_texture_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod2_no_texture.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod2_no_texture.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod2_no_texture.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod2_no_texture.zip")
             }
 
       - id: 953f5c48-9875-4c78-a1d6-4619f8fdedd2
@@ -312,16 +542,26 @@ graphs:
           maxZoom: 18
           attachTexture: true
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod3")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod3")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod3_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod3_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod3.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod3.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod3.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod3.zip")
             }
 
       - id: 990ff798-168a-496e-a20a-b428de6a9ec0
@@ -333,16 +573,26 @@ graphs:
           maxZoom: 18
           attachTexture: false
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod3_no_texture")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod3_no_texture")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod3_no_texture_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod3_no_texture_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod3_no_texture.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod3_no_texture.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod3_no_texture.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod3_no_texture.zip")
             }
 
       - id: b0f8f2c5-bb9b-4f4f-8c27-254367031ded
@@ -354,16 +604,26 @@ graphs:
           maxZoom: 18
           attachTexture: true
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod4")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod4")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod4_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod4_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod4.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod4.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod4.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod4.zip")
             }
 
       - id: 3dfe09e6-0de5-4ba6-ac84-8dd4d2e94638
@@ -375,16 +635,26 @@ graphs:
           maxZoom: 18
           attachTexture: false
           output: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "bldg_lod4_no_texture")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, "bldg_lod4_no_texture")
             } else {
-              file::join_path(env.get("outputPath"), "bldg_lod4_no_texture_" + env.get("__value").city_code)
+              file::join_path(artifact, "bldg_lod4_no_texture_" + city_code)
             }
           compressOutput: |
-            if env.get("__value").baseCityCode == env.get("__value").city_code {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_lod4_no_texture.zip")
+            let city_code = env.get("__value").city_code;
+            let artifact = env.get("workerArtifactPath");
+            let city_gml = file::extract_filename_without_ext(env.get("cityGmlPath"));
+            if city_gml.ends_with("_bldg") {
+              city_gml = city_gml.sub_string(0, city_gml.len() - 5);
+            }
+
+            if env.get("__value").baseCityCode == city_code {
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_lod4_no_texture.zip")
             } else {
-              file::join_path(env.get("outputPath"), "" + file::extract_filename_without_ext(env.get("cityGmlPath")) + "_3dtiles_" + env.get("__value").city_code + "_" + env.get("__value").cityNameEn + "_lod4_no_texture.zip")
+              file::join_path(artifact, city_gml + "_bldg_3dtiles_" + city_code + "_" + env.get("__value").cityNameEn + "_lod4_no_texture.zip")
             }
 
     edges:
@@ -400,6 +670,11 @@ graphs:
         toPort: default
       - id: cf845867-6ffc-4b83-9fd5-e376a22470e2
         from: ded2e272-e05c-4918-86b3-aa9f763da6e6
+        to: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
+        fromPort: default
+        toPort: default
+      - id: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
+        from: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
         to: 33e32a91-5ade-4265-8665-b061f552839c
         fromPort: default
         toPort: default
@@ -408,29 +683,14 @@ graphs:
         to: ae9c558d-ce05-4b40-ae04-a4477d96db5a
         fromPort: default
         toPort: default
-      - id: f79ef31d-45f5-4aa5-ade2-620ab74bb35a
+      - id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
         from: ae9c558d-ce05-4b40-ae04-a4477d96db5a
+        to: f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c
+        fromPort: default
+        toPort: default
+      - id: f79ef31d-45f5-4aa5-ade2-620ab74bb35a
+        from: f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c
         to: 4ffbb8a3-371e-4938-aa73-c142f11bb04b
-        fromPort: default
-        toPort: default
-      - id: f7c94aaf-e43c-4779-893c-e5b23c0cf643
-        from: 4ffbb8a3-371e-4938-aa73-c142f11bb04b
-        to: dc498449-5478-4bff-abaa-59f2d160925f
-        fromPort: default
-        toPort: default
-      - id: 046c94ea-9937-4439-b5f8-c8a616f6599d
-        from: dc498449-5478-4bff-abaa-59f2d160925f
-        to: 1fb4ce1c-538a-436d-8dfa-79185e032de3
-        fromPort: default
-        toPort: default
-      - id: 59c14dab-0e56-4f90-85e6-0c8cfa6d1d14
-        from: 1fb4ce1c-538a-436d-8dfa-79185e032de3
-        to: 52ff7b3c-5fbb-4ad2-86d9-5df50429e3b4
-        fromPort: default
-        toPort: default
-      - id: 993360df-5cfd-4525-9626-bfe13fa62117
-        from: 52ff7b3c-5fbb-4ad2-86d9-5df50429e3b4
-        to: 65074ffc-9113-4fbf-8957-9ba1de4c56ab
         fromPort: default
         toPort: default
       - id: 60ee038e-db4c-4c70-8c0a-a9cbfba726d0
@@ -440,16 +700,6 @@ graphs:
         toPort: default
       - id: eeb85110-2cb8-4196-bb94-6d44c0395fb6
         from: 5daabfc0-2bda-4f8d-b206-d7a388469f7a
-        to: dc85a21b-4356-4a29-a862-270029071234
-        fromPort: default
-        toPort: default
-      - id: bfeb12b1-c8d5-4d13-928d-bf2b01672af9
-        from: dc85a21b-4356-4a29-a862-270029071234
-        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
-        fromPort: default
-        toPort: default
-      - id: fddd597c-3e9c-400c-abd9-02b6c2214459
-        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
         to: 3e637368-48dc-48c2-aade-253d5b0cfeeb
         fromPort: default
         toPort: default
@@ -460,38 +710,143 @@ graphs:
         toPort: default
       - id: dde1d751-fe3e-4283-8742-ec4a61a41574
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: 41d69f1f-2a4d-4bc1-a5d0-175698273571
+        to: dc85a21b-4356-4a29-a862-270029071234
         fromPort: up_to_lod1
+        toPort: default
+      - id: dde1d751-fe3e-4283-8742-ec4a61a41575
+        from: dc85a21b-4356-4a29-a862-270029071234
+        to: fe1daa11-2b3c-4e52-8a1f-123456789011
+        fromPort: default
+        toPort: default
+      - id: dde1d751-fe3e-4283-8742-ec4a61a41576
+        from: fe1daa11-2b3c-4e52-8a1f-123456789011
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
+        fromPort: default
+        toPort: default
+      - id: dde1d751-fe3e-4283-8742-ec4a61a41577
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0ec
+        to: 41d69f1f-2a4d-4bc1-a5d0-175698273571
+        fromPort: default
         toPort: default
       - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30bb
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: a61799d5-176e-4fb9-aa64-5d350adf0bb8
+        to: dc85a21b-4356-4a29-a862-270029071235
         fromPort: up_to_lod2
         toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30ba
+        from: dc85a21b-4356-4a29-a862-270029071235
+        to: fe1daa11-2b3c-4e52-8a1f-123456789012
+        fromPort: default
+        toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30b2
+        from: fe1daa11-2b3c-4e52-8a1f-123456789012
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d2
+        fromPort: default
+        toPort: default
       - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30bc
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d2
+        to: a61799d5-176e-4fb9-aa64-5d350adf0bb8
+        fromPort: default
+        toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30bd
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: fc4c3817-6efe-4d6e-8e82-ebd84d5e6e19
+        to: dc85a21b-4356-4a29-a862-270029071236
         fromPort: up_to_lod2
+        toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30da
+        from: dc85a21b-4356-4a29-a862-270029071236
+        to: fe1daa11-2b3c-4e52-8a1f-123456789013
+        fromPort: default
+        toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30d1
+        from: fe1daa11-2b3c-4e52-8a1f-123456789013
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d3
+        fromPort: default
+        toPort: default
+      - id: 2e6bfbbd-f48f-4cb8-97ac-46fe4ecc30be
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d3
+        to: fc4c3817-6efe-4d6e-8e82-ebd84d5e6e19
+        fromPort: default
         toPort: default
       - id: ce3f3571-053c-4487-8e85-b95fb71a49c7
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: 953f5c48-9875-4c78-a1d6-4619f8fdedd2
+        to: dc85a21b-4356-4a29-a862-270029071237
         fromPort: up_to_lod3
         toPort: default
       - id: ce3f3571-053c-4487-8e85-b95fb71a49c8
+        from: dc85a21b-4356-4a29-a862-270029071237
+        to: fe1daa11-2b3c-4e52-8a1f-123456789014
+        fromPort: default
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49c1
+        from: fe1daa11-2b3c-4e52-8a1f-123456789014
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d4
+        fromPort: default
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49c8
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d4
+        to: 953f5c48-9875-4c78-a1d6-4619f8fdedd2
+        fromPort: default
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49c9
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: 990ff798-168a-496e-a20a-b428de6a9ec0
+        to: dc85a21b-4356-4a29-a862-270029071238
         fromPort: up_to_lod3
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49ca
+        from: dc85a21b-4356-4a29-a862-270029071238
+        to: fe1daa11-2b3c-4e52-8a1f-123456789015
+        fromPort: default
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49c2
+        from: fe1daa11-2b3c-4e52-8a1f-123456789015
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d5
+        fromPort: default
+        toPort: default
+      - id: ce3f3571-053c-4487-8e85-b95fb71a49ca
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d5
+        to: 990ff798-168a-496e-a20a-b428de6a9ec0
+        fromPort: default
         toPort: default
       - id: 841f1bed-a4d3-4425-a754-4f0dd7461eac
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: b0f8f2c5-bb9b-4f4f-8c27-254367031ded
+        to: dc85a21b-4356-4a29-a862-270029071239
         fromPort: up_to_lod4
         toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461eca
+        from: dc85a21b-4356-4a29-a862-270029071239
+        to: fe1daa11-2b3c-4e52-8a1f-123456789016
+        fromPort: default
+        toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461ec2
+        from: fe1daa11-2b3c-4e52-8a1f-123456789016
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d6
+        fromPort: default
+        toPort: default
       - id: 841f1bed-a4d3-4425-a754-4f0dd7461ead
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d6
+        to: b0f8f2c5-bb9b-4f4f-8c27-254367031ded
+        fromPort: default
+        toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461eae
         from: c32a279d-97be-4584-b282-4d65627b1132
-        to: 3dfe09e6-0de5-4ba6-ac84-8dd4d2e94638
+        to: dc85a21b-4356-4a29-a862-270029071240
         fromPort: up_to_lod4
+        toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461eea
+        from: dc85a21b-4356-4a29-a862-270029071240
+        to: fe1daa11-2b3c-4e52-8a1f-123456789017
+        fromPort: default
+        toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461ee2
+        from: fe1daa11-2b3c-4e52-8a1f-123456789017
+        to: 8b05f9d4-1cb2-4071-a1da-c968431bc0d7
+        fromPort: default
+        toPort: default
+      - id: 841f1bed-a4d3-4425-a754-4f0dd7461eaf
+        from: 8b05f9d4-1cb2-4071-a1da-c968431bc0d7
+        to: 3dfe09e6-0de5-4ba6-ac84-8dd4d2e94638
+        fromPort: default
         toPort: default
       - id: 14a2d089-6d1f-4014-bb71-ff976c8e388e
         from: 5daabfc0-2bda-4f8d-b206-d7a388469f7a

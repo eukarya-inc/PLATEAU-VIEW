@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/integration"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integration"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"

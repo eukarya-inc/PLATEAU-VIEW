@@ -3,12 +3,11 @@ package nlslayer
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewFeatureCollection(t *testing.T) {
-	fid := id.NewFeatureID()
+	fid := NewFeatureID()
 	featureCollectionType := "FeatureCollection"
 	property := map[string]any{"key1": "value1"}
 	f, err := NewFeature(
@@ -25,7 +24,7 @@ func TestNewFeatureCollection(t *testing.T) {
 }
 
 func TestFeatureCollectionAddFeature(t *testing.T) {
-	fid1 := id.NewFeatureID()
+	fid1 := NewFeatureID()
 	featureCollectionType := "FeatureCollection"
 	property := &map[string]any{"key1": "value1"}
 	f1, err := NewFeature(
@@ -40,7 +39,7 @@ func TestFeatureCollectionAddFeature(t *testing.T) {
 	fc := NewFeatureCollection(featureCollectionType, []Feature{*f1})
 
 	p2 := &map[string]any{"key2": "value2"}
-	fid2 := id.NewFeatureID()
+	fid2 := NewFeatureID()
 	f2, err := NewFeature(
 		fid2,
 		"Feature",
@@ -57,7 +56,7 @@ func TestFeatureCollectionAddFeature(t *testing.T) {
 }
 
 func TestFeatureCollectionUpdateFeature(t *testing.T) {
-	fid1 := id.NewFeatureID()
+	fid1 := NewFeatureID()
 	featureCollectionType := "FeatureCollection"
 	property := &map[string]any{"key1": "value1"}
 	f1, err := NewFeature(
@@ -72,7 +71,7 @@ func TestFeatureCollectionUpdateFeature(t *testing.T) {
 	fc := NewFeatureCollection(featureCollectionType, []Feature{*f1})
 
 	p2 := &map[string]any{"key2": "value2"}
-	fid2 := id.NewFeatureID()
+	fid2 := NewFeatureID()
 	f2, err := NewFeature(
 		fid2,
 		"Feature",
@@ -96,7 +95,7 @@ func TestFeatureCollectionUpdateFeature(t *testing.T) {
 }
 
 func TestFeatureCollectionRemoveFeature(t *testing.T) {
-	fid1 := id.NewFeatureID()
+	fid1 := NewFeatureID()
 	featureCollectionType := "FeatureCollection"
 	property := map[string]any{"key1": "value1"}
 	f1, err := NewFeature(

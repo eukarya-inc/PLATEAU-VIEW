@@ -28,7 +28,7 @@ impl ProcessorFactory for GeometryFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Filter geometry by type"
+        "Filter Features by Geometry Type"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -59,14 +59,12 @@ impl ProcessorFactory for GeometryFilterFactory {
         let params: GeometryFilterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::GeometryFilterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::GeometryFilterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -86,6 +84,8 @@ pub struct GeometryFilter {
     params: GeometryFilterParam,
 }
 
+/// # Geometry Filter Parameters
+/// Configure how to filter features based on their geometry type
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(tag = "filterType", rename_all = "camelCase")]
 pub enum GeometryFilterParam {
@@ -162,7 +162,11 @@ impl Processor for GeometryFilter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -262,6 +266,7 @@ fn filter_geometry_type(
 #[cfg(test)]
 mod tests {
     use reearth_flow_runtime::forwarder::NoopChannelForwarder;
+    use reearth_flow_types::feature::Attributes;
 
     use crate::tests::utils::create_default_execute_context;
 
@@ -271,7 +276,7 @@ mod tests {
     fn test_filter_multiple_geometry_null() {
         let noop = NoopChannelForwarder::default();
         let fw = ProcessorChannelForwarder::Noop(noop);
-        let feature = Feature::default();
+        let feature = Feature::new_with_attributes(Attributes::new());
         let geometry = Geometry {
             value: GeometryValue::None,
             ..Default::default()
@@ -290,13 +295,14 @@ mod tests {
     fn test_filter_multiple_geometry_3d_multipolygon() {
         let noop = NoopChannelForwarder::default();
         let fw = ProcessorChannelForwarder::Noop(noop);
-        let feature = Feature {
-            geometry: Geometry {
+        let feature = Feature::new_with_attributes_and_geometry(
+            Attributes::new(),
+            Geometry {
                 value: GeometryValue::FlowGeometry3D(Geometry3D::MultiPolygon(Default::default())),
                 ..Default::default()
             },
-            ..Default::default()
-        };
+            Default::default(),
+        );
         let ctx = create_default_execute_context(&feature);
         filter_multiple_geometry(&ctx, &fw, &feature, &feature.geometry.clone());
         if let ProcessorChannelForwarder::Noop(noop) = fw {
@@ -311,15 +317,16 @@ mod tests {
     fn test_filter_multiple_geometry_3d_geometry_collection() {
         let noop = NoopChannelForwarder::default();
         let fw = ProcessorChannelForwarder::Noop(noop);
-        let feature = Feature {
-            geometry: Geometry {
+        let feature = Feature::new_with_attributes_and_geometry(
+            Attributes::new(),
+            Geometry {
                 value: GeometryValue::FlowGeometry3D(Geometry3D::GeometryCollection(
                     Default::default(),
                 )),
                 ..Default::default()
             },
-            ..Default::default()
-        };
+            Default::default(),
+        );
         let ctx = create_default_execute_context(&feature);
         filter_multiple_geometry(&ctx, &fw, &feature, &feature.geometry.clone());
         if let ProcessorChannelForwarder::Noop(noop) = fw {
@@ -334,13 +341,14 @@ mod tests {
     fn test_filter_multiple_geometry_3d_other_geometry() {
         let noop = NoopChannelForwarder::default();
         let fw = ProcessorChannelForwarder::Noop(noop);
-        let feature = Feature {
-            geometry: Geometry {
+        let feature = Feature::new_with_attributes_and_geometry(
+            Attributes::new(),
+            Geometry {
                 value: GeometryValue::FlowGeometry3D(Geometry3D::Point(Default::default())),
                 ..Default::default()
             },
-            ..Default::default()
-        };
+            Default::default(),
+        );
         let ctx = create_default_execute_context(&feature);
         filter_multiple_geometry(&ctx, &fw, &feature, &feature.geometry.clone());
         if let ProcessorChannelForwarder::Noop(noop) = fw {

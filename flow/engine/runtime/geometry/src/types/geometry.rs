@@ -2,7 +2,6 @@ use core::any::type_name;
 use std::convert::TryFrom;
 
 use approx::{AbsDiffEq, RelativeEq};
-use num_traits::Zero;
 use nusamai_projection::vshift::Jgd2011ToWgs84;
 use serde::{Deserialize, Serialize};
 
@@ -26,13 +25,13 @@ use super::solid::Solid;
 use super::traits::Elevation;
 use super::triangle::Triangle;
 use crate::error::Error;
-use crate::utils::PointsCoplanar;
+use crate::types::csg::CSG;
+use crate::types::triangular_mesh::TriangularMesh;
 
-static EPSILON: f64 = 1e-10;
-
-#[derive(Serialize, Deserialize, Eq, PartialEq, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Geometry<T: CoordNum = f64, Z: CoordNum = f64> {
+    CSG(Box<CSG<T, Z>>),
     Point(Point<T, Z>),
     Line(Line<T, Z>),
     LineString(LineString<T, Z>),
@@ -42,6 +41,7 @@ pub enum Geometry<T: CoordNum = f64, Z: CoordNum = f64> {
     MultiPolygon(MultiPolygon<T, Z>),
     Rect(Rect<T, Z>),
     Triangle(Triangle<T, Z>),
+    TriangularMesh(TriangularMesh<T, Z>),
     Solid(Solid<T, Z>),
     GeometryCollection(Vec<Geometry<T, Z>>),
 }
@@ -52,6 +52,7 @@ pub type Geometry3D<T = f64> = Geometry<T, T>;
 impl<T: CoordNum, Z: CoordNum> Geometry<T, Z> {
     pub fn name(&self) -> &'static str {
         match self {
+            Geometry::CSG(_) => "CSG",
             Geometry::Point(_) => "Point",
             Geometry::Line(_) => "Line",
             Geometry::LineString(_) => "LineString",
@@ -61,83 +62,85 @@ impl<T: CoordNum, Z: CoordNum> Geometry<T, Z> {
             Geometry::MultiPolygon(_) => "MultiPolygon",
             Geometry::Rect(_) => "Rect",
             Geometry::Triangle(_) => "Triangle",
+            Geometry::TriangularMesh(_) => "TriangularMesh",
             Geometry::Solid(_) => "Solid",
             Geometry::GeometryCollection(_) => "GeometryCollection",
         }
     }
 
-    pub fn as_point(&self) -> Option<Point<T, Z>> {
+    pub fn as_point(&self) -> Option<&Point<T, Z>> {
         match self {
-            Geometry::Point(p) => Some(*p),
+            Geometry::Point(p) => Some(p),
             _ => None,
         }
     }
 
-    pub fn as_line(&self) -> Option<Line<T, Z>> {
+    pub fn as_line(&self) -> Option<&Line<T, Z>> {
         match self {
-            Geometry::Line(l) => Some(*l),
+            Geometry::Line(l) => Some(l),
             _ => None,
         }
     }
 
-    pub fn as_line_string(&self) -> Option<LineString<T, Z>> {
+    pub fn as_line_string(&self) -> Option<&LineString<T, Z>> {
         match self {
-            Geometry::LineString(ls) => Some(ls.clone()),
+            Geometry::LineString(ls) => Some(ls),
             _ => None,
         }
     }
 
-    pub fn as_multi_line_string(&self) -> Option<MultiLineString<T, Z>> {
+    pub fn as_multi_line_string(&self) -> Option<&MultiLineString<T, Z>> {
         match self {
-            Geometry::MultiLineString(mls) => Some(mls.clone()),
+            Geometry::MultiLineString(mls) => Some(mls),
             _ => None,
         }
     }
 
-    pub fn as_polygon(&self) -> Option<Polygon<T, Z>> {
+    pub fn as_polygon(&self) -> Option<&Polygon<T, Z>> {
         match self {
-            Geometry::Polygon(p) => Some(p.clone()),
+            Geometry::Polygon(p) => Some(p),
             _ => None,
         }
     }
 
-    pub fn as_multi_polygon(&self) -> Option<MultiPolygon<T, Z>> {
+    pub fn as_multi_polygon(&self) -> Option<&MultiPolygon<T, Z>> {
         match self {
-            Geometry::MultiPolygon(mp) => Some(mp.clone()),
+            Geometry::MultiPolygon(mp) => Some(mp),
             _ => None,
         }
     }
 
-    pub fn as_rect(&self) -> Option<Rect<T, Z>> {
+    pub fn as_rect(&self) -> Option<&Rect<T, Z>> {
         match self {
-            Geometry::Rect(rect) => Some(*rect),
+            Geometry::Rect(rect) => Some(rect),
             _ => None,
         }
     }
 
-    pub fn as_triangle(&self) -> Option<Triangle<T, Z>> {
+    pub fn as_triangle(&self) -> Option<&Triangle<T, Z>> {
         match self {
-            Geometry::Triangle(triangle) => Some(*triangle),
+            Geometry::Triangle(triangle) => Some(triangle),
             _ => None,
         }
     }
 
-    pub fn as_solid(&self) -> Option<Solid<T, Z>> {
+    pub fn as_solid(&self) -> Option<&Solid<T, Z>> {
         match self {
-            Geometry::Solid(solid) => Some(solid.clone()),
+            Geometry::Solid(solid) => Some(solid),
             _ => None,
         }
     }
 
-    pub fn as_geometry_collection(&self) -> Option<Vec<Geometry<T, Z>>> {
+    pub fn as_geometry_collection(&self) -> Option<&[Geometry<T, Z>]> {
         match self {
-            Geometry::GeometryCollection(gc) => Some(gc.clone()),
+            Geometry::GeometryCollection(gc) => Some(gc),
             _ => None,
         }
     }
 
     pub fn get_all_coordinates(&self) -> Vec<Coordinate<T, Z>> {
         match self {
+            Geometry::CSG(csg) => csg.get_all_vertex_coordinates(),
             Geometry::Point(p) => vec![p.0],
             Geometry::Line(l) => vec![l.start, l.end],
             Geometry::LineString(ls) => ls.0.clone(),
@@ -181,19 +184,8 @@ impl<T: CoordNum, Z: CoordNum> Geometry<T, Z> {
             Geometry::Triangle(triangle) => {
                 vec![triangle.0, triangle.1, triangle.2]
             }
-            Geometry::Solid(solid) => {
-                let mut coords = Vec::new();
-                for polygon in &solid.top {
-                    coords.extend(polygon.0.clone());
-                }
-                for polygon in &solid.sides {
-                    coords.extend(polygon.0.clone());
-                }
-                for polygon in &solid.bottom {
-                    coords.extend(polygon.0.clone());
-                }
-                coords
-            }
+            Geometry::TriangularMesh(triangular_mesh) => triangular_mesh.get_vertices().to_vec(),
+            Geometry::Solid(solid) => solid.get_all_vertex_coordinates(),
             Geometry::GeometryCollection(gc) => {
                 let mut coords = Vec::new();
                 for geom in gc {
@@ -215,7 +207,6 @@ impl<T: CoordFloat, Z: CoordFloat> From<Geometry<T, Z>> for geojson::Value {
             Geometry::MultiPoint(multi_point) => multi_point.into(),
             Geometry::MultiLineString(multi_line_string) => multi_line_string.into(),
             Geometry::MultiPolygon(multi_point) => multi_point.into(),
-            Geometry::Rect(rect) => rect.into(),
             Geometry::Triangle(triangle) => triangle.into(),
             Geometry::GeometryCollection(gc) => {
                 let mut geometries = Vec::new();
@@ -298,6 +289,7 @@ impl Geometry2D<f64> {
 impl Geometry3D<f64> {
     pub fn elevation(&self) -> f64 {
         match self {
+            Self::CSG(csg) => csg.elevation(),
             Self::Point(p) => p.z(),
             Self::Line(l) => l.start.z,
             Self::LineString(ls) => ls.0.first().map(|c| c.z).unwrap_or(0.0),
@@ -315,17 +307,34 @@ impl Geometry3D<f64> {
                 .unwrap_or(0.0),
             Self::Rect(rect) => rect.min.z,
             Self::Triangle(triangle) => triangle.0.z,
-            Self::Solid(solid) => solid
-                .top
-                .first()
-                .map(|t| t.0.first().map(|c| c.z).unwrap_or(0.0))
-                .unwrap_or(0.0),
+            Self::Solid(solid) => solid.elevation(),
+            Self::TriangularMesh(triangular_mesh) => triangular_mesh.elevation(),
             Self::GeometryCollection(gc) => gc.first().map(|g| g.elevation()).unwrap_or(0.0),
+        }
+    }
+
+    #[inline]
+    pub fn is_elevation_zero(&self) -> bool {
+        match self {
+            Geometry::CSG(csg) => csg.is_elevation_zero(),
+            Geometry::Point(p) => p.is_elevation_zero(),
+            Geometry::Line(l) => l.is_elevation_zero(),
+            Geometry::LineString(ls) => ls.is_elevation_zero(),
+            Geometry::Polygon(p) => p.is_elevation_zero(),
+            Geometry::MultiPoint(mp) => mp.is_elevation_zero(),
+            Geometry::MultiLineString(mls) => mls.is_elevation_zero(),
+            Geometry::MultiPolygon(mp) => mp.is_elevation_zero(),
+            Geometry::Rect(rect) => rect.is_elevation_zero(),
+            Geometry::Triangle(triangle) => triangle.is_elevation_zero(),
+            Geometry::TriangularMesh(triangular_mesh) => triangular_mesh.is_elevation_zero(),
+            Geometry::Solid(solid) => solid.is_elevation_zero(),
+            Geometry::GeometryCollection(gc) => gc.iter().all(|g| g.is_elevation_zero()),
         }
     }
 
     pub fn transform_inplace(&mut self, jgd2wgs: &Jgd2011ToWgs84) {
         match self {
+            Self::CSG(csg) => csg.transform_inplace(jgd2wgs),
             Self::Point(p) => p.transform_inplace(jgd2wgs),
             Self::Line(l) => l.transform_inplace(jgd2wgs),
             Self::LineString(ls) => ls.transform_inplace(jgd2wgs),
@@ -335,6 +344,7 @@ impl Geometry3D<f64> {
             Self::MultiPolygon(mpoly) => mpoly.transform_inplace(jgd2wgs),
             Self::Rect(rect) => rect.transform_inplace(jgd2wgs),
             Self::Triangle(triangle) => triangle.transform_inplace(jgd2wgs),
+            Self::TriangularMesh(triangular_mesh) => triangular_mesh.transform_inplace(jgd2wgs),
             Self::Solid(solid) => solid.transform_inplace(jgd2wgs),
             Self::GeometryCollection(gc) => {
                 for g in gc {
@@ -346,6 +356,7 @@ impl Geometry3D<f64> {
 
     pub fn transform_offset(&mut self, x: f64, y: f64, z: f64) {
         match self {
+            Self::CSG(csg) => csg.transform_offset(x, y, z),
             Self::Point(p) => p.transform_offset(x, y, z),
             Self::Line(l) => l.transform_offset(x, y, z),
             Self::LineString(ls) => ls.transform_offset(x, y, z),
@@ -355,6 +366,7 @@ impl Geometry3D<f64> {
             Self::MultiPolygon(mpoly) => mpoly.transform_offset(x, y, z),
             Self::Rect(rect) => rect.transform_offset(x, y, z),
             Self::Triangle(triangle) => triangle.transform_offset(x, y, z),
+            Self::TriangularMesh(triangular_mesh) => triangular_mesh.transform_offset(x, y, z),
             Self::Solid(solid) => solid.transform_offset(x, y, z),
             Self::GeometryCollection(gc) => {
                 for g in gc {
@@ -368,6 +380,7 @@ impl Geometry3D<f64> {
 impl From<Geometry3D<f64>> for Geometry2D<f64> {
     fn from(geos: Geometry3D<f64>) -> Self {
         match geos {
+            Geometry3D::CSG(_csg) => unreachable!(), // 2D CSG never exists
             Geometry3D::Point(p) => Geometry2D::Point(p.into()),
             Geometry3D::Line(l) => Geometry2D::Line(l.into()),
             Geometry3D::LineString(ls) => Geometry2D::LineString(ls.into()),
@@ -377,6 +390,7 @@ impl From<Geometry3D<f64>> for Geometry2D<f64> {
             Geometry3D::MultiPolygon(mp) => Geometry2D::MultiPolygon(mp.into()),
             Geometry3D::Rect(rect) => Geometry2D::Rect(rect.into()),
             Geometry3D::Triangle(triangle) => Geometry2D::Triangle(triangle.into()),
+            Geometry3D::TriangularMesh(_triangular_mesh) => unimplemented!(),
             Geometry3D::Solid(solid) => Geometry2D::Solid(solid.into()),
             Geometry3D::GeometryCollection(gc) => {
                 let mut new_gc = Vec::new();
@@ -477,41 +491,14 @@ try_from_geometry_impl!(
 );
 
 impl Geometry2D<f64> {
-    pub fn are_points_coplanar(&self) -> bool {
+    pub fn are_points_coplanar(&self, _tolerance: f64) -> bool {
         true
-    }
-}
-
-impl Geometry3D<f64> {
-    pub fn are_points_coplanar(&self) -> Option<PointsCoplanar> {
-        match self {
-            Geometry::Point(_) => None,
-            Geometry::Line(_) => None,
-            Geometry::LineString(ls) => {
-                crate::utils::are_points_coplanar(ls.clone().into(), EPSILON)
-            }
-            Geometry::Polygon(polygon) => {
-                crate::utils::are_points_coplanar(polygon.clone().into(), EPSILON)
-            }
-            Geometry::MultiPoint(mpolygon) => {
-                crate::utils::are_points_coplanar(mpolygon.clone().into(), EPSILON)
-            }
-            Geometry::MultiLineString(mls) => {
-                crate::utils::are_points_coplanar(mls.clone().into(), EPSILON)
-            }
-            Geometry::MultiPolygon(mpolygon) => {
-                crate::utils::are_points_coplanar(mpolygon.clone().into(), EPSILON)
-            }
-            Geometry::Rect(rect) => crate::utils::are_points_coplanar((*rect).into(), EPSILON),
-            Geometry::Triangle(_) => unimplemented!(),
-            Geometry::Solid(_) => unimplemented!(),
-            Geometry::GeometryCollection(_) => unimplemented!(),
-        }
     }
 }
 
 fn inner_type_name<T: CoordNum, Z: CoordNum>(geometry: Geometry<T, Z>) -> &'static str {
     match geometry {
+        Geometry::CSG(_) => type_name::<CSG<T, Z>>(),
         Geometry::Point(_) => type_name::<Point<T, Z>>(),
         Geometry::Line(_) => type_name::<Line<T, Z>>(),
         Geometry::LineString(_) => type_name::<LineString<T, Z>>(),
@@ -521,6 +508,7 @@ fn inner_type_name<T: CoordNum, Z: CoordNum>(geometry: Geometry<T, Z>) -> &'stat
         Geometry::MultiPolygon(_) => type_name::<MultiPolygon<T, Z>>(),
         Geometry::Rect(_) => type_name::<Rect<T, Z>>(),
         Geometry::Triangle(_) => type_name::<Triangle<T, Z>>(),
+        Geometry::TriangularMesh(_) => type_name::<TriangularMesh<T, Z>>(),
         Geometry::Solid(_) => type_name::<Solid<T, Z>>(),
         Geometry::GeometryCollection(_) => type_name::<Vec<Geometry<T, Z>>>(),
     }
@@ -607,29 +595,6 @@ impl<T: AbsDiffEq<Epsilon = T> + CoordNum> AbsDiffEq for Geometry<T, T> {
             (Geometry::MultiPolygon(g1), Geometry::MultiPolygon(g2)) => g1.abs_diff_eq(g2, epsilon),
             (Geometry::Triangle(g1), Geometry::Triangle(g2)) => g1.abs_diff_eq(g2, epsilon),
             (_, _) => false,
-        }
-    }
-}
-
-impl<T, Z> Elevation for Geometry<T, Z>
-where
-    T: CoordNum + Zero,
-    Z: CoordNum + Zero,
-{
-    #[inline]
-    fn is_elevation_zero(&self) -> bool {
-        match self {
-            Geometry::Point(p) => p.is_elevation_zero(),
-            Geometry::Line(l) => l.is_elevation_zero(),
-            Geometry::LineString(ls) => ls.is_elevation_zero(),
-            Geometry::Polygon(p) => p.is_elevation_zero(),
-            Geometry::MultiPoint(mp) => mp.is_elevation_zero(),
-            Geometry::MultiLineString(mls) => mls.is_elevation_zero(),
-            Geometry::MultiPolygon(mp) => mp.is_elevation_zero(),
-            Geometry::Rect(rect) => rect.is_elevation_zero(),
-            Geometry::Triangle(triangle) => triangle.is_elevation_zero(),
-            Geometry::Solid(solid) => solid.is_elevation_zero(),
-            Geometry::GeometryCollection(gc) => gc.iter().all(|g| g.is_elevation_zero()),
         }
     }
 }

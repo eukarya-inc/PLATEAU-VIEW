@@ -20,17 +20,12 @@ type MetadataStore interface {
 
 var _ MetadataStore = &CMS{}
 
-const (
-	ConverterFME     = "fme"
-	ConverterFlow    = "flow"
-	ConverterFMEFlow = "fme_flow"
-)
-
 type Metadata struct {
 	Name                     string `json:"name" cms:"name,text"`
 	ProjectAlias             string `json:"project_alias" cms:"project_alias,text"`
 	DataCatalogProjectAlias  string `json:"datacatalog_project_alias" cms:"datacatalog_project_alias,text"`
 	DataCatalogSchemaVersion string `json:"datacatalog_schema_version" cms:"datacatalog_schema_version,select"`
+	DataCatalogFlowEnabled   bool   `json:"datacatalog_flow_enabled" cms:"datacatalog_flow_enabled,boolean"`
 	CMSAPIKey                string `json:"cms_apikey" cms:"cms_apikey,text"`
 	SidebarAccessToken       string `json:"sidebar_access_token" cms:"sidebar_access_token,text"`
 	SubPorjectAlias          string `json:"subproject_alias" cms:"subproject_alias,text"`
@@ -38,18 +33,10 @@ type Metadata struct {
 	WorkspaceID              string `json:"workspace_id" cms:"workspace_id,text"`
 	ProjectID                string `json:"project_id" cms:"project_id,text"`
 	MergePlateau             bool   `json:"merge_plateau" cms:"merge_plateau,boolean"`
-	Converter                string `json:"converter" cms:"converter,select"`
+	Disabled                 bool   `json:"disabled" cms:"disabled,boolean"`
 	// whether the request is authenticated with sidebar access token
 	Auth       bool   `json:"-" cms:"-"`
 	CMSBaseURL string `json:"-" cms:"-"`
-}
-
-func (m Metadata) IsFMEEnabled() bool {
-	return m.Converter == ConverterFME || m.Converter == ConverterFMEFlow
-}
-
-func (m Metadata) IsFlowEnabled() bool {
-	return m.Converter == ConverterFlow || m.Converter == ConverterFMEFlow
 }
 
 func (m Metadata) CMS() (*cms.CMS, error) {
@@ -82,12 +69,40 @@ func (m Metadata) IsValidToken(token string) bool {
 	return m.SidebarAccessToken == token
 }
 
+func (m Metadata) IsV2() bool {
+	return m.DataCatalogSchemaVersion == "" || m.DataCatalogSchemaVersion == "v2"
+}
+
+func (m Metadata) IsV3() bool {
+	return m.DataCatalogSchemaVersion == "v3"
+}
+
 type MetadataList []Metadata
 
 func (l MetadataList) PlateauProjects() MetadataList {
 	m := lo.FilterMap(l, func(m Metadata, _ int) (lo.Tuple2[Metadata, int], bool) {
 		y := m.PlateauYear()
 		return lo.Tuple2[Metadata, int]{A: m, B: y}, y > 0
+	})
+
+	slices.SortFunc(m, func(a, b lo.Tuple2[Metadata, int]) int {
+		return b.B - a.B
+	})
+
+	return lo.Map(m, func(t lo.Tuple2[Metadata, int], _ int) Metadata {
+		return t.A
+	})
+}
+
+// V3Projects returns all v3 projects sorted by year (newest first)
+// Note: Disabled projects and invalid entries are already filtered out in AllMetadata
+func (l MetadataList) V3Projects() MetadataList {
+	m := lo.FilterMap(l, func(m Metadata, _ int) (lo.Tuple2[Metadata, int], bool) {
+		if !m.IsV3() {
+			return lo.Tuple2[Metadata, int]{}, false
+		}
+		y := m.PlateauYear()
+		return lo.Tuple2[Metadata, int]{A: m, B: y}, true
 	})
 
 	slices.SortFunc(m, func(a, b lo.Tuple2[Metadata, int]) int {
@@ -216,11 +231,14 @@ func (h *CMS) AllMetadata(ctx context.Context, findDataCatalog bool) (MetadataLi
 	for _, item := range items.Items {
 		m := Metadata{}
 		item.Unmarshal(&m)
-		if m.CMSAPIKey == "" {
+		if m.CMSAPIKey == "" || m.Disabled {
 			continue
 		}
 		if m.DataCatalogProjectAlias == "" {
 			m.DataCatalogProjectAlias = m.ProjectAlias
+		}
+		if m.DataCatalogProjectAlias == "" {
+			continue
 		}
 		m.CMSBaseURL = h.cmsbase
 		all = append(all, m)

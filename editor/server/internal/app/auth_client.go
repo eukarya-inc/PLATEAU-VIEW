@@ -38,7 +38,6 @@ func attachOpMiddleware(cfg *ServerConfig) echo.MiddlewareFunc {
 
 			// get sub from context
 			au := adapter.GetAuthInfo(ctx)
-
 			if u, ok := ctx.Value(contextUser).(string); ok {
 				userID = u
 			}
@@ -69,7 +68,6 @@ func attachOpMiddleware(cfg *ServerConfig) echo.MiddlewareFunc {
 					}
 				}
 
-				// This is from the past, and normally, it is retrieved via Sub. During testing, it is retrieved from the userID in the header.
 				if u == nil && userID != "" {
 					if userID2, err := accountdomain.UserIDFrom(userID); err == nil {
 						u2, err := multiUser.FetchByID(ctx, user.IDList{userID2})
@@ -104,9 +102,7 @@ func attachOpMiddleware(cfg *ServerConfig) echo.MiddlewareFunc {
 
 			if u != nil {
 				ctx = adapter.AttachUser(ctx, u)
-				if u.Name() != "e2e" {
-					log.Debugfc(ctx, "auth: user: id=%s name=%s email=%s", u.ID(), u.Name(), u.Email())
-				}
+				log.Debugfc(ctx, "auth: user: id=%s name=%s email=%s", u.ID(), u.Name(), u.Email())
 
 				op, err := generateOperator(ctx, cfg, u)
 				if err != nil {
@@ -114,9 +110,7 @@ func attachOpMiddleware(cfg *ServerConfig) echo.MiddlewareFunc {
 				}
 
 				ctx = adapter.AttachOperator(ctx, op)
-				if u.Name() != "e2e" {
-					log.Debugfc(ctx, "auth: op: %#v", op)
-				}
+				log.Debugfc(ctx, "auth: op: %#v", op)
 			}
 
 			ctx = adapter.AttachCurrentHost(ctx, cfg.Config.Host)

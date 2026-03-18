@@ -1,9 +1,19 @@
 name: ⭐️ Deploy PLATEAU Server production
 on:
   workflow_call:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., build-abc123). Defaults to build-<sha>.'
+        required: false
+        type: string
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., build-abc123). Defaults to build-<sha>.'
+        required: false
+        type: string
 env:
-  IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-api:latest
+  IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-api:${{ inputs.image_tag || format('build-{0}', github.sha) }}
   IMAGE_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau/reearth-plateau/plateauview-api:latest
   IMAGE_HUB: eukarya/plateauview-api:latest
 jobs:
@@ -24,23 +34,51 @@ jobs:
       - name: Configure docker
         run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
       - name: Pull docker image from GHCR
-        run: docker pull $IMAGE
-      - name: docker push
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: docker pull $IMAGE
+      - name: Get pulled image digest
+        id: digest
         run: |
-          docker tag $IMAGE $IMAGE_GCP
-          docker push $IMAGE_GCP
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Pulled image digest: $DIGEST"
+      - name: Push image to GCP Artifact Registry
+        run: |
+          # Use buildx imagetools to copy image directly between registries
+          # This avoids local Docker daemon caching issues
+          docker buildx imagetools create -t $IMAGE_GCP "$IMAGE"
+          echo "Pushed to GCP: $IMAGE_GCP"
       - name: Deploy server to Cloud Run
         run: |
+          # Use the digest to ensure we deploy the exact image we pulled
+          IMAGE_WITH_DIGEST="${IMAGE_GCP%:*}@${{ steps.digest.outputs.digest }}"
+          echo "Deploying image: $IMAGE_WITH_DIGEST"
           gcloud run deploy plateauview-api \
-            --image $IMAGE_GCP \
+            --image "$IMAGE_WITH_DIGEST" \
             --region ${{ vars.GCP_REGION }} \
             --platform managed \
+            --quiet
+      - name: Deploy server job to Cloud Run
+        run: |
+          # Use the digest to ensure we deploy the exact image we pulled
+          IMAGE_WITH_DIGEST="${IMAGE_GCP%:*}@${{ steps.digest.outputs.digest }}"
+          echo "Deploying job image: $IMAGE_WITH_DIGEST"
+          gcloud run jobs deploy plateauview-server-job \
+            --image "$IMAGE_WITH_DIGEST" \
+            --region ${{ vars.GCP_REGION }} \
             --quiet
 
   push_hub:
@@ -49,13 +87,19 @@ jobs:
       packages: read
     steps:
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Pull image
-        run: docker pull $IMAGE
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: docker pull $IMAGE
       - name: Log in to DockerHub
         uses: docker/login-action@v2
         with:

@@ -1,7 +1,7 @@
 package asset
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
@@ -15,6 +15,14 @@ func (l List) SortByID() List {
 		return a.ID().Compare(b.ID())
 	})
 	return m
+}
+
+func (l List) SetAccessInfoResolver(r AccessInfoResolver) {
+	lo.ForEach(l, func(a *Asset, _ int) {
+		if a != nil {
+			a.SetAccessInfoResolver(r)
+		}
+	})
 }
 
 func (l List) Clone() List {

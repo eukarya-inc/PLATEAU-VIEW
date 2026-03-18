@@ -41,3 +41,14 @@ func CutStringRight(s string, sep string) (string, string) {
 	}
 	return s, ""
 }
+
+// ExtractBaseFeatureType extracts the base feature type from a code.
+// Examples: "bldg2" -> "bldg", "tran10" -> "tran", "bldg" -> "bldg"
+func ExtractBaseFeatureType(code string) string {
+	return strings.TrimRight(code, "0123456789")
+}
+
+// IsDerivedFeatureType returns true if the code is a derived feature type (e.g., "bldg2").
+func IsDerivedFeatureType(code string) bool {
+	return ExtractBaseFeatureType(code) != code
+}

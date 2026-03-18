@@ -3,13 +3,12 @@ package scene
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewPlugins(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
@@ -67,14 +66,14 @@ func TestNewPlugins(t *testing.T) {
 }
 
 func TestPlugins_Property(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
-		Input    id.PluginID
+		Input    PluginID
 		PS       *Plugins
-		Expected *id.PropertyID
+		Expected *PropertyID
 	}{
 		{
 			Name:     "property is found",
@@ -91,7 +90,7 @@ func TestPlugins_Property(t *testing.T) {
 		{
 			Name:     "property is not found",
 			Input:    pid,
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.MustPluginID("zzz~1.1.1"), pr)}),
+			PS:       NewPlugins([]*Plugin{NewPlugin(MustPluginID("zzz~1.1.1"), pr)}),
 			Expected: nil,
 		},
 	}
@@ -107,12 +106,12 @@ func TestPlugins_Property(t *testing.T) {
 }
 
 func TestPlugins_Plugin(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
-		Input    id.PluginID
+		Input    PluginID
 		PS       *Plugins
 		Expected *Plugin
 	}{
@@ -125,7 +124,7 @@ func TestPlugins_Plugin(t *testing.T) {
 		{
 			Name:     "plugin is not found",
 			Input:    pid,
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.MustPluginID("zzz~1.1.1"), pr)}),
+			PS:       NewPlugins([]*Plugin{NewPlugin(MustPluginID("zzz~1.1.1"), pr)}),
 			Expected: nil,
 		},
 	}
@@ -141,8 +140,8 @@ func TestPlugins_Plugin(t *testing.T) {
 }
 
 func TestPlugins_PluginByName(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
@@ -175,13 +174,13 @@ func TestPlugins_PluginByName(t *testing.T) {
 }
 
 func TestPlugins_Properties(t *testing.T) {
-	pr := id.NewPropertyID().Ref()
-	pr2 := id.NewPropertyID().Ref()
+	pr := NewPropertyID().Ref()
+	pr2 := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
 		PS       *Plugins
-		Expected []id.PropertyID
+		Expected []PropertyID
 	}{
 		{
 			Name:     "plugins is nil",
@@ -191,10 +190,10 @@ func TestPlugins_Properties(t *testing.T) {
 		{
 			Name: "get properties",
 			PS: NewPlugins([]*Plugin{
-				NewPlugin(id.MustPluginID("zzz~1.1.1"), pr),
-				NewPlugin(id.MustPluginID("xxx~1.1.1"), pr2),
+				NewPlugin(MustPluginID("zzz~1.1.1"), pr),
+				NewPlugin(MustPluginID("xxx~1.1.1"), pr2),
 			}),
-			Expected: []id.PropertyID{*pr, *pr2},
+			Expected: []PropertyID{*pr, *pr2},
 		},
 	}
 
@@ -209,12 +208,12 @@ func TestPlugins_Properties(t *testing.T) {
 }
 
 func TestPlugins_Has(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
-		Input    id.PluginID
+		Input    PluginID
 		PS       *Plugins
 		Expected bool
 	}{
@@ -227,7 +226,7 @@ func TestPlugins_Has(t *testing.T) {
 		{
 			Name:     "property is not found",
 			Input:    pid,
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.MustPluginID("zzz~1.1.1"), pr)}),
+			PS:       NewPlugins([]*Plugin{NewPlugin(MustPluginID("zzz~1.1.1"), pr)}),
 			Expected: false,
 		},
 	}
@@ -243,12 +242,12 @@ func TestPlugins_Has(t *testing.T) {
 }
 
 func TestPlugins_HasPlugin(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
-		Input    id.PluginID
+		Input    PluginID
 		PS       *Plugins
 		Expected bool
 	}{
@@ -261,7 +260,7 @@ func TestPlugins_HasPlugin(t *testing.T) {
 		{
 			Name:     "plugin is not found",
 			Input:    pid,
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.MustPluginID("xxx~1.2.1"), pr)}),
+			PS:       NewPlugins([]*Plugin{NewPlugin(MustPluginID("xxx~1.2.1"), pr)}),
 			Expected: false,
 		},
 	}
@@ -277,8 +276,8 @@ func TestPlugins_HasPlugin(t *testing.T) {
 }
 
 func TestPlugins_HasPluginByName(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name     string
@@ -295,7 +294,7 @@ func TestPlugins_HasPluginByName(t *testing.T) {
 		{
 			Name:     "plugin is not found",
 			Input:    "xxxx",
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.MustPluginID("zzz~1.1.1"), pr)}),
+			PS:       NewPlugins([]*Plugin{NewPlugin(MustPluginID("zzz~1.1.1"), pr)}),
 			Expected: false,
 		},
 	}
@@ -311,8 +310,8 @@ func TestPlugins_HasPluginByName(t *testing.T) {
 }
 
 func TestPlugins_Add(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name         string
@@ -336,7 +335,7 @@ func TestPlugins_Add(t *testing.T) {
 		},
 		{
 			Name:     "add official plugin",
-			Input:    NewPlugin(id.OfficialPluginID, pr),
+			Input:    NewPlugin(OfficialPluginID, pr),
 			PS:       NewPlugins([]*Plugin{NewPlugin(pid, pr)}),
 			Expected: NewPlugins([]*Plugin{NewPlugin(pid, pr)}),
 			Want:     false,
@@ -361,19 +360,19 @@ func TestPlugins_Add(t *testing.T) {
 }
 
 func TestPlugins_Remove(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	pr := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	pr := NewPropertyID().Ref()
 
 	tests := []struct {
 		Name         string
-		Input        id.PluginID
+		Input        PluginID
 		PS, Expected *Plugins
 	}{
 		{
 			Name:     "remove official plugin",
-			Input:    id.OfficialPluginID,
-			PS:       NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
-			Expected: NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
+			Input:    OfficialPluginID,
+			PS:       NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
+			Expected: NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
 		},
 		{
 			Name:     "remove a plugin",
@@ -394,15 +393,15 @@ func TestPlugins_Remove(t *testing.T) {
 }
 
 func TestPlugins_Upgrade(t *testing.T) {
-	pid := id.MustPluginID("xxx~1.1.1")
-	nid := id.MustPluginID("zzz~1.1.1")
-	pr := id.NewPropertyID().Ref()
-	pr2 := id.NewPropertyID().Ref()
+	pid := MustPluginID("xxx~1.1.1")
+	nid := MustPluginID("zzz~1.1.1")
+	pr := NewPropertyID().Ref()
+	pr2 := NewPropertyID().Ref()
 
 	type args struct {
-		From           id.PluginID
-		To             id.PluginID
-		Property       *id.PropertyID
+		From           PluginID
+		To             PluginID
+		Property       *PropertyID
 		DeleteProperty bool
 	}
 
@@ -445,11 +444,11 @@ func TestPlugins_Upgrade(t *testing.T) {
 		{
 			name: "upgrade official plugin",
 			args: args{
-				From: id.OfficialPluginID,
+				From: OfficialPluginID,
 				To:   nid,
 			},
-			target: NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
-			want:   NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
+			target: NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
+			want:   NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
 		},
 		{
 			name: "same plugin",
@@ -457,8 +456,8 @@ func TestPlugins_Upgrade(t *testing.T) {
 				From: pid,
 				To:   pid,
 			},
-			target: NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
-			want:   NewPlugins([]*Plugin{NewPlugin(id.OfficialPluginID, pr)}),
+			target: NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
+			want:   NewPlugins([]*Plugin{NewPlugin(OfficialPluginID, pr)}),
 		},
 		{
 			name: "nil",

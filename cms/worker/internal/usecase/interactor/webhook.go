@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/reearth/reearth-cms/worker/pkg/webhook"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/pkg/webhook"
 	"github.com/reearth/reearthx/log"
 )
 

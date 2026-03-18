@@ -5,25 +5,32 @@ import {
   XYPosition,
 } from "@xyflow/react";
 import { MouseEvent, useCallback, useRef, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 import type { ContextMenuMeta } from "@flow/components";
+import { CANVAS_HOT_KEYS } from "@flow/global-constants";
 import { useEdges, useNodes } from "@flow/lib/reactFlow";
 import type { ActionNodeType, Edge, Node } from "@flow/types";
 
 type Props = {
   nodes: Node[];
   edges: Edge[];
+  isMainWorkflow: boolean;
   onWorkflowAdd?: (position?: XYPosition) => void;
   onNodesAdd?: (newNode: Node[]) => void;
   onNodesChange?: (changes: NodeChange<Node>[]) => void;
-  onNodeDoubleClick?: (
-    e: MouseEvent | undefined,
-    nodeId: string,
-    subworkflowId?: string,
-  ) => void;
+  onNodeSettings?: (e: MouseEvent | undefined, nodeId: string) => void;
+  onNodesDisable?: (nodes?: Node[]) => void;
   onEdgesAdd?: (newEdges: Edge[]) => void;
   onEdgesChange?: (changes: EdgeChange[]) => void;
-  onNodePickerOpen?: (position: XYPosition, nodeType?: ActionNodeType) => void;
+  onNodePickerOpen?: (
+    position: XYPosition,
+    nodeType?: ActionNodeType,
+    isMainWorkflow?: boolean,
+  ) => void;
+  onCopy?: (node?: Node) => void;
+  onCut?: (isCutByShortCut?: boolean, node?: Node) => void;
+  onPaste?: () => void;
 };
 
 export const defaultEdgeOptions: DefaultEdgeOptions = {
@@ -46,28 +53,33 @@ export const defaultEdgeOptions: DefaultEdgeOptions = {
 export default ({
   nodes,
   edges,
+  isMainWorkflow,
   onWorkflowAdd,
   onNodesAdd,
   onNodesChange,
-  onNodeDoubleClick,
+  onNodeSettings,
   onEdgesAdd,
   onEdgesChange,
   onNodePickerOpen,
+  onCopy,
+  onCut,
+  onPaste,
+  onNodesDisable,
 }: Props) => {
   const {
     handleNodesChange,
-    handleNodesDelete,
+    handleNodesDeleteCleanup,
     handleNodeDragOver,
     handleNodeDragStop,
     handleNodeDrop,
-    handleNodeDoubleClick,
+    handleNodeSettings,
   } = useNodes({
     nodes,
     edges,
     onWorkflowAdd,
     onNodesAdd,
     onNodesChange,
-    onNodeDoubleClick,
+    onNodeSettings,
     onEdgesChange,
     onNodePickerOpen,
   });
@@ -79,7 +91,6 @@ export default ({
   });
 
   const [contextMenu, setContextMenu] = useState<ContextMenuMeta | null>(null);
-
   const paneRef = useRef<HTMLDivElement>(null);
   const getContextMenuPosition = (event: MouseEvent) => {
     if (!paneRef.current) return;
@@ -87,7 +98,6 @@ export default ({
     const localX = event.clientX - pane.left;
     const localY = event.clientY - pane.top;
     const styles: React.CSSProperties = {};
-
     if (localY < pane.height - 200) {
       styles.top = localY;
     } else {
@@ -99,17 +109,17 @@ export default ({
     } else {
       styles.right = pane.width - localX;
     }
-    return styles;
+    return { styles, mousePosition: { x: localX, y: localY } };
   };
 
   const handleNodeContextMenu = useCallback(
     (event: MouseEvent, node: Node) => {
       event.preventDefault();
-      const styles = getContextMenuPosition(event);
-      if (!styles) return;
+      const position = getContextMenuPosition(event);
+      if (!position) return;
+      const { styles } = position;
 
       setContextMenu({
-        type: "node",
         data: node,
         styles,
       });
@@ -120,12 +130,26 @@ export default ({
   const handleSelectionContextMenu = useCallback(
     (event: MouseEvent, nodes: Node[]) => {
       event.preventDefault();
-      const styles = getContextMenuPosition(event);
-      if (!styles) return;
+      const position = getContextMenuPosition(event);
+      if (!position) return;
+      const { styles } = position;
 
       setContextMenu({
-        type: "selection",
         data: nodes,
+        styles,
+      });
+    },
+    [setContextMenu],
+  );
+
+  const handlePaneContextMenu = useCallback(
+    (event: MouseEvent | globalThis.MouseEvent) => {
+      event.preventDefault();
+      const position = getContextMenuPosition(event as MouseEvent);
+      if (!position) return;
+      const { styles, mousePosition } = position;
+      setContextMenu({
+        mousePosition,
         styles,
       });
     },
@@ -136,18 +160,49 @@ export default ({
     setContextMenu(null);
   };
 
+  useHotkeys(CANVAS_HOT_KEYS, (event, handler) => {
+    const hasModifier = event.metaKey || event.ctrlKey;
+    switch (handler.keys?.join("")) {
+      case "r":
+        event.preventDefault();
+        if (isMainWorkflow) onNodePickerOpen?.({ x: 0, y: 0 }, "reader", true);
+        break;
+      case "t":
+        event.preventDefault();
+        onNodePickerOpen?.({ x: 0, y: 0 }, "transformer", true);
+        break;
+      case "w":
+        event.preventDefault();
+        if (isMainWorkflow) onNodePickerOpen?.({ x: 0, y: 0 }, "writer", true);
+        break;
+      case "c":
+        if (hasModifier) onCopy?.();
+        break;
+      case "x":
+        if (hasModifier) onCut?.();
+        break;
+      case "v":
+        if (hasModifier) onPaste?.();
+        break;
+      case "e":
+        if (hasModifier) onNodesDisable?.();
+        break;
+    }
+  });
+
   return {
     handleNodesChange,
-    handleNodesDelete,
+    handleNodesDeleteCleanup,
     handleNodeDragStop,
     handleNodeDragOver,
     handleNodeDrop,
-    handleNodeDoubleClick,
+    handleNodeSettings,
     handleEdgesChange,
     handleConnect,
     handleReconnect,
     handleNodeContextMenu,
     handleSelectionContextMenu,
+    handlePaneContextMenu,
     handleCloseContextmenu,
     contextMenu,
     paneRef,

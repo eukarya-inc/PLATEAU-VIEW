@@ -20,11 +20,11 @@ func TestProperty_AddItem(t *testing.T) {
 	memory := memory.New()
 
 	ws := accountdomain.NewWorkspaceID()
-	scene := scene.New().NewID().Workspace(ws).MustBuild()
+	scene := scene.New().NewID().Workspace(ws).RootLayer(id.NewLayerID()).MustBuild()
 	psg := property.NewSchemaGroup().ID("foobar").IsList(true).Fields([]*property.SchemaField{
 		property.NewSchemaField().ID("field").Type(property.ValueTypeString).MustBuild(),
 	}).MustBuild()
-	ps := property.NewSchema().ID(id.MustPropertySchemaID("xxx~1.1.1/aa")).
+	ps := property.NewSchema().ID(property.MustSchemaID("xxx~1.1.1/aa")).
 		Groups(property.NewSchemaGroupList([]*property.SchemaGroup{
 			psg,
 		})).
@@ -72,9 +72,9 @@ func TestProperty_RemoveItem(t *testing.T) {
 	memory := memory.New()
 
 	ws := accountdomain.NewWorkspaceID()
-	scene := scene.New().NewID().Workspace(ws).MustBuild()
+	scene := scene.New().NewID().Workspace(ws).RootLayer(id.NewLayerID()).MustBuild()
 	psg := property.NewSchemaGroup().ID("foobar").IsList(true).MustBuild()
-	ps := property.NewSchema().ID(id.MustPropertySchemaID("xxx~1.1.1/aa")).
+	ps := property.NewSchema().ID(property.MustSchemaID("xxx~1.1.1/aa")).
 		Groups(property.NewSchemaGroupList([]*property.SchemaGroup{
 			psg,
 		})).
@@ -117,10 +117,10 @@ func TestProperty_UpdateValue_FieldOfGroupInList(t *testing.T) {
 	memory := memory.New()
 
 	ws := accountdomain.NewWorkspaceID()
-	scene := scene.New().NewID().Workspace(ws).MustBuild()
+	scene := scene.New().NewID().Workspace(ws).RootLayer(id.NewLayerID()).MustBuild()
 	psf := property.NewSchemaField().ID("field").Type(property.ValueTypeString).MustBuild()
 	psg := property.NewSchemaGroup().ID("foobar").IsList(true).Fields([]*property.SchemaField{psf}).MustBuild()
-	ps := property.NewSchema().ID(id.MustPropertySchemaID("xxx~1.1.1/aa")).
+	ps := property.NewSchema().ID(property.MustSchemaID("xxx~1.1.1/aa")).
 		Groups(property.NewSchemaGroupList([]*property.SchemaGroup{psg})).
 		MustBuild()
 	pg := property.NewGroup().NewID().SchemaGroup(psg.ID()).MustBuild()

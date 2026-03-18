@@ -17,9 +17,9 @@ pub struct X3DMaterial {
 impl From<nusamai_plateau::models::appearance::X3DMaterial> for X3DMaterial {
     fn from(src: nusamai_plateau::models::appearance::X3DMaterial) -> Self {
         Self {
-            diffuse_color: src.diffuse_color.unwrap_or(Color::new(0.8, 0.8, 0.8)),
-            specular_color: src.specular_color.unwrap_or(Color::new(1., 1., 1.)),
-            ambient_intensity: src.ambient_intensity.unwrap_or(0.2),
+            diffuse_color: src.diffuse_color.unwrap_or(Color::new(0.7, 0.7, 0.7)),
+            specular_color: src.specular_color.unwrap_or(Color::new(0.04, 0.04, 0.04)),
+            ambient_intensity: src.ambient_intensity.unwrap_or(0.9),
         }
     }
 }
@@ -37,9 +37,9 @@ impl From<nusamai_plateau::appearance::Material> for X3DMaterial {
 impl Default for X3DMaterial {
     fn default() -> Self {
         Self {
-            diffuse_color: Color::new(0.8, 0.8, 0.8),
-            specular_color: Color::new(1., 1., 1.),
-            ambient_intensity: 0.2,
+            diffuse_color: Color::new(0.7, 0.7, 0.7),
+            specular_color: Color::new(0.04, 0.04, 0.04),
+            ambient_intensity: 0.9,
         }
     }
 }
@@ -87,8 +87,8 @@ impl Material {
             pbr_metallic_roughness: Some(
                 nusamai_gltf::nusamai_gltf_json::MaterialPbrMetallicRoughness {
                     base_color_factor: to_f64x4(self.base_color),
-                    metallic_factor: 0.2,
-                    roughness_factor: 0.5,
+                    metallic_factor: 0.0,
+                    roughness_factor: 0.9,
                     base_color_texture: tex,
                     ..Default::default()
                 },
@@ -120,6 +120,7 @@ impl Texture {
 
         if extension == Some("webp".to_string()) {
             nusamai_gltf::nusamai_gltf_json::Texture {
+                sampler: Some(0), // Reference the sampler with proper mipmap filtering
                 extensions: Some(
                     nusamai_gltf::nusamai_gltf_json::extensions::texture::TextureExtensions {
                         ext_texture_webp: Some(
@@ -135,6 +136,7 @@ impl Texture {
             }
         } else {
             nusamai_gltf::nusamai_gltf_json::Texture {
+                sampler: Some(0), // Reference the sampler with proper mipmap filtering
                 source: Some(image_index as u32),
                 ..Default::default()
             }
@@ -205,12 +207,12 @@ fn load_image(path: &Path) -> std::io::Result<(Vec<u8>, MimeType)> {
             Some("jpg" | "jpeg") => Ok((std::fs::read(path)?, MimeType::ImageJpeg)),
             Some("webp") => Ok((std::fs::read(path)?, MimeType::ImageWebp)),
             _ => {
-                let err = format!("Unsupported image format: {:?}", path);
+                let err = format!("Unsupported image format: {path:?}");
                 Err(std::io::Error::new(std::io::ErrorKind::InvalidData, err))
             }
         }
     } else {
-        let err = format!("Unsupported image format: {:?}", path);
+        let err = format!("Unsupported image format: {path:?}");
         Err(std::io::Error::new(std::io::ErrorKind::InvalidData, err))
     }
 }

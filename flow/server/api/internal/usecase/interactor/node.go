@@ -19,10 +19,10 @@ import (
 type NodeExecution struct {
 	nodeRepo          repo.NodeExecution
 	redisGateway      gateway.Redis
+	permissionChecker gateway.PermissionChecker
 	subscriptions     *subscription.NodeManager
 	watchers          map[string]context.CancelFunc
 	mu                sync.Mutex
-	permissionChecker gateway.PermissionChecker
 }
 
 func NewNodeExecution(nodeRepo repo.NodeExecution, redisGateway gateway.Redis, permissionChecker gateway.PermissionChecker) interfaces.NodeExecution {
@@ -139,7 +139,7 @@ func (ei *NodeExecution) runNodeMonitoringLoop(ctx context.Context, jobID id.Job
 	}
 
 	key := fmt.Sprintf("%s:%s", jobID.String(), nodeID)
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	var lastStatus graph.Status

@@ -3,7 +3,7 @@ package geospatialjpv3
 import (
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/samber/lo"
 )
 

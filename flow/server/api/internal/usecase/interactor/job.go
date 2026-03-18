@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/rbac"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
@@ -15,24 +16,26 @@ import (
 	"github.com/reearth/reearth-flow/api/pkg/job/monitor"
 	"github.com/reearth/reearth-flow/api/pkg/notification"
 	"github.com/reearth/reearth-flow/api/pkg/subscription"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/usecasex"
 )
 
+var _ interfaces.Job = &Job{}
+
 type Job struct {
 	jobRepo           repo.Job
-	workspaceRepo     accountrepo.Workspace
 	transaction       usecasex.Transaction
 	file              gateway.File
 	batch             gateway.Batch
-	monitor           *monitor.Monitor
-	subscriptions     *subscription.JobManager
+	redis             gateway.Redis
 	notifier          notification.Notifier
 	permissionChecker gateway.PermissionChecker
-	watchersMu        sync.Mutex
+	monitor           *monitor.Monitor
+	subscriptions     *subscription.JobManager
 	activeWatchers    map[string]bool
+	jobLocks          map[string]*sync.Mutex
+	jobLocksMu        sync.RWMutex
+	watchersMu        sync.Mutex
 }
 
 type NotificationPayload struct {
@@ -43,19 +46,50 @@ type NotificationPayload struct {
 	Outputs      []string `json:"outputs"`
 }
 
-func NewJob(r *repo.Container, gr *gateway.Container, permissionChecker gateway.PermissionChecker) interfaces.Job {
+func NewJob(
+	r *repo.Container,
+	gr *gateway.Container,
+	permissionChecker gateway.PermissionChecker,
+) interfaces.Job {
 	return &Job{
 		jobRepo:           r.Job,
-		workspaceRepo:     r.Workspace,
 		transaction:       r.Transaction,
 		file:              gr.File,
 		batch:             gr.Batch,
+		redis:             gr.Redis,
 		monitor:           monitor.NewMonitor(),
 		subscriptions:     subscription.NewJobManager(),
 		notifier:          notification.NewHTTPNotifier(),
 		permissionChecker: permissionChecker,
 		activeWatchers:    make(map[string]bool),
+		jobLocks:          make(map[string]*sync.Mutex),
 	}
+}
+
+func (i *Job) getJobLock(jobID string) *sync.Mutex {
+	i.jobLocksMu.RLock()
+	if lock, exists := i.jobLocks[jobID]; exists {
+		i.jobLocksMu.RUnlock()
+		return lock
+	}
+	i.jobLocksMu.RUnlock()
+
+	i.jobLocksMu.Lock()
+	defer i.jobLocksMu.Unlock()
+
+	if lock, exists := i.jobLocks[jobID]; exists {
+		return lock
+	}
+
+	lock := &sync.Mutex{}
+	i.jobLocks[jobID] = lock
+	return lock
+}
+
+func (i *Job) cleanupJobLock(jobID string) {
+	i.jobLocksMu.Lock()
+	defer i.jobLocksMu.Unlock()
+	delete(i.jobLocks, jobID)
 }
 
 func (i *Job) checkPermission(ctx context.Context, action string) error {
@@ -66,6 +100,10 @@ func (i *Job) Cancel(ctx context.Context, jobID id.JobID) (*job.Job, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, err
 	}
+
+	jobLock := i.getJobLock(jobID.String())
+	jobLock.Lock()
+	defer jobLock.Unlock()
 
 	j, err := i.jobRepo.FindByID(ctx, jobID)
 	if err != nil {
@@ -105,7 +143,6 @@ func (i *Job) Cancel(ctx context.Context, jobID id.JobID) (*job.Job, error) {
 	}
 
 	i.subscriptions.Notify(j.ID().String(), j.Status())
-	i.monitor.Remove(j.ID().String())
 
 	return j, nil
 }
@@ -126,12 +163,17 @@ func (i *Job) Fetch(ctx context.Context, ids []id.JobID) ([]*job.Job, error) {
 	return i.jobRepo.FindByIDs(ctx, ids)
 }
 
-func (i *Job) FindByWorkspace(ctx context.Context, wsID accountdomain.WorkspaceID, p *interfaces.PaginationParam) ([]*job.Job, *interfaces.PageBasedInfo, error) {
+func (i *Job) FindByWorkspace(
+	ctx context.Context,
+	wsID accountsid.WorkspaceID,
+	p *interfaces.PaginationParam,
+	keyword *string,
+) ([]*job.Job, *interfaces.PageBasedInfo, error) {
 	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
 		return nil, nil, err
 	}
 
-	return i.jobRepo.FindByWorkspace(ctx, wsID, p)
+	return i.jobRepo.FindByWorkspace(ctx, wsID, p, keyword)
 }
 
 func (i *Job) GetStatus(ctx context.Context, jobID id.JobID) (job.Status, error) {
@@ -153,9 +195,29 @@ func (i *Job) StartMonitoring(ctx context.Context, j *job.Job, notificationURL *
 
 	log.Debugfc(ctx, "job: starting monitoring for jobID=%s workspace=%s", j.ID(), j.Workspace())
 
+	i.watchersMu.Lock()
+	defer i.watchersMu.Unlock()
+
+	jobKey := j.ID().String()
+	if i.activeWatchers == nil {
+		i.activeWatchers = make(map[string]bool)
+	}
+
+	if _, exists := i.activeWatchers[jobKey]; exists {
+		log.Debugfc(ctx, "job: monitoring already active for jobID=%s", jobKey)
+		if notificationURL != nil {
+			if config := i.monitor.Get(jobKey); config != nil {
+				config.NotificationURL = notificationURL
+			}
+		}
+		return nil
+	}
+
+	i.activeWatchers[jobKey] = true
+
 	monitorCtx, cancel := context.WithCancel(context.Background())
 
-	i.monitor.Register(j.ID().String(), &monitor.Config{
+	i.monitor.Register(jobKey, &monitor.Config{
 		Cancel:          cancel,
 		NotificationURL: notificationURL,
 	})
@@ -166,11 +228,20 @@ func (i *Job) StartMonitoring(ctx context.Context, j *job.Job, notificationURL *
 }
 
 func (i *Job) runMonitoringLoop(ctx context.Context, j *job.Job) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	jobID := j.ID().String()
 	log.Infof("Starting continuous monitoring for job ID %s", jobID)
+
+	defer func() {
+		i.watchersMu.Lock()
+		delete(i.activeWatchers, jobID)
+		i.watchersMu.Unlock()
+		i.monitor.Remove(jobID)
+		i.cleanupJobLock(jobID)
+		log.Infof("Monitoring cleanup completed for job ID %s", jobID)
+	}()
 
 	maxDuration := 24 * time.Hour
 	startTime := time.Now()
@@ -183,7 +254,6 @@ func (i *Job) runMonitoringLoop(ctx context.Context, j *job.Job) {
 		case <-ticker.C:
 			if time.Since(startTime) > maxDuration {
 				log.Warnf("Exceeded maximum monitoring duration for job ID %s", jobID)
-				i.monitor.Remove(jobID)
 				return
 			}
 
@@ -194,9 +264,13 @@ func (i *Job) runMonitoringLoop(ctx context.Context, j *job.Job) {
 			}
 
 			status := currentJob.Status()
-			if status == job.StatusCompleted || status == job.StatusFailed || status == job.StatusCancelled {
-				log.Infof("Job ID %s already in terminal state %s, stopping monitoring", jobID, status)
-				i.monitor.Remove(jobID)
+			if status == job.StatusCompleted || status == job.StatusFailed ||
+				status == job.StatusCancelled {
+				log.Infof(
+					"Job ID %s already in terminal state %s, stopping monitoring",
+					jobID,
+					status,
+				)
 				return
 			}
 
@@ -213,51 +287,98 @@ func (i *Job) checkJobStatus(ctx context.Context, j *job.Job) error {
 		return err
 	}
 
-	newStatus := job.Status(status)
-	statusChanged := j.Status() != newStatus
+	newBatchStatus := job.Status(status)
 
-	isTerminalState := status == gateway.JobStatusCompleted || status == gateway.JobStatusFailed
-	isNewTerminalState := isTerminalState && statusChanged
+	jobLock := i.getJobLock(j.ID().String())
+	jobLock.Lock()
+	defer jobLock.Unlock()
+
+	currentJob, err := i.jobRepo.FindByID(ctx, j.ID())
+	if err != nil {
+		return fmt.Errorf("failed to fetch current job state: %w", err)
+	}
+
+	workerEvent, err := i.redis.GetJobCompleteEvent(ctx, currentJob.ID())
+	if err != nil {
+		log.Warnf("Failed to get worker status from Redis for job %s: %v", currentJob.ID(), err)
+	}
+
+	if workerEvent != nil {
+		var workerStatus job.Status
+		switch workerEvent.Result {
+		case "success":
+			workerStatus = job.StatusCompleted
+		case "failed":
+			workerStatus = job.StatusFailed
+		}
+
+		if workerStatus != "" {
+			currentJob.SetWorkerStatus(workerStatus)
+			log.Infof("Updated worker status for job %s to %s", currentJob.ID(), workerStatus)
+		}
+	}
+
+	batchStatusChanged := currentJob.BatchStatus() == nil || *currentJob.BatchStatus() != newBatchStatus
+	if batchStatusChanged {
+		currentJob.SetBatchStatus(newBatchStatus)
+	}
+
+	statusChanged := batchStatusChanged || workerEvent != nil
 
 	if statusChanged {
-		if err := i.updateJobStatus(ctx, j, newStatus); err != nil {
-			return err
+		// Update legacy status field with computed value
+		currentJob.SetStatus(currentJob.Status())
+
+		// Use transaction for MongoDB update
+		tx, err := i.transaction.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+
+		var txErr error
+		defer func() {
+			if err2 := tx.End(ctx); err2 != nil && txErr == nil {
+				log.Errorfc(ctx, "transaction end failed: %v", err2)
+			}
+		}()
+
+		if err := i.jobRepo.Save(ctx, currentJob); err != nil {
+			txErr = err
+			return fmt.Errorf("failed to save job: %w", err)
+		}
+
+		tx.Commit()
+
+		// Delete Redis key only after successful DB commit
+		if workerEvent != nil {
+			if err := i.redis.DeleteJobCompleteEvent(ctx, currentJob.ID()); err != nil {
+				log.Warnf("Failed to delete job complete event from Redis for job %s: %v", currentJob.ID(), err)
+			}
 		}
 	}
 
-	if isNewTerminalState {
-		log.Infof("Job %s transitioning to terminal state %s, handling completion", j.ID(), newStatus)
-		if err := i.handleJobCompletion(ctx, j); err != nil {
+	computedStatus := currentJob.Status()
+	isTerminalState := computedStatus == job.StatusCompleted || computedStatus == job.StatusFailed ||
+		computedStatus == job.StatusCancelled
+	if isTerminalState {
+		log.Infof(
+			"Job %s transitioning to terminal state %s, handling completion",
+			currentJob.ID(),
+			computedStatus,
+		)
+
+		// For terminal states, run completion handling (artifacts/logs) before notifying.
+		if err := i.handleJobCompletion(ctx, currentJob); err != nil {
 			log.Errorfc(ctx, "job: completion handling failed: %v", err)
 		}
-		i.monitor.Remove(j.ID().String())
 	}
 
-	return nil
-}
-
-func (i *Job) updateJobStatus(ctx context.Context, j *job.Job, status job.Status) error {
-	if err := i.checkPermission(ctx, rbac.ActionAny); err != nil {
-		return err
+	// For terminal states we notify only after completion handling,
+	// so subscribers see final outputs/logs together with the final status.
+	if statusChanged {
+		i.subscriptions.Notify(currentJob.ID().String(), currentJob.Status())
 	}
 
-	tx, err := i.transaction.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := tx.End(ctx); err != nil {
-			log.Errorfc(ctx, "transaction end failed: %v", err)
-		}
-	}()
-
-	j.SetStatus(status)
-	if err := i.jobRepo.Save(ctx, j); err != nil {
-		return err
-	}
-
-	tx.Commit()
-	i.subscriptions.Notify(j.ID().String(), j.Status())
 	return nil
 }
 
@@ -308,6 +429,16 @@ func (i *Job) updateJobArtifacts(ctx context.Context, j *job.Job) error {
 		j.SetLogsURL(logURL)
 	}
 
+	workerLogURL := i.file.GetJobWorkerLogURL(jobID)
+	if workerLogURL != "" {
+		j.SetWorkerLogsURL(workerLogURL)
+	}
+
+	userFacingLogURL := i.file.GetJobUserFacingLogURL(jobID)
+	if userFacingLogURL != "" {
+		j.SetUserFacingLogsURL(userFacingLogURL)
+	}
+
 	return nil
 }
 
@@ -331,7 +462,11 @@ func (i *Job) saveJobState(ctx context.Context, j *job.Job) error {
 	return nil
 }
 
-func (i *Job) sendCompletionNotification(ctx context.Context, j *job.Job, notificationURL string) error {
+func (i *Job) sendCompletionNotification(
+	ctx context.Context,
+	j *job.Job,
+	notificationURL string,
+) error {
 	jobID := j.ID().String()
 
 	status := "failed"
@@ -348,6 +483,20 @@ func (i *Job) sendCompletionNotification(ctx context.Context, j *job.Job, notifi
 		log.Warnfc(ctx, "job: failed to check log existence for jobID=%s: %v", jobID, err)
 	} else if logExists {
 		logs = append(logs, j.LogsURL())
+	}
+
+	workerLogExists, err := i.file.CheckJobWorkerLogExists(ctx, jobID)
+	if err != nil {
+		log.Warnfc(ctx, "job: failed to check worker log existence for jobID=%s: %v", jobID, err)
+	} else if workerLogExists {
+		logs = append(logs, j.WorkerLogsURL())
+	}
+
+	userFacingLogExists, err := i.file.CheckJobUserFacingLogExists(ctx, jobID)
+	if err != nil {
+		log.Warnfc(ctx, "job: failed to check user-facing log existence for jobID=%s: %v", jobID, err)
+	} else if userFacingLogExists {
+		logs = append(logs, j.UserFacingLogsURL())
 	}
 
 	payload := notification.Payload{
@@ -383,32 +532,21 @@ func (i *Job) Subscribe(ctx context.Context, jobID id.JobID) (chan job.Status, e
 }
 
 func (i *Job) startMonitoringIfNeeded(jobID id.JobID) {
-	i.watchersMu.Lock()
-	defer i.watchersMu.Unlock()
-
-	jobKey := jobID.String()
-	if i.activeWatchers == nil {
-		i.activeWatchers = make(map[string]bool)
-	}
-
-	if _, exists := i.activeWatchers[jobKey]; exists {
-		return
-	}
-
-	i.activeWatchers[jobKey] = true
-
 	j, err := i.jobRepo.FindByID(context.Background(), jobID)
 	if err != nil {
 		log.Errorfc(context.Background(), "job: failed to find job for monitoring: %v", err)
 		return
 	}
 
-	monitorCtx, cancel := context.WithCancel(context.Background())
-	i.monitor.Register(jobKey, &monitor.Config{
-		Cancel: cancel,
-	})
+	status := j.Status()
+	if status == job.StatusCompleted || status == job.StatusFailed ||
+		status == job.StatusCancelled {
+		return
+	}
 
-	go i.runMonitoringLoop(monitorCtx, j)
+	if err := i.StartMonitoring(context.Background(), j, nil); err != nil {
+		log.Errorfc(context.Background(), "job: failed to start monitoring: %v", err)
+	}
 }
 
 func (i *Job) Unsubscribe(jobID id.JobID, ch chan job.Status) {

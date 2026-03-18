@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/group"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/group"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/samber/lo"
@@ -46,8 +46,20 @@ func (i Group) FindByProject(ctx context.Context, projectID id.ProjectID, operat
 	return g.Ordered(), nil
 }
 
+func (i Group) Filter(ctx context.Context, projectID id.ProjectID, sort *group.Sort, pagination *usecasex.Pagination, operator *usecase.Operator) (group.List, *usecasex.PageInfo, error) {
+	g, p, err := i.repos.Group.Filter(ctx, projectID, sort, pagination)
+	if err != nil {
+		return nil, nil, err
+	}
+	return g, p, nil
+}
+
 func (i Group) FindByKey(ctx context.Context, pid id.ProjectID, group string, operator *usecase.Operator) (*group.Group, error) {
 	return i.repos.Group.FindByKey(ctx, pid, group)
+}
+
+func (i Group) FindByIDOrKey(ctx context.Context, pid id.ProjectID, idOrKey group.IDOrKey, operator *usecase.Operator) (*group.Group, error) {
+	return i.repos.Group.FindByIDOrKey(ctx, pid, idOrKey)
 }
 
 func (i Group) Create(ctx context.Context, param interfaces.CreateGroupParam, operator *usecase.Operator) (*group.Group, error) {

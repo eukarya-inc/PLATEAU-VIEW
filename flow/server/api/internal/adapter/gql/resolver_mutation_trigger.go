@@ -3,14 +3,14 @@ package gql
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 func (r *mutationResolver) CreateTrigger(ctx context.Context, input gqlmodel.CreateTriggerInput) (*gqlmodel.Trigger, error) {
-	wsid, err := gqlmodel.ToID[accountdomain.Workspace](input.WorkspaceID)
+	wsid, err := gqlmodel.ToID[accountsid.Workspace](input.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -25,6 +25,14 @@ func (r *mutationResolver) CreateTrigger(ctx context.Context, input gqlmodel.Cre
 	param.DeploymentID = did
 
 	param.Description = input.Description
+	param.Enabled = input.Enabled
+
+	if input.Variables != nil {
+		param.Variables, err = gqlmodel.FromVariables(input.Variables)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if input.TimeDriverInput != nil {
 		param.EventSource = "TIME_DRIVEN"
@@ -51,6 +59,7 @@ func (r *mutationResolver) UpdateTrigger(ctx context.Context, input gqlmodel.Upd
 	param := interfaces.UpdateTriggerParam{
 		ID:          tid,
 		Description: input.Description,
+		Enabled:     input.Enabled,
 	}
 
 	if input.DeploymentID != nil {
@@ -67,6 +76,13 @@ func (r *mutationResolver) UpdateTrigger(ctx context.Context, input gqlmodel.Upd
 	} else if input.APIDriverInput != nil {
 		param.EventSource = "API_DRIVEN"
 		param.AuthToken = input.APIDriverInput.Token
+	}
+
+	if input.Variables != nil {
+		param.Variables, err = gqlmodel.FromVariables(input.Variables)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	res, err := usecases(ctx).Trigger.Update(ctx, param)

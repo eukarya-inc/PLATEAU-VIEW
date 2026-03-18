@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/internal/infrastructure/aws"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/infrastructure/aws"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -3,20 +3,21 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/project"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/rerror"
 )
 
 type Project struct {
-	lock sync.Mutex
 	data map[id.ProjectID]*project.Project
 	f    repo.WorkspaceFilter
+	lock sync.Mutex
 }
 
 func NewProject() repo.Project {
@@ -32,7 +33,7 @@ func (r *Project) Filtered(f repo.WorkspaceFilter) repo.Project {
 	}
 }
 
-func (r *Project) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, pagination *interfaces.PaginationParam) ([]*project.Project, *interfaces.PageBasedInfo, error) {
+func (r *Project) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, pagination *interfaces.PaginationParam, keyword *string, includeArchived *bool) ([]*project.Project, *interfaces.PageBasedInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -43,6 +44,12 @@ func (r *Project) FindByWorkspace(ctx context.Context, id accountdomain.Workspac
 	result := make([]*project.Project, 0, len(r.data))
 	for _, p := range r.data {
 		if p.Workspace() == id {
+			if (includeArchived == nil || !*includeArchived) && p.IsArchived() {
+				continue
+			}
+			if keyword != nil && *keyword != "" && !strings.Contains(strings.ToLower(p.Name()), strings.ToLower(*keyword)) {
+				continue
+			}
 			result = append(result, p)
 		}
 	}
@@ -115,7 +122,7 @@ func (r *Project) FindByWorkspace(ctx context.Context, id accountdomain.Workspac
 	return result, interfaces.NewPageBasedInfo(total, 1, int(total)), nil
 }
 
-func (r *Project) FindIDsByWorkspace(ctx context.Context, id accountdomain.WorkspaceID) (res []project.ID, _ error) {
+func (r *Project) FindIDsByWorkspace(ctx context.Context, id accountsid.WorkspaceID) (res []project.ID, _ error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -156,7 +163,7 @@ func (r *Project) FindByID(ctx context.Context, id id.ProjectID) (*project.Proje
 	return nil, rerror.ErrNotFound
 }
 
-func (r *Project) CountByWorkspace(_ context.Context, ws accountdomain.WorkspaceID) (n int, _ error) {
+func (r *Project) CountByWorkspace(_ context.Context, ws accountsid.WorkspaceID) (n int, _ error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -168,7 +175,7 @@ func (r *Project) CountByWorkspace(_ context.Context, ws accountdomain.Workspace
 	return
 }
 
-func (r *Project) CountPublicByWorkspace(_ context.Context, ws accountdomain.WorkspaceID) (n int, _ error) {
+func (r *Project) CountPublicByWorkspace(_ context.Context, ws accountsid.WorkspaceID) (n int, _ error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

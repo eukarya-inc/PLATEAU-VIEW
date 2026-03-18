@@ -3,7 +3,6 @@ package property
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,13 +15,13 @@ func TestSchemaFieldPointer_Pointer(t *testing.T) {
 		{
 			name: "ok",
 			target: &SchemaFieldPointer{
-				SchemaGroup: id.PropertySchemaGroupID("a"),
-				Field:       id.PropertyFieldID("b"),
+				SchemaGroup: SchemaGroupID("a"),
+				Field:       FieldID("b"),
 			},
 			want: &Pointer{
-				schemaGroup: id.PropertySchemaGroupID("a").Ref(),
+				schemaGroup: SchemaGroupID("a").Ref(),
 				item:        nil,
-				field:       id.PropertyFieldID("b").Ref(),
+				field:       FieldID("b").Ref(),
 			},
 		},
 	}

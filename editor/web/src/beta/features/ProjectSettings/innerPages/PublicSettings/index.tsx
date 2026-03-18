@@ -6,7 +6,7 @@ import {
 } from "@reearth/beta/ui/components/Sidebar";
 import { Story } from "@reearth/services/api/storytellingApi/utils";
 import { useT } from "@reearth/services/i18n";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   InnerPage,
@@ -31,18 +31,13 @@ export type PublicBasicAuthSettingsType = {
 };
 
 export type PublicAliasSettingsType = {
-  alias?: string;
+  alias: string;
 };
 
 export type PublicGASettingsType = {
   enableGa?: boolean;
   trackingId?: string;
 };
-
-export type PublicStorySettingsType = PublicSettingsType &
-  PublicBasicAuthSettingsType &
-  PublicAliasSettingsType &
-  PublicGASettingsType;
 
 export type SettingsProject = {
   id: string;
@@ -64,7 +59,9 @@ type Props = {
   stories: Story[];
   currentStory?: Story;
   subId?: string;
-  onUpdateStory: (settings: PublicStorySettingsType) => void;
+  onUpdateStory: (settings: PublicSettingsType) => void;
+  onUpdateStoryBasicAuth: (settings: PublicBasicAuthSettingsType) => void;
+  onUpdateStoryAlias: (settings: PublicAliasSettingsType) => void;
   onUpdateProject: (settings: PublicSettingsType) => void;
   onUpdateProjectBasicAuth: (settings: PublicBasicAuthSettingsType) => void;
   onUpdateProjectAlias: (settings: PublicAliasSettingsType) => void;
@@ -77,6 +74,8 @@ const PublicSettings: React.FC<Props> = ({
   currentStory,
   subId,
   onUpdateStory,
+  onUpdateStoryBasicAuth,
+  onUpdateStoryAlias,
   onUpdateProject,
   onUpdateProjectBasicAuth,
   onUpdateProjectAlias,
@@ -96,7 +95,7 @@ const PublicSettings: React.FC<Props> = ({
       },
       ...stories.map((s) => ({
         id: s.id,
-        title: `${t("Story")} ${s.title}`,
+        title: !s.title || s.title === "Default" ? t("Story") : s.title,
         icon: "sidebar" as const,
         path: `/settings/projects/${project.id}/public/${s.id}`,
         active: selectedTab === s.id
@@ -105,18 +104,7 @@ const PublicSettings: React.FC<Props> = ({
     [stories, selectedTab, project.id, t]
   );
 
-  const settingsWrapperRef = useRef<HTMLDivElement>(null);
-
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      if (settingsWrapperRef.current) {
-        settingsWrapperRef.current.scrollTo(0, 0);
-      }
-      if (selectedTab === tab) return;
-      selectTab(tab);
-    },
-    [selectedTab]
-  );
+  const handleTabChange = useCallback((tab: string) => selectTab(tab), []);
 
   return (
     <InnerPage wide>
@@ -138,7 +126,7 @@ const PublicSettings: React.FC<Props> = ({
           </SidebarMainSection>
         </SidebarWrapper>
       </InnerSidebar>
-      <SettingsWrapper ref={settingsWrapperRef}>
+      <SettingsWrapper>
         {project.isArchived ? (
           <ArchivedSettingNotice />
         ) : selectedTab === currentStory?.id ? (
@@ -146,9 +134,8 @@ const PublicSettings: React.FC<Props> = ({
             key={currentStory.id}
             settingsItem={currentStory}
             onUpdate={onUpdateStory}
-            onUpdateBasicAuth={onUpdateStory}
-            onUpdateAlias={onUpdateStory}
-            onUpdateGA={onUpdateStory}
+            onUpdateBasicAuth={onUpdateStoryBasicAuth}
+            onUpdateAlias={onUpdateStoryAlias}
           />
         ) : (
           <PublicSettingsDetail

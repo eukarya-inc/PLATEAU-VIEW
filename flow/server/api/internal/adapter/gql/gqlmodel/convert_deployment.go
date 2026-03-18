@@ -36,6 +36,7 @@ func ToJob(j *job.Job) *Job {
 		Status:       ToJobStatus(j.Status()),
 		StartedAt:    j.StartedAt(),
 		CompletedAt:  j.CompletedAt(),
+		Variables:    ToVariables(j.Variables()),
 	}
 
 	if urls := j.OutputURLs(); len(urls) > 0 {
@@ -43,6 +44,12 @@ func ToJob(j *job.Job) *Job {
 	}
 	if logsURL := j.LogsURL(); logsURL != "" {
 		job.LogsURL = &logsURL
+	}
+	if workerLogsURL := j.WorkerLogsURL(); workerLogsURL != "" {
+		job.WorkerLogsURL = &workerLogsURL
+	}
+	if userFacingLogsURL := j.UserFacingLogsURL(); userFacingLogsURL != "" {
+		job.UserFacingLogsURL = &userFacingLogsURL
 	}
 	if debug := j.Debug(); debug != nil {
 		job.Debug = debug

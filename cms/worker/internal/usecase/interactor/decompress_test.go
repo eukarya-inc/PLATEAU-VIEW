@@ -7,9 +7,9 @@ import (
 	"path"
 	"testing"
 
-	wfs "github.com/reearth/reearth-cms/worker/internal/infrastructure/fs"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/worker/pkg/asset"
+	wfs "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/infrastructure/fs"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/pkg/asset"
 	"github.com/samber/lo"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"

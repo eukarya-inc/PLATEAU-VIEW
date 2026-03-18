@@ -1,0 +1,106 @@
+name: ⭐️ Deploy reearth visualizer dev
+on:
+  workflow_call:
+    inputs:
+      server:
+        description: 'Run server deploy'
+        required: true
+        default: 'false'
+        type: string
+      web:
+        description: 'Run web deploy'
+        required: true
+        default: 'false'
+        type: string
+  workflow_dispatch:
+    inputs:
+      server:
+        description: 'Run server deploy'
+        required: true
+        default: 'false'
+        type: string
+      web:
+        description: 'Run web deploy'
+        required: true
+        default: 'false'
+        type: string
+  repository_dispatch:
+    types:
+      - deploy-editor-server-dev
+      - deploy-editor-web-dev
+env:
+  IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-visualizer-api:latest
+  IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/reearth-visualizer-api:latest
+
+  WEB_IMAGE_NAME_GHCR: ghcr.io/eukarya-inc/plateau-view/reearth-visualizer-web:latest
+  WEB_IMAGE_NAME_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/reearth-visualizer-web:latest
+concurrency:
+  group: ${{ github.workflow }}
+jobs:
+  deploy_server:
+    if: ${{ inputs.server == 'true' || ( github.event_name == 'repository_dispatch' && github.event.event_type == 'deploy-editor-server-dev' ) }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull docker images
+        run: docker pull $IMAGE_NAME_GHCR
+      - name: Tag docker images
+        run: docker tag $IMAGE_NAME_GHCR $IMAGE_NAME_GCP
+      - name: Push docker images
+        run: docker push $IMAGE_NAME_GCP
+      - name: Deploy
+        run: |
+          gcloud run deploy reearth-visualizer-api \
+            --image $IMAGE_NAME_GCP \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --quiet
+
+  deploy_web:
+    if: ${{ inputs.web == 'true' || ( github.event_name == 'repository_dispatch' && github.event.event_type == 'deploy-editor-web-dev' ) }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull docker images
+        run: docker pull $WEB_IMAGE_NAME_GHCR
+      - name: Tag docker images
+        run: docker tag $WEB_IMAGE_NAME_GHCR $WEB_IMAGE_NAME_GCP
+      - name: Push docker images
+        run: docker push $WEB_IMAGE_NAME_GCP
+      - name: Deploy
+        run: |
+          gcloud run deploy reearth-visualizer-web \
+            --image $WEB_IMAGE_NAME_GCP \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --quiet

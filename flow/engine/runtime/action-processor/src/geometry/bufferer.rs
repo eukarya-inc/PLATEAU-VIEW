@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use reearth_flow_geometry::algorithm::bufferable::Bufferable;
+use reearth_flow_geometry::algorithm::bufferable::{buffer_polygon, Bufferable};
 use reearth_flow_geometry::types::geometry::Geometry2D;
 use reearth_flow_geometry::types::geometry::Geometry3D;
 use reearth_flow_geometry::types::line_string::LineString2D;
@@ -29,7 +30,7 @@ impl ProcessorFactory for BuffererFactory {
     }
 
     fn description(&self) -> &str {
-        "Buffers a geometry"
+        "Create Buffer Around Features"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -57,14 +58,12 @@ impl ProcessorFactory for BuffererFactory {
         let bufferer: Bufferer = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::BuffererFactory(format!(
-                    "Failed to serialize 'with' parameter: {}",
-                    e
+                    "Failed to serialize 'with' parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::BuffererFactory(format!(
-                    "Failed to deserialize 'with' parameter: {}",
-                    e
+                    "Failed to deserialize 'with' parameter: {e}"
                 ))
             })?
         } else {
@@ -79,18 +78,25 @@ impl ProcessorFactory for BuffererFactory {
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 enum BufferType {
+    /// # 2D Area Buffer
+    /// Creates a 2D polygon buffer around the input geometry
     #[serde(rename = "area2d")]
     Area2D,
 }
 
+/// # Bufferer Parameters
+/// Configure how to create buffers around input geometries
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Bufferer {
-    /// # Buffer type
+    /// # Buffer Type
+    /// The type of buffer to create around the input geometry
     buffer_type: BufferType,
-    /// # Buffer distance
+    /// # Distance
+    /// The distance to extend the buffer from the original geometry (in coordinate units)
     distance: f64,
-    /// # Buffer interpolation angle
+    /// # Interpolation Angle
+    /// The angle in degrees used for curve interpolation when creating rounded corners
     interpolation_angle: f64,
 }
 
@@ -121,7 +127,11 @@ impl Processor for Bufferer {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -141,23 +151,38 @@ impl Bufferer {
     ) {
         match self.buffer_type {
             BufferType::Area2D => match geos {
+                Geometry2D::Point(point) => {
+                    let mut feature = feature.clone();
+                    let mut geometry = geometry.clone();
+                    let coord = point.0;
+                    geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
+                        coord.to_polygon(self.distance, self.interpolation_angle),
+                    ));
+                    feature.geometry = Arc::new(geometry);
+                    fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                }
                 Geometry2D::LineString(line_string) => {
                     let mut feature = feature.clone();
                     let mut geometry = geometry.clone();
                     geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
                         line_string.to_polygon(self.distance, self.interpolation_angle),
                     ));
-                    feature.geometry = geometry;
+                    feature.geometry = Arc::new(geometry);
                     fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                 }
                 Geometry2D::Polygon(polygon) => {
                     let mut feature = feature.clone();
                     let mut geometry = geometry.clone();
-                    geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
-                        polygon.to_polygon(self.distance, self.interpolation_angle),
-                    ));
-                    feature.geometry = geometry;
-                    fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                    if let Some(buffered) = buffer_polygon(polygon, self.distance) {
+                        geometry.value =
+                            GeometryValue::FlowGeometry2D(Geometry2D::Polygon(buffered));
+                        feature.geometry = Arc::new(geometry);
+                        fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                    } else {
+                        fw.send(
+                            ctx.new_with_feature_and_port(feature.clone(), REJECTED_PORT.clone()),
+                        );
+                    }
                 }
                 _ => {
                     fw.send(ctx.new_with_feature_and_port(feature.clone(), DEFAULT_PORT.clone()));
@@ -176,6 +201,22 @@ impl Bufferer {
     ) {
         match self.buffer_type {
             BufferType::Area2D => match geos {
+                Geometry3D::Point(point) => {
+                    let mut feature = feature.clone();
+                    let mut geometry = geometry.clone();
+                    let coord = point.0;
+                    // Convert 3D coordinate to 2D for buffering
+                    let coord_2d = reearth_flow_geometry::types::coordinate::Coordinate2D {
+                        x: coord.x,
+                        y: coord.y,
+                        z: reearth_flow_geometry::types::no_value::NoValue,
+                    };
+                    geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
+                        coord_2d.to_polygon(self.distance, self.interpolation_angle),
+                    ));
+                    feature.geometry = Arc::new(geometry);
+                    fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                }
                 Geometry3D::LineString(line_string) => {
                     let mut feature = feature.clone();
                     let mut geometry = geometry.clone();
@@ -183,25 +224,30 @@ impl Bufferer {
                     geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
                         line_string.to_polygon(self.distance, self.interpolation_angle),
                     ));
-                    feature.geometry = geometry;
+                    feature.geometry = Arc::new(geometry);
                     fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                 }
                 Geometry3D::Polygon(polygon) => {
                     let mut feature = feature.clone();
                     let mut geometry = geometry.clone();
-                    let polygon: Polygon2D<f64> = polygon.clone().into();
-                    geometry.value = GeometryValue::FlowGeometry2D(Geometry2D::Polygon(
-                        polygon.to_polygon(self.distance, self.interpolation_angle),
-                    ));
-                    feature.geometry = geometry;
-                    fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                    let polygon_2d: Polygon2D<f64> = polygon.clone().into();
+                    if let Some(buffered) = buffer_polygon(&polygon_2d, self.distance) {
+                        geometry.value =
+                            GeometryValue::FlowGeometry2D(Geometry2D::Polygon(buffered));
+                        feature.geometry = Arc::new(geometry);
+                        fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+                    } else {
+                        fw.send(
+                            ctx.new_with_feature_and_port(feature.clone(), REJECTED_PORT.clone()),
+                        );
+                    }
                 }
                 _ => {
                     let value: Geometry2D = geos.clone().into();
                     let mut geometry = geometry.clone();
                     geometry.value = GeometryValue::FlowGeometry2D(value);
                     let mut feature = feature.clone();
-                    feature.geometry = geometry;
+                    feature.geometry = Arc::new(geometry);
                     fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                 }
             },

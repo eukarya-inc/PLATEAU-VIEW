@@ -1,12 +1,12 @@
 import { Pagination, styled, paginationItemClasses } from "@mui/material";
 import { useAtom } from "jotai";
 import { FC, useCallback, useEffect, useState } from "react";
-import Markdown from "react-markdown";
 
 import { ParameterList } from "../../../../prototypes/ui-components";
 import { useCamera } from "../../../reearth/hooks";
 import { CameraPosition } from "../../../reearth/types";
 import { DatasetStoryField } from "../../../types/fieldComponents/general";
+import { ViewMarkdownViewer } from "../../../ui-components/common";
 import { CommonContentWrapper } from "../../../ui-components/CommonContentWrapper";
 import { WritableAtomForComponent } from "../../../view-layers/component";
 
@@ -44,9 +44,7 @@ export const LayerDatasetStoryField: FC<LayerDatasetStoryFieldProps> = ({ atoms 
   return component?.preset?.pages?.length > 0 ? (
     <ParameterList>
       <CommonContentWrapper>
-        <Markdown skipHtml components={{ a: LinkRenderer }}>
-          {component.preset.pages[currentPage].content}
-        </Markdown>
+        <ViewMarkdownViewer content={component.preset.pages[currentPage].content} />
         <PaginationWrapper>
           <StyledPagination
             count={component.preset.pages.length}
@@ -62,11 +60,3 @@ export const LayerDatasetStoryField: FC<LayerDatasetStoryFieldProps> = ({ atoms 
     </ParameterList>
   ) : null;
 };
-
-function LinkRenderer(props: any) {
-  return (
-    <a href={props.href} target="_blank" rel="noreferrer">
-      {props.children}
-    </a>
-  );
-}

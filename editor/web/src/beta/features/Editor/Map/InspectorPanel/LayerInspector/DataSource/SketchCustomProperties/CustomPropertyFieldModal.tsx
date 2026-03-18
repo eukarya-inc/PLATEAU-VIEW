@@ -33,6 +33,7 @@ type CustomPropertyFieldProps = {
   } | null;
   schemaJSON: Record<string, string>;
   showEditFieldConfirmModal?: boolean;
+  customPropertySchemaShown?: boolean;
   onSubmit?: (schema: CustomPropertyProp, newTitle?: string) => void;
   onClose?: () => void;
   onCustomPropertySchemaState?: () => void;
@@ -49,6 +50,7 @@ const CustomPropertyFieldModal: FC<CustomPropertyFieldProps> = ({
   selectedField,
   isEditField,
   schemaJSON,
+  customPropertySchemaShown,
   onClose,
   onSubmit,
   onSchemaJSONUpdate,
@@ -66,7 +68,7 @@ const CustomPropertyFieldModal: FC<CustomPropertyFieldProps> = ({
 
   const openEditFieldConfirmModal = useCallback(() => {
     setShowEditFieldConfirmModal(true);
-    onCustomPropertySchemaState?.();
+    onCustomPropertySchemaState?.()
   }, [onCustomPropertySchemaState]);
 
   const closeEditFieldConfirmModal = useCallback(() => {
@@ -137,10 +139,12 @@ const CustomPropertyFieldModal: FC<CustomPropertyFieldProps> = ({
         const suffix = match
           ? match[0]
           : `${dataType}_${Object.keys(updatedSchema).length + 1}`;
+;
+
         updatedSchema[customPropertyTitle] = isDataTypeChanged
           ? existingValue
           : `${dataType}${suffix}`;
-
+        
         if (isDataTypeChanged) {
           onSubmit?.(updatedSchema, customPropertyTitle);
         } else {
@@ -167,51 +171,55 @@ const CustomPropertyFieldModal: FC<CustomPropertyFieldProps> = ({
 
   return (
     <>
-      <Modal size="small" visible>
-        <ModalPanel
-          title={
-            isEditField ? t("Edit Custom Property") : t("New Custom Property")
-          }
-          onCancel={onClose}
-          actions={
-            <>
-              <Button onClick={onClose} size="normal" title={t("Cancel")} />
-              <Button
-                onClick={isEditField ? openEditFieldConfirmModal : handleSubmit}
-                size="normal"
-                title={isEditField ? t("Submit") : t("Apply")}
-                appearance="primary"
-                disabled={disabled}
-              />
-            </>
-          }
-        >
-          <Wrapper>
-            <InputGroup label={t("Property Title")}>
-              <InputsWrapper>
-                <TextInput
-                  value={customPropertyTitle}
-                  onBlur={setCustomPropertyTitle}
+      {customPropertySchemaShown && (
+        <Modal size="small" visible={customPropertySchemaShown}>
+          <ModalPanel
+            title={
+              isEditField ? t("Edit Custom Property") : t("New Custom Property")
+            }
+            onCancel={onClose}
+            actions={
+              <>
+                <Button onClick={onClose} size="normal" title={t("Cancel")} />
+                <Button
+                  onClick={
+                    isEditField ? openEditFieldConfirmModal : handleSubmit
+                  }
+                  size="normal"
+                  title={isEditField ? t("Submit") : t("Apply")}
+                  appearance="primary"
+                  disabled={disabled}
                 />
-              </InputsWrapper>
-            </InputGroup>
+              </>
+            }
+          >
+            <Wrapper>
+              <InputGroup label={t("Property Title")}>
+                <InputsWrapper>
+                  <TextInput
+                    value={customPropertyTitle}
+                    onBlur={setCustomPropertyTitle}
+                  />
+                </InputsWrapper>
+              </InputGroup>
 
-            <InputGroup label={t("Property Type")}>
-              <Selector
-                value={dataType}
-                placeholder={t("Please select one type")}
-                options={groupedDataTypes.map((v) => ({
-                  value: v,
-                  label: v
-                }))}
-                onChange={(value: string | string[]) =>
-                  setDataType(value as string)
-                }
-              />
-            </InputGroup>
-          </Wrapper>
-        </ModalPanel>
-      </Modal>
+              <InputGroup label={t("Property Type")}>
+                <Selector
+                  value={dataType}
+                  placeholder={t("Please select one type")}
+                  options={groupedDataTypes.map((v) => ({
+                    value: v,
+                    label: v
+                  }))}
+                  onChange={(value: string | string[]) =>
+                    setDataType(value as string)
+                  }
+                />
+              </InputGroup>
+            </Wrapper>
+          </ModalPanel>
+        </Modal>
+      )}
       {showEditFieldConfirmModal && (
         <ConfirmModal
           visible={true}

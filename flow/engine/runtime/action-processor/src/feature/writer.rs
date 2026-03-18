@@ -1,3 +1,4 @@
+mod citygml;
 mod csv;
 mod json;
 
@@ -12,7 +13,7 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::{Attribute, AttributeValue, Expr, Feature};
+use reearth_flow_types::{lod::LodMask, Attribute, AttributeValue, Expr, Feature};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -57,14 +58,12 @@ impl ProcessorFactory for FeatureWriterFactory {
         let params: FeatureWriterParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::FeatureWriterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::FeatureWriterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -81,7 +80,7 @@ impl ProcessorFactory for FeatureWriterFactory {
                     output: expr_engine
                         .compile(common_param.output.as_ref())
                         .map_err(|e| {
-                            FeatureProcessorError::FeatureWriterFactory(format!("{:?}", e))
+                            FeatureProcessorError::FeatureWriterFactory(format!("{e:?}"))
                         })?,
                 };
                 let process = FeatureWriter {
@@ -96,7 +95,7 @@ impl ProcessorFactory for FeatureWriterFactory {
                     output: expr_engine
                         .compile(common_param.output.as_ref())
                         .map_err(|e| {
-                            FeatureProcessorError::FeatureWriterFactory(format!("{:?}", e))
+                            FeatureProcessorError::FeatureWriterFactory(format!("{e:?}"))
                         })?,
                 };
                 let process = FeatureWriter {
@@ -114,12 +113,12 @@ impl ProcessorFactory for FeatureWriterFactory {
                     output: expr_engine
                         .compile(common_param.output.as_ref())
                         .map_err(|e| {
-                            FeatureProcessorError::FeatureWriterFactory(format!("{:?}", e))
+                            FeatureProcessorError::FeatureWriterFactory(format!("{e:?}"))
                         })?,
                 };
                 let converter = if let Some(expr) = param.converter {
                     Some(expr_engine.compile(expr.as_ref()).map_err(|e| {
-                        FeatureProcessorError::FeatureWriterFactory(format!("{:?}", e))
+                        FeatureProcessorError::FeatureWriterFactory(format!("{e:?}"))
                     })?)
                 } else {
                     None
@@ -129,6 +128,30 @@ impl ProcessorFactory for FeatureWriterFactory {
                     params: CompiledFeatureWriterParam::Json {
                         common_param,
                         param: json::CompiledJsonWriterParam { converter },
+                    },
+                    buffer: HashMap::new(),
+                };
+                Ok(Box::new(process))
+            }
+            FeatureWriterParam::CityGml {
+                common_param,
+                param,
+            } => {
+                let common_param = CompiledCommonWriterParam {
+                    output: expr_engine
+                        .compile(common_param.output.as_ref())
+                        .map_err(|e| {
+                            FeatureProcessorError::FeatureWriterFactory(format!("{e:?}"))
+                        })?,
+                };
+                let lod_mask = citygml::build_lod_mask(&param.lod_filter);
+                let process = FeatureWriter {
+                    global_params: with,
+                    params: CompiledFeatureWriterParam::CityGml {
+                        common_param,
+                        lod_mask,
+                        epsg_code: param.epsg_code,
+                        pretty_print: param.pretty_print.unwrap_or(true),
                     },
                     buffer: HashMap::new(),
                 };
@@ -152,6 +175,9 @@ struct CommonWriterParam {
     pub(super) output: Expr,
 }
 
+/// # FeatureWriter Parameters
+///
+/// Configuration for writing features to different file formats.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(tag = "format")]
 enum FeatureWriterParam {
@@ -172,6 +198,13 @@ enum FeatureWriterParam {
         #[serde(flatten)]
         param: json::JsonWriterParam,
     },
+    #[serde(rename = "citygml")]
+    CityGml {
+        #[serde(flatten)]
+        common_param: CommonWriterParam,
+        #[serde(flatten)]
+        param: citygml::CityGmlWriterParam,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +219,12 @@ enum CompiledFeatureWriterParam {
         common_param: CompiledCommonWriterParam,
         param: json::CompiledJsonWriterParam,
     },
+    CityGml {
+        common_param: CompiledCommonWriterParam,
+        lod_mask: LodMask,
+        epsg_code: Option<u32>,
+        pretty_print: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -199,6 +238,7 @@ impl CompiledFeatureWriterParam {
             CompiledFeatureWriterParam::Csv { common_param } => &common_param.output,
             CompiledFeatureWriterParam::Tsv { common_param } => &common_param.output,
             CompiledFeatureWriterParam::Json { common_param, .. } => &common_param.output,
+            CompiledFeatureWriterParam::CityGml { common_param, .. } => &common_param.output,
         }
     }
 }
@@ -214,14 +254,18 @@ impl Processor for FeatureWriter {
         let scope = feature.new_scope(ctx.expr_engine.clone(), &self.global_params);
         let path = scope
             .eval_ast::<String>(&output)
-            .map_err(|e| FeatureProcessorError::FeatureWriterFactory(format!("{:?}", e)))?;
+            .map_err(|e| FeatureProcessorError::FeatureWriterFactory(format!("{e:?}")))?;
         let output = Uri::from_str(path.as_str())?;
         let buffer = self.buffer.entry(output).or_default();
         buffer.push(ctx.feature);
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         for (output, features) in &self.buffer {
             let feature: Feature = IndexMap::<Attribute, AttributeValue>::from([
                 (
@@ -251,6 +295,21 @@ impl Processor for FeatureWriter {
                         &ctx.storage_resolver,
                         &ctx.expr_engine,
                         features,
+                    )?;
+                }
+                CompiledFeatureWriterParam::CityGml {
+                    lod_mask,
+                    epsg_code,
+                    pretty_print,
+                    ..
+                } => {
+                    citygml::write_citygml(
+                        output,
+                        features,
+                        &lod_mask,
+                        &epsg_code,
+                        &pretty_print,
+                        &ctx.storage_resolver,
                     )?;
                 }
             }

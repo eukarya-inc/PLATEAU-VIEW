@@ -4,60 +4,53 @@ import (
 	"context"
 	"testing"
 
-	"github.com/reearth/reearth-flow/api/internal/adapter"
+	gqlworkspace "github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace"
+	workspacemockrepo "github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace/mockrepo"
+	accountsworkspace "github.com/reearth/reearth-accounts/server/pkg/workspace"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/memory"
+	"github.com/reearth/reearth-flow/api/internal/testutil/factory"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/project"
-	"github.com/reearth/reearthx/account/accountdomain/user"
-	"github.com/reearth/reearthx/account/accountdomain/workspace"
-	"github.com/reearth/reearthx/account/accountinfrastructure/accountmemory"
 	"github.com/reearth/reearthx/appx"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
-func setupProject(t *testing.T, permissionChecker *mockPermissionChecker) *Project {
+func setupProject(t *testing.T, permissionChecker *mockPermissionChecker, workspaceRepo gqlworkspace.WorkspaceRepo) *Project {
 	t.Helper()
 
 	return &Project{
 		projectRepo:       memory.NewProject(),
-		workspaceRepo:     accountmemory.NewWorkspace(),
+		workspaceRepo:     workspaceRepo,
 		transaction:       &usecasex.NopTransaction{},
 		permissionChecker: permissionChecker,
 	}
 }
 
 func TestProject_Create(t *testing.T) {
-	mockAuthInfo := &appx.AuthInfo{
-		Token: "token",
-	}
-	mockUser := user.New().NewID().Name("hoge").Email("abc@bb.cc").MustBuild()
-
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	ctx := context.Background()
-	ctx = adapter.AttachAuthInfo(ctx, mockAuthInfo)
-	ctx = adapter.AttachUser(ctx, mockUser)
 
 	mockPermissionCheckerTrue := NewMockPermissionChecker(func(ctx context.Context, authInfo *appx.AuthInfo, userId, resource, action string) (bool, error) {
 		return true, nil
 	})
 
-	uc := setupProject(t, mockPermissionCheckerTrue)
-
-	ws := workspace.New().NewID().MustBuild()
-	wsid2 := workspace.NewID()
-	err := uc.workspaceRepo.Save(ctx, ws)
-	assert.NoError(t, err, "workspace save should not return error")
+	ws := factory.NewWorkspace(func(b *accountsworkspace.Builder) {})
+	wsid2 := accountsworkspace.NewID()
 
 	pId := project.NewID()
 	defer project.MockNewID(pId)()
 
 	tests := []struct {
-		name       string
-		param      interfaces.CreateProjectParam
-		permission *mockPermissionChecker
-		wantErr    error
+		name              string
+		param             interfaces.CreateProjectParam
+		mockFindWorkspace func(m *workspacemockrepo.MockWorkspaceRepo)
+		permission        *mockPermissionChecker
+		wantErr           error
 	}{
 		{
 			name: "normal creation",
@@ -67,6 +60,9 @@ func TestProject_Create(t *testing.T) {
 				Description: lo.ToPtr("bbb"),
 				Archived:    lo.ToPtr(false),
 			},
+			mockFindWorkspace: func(m *workspacemockrepo.MockWorkspaceRepo) {
+				m.EXPECT().FindByID(gomock.Any(), gomock.Any()).Return(ws, nil)
+			},
 		},
 		{
 			name: "nonexistent workspace",
@@ -74,6 +70,9 @@ func TestProject_Create(t *testing.T) {
 				WorkspaceID: wsid2,
 			},
 			wantErr: rerror.ErrNotFound,
+			mockFindWorkspace: func(m *workspacemockrepo.MockWorkspaceRepo) {
+				m.EXPECT().FindByID(gomock.Any(), gomock.Any()).Return(ws, rerror.ErrNotFound)
+			},
 		},
 		// Once the operation check in the oss environment is completed, remove cooment out
 		// {
@@ -93,9 +92,12 @@ func TestProject_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.permission != nil {
-				uc.permissionChecker = tt.permission
+			mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+			if tt.mockFindWorkspace != nil {
+				tt.mockFindWorkspace(mockWorkspaceRepo)
 			}
+
+			uc := setupProject(t, mockPermissionCheckerTrue, mockWorkspaceRepo)
 
 			got, err := uc.Create(ctx, tt.param)
 

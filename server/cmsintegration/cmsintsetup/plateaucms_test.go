@@ -3,7 +3,7 @@ package cmsintsetup
 import (
 	"context"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 type plateauCMSMock struct {

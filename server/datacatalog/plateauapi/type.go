@@ -17,6 +17,7 @@ const (
 	TypeWard        Type = "w"
 	TypePlateauSpec Type = "ps"
 	TypeCityGML     Type = "cg"
+	TypeGlobal      Type = "g"
 )
 
 func to[T Node](n Node, err error) (t T, _ error) {

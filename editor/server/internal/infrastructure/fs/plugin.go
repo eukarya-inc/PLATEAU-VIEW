@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/reearth/reearth/server/internal/usecase/gateway"
 	"github.com/reearth/reearth/server/internal/usecase/repo"
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/plugin"
@@ -63,10 +62,6 @@ func (r *pluginRepo) Save(ctx context.Context, p *plugin.Plugin) error {
 }
 
 func (r *pluginRepo) Remove(ctx context.Context, pid id.PluginID) error {
-	return rerror.ErrInternalByWithContext(ctx, errors.New("read only"))
-}
-
-func (r *pluginRepo) RemoveBySceneWithFile(ctx context.Context, sid id.SceneID, f gateway.File) error {
 	return rerror.ErrInternalByWithContext(ctx, errors.New("read only"))
 }
 

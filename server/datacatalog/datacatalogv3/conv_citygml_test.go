@@ -3,7 +3,7 @@ package datacatalogv3
 import (
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/stretchr/testify/assert"
 )
@@ -64,19 +64,21 @@ func TestToCityGMLs(t *testing.T) {
 		},
 	}
 
+	gspatialjpURL := "https://www.geospatial.jp/ckan/dataset/plateau-13100-東京都23区-2023"
 	expected := map[plateauapi.ID]*plateauapi.CityGMLDataset{
 		"cg_13100": {
-			ID:                 "cg_13100",
-			Year:               2023,
-			RegistrationYear:   regYear,
-			URL:                "https://example.com/city1.gml",
-			PrefectureID:       "p_13",
-			PrefectureCode:     "13",
-			CityID:             "c_13100",
-			CityCode:           "13100",
-			PlateauSpecMinorID: "ps_3.3",
-			FeatureTypes:       []string{"bldg", "ubld"},
-			MetadataZipUrls:    []string{"https://example.com/codelists.zip"},
+			ID:                   "cg_13100",
+			Year:                 2023,
+			RegistrationYear:     regYear,
+			URL:                  "https://example.com/city1.gml",
+			GspatialjpDatasetURL: &gspatialjpURL,
+			PrefectureID:         "p_13",
+			PrefectureCode:       "13",
+			CityID:               "c_13100",
+			CityCode:             "13100",
+			PlateauSpecMinorID:   "ps_3.3",
+			FeatureTypes:         []string{"bldg", "ubld"},
+			MetadataZipUrls:      []string{"https://example.com/codelists.zip"},
 			Admin: &plateauapi.Admin{
 				CMSItemID: "city1",
 				CityGMLURLs: []string{

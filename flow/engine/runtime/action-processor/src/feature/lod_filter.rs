@@ -8,7 +8,7 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::{Attribute, AttributeValue, Feature};
+use reearth_flow_types::{lod::LodMask, Attribute, AttributeValue, Feature};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -31,7 +31,7 @@ impl ProcessorFactory for FeatureLodFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Filter Geometry by lod"
+        "Filters features by Level of Detail (LOD), routing them to appropriate output ports"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -48,6 +48,7 @@ impl ProcessorFactory for FeatureLodFilterFactory {
 
     fn get_output_ports(&self) -> Vec<Port> {
         vec![
+            UP_TO_LOD0.clone(),
             UP_TO_LOD1.clone(),
             UP_TO_LOD2.clone(),
             UP_TO_LOD3.clone(),
@@ -66,14 +67,12 @@ impl ProcessorFactory for FeatureLodFilterFactory {
         let params: FeatureLodFilterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::LodFilterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::LodFilterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -91,10 +90,13 @@ impl ProcessorFactory for FeatureLodFilterFactory {
     }
 }
 
+/// # FeatureLodFilter Parameters
+///
+/// Configuration for filtering features based on Level of Detail (LOD).
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct FeatureLodFilterParam {
-    /// # Attributes to filter by
+    /// Attribute used to group features for LOD filtering
     filter_key: Attribute,
 }
 
@@ -141,7 +143,11 @@ impl Processor for FeatureLodFilter {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         self.flush_buffer(ctx.as_context(), fw);
         Ok(())
     }
@@ -174,11 +180,11 @@ impl FeatureLodFilter {
             return;
         };
         if lod.has_lod(0) {
-            let feature = feature.clone();
+            let feature = Self::feature_with_single_lod(feature, 0);
             fw.send(ctx.as_executor_context(feature, UP_TO_LOD0.clone()));
         }
         if lod.has_lod(1) {
-            let feature = feature.clone();
+            let feature = Self::feature_with_single_lod(feature, 1);
             fw.send(ctx.as_executor_context(feature, UP_TO_LOD1.clone()));
         }
         if lod_count.max_lod >= 2
@@ -186,7 +192,7 @@ impl FeatureLodFilter {
                 || (lod.has_lod(1) && !lod.has_lod(2))
                 || (lod.has_lod(0) && !lod.has_lod(2) && !lod.has_lod(1)))
         {
-            let feature = feature.clone();
+            let feature = Self::feature_with_single_lod(feature, 2);
             fw.send(ctx.as_executor_context(feature, UP_TO_LOD2.clone()));
         }
         if lod_count.max_lod >= 3
@@ -194,7 +200,7 @@ impl FeatureLodFilter {
                 || (lod.has_lod(2) && !lod.has_lod(3))
                 || (lod.has_lod(1) && !lod.has_lod(3) && !lod.has_lod(2)))
         {
-            let feature = feature.clone();
+            let feature = Self::feature_with_single_lod(feature, 3);
             fw.send(ctx.as_executor_context(feature, UP_TO_LOD3.clone()));
         }
         if lod_count.max_lod >= 4
@@ -203,8 +209,44 @@ impl FeatureLodFilter {
                 || (lod.has_lod(2) && !lod.has_lod(4) && !lod.has_lod(3))
                 || (lod.has_lod(1) && !lod.has_lod(4) && !lod.has_lod(3) && !lod.has_lod(2)))
         {
-            let feature = feature.clone();
+            let feature = Self::feature_with_single_lod(feature, 4);
             fw.send(ctx.as_executor_context(feature, UP_TO_LOD4.clone()));
         }
+    }
+
+    fn feature_with_single_lod(feature: &Feature, max_lod: u8) -> Feature {
+        let mut filtered_feature = feature.clone();
+
+        // Calculate the actual LOD to use based on feature's available LODs
+        let actual_lod = if let Some(lod_mask) = &feature.metadata.lod {
+            // Find the maximum LOD that doesn't exceed max_lod
+            let mut best_lod = None;
+            for lod in 0..=max_lod {
+                if lod_mask.has_lod(lod) {
+                    best_lod = Some(lod);
+                }
+            }
+            best_lod
+        } else {
+            None
+        };
+
+        if let Some(target_lod) = actual_lod {
+            if let Some(citygml_geometry) = filtered_feature.geometry.value.as_citygml_geometry() {
+                let filtered_citygml_geometry =
+                    citygml_geometry.filter_by_lod(|gml_geom| gml_geom.lod == Some(target_lod));
+
+                filtered_feature.geometry_mut().value =
+                    reearth_flow_types::GeometryValue::CityGmlGeometry(filtered_citygml_geometry);
+            }
+
+            if filtered_feature.metadata.lod.is_some() {
+                let mut new_lod_mask = LodMask::default();
+                new_lod_mask.add_lod(target_lod);
+                filtered_feature.metadata.lod = Some(new_lod_mask);
+            }
+        }
+
+        filtered_feature
     }
 }

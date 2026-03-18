@@ -21,7 +21,7 @@ impl ProcessorFactory for BulkAttributeRenamerFactory {
     }
 
     fn description(&self) -> &str {
-        "Renames attributes by adding/removing prefixes or suffixes, or replacing text"
+        "Rename Feature Attributes in Bulk"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -50,14 +50,12 @@ impl ProcessorFactory for BulkAttributeRenamerFactory {
         let params: BulkAttributeRenamerParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::BulkRenamerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::BulkRenamerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -71,8 +69,7 @@ impl ProcessorFactory for BulkAttributeRenamerFactory {
             if let Some(ref find) = params.text_to_find {
                 Some(Regex::new(find).map_err(|e| {
                     AttributeProcessorError::BulkRenamerFactory(format!(
-                        "Invalid regex pattern '{}': {}",
-                        find, e
+                        "Invalid regex pattern '{find}': {e}"
                     ))
                 })?)
             } else {
@@ -96,33 +93,54 @@ struct BulkAttributeRenamer {
     regex: Option<Regex>,
 }
 
+/// # BulkAttributeRenamer Parameters
+/// Configure how to rename feature attributes in bulk operations
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct BulkAttributeRenamerParam {
-    /// # Type of attributes to rename
+    /// # Which Attributes to Rename
+    /// Choose whether to rename all attributes or only selected ones
     rename_type: RenameType,
-    /// # Action to perform on the attribute
+    /// # Rename Operation
+    /// The type of renaming operation to perform on the attribute names
     rename_action: RenameAction,
-    /// # Regular expression pattern to match
+    /// # Text Pattern to Find
+    /// Regular expression pattern to match when using "Replace Text" operation
     text_to_find: Option<String>,
-    /// # Value to add or remove
+    /// # Text Value
+    /// The text to add as prefix/suffix, remove, or use as replacement
     rename_value: String,
-    /// # Attributes to rename
+    /// # Selected Attribute Names
+    /// List of specific attribute names to rename (required when "Selected Attributes" is chosen)
     selected_attributes: Option<Vec<String>>,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone, JsonSchema)]
 enum RenameType {
+    /// # All Attributes
+    /// Rename all attributes in the feature
     All,
+    /// # Selected Attributes
+    /// Rename only specific attributes listed below
     Selected,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone, JsonSchema)]
 enum RenameAction {
+    /// # Add Prefix
+    /// Add text to the beginning of attribute names
     AddPrefix,
+    /// # Add Suffix
+    /// Add text to the end of attribute names
     AddSuffix,
+    /// # Remove Prefix
+    /// Remove text from the beginning of attribute names
     RemovePrefix,
+    /// # Remove Suffix
+    /// Remove text from the end of attribute names
     RemoveSuffix,
+    /// # Replace Text
+    /// Find and replace text using regular expressions
     StringReplace,
 }
 
@@ -145,7 +163,11 @@ impl Processor for BulkAttributeRenamer {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -178,13 +200,12 @@ impl BulkAttributeRenamer {
         let mut attributes_to_remove = vec![];
 
         for attr in attributes {
-            if let Some(value) = feature.attributes.get(&attr) {
+            if let Some(value) = feature.get(&attr).cloned() {
                 let new_name = self.get_new_name(&attr.inner())?;
                 if new_name.is_empty() {
                     feature.remove(&attr);
                 } else {
-                    let new_attr = Attribute::new(new_name);
-                    feature.attributes.insert(new_attr, value.clone());
+                    feature.insert(&new_name, value);
                     attributes_to_remove.push(attr.clone());
                 }
             }
@@ -238,8 +259,7 @@ impl BulkAttributeRenamer {
                     .to_string())
             } else {
                 Err(AttributeProcessorError::BulkRenamer(format!(
-                    "Attribute '{}' does not match the regex pattern",
-                    attr_name
+                    "Attribute '{attr_name}' does not match the regex pattern"
                 )))
             }
         } else {

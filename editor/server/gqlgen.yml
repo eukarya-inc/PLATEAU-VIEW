@@ -37,6 +37,40 @@ models:
     fields:
       team:
         resolver: true
+  Cluster:
+    fields:
+      property:
+        resolver: true
+  Dataset:
+    fields:
+      schema:
+        resolver: true
+      name:
+        resolver: true
+  DatasetSchema:
+    fields:
+      datasets:
+        resolver: true
+      scene:
+        resolver: true
+      representativeField:
+        resolver: true
+      totalCount:
+        resolver: true
+  DatasetField:
+    fields:
+      schema:
+        resolver: true
+      field:
+        resolver: true
+      valueRef:
+        resolver: true
+  DatasetSchemaField:
+    fields:
+      schema:
+        resolver: true
+      ref:
+        resolver: true
   LayerItem:
     fields:
       parent:
@@ -46,6 +80,8 @@ models:
       plugin:
         resolver: true
       extension:
+        resolver: true
+      linkedDataset:
         resolver: true
       merged:
         resolver: true
@@ -63,6 +99,8 @@ models:
         resolver: true
       extension:
         resolver: true
+      linkedDatasetSchema:
+        resolver: true
       layers:
         resolver: true
       scene:
@@ -74,6 +112,8 @@ models:
       layer:
         resolver: true
       property:
+        resolver: true
+      linkedDataset:
         resolver: true
       merged:
         resolver: true
@@ -91,11 +131,21 @@ models:
         resolver: true
       extension:
         resolver: true
+      linkedDataset:
+        resolver: true
       merged:
         resolver: true
       scene:
         resolver: true
       scenePlugin:
+        resolver: true
+  LayerTagItem:
+    fields:
+      tag:
+        resolver: true
+  LayerTagGroup:
+    fields:
+      tag:
         resolver: true
   MergedLayer:
     fields:
@@ -203,6 +253,18 @@ models:
         resolver: true
       field:
         resolver: true
+      actualValue:
+        resolver: true
+  PropertyFieldLink:
+    fields:
+      dataset:
+        resolver: true
+      datasetField:
+        resolver: true
+      datasetSchema:
+        resolver: true
+      datasetSchemaField:
+        resolver: true
   MergedProperty:
     fields:
       original:
@@ -210,6 +272,8 @@ models:
       parent:
         resolver: true
       schema:
+        resolver: true
+      linkedDataset:
         resolver: true
       groups:
         resolver: true
@@ -225,11 +289,15 @@ models:
         resolver: true
       schema:
         resolver: true
+      linkedDataset:
+        resolver: true
   MergedPropertyField:
     fields:
       schema:
         resolver: true
       field:
+        resolver: true
+      actualValue:
         resolver: true
   Scene:
     fields:
@@ -239,7 +307,11 @@ models:
         resolver: true
       property:
         resolver: true
+      rootLayer:
+        resolver: true
       newLayers:
+        resolver: true
+      datasetSchemas:
         resolver: true
       tags:
         resolver: true
@@ -260,6 +332,30 @@ models:
       plugin:
         resolver: true
       property:
+        resolver: true
+  Tag:
+    fields:
+      layers:
+        resolver: true
+  TagItem:
+    fields:
+      linkedDatasetSchema:
+        resolver: true
+      linkedDataset:
+        resolver: true
+      linkedDatasetField:
+        resolver: true
+      parent:
+        resolver: true
+      layers:
+        resolver: true
+  TagGroup:
+    fields:
+      tags:
+        resolver: true
+      scene:
+        resolver: true
+      layers:
         resolver: true
   Team:
     fields:
@@ -318,12 +414,6 @@ models:
       scene:
         resolver: true  
   NLSInfobox:
-    fields:
-      property:
-        resolver: true
-      scene:
-        resolver: true
-  NLSPhotoOverlay:
     fields:
       property:
         resolver: true

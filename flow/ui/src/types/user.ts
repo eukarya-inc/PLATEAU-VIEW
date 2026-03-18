@@ -1,4 +1,6 @@
 import { ApiResponse } from "./api";
+import { JobStatus } from "./job";
+import type { Workspace } from "./workspace";
 
 export type Me = {
   myWorkspaceId: string;
@@ -8,6 +10,12 @@ export type Me = {
 
 export type GetMe = {
   me: Me | undefined;
+  isLoading: boolean;
+} & ApiResponse;
+
+export type GetMeAndWorkspaces = {
+  me: Me | undefined;
+  workspaces: Workspace[] | undefined;
   isLoading: boolean;
 } & ApiResponse;
 
@@ -24,3 +32,43 @@ export type SearchUser = {
 export type UpdateMe = {
   me?: User;
 } & ApiResponse;
+
+export type AwarenessSelection = { color: string; userName: string };
+export type AwarenessSelectionsMap = Record<string, AwarenessSelection[]>;
+
+export type AwarenessUser = {
+  clientId: number;
+  selectionRect?: {
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null;
+  cursor?: {
+    x: number;
+    y: number;
+  };
+  viewport?: {
+    x: number;
+    y: number;
+    zoom: number;
+  };
+  color: string;
+  userName: string;
+  currentWorkflowId?: string;
+  openWorkflowIds?: string[];
+  debugRun?: UserDebugRun;
+  draggingEdge?: {
+    nodeId: string;
+    handleId: string | null;
+    handleType: "source" | "target" | null;
+  } | null;
+  selectedNodeIds?: string[] | null;
+};
+
+export type UserDebugRun = {
+  projectId: string;
+  jobId: string;
+  startedAt: number;
+  status: JobStatus;
+};

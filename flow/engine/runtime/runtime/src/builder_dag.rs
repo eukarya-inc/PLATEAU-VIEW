@@ -128,12 +128,9 @@ impl BuilderDag {
                     continue;
                 };
                 let sources = std::mem::take(&mut affecting_sources[node_index]);
-                let source = sources
-                    .into_iter()
-                    .next()
-                    .ok_or(ExecutionError::InvalidSink(
-                        format!("Target source is not exists. with {:?}", node).to_string(),
-                    ))?;
+                let Some(source) = sources.into_iter().next() else {
+                    continue; // orphaned sink (no connected source)
+                };
                 let node_index = NodeIndex::new(node_index);
                 if sink.name() != node.node.action() {
                     return Err(ExecutionError::ActionNameMismatch(
@@ -149,7 +146,11 @@ impl BuilderDag {
                         node.node.action().to_string(),
                         node.with.clone(),
                     )
-                    .map_err(ExecutionError::Factory)?;
+                    .map_err(|e| ExecutionError::Factory {
+                        node_id: node.handle.id.to_string(),
+                        node_name: node.name.clone(),
+                        error: e,
+                    })?;
 
                 let state = sink.get_source_state().map_err(ExecutionError::Sink)?;
                 if let Some(state) = state {
@@ -204,7 +205,11 @@ impl BuilderDag {
                             node.with.clone(),
                             source_states.remove(&node.handle),
                         )
-                        .map_err(ExecutionError::Factory)?;
+                        .map_err(|e| ExecutionError::Factory {
+                            node_id: node.handle.id.to_string(),
+                            node_name: node.name.clone(),
+                            error: e,
+                        })?;
 
                     // Write state to relevant sink.
                     let state = source
@@ -241,7 +246,11 @@ impl BuilderDag {
                             node.node.action().to_string(),
                             node.with.clone(),
                         )
-                        .map_err(ExecutionError::Factory)?;
+                        .map_err(|e| ExecutionError::Factory {
+                            node_id: node.handle.id.to_string(),
+                            node_name: node.name.clone(),
+                            error: e,
+                        })?;
                     NodeType {
                         handle: node.handle,
                         name: node.name,
@@ -254,11 +263,18 @@ impl BuilderDag {
             node_index_map.insert(node_index, new_node_index);
         }
 
-        // Connect the edges.
+        // Connect the edges, skipping any that involve nodes not added to the graph
+        // (e.g. orphaned sinks or nodes connected only to orphaned sinks).
         for edge in edges {
+            let (Some(&src), Some(&dst)) = (
+                node_index_map.get(&edge.source()),
+                node_index_map.get(&edge.target()),
+            ) else {
+                continue;
+            };
             graph.add_edge(
-                node_index_map[&edge.source()],
-                node_index_map[&edge.target()],
+                src,
+                dst,
                 EdgeType::new(
                     edge.weight.id.clone(),
                     edge.weight.from,

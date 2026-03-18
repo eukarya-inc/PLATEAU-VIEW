@@ -5,7 +5,7 @@ import { LogsTable } from "@flow/components/LogsTable";
 import { useJob } from "@flow/lib/gql/job";
 import { useSubscription } from "@flow/lib/gql/subscriptions/useSubscription";
 import { useT } from "@flow/lib/i18n";
-import type { Log } from "@flow/types";
+import type { UserFacingLog } from "@flow/types";
 import { formatTimestamp } from "@flow/utils";
 import { parseJSONL } from "@flow/utils/jsonl";
 
@@ -15,7 +15,7 @@ type LogsConsoleProps = {
 
 const LogsConsole: React.FC<LogsConsoleProps> = ({ jobId }) => {
   const t = useT();
-  const columns: ColumnDef<Log>[] = [
+  const columns: ColumnDef<UserFacingLog>[] = [
     {
       accessorKey: "timestamp",
       header: t("Timestamp"),
@@ -23,10 +23,14 @@ const LogsConsole: React.FC<LogsConsoleProps> = ({ jobId }) => {
     },
     {
       accessorKey: "nodeId",
-      header: t("Node Id"),
+      header: t("Action Id"),
     },
     {
-      accessorKey: "status",
+      accessorKey: "nodeName",
+      header: t("Action Name"),
+    },
+    {
+      accessorKey: "level",
       header: t("Status"),
     },
     {
@@ -35,44 +39,41 @@ const LogsConsole: React.FC<LogsConsoleProps> = ({ jobId }) => {
     },
   ];
 
-  const [urlLogs, setUrlLogs] = useState<Log[] | null>(null);
+  const [urlLogs, setUrlLogs] = useState<UserFacingLog[] | null>(null);
   const [isFetchingLogsUrl, setIsFetchingLogsUrl] = useState<boolean>(false);
 
   const { useGetJob } = useJob();
 
   const debugJob = useGetJob(jobId).job;
 
-  const { data: liveLogs } = useSubscription("GetSubscribedLogs", jobId);
+  const { data: liveLogs } = useSubscription(
+    "GetSubscribedUserFacingLogs",
+    jobId,
+  );
 
   const logs = useMemo(() => urlLogs || liveLogs || [], [liveLogs, urlLogs]);
 
   const getLogsFromUrl = useCallback(async () => {
-    if (!debugJob || !debugJob.logsURL || debugJob.status !== "completed")
+    if (
+      !debugJob ||
+      !debugJob.userFacingLogsURL ||
+      debugJob.status !== "completed"
+    )
       return;
     setIsFetchingLogsUrl(true);
     try {
-      const response = await fetch(debugJob.logsURL);
+      const response = await fetch(debugJob.userFacingLogsURL);
       const textData = await response.text();
-
       // Logs are JSONL there we have ensure they are parsed correctly and cleaned to be used
       const logsArray = parseJSONL(textData, {
         transform: (parsedLog) => {
-          if (
-            typeof parsedLog.msg === "string" &&
-            parsedLog.msg.trim() !== ""
-          ) {
-            try {
-              parsedLog.msg = JSON.parse(parsedLog.msg);
-            } catch (innerError) {
-              console.error("Failed to clean msg:", parsedLog.msg, innerError);
-            }
-          }
           return {
-            nodeId: parsedLog.action,
+            nodeId: parsedLog.nodeId,
             jobId: debugJob.id,
-            message: parsedLog.msg,
-            timestamp: parsedLog.ts,
-            status: parsedLog.level,
+            message: parsedLog.message,
+            timestamp: parsedLog.timestamp,
+            level: parsedLog.level,
+            nodeName: parsedLog.nodeName,
           };
         },
         onError: (error, line, index) => {
@@ -92,12 +93,12 @@ const LogsConsole: React.FC<LogsConsoleProps> = ({ jobId }) => {
   }, [debugJob, setIsFetchingLogsUrl]);
 
   useEffect(() => {
-    if (debugJob?.logsURL && !urlLogs) {
+    if (debugJob?.userFacingLogsURL && !urlLogs) {
       (async () => {
         await getLogsFromUrl();
       })();
     }
-  }, [debugJob?.logsURL, urlLogs, getLogsFromUrl]);
+  }, [debugJob?.userFacingLogsURL, urlLogs, getLogsFromUrl]);
 
   return (
     <LogsTable

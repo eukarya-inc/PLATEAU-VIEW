@@ -1,6 +1,5 @@
 import Visualizer from "@reearth/beta/features/Visualizer";
 import { Layer, MapRef } from "@reearth/core";
-import { styled } from "@reearth/services/theme";
 import { ComponentProps, FC, MutableRefObject } from "react";
 
 import { Story } from "../../Visualizer/Crust/StoryPanel";
@@ -29,28 +28,21 @@ const Viewer: FC<Props> = ({
 
   return (
     enabledVisualizer && (
-      <VisualizerWrapper>
-        <Visualizer
-          engine="cesium"
-          visualizerRef={visualizerRef}
-          viewerProperty={viewerProperty}
-          ready={ready}
-          layers={layers}
-          engineMeta={engineMeta}
-          currentCamera={currentCamera}
-          onCameraChange={setCurrentCamera}
-          widgets={widgets}
-          story={story}
-          showStoryPanel={showStoryPanel}
-        />
-      </VisualizerWrapper>
+      <Visualizer
+        engine="cesium"
+        visualizerRef={visualizerRef}
+        viewerProperty={viewerProperty}
+        ready={ready}
+        layers={layers}
+        engineMeta={engineMeta}
+        currentCamera={currentCamera}
+        onCameraChange={setCurrentCamera}
+        widgets={widgets}
+        story={story}
+        showStoryPanel={showStoryPanel}
+      />
     )
   );
 };
-
-const VisualizerWrapper = styled("div")({
-  minWidth: 768,
-  height: "100%"
-});
 
 export default Viewer;

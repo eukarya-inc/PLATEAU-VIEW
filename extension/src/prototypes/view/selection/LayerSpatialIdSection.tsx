@@ -84,7 +84,7 @@ export const LayerSpatialIdSection: FC<LayerSpatialIdSectionProps> = ({ layers }
     return [
       {
         id: "spaceId",
-        name: "タイルハッシュ",
+        name: "タイルハッシュ（独自）",
         values: features.map(feature => feature.data.id),
       },
     ];
@@ -95,7 +95,7 @@ export const LayerSpatialIdSection: FC<LayerSpatialIdSectionProps> = ({ layers }
     return [
       {
         id: "spaceIdZoomZFXY",
-        name: "z/f/x/y",
+        name: "空間ID（z/h/x/y）",
         values: features.map(feature =>
           feature.data.zfxyStr?.startsWith("/")
             ? feature.data.zfxyStr.slice(1)

@@ -11,13 +11,14 @@ use crate::types::{
     polygon::Polygon3D,
     rect::Rect3D,
     triangle::Triangle3D,
+    triangular_mesh::TriangularMesh,
 };
 
 use super::map_coords::MapCoords;
 
 pub(crate) fn twice_signed_ring_area3d<T>(linestring: &LineString3D<T>) -> T
 where
-    T: CoordNum,
+    T: CoordFloat,
 {
     // LineString with less than 3 points is empty, or a
     // single point, or is not closed.
@@ -31,27 +32,32 @@ where
         return T::zero();
     }
 
-    // Use a reasonable shift for the line-string coords
-    // to avoid numerical-errors when summing the
-    // determinants.
-    //
-    // Note: we can't use the `Centroid` trait as it
-    // requires `T: Float` and in fact computes area in the
-    // implementation. Another option is to use the average
-    // of the coordinates, but it is not fool-proof to
-    // divide by the length of the linestring (eg. a long
-    // line-string with T = u8)
+    // Shift coords to reduce numerical error when summing cross products.
     let shift = linestring.0[0];
 
-    let mut tmp = T::zero();
+    let mut sum_xy = T::zero();
+    let mut sum_yz = T::zero();
+    let mut sum_zx = T::zero();
     for line in linestring.lines() {
         let line = line.map_coords(|c| c - shift);
-        tmp = tmp + line.determinant3d();
+        let s = &line.start;
+        let e = &line.end;
+        sum_xy = sum_xy + s.x * e.y - s.y * e.x;
+        sum_yz = sum_yz + s.y * e.z - s.z * e.y;
+        sum_zx = sum_zx + s.z * e.x - s.x * e.z;
     }
 
-    tmp
+    let magnitude = (sum_xy * sum_xy + sum_yz * sum_yz + sum_zx * sum_zx).sqrt();
+    // Sign is determined by the Z-component (sum_xy) of the cross-product vector,
+    // i.e. the winding as seen from the +Z direction.
+    if sum_xy < T::zero() {
+        -magnitude
+    } else {
+        magnitude
+    }
 }
 
+/// Computes 2D surface area of planar geometries in 3D space (NOT volume).
 pub trait Area3D<T>
 where
     T: CoordNum,
@@ -84,7 +90,7 @@ where
 
 impl<T> Area3D<T> for LineString3D<T>
 where
-    T: CoordNum,
+    T: CoordFloat,
 {
     fn signed_area3d(&self) -> T {
         T::zero()
@@ -200,14 +206,61 @@ where
     T: CoordFloat,
 {
     fn signed_area3d(&self) -> T {
-        self.to_lines()
-            .iter()
-            .fold(T::zero(), |total, line| total + line.determinant3d())
-            / (T::one() + T::one())
+        let mut sum_xy = T::zero();
+        let mut sum_yz = T::zero();
+        let mut sum_zx = T::zero();
+        for line in &self.to_lines() {
+            let s = &line.start;
+            let e = &line.end;
+            sum_xy = sum_xy + s.x * e.y - s.y * e.x;
+            sum_yz = sum_yz + s.y * e.z - s.z * e.y;
+            sum_zx = sum_zx + s.z * e.x - s.x * e.z;
+        }
+        let magnitude = (sum_xy * sum_xy + sum_yz * sum_yz + sum_zx * sum_zx).sqrt();
+        let two = T::one() + T::one();
+        // Sign determined by Z-component of cross-product vector (winding w.r.t. +Z).
+        if sum_xy < T::zero() {
+            -magnitude / two
+        } else {
+            magnitude / two
+        }
     }
 
     fn unsigned_area3d(&self) -> T {
         self.signed_area3d().abs()
+    }
+}
+
+impl<T> Area3D<T> for TriangularMesh<T>
+where
+    T: CoordFloat,
+{
+    fn signed_area3d(&self) -> T {
+        self.get_triangles()
+            .iter()
+            .map(|triangle_indices| {
+                // Create a Triangle3D from the vertex indices
+                let v0 = self.get_vertices()[triangle_indices[0]];
+                let v1 = self.get_vertices()[triangle_indices[1]];
+                let v2 = self.get_vertices()[triangle_indices[2]];
+                let triangle = Triangle3D::new(v0, v1, v2);
+                triangle.signed_area3d()
+            })
+            .fold(T::zero(), |total, area| total + area)
+    }
+
+    fn unsigned_area3d(&self) -> T {
+        self.get_triangles()
+            .iter()
+            .map(|triangle_indices| {
+                // Create a Triangle3D from the vertex indices
+                let v0 = self.get_vertices()[triangle_indices[0]];
+                let v1 = self.get_vertices()[triangle_indices[1]];
+                let v2 = self.get_vertices()[triangle_indices[2]];
+                let triangle = Triangle3D::new(v0, v1, v2);
+                triangle.unsigned_area3d()
+            })
+            .fold(T::zero(), |total, area| total + area)
     }
 }
 
@@ -226,6 +279,7 @@ where
             Geometry3D::MultiPolygon(mp) => mp.signed_area3d(),
             Geometry3D::Rect(r) => r.signed_area3d(),
             Geometry3D::Triangle(t) => t.signed_area3d(),
+            Geometry3D::TriangularMesh(t) => t.signed_area3d(),
             _ => unimplemented!(),
         }
     }
@@ -240,6 +294,7 @@ where
             Geometry3D::MultiPolygon(mp) => mp.unsigned_area3d(),
             Geometry3D::Rect(r) => r.unsigned_area3d(),
             Geometry3D::Triangle(t) => t.unsigned_area3d(),
+            Geometry3D::TriangularMesh(t) => t.unsigned_area3d(),
             _ => unimplemented!(),
         }
     }
@@ -261,5 +316,178 @@ where
             .iter()
             .map(|g| g.unsigned_area3d())
             .fold(T::zero(), |acc, next| acc + next)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::coordinate::Coordinate;
+    use crate::types::line_string::LineString3D;
+    use crate::types::polygon::Polygon3D;
+
+    #[test]
+    fn test_triangle_area_basic() {
+        // Simple right triangle in XY plane: (0,0,0), (1,0,0), (0,1,0)
+        // Expected area: 0.5
+        let coords = vec![
+            (0.0, 0.0, 0.0).into(),
+            (1.0, 0.0, 0.0).into(),
+            (0.0, 1.0, 0.0).into(),
+            (0.0, 0.0, 0.0).into(), // Close the ring
+        ];
+        let polygon = Polygon3D::new(LineString3D::new(coords), vec![]);
+        let signed_area = polygon.signed_area3d();
+        let unsigned_area = polygon.unsigned_area3d();
+        println!(
+            "Basic triangle signed area: {}, unsigned area: {}",
+            signed_area, unsigned_area
+        );
+        assert!(
+            (signed_area - 0.5_f64).abs() < 1e-10,
+            "Expected signed area 0.5, got {}",
+            signed_area
+        );
+        assert!(
+            (unsigned_area - 0.5_f64).abs() < 1e-10,
+            "Expected unsigned area 0.5, got {}",
+            unsigned_area
+        );
+    }
+
+    #[test]
+    fn test_triangle_area_with_large_offset() {
+        // ECEF-like coordinates with small (1cm) triangle
+        let offset = 4000000.0;
+        let coords = vec![
+            (offset, offset, offset).into(),
+            (offset + 0.01, offset, offset).into(),
+            (offset, offset + 0.01, offset).into(),
+            (offset, offset, offset).into(),
+        ];
+        let polygon = Polygon3D::new(LineString3D::new(coords), vec![]);
+        let signed_area = polygon.signed_area3d();
+        let unsigned_area = polygon.unsigned_area3d();
+        println!(
+            "Large offset triangle signed area: {}, unsigned area: {}",
+            signed_area, unsigned_area
+        );
+        assert!(
+            (signed_area - 0.00005_f64).abs() < 1e-6,
+            "Expected signed area 0.00005 with offset, got {}",
+            signed_area
+        );
+        assert!(
+            (unsigned_area - 0.00005_f64).abs() < 1e-6,
+            "Expected unsigned area 0.00005 with offset, got {}",
+            unsigned_area
+        );
+    }
+
+    #[test]
+    fn test_polygon_with_hole_all_winding_combinations() {
+        // Define coordinate data at the beginning
+        // Outer square: 2x2 (area = 4), Inner square: 1x1 (area = 1), Expected net area: 3.0
+        let exterior_ccw: Vec<Coordinate<f64, f64>> = vec![
+            (0.0, 0.0, 0.0).into(),
+            (2.0, 0.0, 0.0).into(),
+            (2.0, 2.0, 0.0).into(),
+            (0.0, 2.0, 0.0).into(),
+            (0.0, 0.0, 0.0).into(),
+        ];
+        let exterior_cw: Vec<Coordinate<f64, f64>> = vec![
+            (0.0, 0.0, 0.0).into(),
+            (0.0, 2.0, 0.0).into(),
+            (2.0, 2.0, 0.0).into(),
+            (2.0, 0.0, 0.0).into(),
+            (0.0, 0.0, 0.0).into(),
+        ];
+        let interior_ccw: Vec<Coordinate<f64, f64>> = vec![
+            (0.5, 0.5, 0.0).into(),
+            (1.5, 0.5, 0.0).into(),
+            (1.5, 1.5, 0.0).into(),
+            (0.5, 1.5, 0.0).into(),
+            (0.5, 0.5, 0.0).into(),
+        ];
+        let interior_cw: Vec<Coordinate<f64, f64>> = vec![
+            (0.5, 0.5, 0.0).into(),
+            (0.5, 1.5, 0.0).into(),
+            (1.5, 1.5, 0.0).into(),
+            (1.5, 0.5, 0.0).into(),
+            (0.5, 0.5, 0.0).into(),
+        ];
+
+        // Helper function to test both signed and unsigned area
+        let test_winding = |ext: &[Coordinate<f64, f64>],
+                            int: &[Coordinate<f64, f64>],
+                            expected_signed: f64,
+                            name: &str| {
+            let polygon = Polygon3D::new(
+                LineString3D::new(ext.to_vec()),
+                vec![LineString3D::new(int.to_vec())],
+            );
+            let signed = polygon.signed_area3d();
+            let unsigned = polygon.unsigned_area3d();
+            assert!(
+                (signed - expected_signed).abs() < 1e-10,
+                "{} signed: expected {}, got {}",
+                name,
+                expected_signed,
+                signed
+            );
+            assert!(
+                (unsigned - 3.0_f64).abs() < 1e-10,
+                "{} unsigned: expected 3.0, got {}",
+                name,
+                unsigned
+            );
+        };
+
+        // Test all 4 combinations (CCW exterior = positive, CW exterior = negative)
+        test_winding(&exterior_ccw, &interior_ccw, 3.0_f64, "CCW/CCW");
+        test_winding(&exterior_ccw, &interior_cw, 3.0_f64, "CCW/CW");
+        test_winding(&exterior_cw, &interior_ccw, -3.0_f64, "CW/CCW");
+        test_winding(&exterior_cw, &interior_cw, -3.0_f64, "CW/CW");
+    }
+
+    #[test]
+    fn test_tilted_polygon_area_orientation_independent() {
+        // ~23° tilted 1m² cells facing opposite directions should have equal 3D area (~1.09).
+        let north_coords = vec![
+            (0.0, 0.0, 0.0).into(),
+            (0.0, -1.0, 0.3996).into(),
+            (1.0, -1.0, 0.2282).into(),
+            (1.0, 0.0, -0.1714).into(),
+            (0.0, 0.0, 0.0).into(),
+        ];
+        let north_poly = Polygon3D::new(LineString3D::new(north_coords), vec![]);
+        let north_area: f64 = north_poly.unsigned_area3d();
+
+        let south_coords = vec![
+            (0.0, 0.0, 0.0).into(),
+            (-1.0, 0.0, -0.1678).into(),
+            (-1.0, -1.0, -0.559).into(),
+            (0.0, -1.0, -0.3912).into(),
+            (0.0, 0.0, 0.0).into(),
+        ];
+        let south_poly = Polygon3D::new(LineString3D::new(south_coords), vec![]);
+        let south_area: f64 = south_poly.unsigned_area3d();
+
+        assert!(
+            (north_area - south_area).abs() < 0.01_f64,
+            "North-facing area {} and south-facing area {} should be nearly equal",
+            north_area,
+            south_area
+        );
+        assert!(
+            north_area > 1.08 && north_area < 1.10,
+            "North-facing area {} should be ~1.09",
+            north_area
+        );
+        assert!(
+            south_area > 1.08 && south_area < 1.10,
+            "South-facing area {} should be ~1.09",
+            south_area
+        );
     }
 }

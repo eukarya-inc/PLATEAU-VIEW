@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
 )
 
@@ -57,6 +57,7 @@ type ToPlateauDatasetsOptions struct {
 	FeatureType *FeatureType
 	Year        int
 	CMSInfo     CMSInfo
+	IsFlow      bool // Flow model data (always beta, with [Flow] prefix)
 }
 
 func (i *PlateauFeatureItem) toDatasets(opts ToPlateauDatasetsOptions) (res []*plateauapi.PlateauDataset, warning []string) {
@@ -93,6 +94,8 @@ func (i *PlateauFeatureItem) toDatasets(opts ToPlateauDatasetsOptions) (res []*p
 	return
 }
 
+const flowNamePrefix = "[Flowテスト用] "
+
 func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, warning []string) {
 	if len(seed.AssetURLs) == 0 {
 		// warning = append(warning, fmt.Sprintf("plateau %s %s: no asset urls", seed.TargetArea.GetCode(), seed.DatasetType.Code))
@@ -118,11 +121,37 @@ func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, war
 		return
 	}
 
+	// Check if any asset is interior
+	isInterior := false
+	for _, asset := range seed.Assets {
+		if asset != nil && asset.Ex.Normal != nil && asset.Ex.Normal.Interior {
+			isInterior = true
+			break
+		}
+	}
+
+	// Modify name and subname for interior datasets
+	datasetName := seed.DatasetType.Name
+	subname := seed.Subname
+	subcode := seed.Subcode
+	if isInterior {
+		if subname != "" {
+			subname = subname + "（屋内）"
+		} else {
+			datasetName = datasetName + "（屋内）"
+		}
+	}
+
+	// Add [Flow] prefix for Flow datasets
+	if seed.IsFlow {
+		datasetName = flowNamePrefix + datasetName
+	}
+
 	res = &plateauapi.PlateauDataset{
 		ID:                 id,
-		Name:               standardItemName(seed.DatasetType.Name, seed.Subname, seed.TargetArea.GetName()),
-		Subname:            lo.EmptyableToPtr(seed.Subname),
-		Subcode:            lo.EmptyableToPtr(seed.Subcode),
+		Name:               standardItemName(datasetName, subname, seed.TargetArea.GetName()),
+		Subname:            lo.EmptyableToPtr(subname),
+		Subcode:            lo.EmptyableToPtr(subcode),
 		Suborder:           seed.Suborder,
 		Description:        lo.EmptyableToPtr(seed.Desc),
 		Year:               seed.Area.CityItem.YearInt(),

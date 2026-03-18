@@ -1,6 +1,5 @@
-import { ViewerProperty } from "@reearth/beta/features/Editor/Visualizer/type";
 import { Camera } from "@reearth/beta/utils/value";
-import { ComputedFeature, ComputedLayer } from "@reearth/core";
+import { ViewerProperty, ComputedFeature, ComputedLayer } from "@reearth/core";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useVisualizerCamera } from "./atoms";
@@ -55,8 +54,6 @@ export default function useHooks({
       setVisualizerCamera(undefined);
     };
   }, [currentCamera, setVisualizerCamera]);
-  const currentCameraRef = useRef(currentCamera);
-  currentCameraRef.current = currentCamera;
 
   const [mapAPIReady, setMapAPIReady] = useState(false);
   const onCoreAPIReady = useCallback(() => {
@@ -72,7 +69,6 @@ export default function useHooks({
     visualizerCamera,
     handleCoreLayerSelect,
     mapAPIReady,
-    onCoreAPIReady,
-    currentCameraRef
+    onCoreAPIReady
   };
 }

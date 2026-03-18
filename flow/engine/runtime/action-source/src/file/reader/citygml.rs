@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use url::Url;
 
+/// # CityGmlReader Parameters
+///
+/// Configuration for reading CityGML files as a data source.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CityGmlReaderParam {
@@ -40,17 +43,17 @@ pub(crate) async fn read_citygml(
         input_path.into()
     } else {
         Url::parse(".")
-            .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?
+            .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?
     };
     let mut xml_reader = NsReader::from_reader(buf_reader);
     let context = nusamai_citygml::ParseContext::new(base_url.clone(), &code_resolver);
     let mut citygml_reader = CityGmlReader::new(context);
     let mut st = citygml_reader
         .start_root(&mut xml_reader)
-        .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?;
+        .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?;
     parse_tree_reader(&mut st, base_url, params.flatten.unwrap_or(false), sender)
         .await
-        .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?;
+        .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?;
     Ok(())
 }
 
@@ -81,7 +84,6 @@ async fn parse_tree_reader<R: BufRead>(
                 let geometry_store = st.collect_geometries(envelope.crs_uri.clone());
                 let id = cityobj.id();
                 let typename = cityobj.name();
-                let bounded_by = cityobj.bounded_by();
                 if let Some(root) = cityobj.into_object() {
                     let entity = Entity {
                         id: Some(id.to_string()),
@@ -90,7 +92,7 @@ async fn parse_tree_reader<R: BufRead>(
                         base_url: base_url.clone(),
                         geometry_store: RwLock::new(geometry_store).into(),
                         appearance_store: Default::default(),
-                        bounded_by,
+                        cross_file_feature_refs: vec![],
                     };
                     entities.push(entity);
                 }
@@ -111,7 +113,7 @@ async fn parse_tree_reader<R: BufRead>(
             ))),
         }
     })
-    .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?;
+    .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?;
     let mut transformer = GeometricMergedownTransform::new();
     for entity in entities {
         {
@@ -129,18 +131,13 @@ async fn parse_tree_reader<R: BufRead>(
                 (v[0], v[1], v[2]) = (v[1], v[0], v[2]);
             });
         }
-        let attributes = AttributeValue::from_nusamai_cityml_value(&entity.root);
+        let attributes = AttributeValue::from_nusamai_citygml_value(&entity.root);
         let city_gml_attributes = match attributes.len() {
             0 => AttributeValue::Null,
             1 => attributes.values().next().unwrap().clone(),
             _ => AttributeValue::Map(attributes),
         };
         let city_gml_attributes = city_gml_attributes.flatten();
-        let city_gml_attributes = if let AttributeValue::Map(map) = &city_gml_attributes {
-            AttributeValue::Map(AttributeValue::convert_array_attributes(map))
-        } else {
-            city_gml_attributes
-        };
         let gml_id = entity.root.id();
         let name = entity.root.typename();
         let attributes = HashMap::<Attribute, AttributeValue>::from([
@@ -177,7 +174,7 @@ async fn parse_tree_reader<R: BufRead>(
             transformer.transform(&mut ent);
             let geometry: Geometry = ent
                 .try_into()
-                .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?;
+                .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?;
             let mut feature: Feature = geometry.into();
             feature.extend(attributes.clone());
             feature.metadata = metadata.clone();
@@ -187,7 +184,7 @@ async fn parse_tree_reader<R: BufRead>(
                     IngestionMessage::OperationEvent { feature },
                 ))
                 .await
-                .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{:?}", e)))?;
+                .map_err(|e| crate::errors::SourceError::CityGmlFileReader(format!("{e:?}")))?;
         }
     }
     Ok(())

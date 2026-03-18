@@ -4,20 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
-	"github.com/eukarya-inc/reearth-plateauview/server/govpolygon"
-	"github.com/eukarya-inc/reearth-plateauview/server/openapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/opinion"
-	"github.com/eukarya-inc/reearth-plateauview/server/proxy"
-	"github.com/eukarya-inc/reearth-plateauview/server/putil"
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/searchindex"
-	"github.com/eukarya-inc/reearth-plateauview/server/sidebar"
-	"github.com/eukarya-inc/reearth-plateauview/server/tiles"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/openapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/proxy"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
+	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
 )
 
@@ -33,14 +37,16 @@ var services = [](func(*Config) (*Service, error)){
 	OpenAPI,
 	CMSIntegration,
 	SDKAPI,
-	SearchIndex,
 	Opinion,
 	Sidebar,
 	DataCatalog,
 	GovPolygon,
+	Geocoding,
 	Tiles,
 	Embed,
 	CityGML,
+	MCP,
+	LodStat,
 }
 
 func Services(conf *Config) (srv []*Service, _ error) {
@@ -97,23 +103,6 @@ func CMSIntegration(conf *Config) (*Service, error) {
 	}, nil
 }
 
-func SearchIndex(conf *Config) (*Service, error) {
-	c := conf.SearchIndex()
-	if c.CMSBase == "" || c.CMSToken == "" || c.CMSStorageProject == "" {
-		return nil, nil
-	}
-
-	w, err := searchindex.WebhookHandler(c)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Service{
-		Name:    "searchindex",
-		Webhook: w,
-	}, nil
-}
-
 func SDKAPI(conf *Config) (*Service, error) {
 	c := conf.SDKAPI()
 
@@ -161,7 +150,7 @@ func Sidebar(conf *Config) (*Service, error) {
 
 func DataCatalog(conf *Config) (*Service, error) {
 	c := conf.DataCatalog()
-	if c.Config.CMSBaseURL == "" {
+	if c.CMSBaseURL == "" {
 		return nil, nil
 	}
 	if c.PlaygroundEndpoint == "" {
@@ -225,6 +214,78 @@ func CityGML(conf *Config) (*Service, error) {
 		Name: "citygml",
 		Echo: func(g *echo.Group) error {
 			return citygml.Echo(conf.CityGML(), g.Group("/citygml"))
+		},
+	}, nil
+}
+
+func MCP(conf *Config) (*Service, error) {
+	dcConf := conf.DataCatalog()
+
+	return &Service{
+		Name: "mcp",
+		Echo: func(g *echo.Group) error {
+			// Create MCP handler with datacatalog integration if configured
+			mcpCfg := &mcp.Config{
+				Host: dcConf.Host,
+			}
+
+			// If datacatalog is fully configured, create reposHandler for data catalog tools
+			if dcConf.CMSBaseURL != "" {
+				pcms, err := plateaucms.New(dcConf.Config)
+				if err != nil {
+					// Log error but continue with spec-only MCP
+					log.Errorf("mcp: failed to initialize plateaucms, datacatalog tools will not be available: %v", err)
+				} else {
+					reposHandler, err := datacatalog.NewReposHandler(dcConf, pcms)
+					if err != nil {
+						log.Errorf("mcp: failed to create repos handler, datacatalog tools will not be available: %v", err)
+					} else {
+						mcpCfg.DataCatalogReposHandler = reposHandler
+
+						// Initialize repos in background
+						go func() {
+							ctx := context.Background()
+							if dcConf.CacheURL != "" {
+								if err := reposHandler.InitFromCache(ctx, dcConf.CacheURL); err != nil {
+									log.Errorf("mcp: failed to initialize repos from cache: %v", err)
+								}
+							} else {
+								if err := reposHandler.Init(ctx); err != nil {
+									log.Errorf("mcp: failed to initialize repos: %v", err)
+								}
+							}
+						}()
+
+						// Create handler with CMS middleware
+						handler := mcp.NewHTTPHandler(mcpCfg)
+						handler.SetCMSMiddleware(reposHandler.Middleware())
+						handler.RegisterRoutes(g.Group("/mcp"))
+						return nil
+					}
+				}
+			}
+
+			// Fallback: register with spec tools only
+			mcp.RegisterHTTPEndpoint(g.Group("/mcp"))
+			return nil
+		},
+	}, nil
+}
+
+func LodStat(conf *Config) (*Service, error) {
+	return &Service{
+		Name: "lodstat",
+		Echo: func(g *echo.Group) error {
+			return lodstat.Echo(conf.LodStat(), g.Group("/lodstat"))
+		},
+	}, nil
+}
+
+func Geocoding(conf *Config) (*Service, error) {
+	return &Service{
+		Name: "geocoding",
+		Echo: func(g *echo.Group) error {
+			return geocoding.Echo(g.Group("/geocoding"), conf.Geocoding())
 		},
 	}, nil
 }

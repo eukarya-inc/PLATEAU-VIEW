@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/worker/workerutil"
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	"github.com/reearth/reearthx/log"
 )
 
@@ -39,7 +39,7 @@ func (p *Packer) writeZip(ctx context.Context, u *url.URL, pctx *packerContext) 
 	log.Infofc(ctx, "downloading... %s", ustr)
 	body, err := httpGet(ctx, p.httpClient, ustr)
 	if body != nil {
-		defer body.Close()
+		defer func() { _ = body.Close() }()
 	}
 	if err != nil {
 		return fmt.Errorf("get: %w", err)

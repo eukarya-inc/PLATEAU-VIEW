@@ -3,13 +3,17 @@ package datacatalogv3
 import (
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
 )
 
 func (ft FeatureTypes) ToDatasetTypes(specs []plateauapi.PlateauSpec) plateauapi.DatasetTypes {
 	res := make(plateauapi.DatasetTypes)
 	res[plateauapi.DatasetTypeCategoryPlateau] = lo.FlatMap(ft.Plateau, func(f FeatureType, _ int) []plateauapi.DatasetType {
+		// Skip derived feature types (e.g., bldg2) - they are merged into base types
+		if IsDerivedFeatureType(f.Code) {
+			return nil
+		}
 		return lo.FilterMap(specs, func(s plateauapi.PlateauSpec, _ int) (plateauapi.DatasetType, bool) {
 			if s.MajorVersion < f.MinSpecMajor {
 				return nil, false

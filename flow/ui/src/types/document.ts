@@ -17,6 +17,17 @@ export type ProjectDocument = {
   updates: number[];
 };
 
+export type PreviewSnapshot = {
+  id: string;
+  timestamp: string;
+  version: number;
+  updates: number[];
+};
+
 export type RollbackProject = {
   projectDocument?: ProjectDocument;
+} & ApiResponse;
+
+export type SaveSnapshot = {
+  saveSnapshot: boolean;
 } & ApiResponse;

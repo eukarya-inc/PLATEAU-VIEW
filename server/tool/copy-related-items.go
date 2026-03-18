@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintsetup"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
@@ -49,7 +49,7 @@ func copyRelatedItems(conf *Config, args []string) error {
 		return errors.New("CMS base URL, CMS token, fromProject, and toProject are required")
 	}
 
-	pp.Printf("args: %v\n", opts)
+	_, _ = pp.Printf("args: %v\n", opts)
 
 	err := cmsintsetup.CopyRelatedDatasetItems(
 		context.Background(),

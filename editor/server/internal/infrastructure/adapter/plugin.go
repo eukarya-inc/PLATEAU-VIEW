@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/reearth/reearth/server/internal/usecase/gateway"
 	"github.com/reearth/reearth/server/internal/usecase/repo"
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/plugin"
@@ -75,11 +74,4 @@ func (r *pluginRepo) Remove(ctx context.Context, p id.PluginID) error {
 		return errors.New("cannot write")
 	}
 	return r.writer.Remove(ctx, p)
-}
-
-func (r *pluginRepo) RemoveBySceneWithFile(ctx context.Context, sid id.SceneID, f gateway.File) error {
-	if r.writer == nil {
-		return errors.New("cannot write")
-	}
-	return r.writer.RemoveBySceneWithFile(ctx, sid, f)
 }

@@ -17,7 +17,9 @@ func TestCatalogFile(t *testing.T) {
 	thumbnail, err := os.ReadFile("testdata/test.jpg")
 	assert.NoError(t, err)
 
-	defer f.Close()
+	defer func() {
+		assert.NoError(t, f.Close())
+	}()
 	xf, err := excelize.OpenReader(f)
 	assert.NoError(t, err)
 

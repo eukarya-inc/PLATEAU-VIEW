@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::ops::{Div, Mul};
 
 use approx::{AbsDiffEq, RelativeEq};
 use geo_types::Line as GeoLine;
-use num_traits::Zero;
+use num_traits::{NumCast, Zero};
 use nusamai_projection::vshift::Jgd2011ToWgs84;
 use serde::{Deserialize, Serialize};
 
@@ -88,11 +89,171 @@ impl<T: CoordNum, Z: CoordNum> Line<T, Z> {
     }
 }
 
+impl<T: CoordFloat + From<Z>, Z: CoordFloat + Mul<T, Output = Z>> Line<T, Z> {
+    /// Smallest distance between segments `self` and `other`.
+    pub fn distance(&self, other: &Self) -> T {
+        let (p, q) = self.closest_points(other);
+        (p - q).norm()
+    }
+
+    pub fn closest_points(&self, other: &Self) -> (Coordinate<T, Z>, Coordinate<T, Z>) {
+        #[inline]
+        fn clamp<T: PartialOrd>(x: T, lo: T, hi: T) -> T {
+            if x < lo {
+                lo
+            } else if x > hi {
+                hi
+            } else {
+                x
+            }
+        }
+
+        let epsilon = <T as NumCast>::from(1e-5).unwrap_or_default();
+
+        let u = self.end - self.start;
+        let v = other.end - other.start;
+        let w0 = self.start - other.start;
+
+        let a = u.dot(&u);
+        let b = u.dot(&v);
+        let c = v.dot(&v);
+        let d = u.dot(&w0);
+        let e = v.dot(&w0);
+        let dnm = a * c - b * b;
+
+        // Degenerate cases (point vs point/segment)
+        if a <= epsilon && c <= epsilon {
+            return (self.start, other.start);
+        }
+        if a <= epsilon {
+            let t = clamp(e / c, T::zero(), T::one());
+            return (self.start, (other.start + v * t));
+        }
+        if c <= epsilon {
+            let s = clamp(-d / a, T::zero(), T::one());
+            return (self.start + u * s, other.start);
+        }
+
+        // General case
+        let mut s_n = b * e - c * d;
+        let mut t_n = a * e - b * d;
+        let mut s_d = dnm;
+        let mut t_d = dnm;
+
+        // Nearly parallel
+        if dnm <= epsilon {
+            s_n = T::zero();
+            s_d = T::one();
+            t_n = e;
+            t_d = c;
+        }
+
+        // Clamp s to [0,1] with coupling to t
+        if s_n < T::zero() {
+            s_n = T::zero();
+            t_n = e;
+            t_d = c;
+        } else if s_n > s_d {
+            s_n = s_d;
+            t_n = e + b;
+            t_d = c;
+        }
+
+        // Clamp t to [0,1], possibly re-clamping s
+        if t_n < T::zero() {
+            t_n = T::zero();
+            s_n = -d;
+            s_d = a;
+            if s_n < T::zero() {
+                s_n = T::zero();
+            } else if s_n > s_d {
+                s_n = s_d;
+            }
+        } else if t_n > t_d {
+            t_n = t_d;
+            s_n = -d + b;
+            s_d = a;
+            if s_n < T::zero() {
+                s_n = T::zero();
+            } else if s_n > s_d {
+                s_n = s_d;
+            }
+        }
+
+        let s = if s_d.abs() > epsilon {
+            s_n / s_d
+        } else {
+            T::zero()
+        };
+        let t = if t_d.abs() > epsilon {
+            t_n / t_d
+        } else {
+            T::zero()
+        };
+
+        let cp = self.start + u * s;
+        let cq = other.start + v * t;
+        (cp, cq)
+    }
+}
+
+impl<T, Z> Line<T, Z>
+where
+    T: CoordFloat + From<Z>,
+    Z: CoordFloat + Mul<T, Output = Z> + Div<T, Output = Z>,
+{
+    pub fn intersection(&self, other: &Self, tolerance: T) -> Option<Coordinate<T, Z>> {
+        let (cp, cq) = self.closest_points(other);
+        let d = (cp - cq).norm();
+        if d < tolerance {
+            Some((cp + cq) / <T as NumCast>::from(2.0).unwrap_or_default())
+        } else {
+            None
+        }
+    }
+
+    pub fn contains(&self, mut p: Coordinate<T, Z>, tolerance: Option<T>) -> bool {
+        let epsilon = tolerance.unwrap_or_else(|| <T as NumCast>::from(1e-5).unwrap_or_default());
+        let mut line = *self;
+        p = p - self.start;
+        line.end = line.end - line.start;
+        line.start = Coordinate::zero();
+
+        let dot = line.end.dot(&p);
+        if dot < T::zero() {
+            return false;
+        }
+
+        let norm_squared = line.end.dot(&line.end);
+        let normal = p - line.end * (dot / norm_squared);
+
+        if normal.norm() > epsilon {
+            return false;
+        }
+
+        let parallel_norm = (p - normal).norm();
+        parallel_norm <= line.end.norm()
+    }
+}
+
 impl<T: CoordNum> Line3D<T> {
+    /// Computes the 3D shoelace formula contribution for polygon area calculation.
+    ///
+    /// This is the sum of three 2D cross products (determinants) computed by projecting
+    /// the line segment onto each coordinate plane (XY, YZ, ZX):
+    /// - XY plane: `start.x * end.y - start.y * end.x`
+    /// - YZ plane: `start.y * end.z - start.z * end.y`
+    /// - ZX plane: `start.z * end.x - start.x * end.z`
+    ///
+    /// When summed over all edges of a closed polygon and divided by 2, this gives the
+    /// signed 3D area. The sign depends on winding order: CCW is positive, CW is negative.
     pub fn determinant3d(&self) -> T {
-        self.start.x * (self.end.y * self.start.z - self.end.z * self.start.y)
-            - self.start.y * (self.end.x * self.start.z - self.end.z * self.start.x)
-            + self.start.z * (self.end.x * self.start.y - self.end.y * self.start.x)
+        // For 3D area calculation using shoelace formula
+        // This computes the cross product contribution: start × end
+        self.start.x * self.end.y - self.start.y * self.end.x + self.start.y * self.end.z
+            - self.start.z * self.end.y
+            + self.start.z * self.end.x
+            - self.start.x * self.end.z
     }
 }
 
@@ -319,5 +480,52 @@ impl Line3D<f64> {
     pub fn transform_offset(&mut self, x: f64, y: f64, z: f64) {
         self.start.transform_offset(x, y, z);
         self.end.transform_offset(x, y, z);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_line_distance() {
+        let line1 = Line3D::new_((0.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        let line2 = Line3D::new_((0.0, 1.0, 0.0), (1.0, 1.0, 0.0));
+        assert!((line1.distance(&line2) - 1_f64).abs() < 1e-6);
+
+        let line3 = Line3D::new_((2.0, 1.0, 0.0), (2.0, 2.0, 0.0));
+        assert!((line1.distance(&line3) - (2_f64).sqrt()).abs() < 1e-6);
+
+        let line4 = Line3D::new_((2.0, 0.0, 0.0), (3.0, 0.0, 0.0));
+        assert!((line1.distance(&line4) - 1_f64).abs() < 1e-6);
+
+        let line5 = Line3D::new_((0.0, 0.0, 0.0), (1.0, 1.0, 1.0));
+        let line6 = Line3D::new_((1.0, 0.0, 0.0), (0.0, 1.0, 1.0));
+        assert!(line5.distance(&line6) < 1e-6);
+    }
+
+    #[test]
+    fn test_line_contains() {
+        let line = Line3D::new_((0.0, 0.0, 0.0), (1.0, 1.0, 1.0));
+        let points_contained = [
+            Coordinate::new__(0.0, 0.0, 0.0),
+            Coordinate::new__(1e-12, 0.0, 1e-12),
+            Coordinate::new__(0.5 + 1e-12, 0.5, 0.5),
+            Coordinate::new__(1.0, 1.0, 1.0),
+        ];
+        for p in &points_contained {
+            assert!(line.contains(*p, None), "Point {p:?} should be contained");
+        }
+        let points_not_contained = [
+            Coordinate::new__(1.0, 0.0, 0.0),
+            Coordinate::new__(0.5, 0.5, 0.6),
+            Coordinate::new__(1.0, 1.1, 1.1),
+        ];
+        for p in &points_not_contained {
+            assert!(
+                !line.contains(*p, None),
+                "Point {p:?} should not be contained"
+            );
+        }
     }
 }

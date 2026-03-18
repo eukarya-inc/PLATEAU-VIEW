@@ -9,8 +9,30 @@ use super::module::str::str_module;
 use crate::module::collection::collection_module;
 use crate::module::datetime::datetime_module;
 use crate::module::json::json_module;
+use crate::module::math::math_module;
 use crate::module::xml::xml_module;
 use crate::{error::Error, scope::Scope, ShareLock, Value, Vars};
+
+/// Inner environment exposed to Rhai scripts as "env" at the Engine level.
+/// This is separate from `Engine` to avoid a cyclic reference.
+#[derive(Debug, Clone)]
+pub(crate) struct EngineEnv {
+    vars: ShareLock<Vars>,
+}
+
+impl EngineEnv {
+    pub fn get(&self, name: &str) -> Option<Value> {
+        let vars = self.vars.read().unwrap();
+        vars.get(name).cloned()
+    }
+
+    pub fn set(&self, name: &str, value: Value) {
+        let mut vars = self.vars.write().unwrap();
+        vars.entry(name.to_string())
+            .and_modify(|i| *i = value.clone())
+            .or_insert(value);
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct Engine {
@@ -28,8 +50,8 @@ impl Engine {
         script_engine.set_allow_looping(true);
         script_engine.set_allow_anonymous_fn(true);
         script_engine.set_allow_shadowing(true);
-        let scope = rhai::Scope::new();
-        vec![
+
+        [
             rhai::exported_module!(env_module),
             rhai::exported_module!(scope_module),
         ]
@@ -49,18 +71,22 @@ impl Engine {
         );
         script_engine
             .register_static_module("datetime", rhai::exported_module!(datetime_module).into());
+        script_engine.register_static_module("math", rhai::exported_module!(math_module).into());
 
-        let engine = Self {
-            script_engine: Arc::new(script_engine),
-            scope: Arc::new(RwLock::new(scope)),
-            vars: Arc::new(RwLock::new(Vars::new())),
+        let vars = Arc::new(RwLock::new(Vars::new()));
+
+        let env = EngineEnv {
+            vars: Arc::clone(&vars),
         };
-        engine.init();
-        engine
-    }
 
-    pub fn init(&self) {
-        self.scope.write().unwrap().set_or_push("env", self.clone());
+        let mut rhai_scope = rhai::Scope::new();
+        rhai_scope.set_or_push("env", env);
+
+        Self {
+            script_engine: Arc::new(script_engine),
+            scope: Arc::new(RwLock::new(rhai_scope)),
+            vars,
+        }
     }
 
     pub fn new_scope(&self) -> Scope {
@@ -93,8 +119,7 @@ impl Engine {
         match scr.eval_with_scope::<T>(&mut scope, expr) {
             Ok(ret) => Ok(ret),
             Err(err) => Err(Error::ExprInternalRuntime(format!(
-                "expr code = {}, err = {}",
-                expr, err
+                "expr code = {expr}, err = {err}"
             ))),
         }
     }
@@ -108,8 +133,7 @@ impl Engine {
         match scr.eval_ast_with_scope::<T>(&mut scope, ast) {
             Ok(ret) => Ok(ret),
             Err(err) => Err(Error::ExprInternalRuntime(format!(
-                "ast = {:?} err = {}",
-                ast, err
+                "ast = {ast:?} err = {err}"
             ))),
         }
     }
@@ -125,8 +149,7 @@ impl Engine {
         match scr.eval_with_scope::<T>(&mut scope, expr) {
             Ok(ret) => Ok(ret),
             Err(err) => Err(Error::ExprInternalRuntime(format!(
-                "expr code = {}, err = {}",
-                expr, err
+                "expr code = {expr}, err = {err}"
             ))),
         }
     }
@@ -142,8 +165,7 @@ impl Engine {
         match scr.eval_ast_with_scope::<T>(&mut scope, ast) {
             Ok(ret) => Ok(ret),
             Err(err) => Err(Error::ExprInternalRuntime(format!(
-                "ast = {:?} err = {}",
-                ast, err
+                "ast = {ast:?} err = {err}"
             ))),
         }
     }
@@ -151,7 +173,7 @@ impl Engine {
     pub fn compile(&self, expr: &str) -> crate::Result<rhai::AST> {
         let scr = Arc::clone(&self.script_engine);
         scr.compile(expr)
-            .map_err(|err| Error::ExprCompile(format!("expr code = {}, err = {}", expr, err)))
+            .map_err(|err| Error::ExprCompile(format!("expr code = {expr}, err = {err}")))
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
@@ -216,7 +238,7 @@ mod tests {
         a
         "#;
         let result = engine.eval::<i64>(script);
-        print!("hogehoge {:?}", result);
+        print!("hogehoge {result:?}");
         assert_eq!(result.unwrap(), 10);
     }
 

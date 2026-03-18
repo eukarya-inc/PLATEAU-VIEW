@@ -14,7 +14,7 @@ export type PublishedData = {
   publishedAt: string;
   property?: SceneProperty;
   plugins?: Record<string, Plugin>;
-  nlsLayers?: PublishedNLSLayer[];
+  nlsLayers?: NLSLayer[];
   layerStyles?: LayerStyle[];
   widgets?: Widget[];
   widgetAlignSystem?: WidgetAlignSystem;
@@ -54,7 +54,7 @@ export type Plugin = {
   property: any;
 };
 
-export type PublishedNLSLayer = {
+export type NLSLayer = {
   id: string;
   title: string;
   layerType: "simple";
@@ -71,15 +71,6 @@ export type PublishedNLSLayer = {
   isSketch?: boolean;
   sketchInfo?: SketchInfo;
   nlsInfobox?: any;
-  nlsPhotoOverlay?: {
-    id?: string;
-    property?: {
-      default?: {
-        enabled?: boolean;
-        cameraDuration?: number;
-      };
-    };
-  };
 };
 
 export type SketchInfo = {

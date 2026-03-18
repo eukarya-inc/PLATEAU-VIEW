@@ -17,9 +17,10 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+// TODO: Remove this file once the migration is complete.
 type Auth0 struct {
-	base           string
 	client         *http.Client
+	base           string
 	disableLogging bool
 }
 
@@ -28,9 +29,9 @@ type response struct {
 	Name             string `json:"name"`
 	UserName         string `json:"username"`
 	Email            string `json:"email"`
-	EmailVerified    bool   `json:"email_verified"`
 	Message          string `json:"message"`
 	ErrorDescription string `json:"error_description"`
+	EmailVerified    bool   `json:"email_verified"`
 }
 
 func (u response) Into() accountgateway.AuthenticatorUser {
@@ -73,7 +74,6 @@ func New(domain, clientID, clientSecret string) *Auth0 {
 }
 
 func (a *Auth0) UpdateUser(ctx context.Context, p accountgateway.AuthenticatorUpdateUserParam) (data accountgateway.AuthenticatorUser, err error) {
-
 	payload := map[string]string{}
 	if p.Name != nil {
 		payload["name"] = *p.Name

@@ -3,12 +3,13 @@ package datacatalogv3
 import (
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 )
 
 type AllData struct {
 	Name                  string
 	Year                  int
+	Host                  string
 	PlateauSpecs          []plateauapi.PlateauSpecSimple
 	FeatureTypes          FeatureTypes
 	City                  []*CityItem
@@ -16,6 +17,8 @@ type AllData struct {
 	Generic               []*GenericItem
 	Sample                []*PlateauFeatureItem
 	Plateau               map[string][]*PlateauFeatureItem
+	Flow                  map[string][]*PlateauFeatureItem // plateau-flow model items grouped by feature type
+	FlowEnabled           bool                             // whether Flow datasets should be included in the catalog
 	GeospatialjpDataItems []*GeospatialjpDataItem
 	CMSInfo               CMSInfo
 }
@@ -88,6 +91,7 @@ type CMSInfo struct {
 	WorkspaceID string
 	ProjectID   string
 	ModelIDMap  ModelIDMap
+	FlowEnabled bool // whether Flow datasets should be included in the catalog
 }
 
 func (c CMSInfo) ItemBaseURL(modelKey string) string {

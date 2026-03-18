@@ -50,6 +50,10 @@ export const AppRoutes = () => {
       element: <WorkspaceSettingPage tab="workspace" />
     },
     {
+      path: "settings/workspaces/:workspaceId/members",
+      element: <WorkspaceSettingPage tab="members" />
+    },
+    {
       path: "graphql",
       element: <GraphQLPlayground />
     },

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use reearth_flow_common::compress::decode;
 use reearth_flow_runtime::{
@@ -24,7 +25,7 @@ impl ProcessorFactory for GeometryReplacerFactory {
     }
 
     fn description(&self) -> &str {
-        "Replaces the geometry of a feature with a new geometry."
+        "Replace Feature Geometry from Attribute"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -53,14 +54,12 @@ impl ProcessorFactory for GeometryReplacerFactory {
         let processor: GeometryReplacer = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::GeometryReplacerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::GeometryReplacerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -73,9 +72,13 @@ impl ProcessorFactory for GeometryReplacerFactory {
     }
 }
 
+/// # Geometry Replacer Parameters
+/// Configure which attribute contains the geometry data to replace the feature's current geometry
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GeometryReplacer {
+    /// # Source Attribute
+    /// Name of the attribute containing the compressed geometry data to use as the new geometry
     source_attribute: Attribute,
 }
 
@@ -101,13 +104,17 @@ impl Processor for GeometryReplacer {
         };
         let dump = decode(dump)?;
         let geometry: Geometry = serde_json::from_str(&dump)?;
-        feature.geometry = geometry;
+        feature.geometry = Arc::new(geometry);
         feature.remove(&self.source_attribute);
         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

@@ -5,32 +5,32 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/reearth/reearth/server/pkg/id"
+	"github.com/reearth/reearth/server/pkg/dataset"
 )
 
 type Property struct {
-	id     id.PropertyID
-	scene  id.SceneID
-	schema id.PropertySchemaID
+	id     ID
+	scene  SceneID
+	schema SchemaID
 	items  []Item
 }
 
-func (p *Property) ID() id.PropertyID {
+func (p *Property) ID() ID {
 	return p.id
 }
 
-func (p *Property) IDRef() *id.PropertyID {
+func (p *Property) IDRef() *ID {
 	if p == nil {
 		return nil
 	}
 	return p.id.Ref()
 }
 
-func (p *Property) Scene() id.SceneID {
+func (p *Property) Scene() SceneID {
 	return p.scene
 }
 
-func (p *Property) Schema() id.PropertySchemaID {
+func (p *Property) Schema() SchemaID {
 	return p.schema
 }
 
@@ -88,7 +88,7 @@ func (p *Property) GroupAndList(ptr *Pointer) (*Group, *GroupList) {
 }
 
 // ItemBySchema returns a root item by a schema group ID.
-func (p *Property) ItemBySchema(id id.PropertySchemaGroupID) Item {
+func (p *Property) ItemBySchema(id SchemaGroupID) Item {
 	if p == nil {
 		return nil
 	}
@@ -100,7 +100,7 @@ func (p *Property) ItemBySchema(id id.PropertySchemaGroupID) Item {
 	return nil
 }
 
-func (p *Property) GroupBySchema(id id.PropertySchemaGroupID) *Group {
+func (p *Property) GroupBySchema(id SchemaGroupID) *Group {
 	i := p.ItemBySchema(id)
 	if i == nil {
 		return nil
@@ -111,7 +111,7 @@ func (p *Property) GroupBySchema(id id.PropertySchemaGroupID) *Group {
 	return nil
 }
 
-func (p *Property) GroupListBySchema(id id.PropertySchemaGroupID) *GroupList {
+func (p *Property) GroupListBySchema(id SchemaGroupID) *GroupList {
 	i := p.ItemBySchema(id)
 	if i == nil {
 		return nil
@@ -143,6 +143,18 @@ func (p *Property) ListItem(ptr *Pointer) (*Group, *GroupList) {
 		}
 	}
 	return nil, nil
+}
+
+func (p *Property) HasLinkedField() bool {
+	if p == nil {
+		return false
+	}
+	for _, f := range p.items {
+		if f.HasLinkedField() {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Property) Clone() *Property {
@@ -184,6 +196,42 @@ func (p *Property) RemoveFields(ptr *Pointer) (res bool) {
 		}
 	}
 	return
+}
+
+func (p *Property) FieldsByLinkedDataset(s DatasetSchemaID, i DatasetID) []*Field {
+	if p == nil {
+		return nil
+	}
+	res := []*Field{}
+	for _, g := range p.items {
+		res = append(res, g.FieldsByLinkedDataset(s, i)...)
+	}
+	return res
+}
+
+func (p *Property) IsDatasetLinked(s DatasetSchemaID, i DatasetID) bool {
+	if p == nil {
+		return false
+	}
+	for _, g := range p.items {
+		if g.IsDatasetLinked(s, i) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Property) Datasets() []DatasetID {
+	if p == nil {
+		return nil
+	}
+	res := []DatasetID{}
+
+	for _, f := range p.items {
+		res = append(res, f.Datasets()...)
+	}
+
+	return res
 }
 
 func (p *Property) AddItem(i Item) bool {
@@ -262,6 +310,13 @@ func (p *Property) UpdateValue(ps *Schema, ptr *Pointer, v *Value) (*Field, *Gro
 	}
 
 	return field, gl, g, nil
+}
+
+func (p *Property) UnlinkAllByDataset(s DatasetSchemaID, ds DatasetID) {
+	fields := p.FieldsByLinkedDataset(s, ds)
+	for _, f := range fields {
+		f.Unlink()
+	}
 }
 
 func (p *Property) GetOrCreateField(ps *Schema, ptr *Pointer) (*Field, *GroupList, *Group, bool) {
@@ -433,8 +488,8 @@ func (p *Property) UpdateLinkableValue(s *Schema, v *Value) {
 	}
 }
 
-func (p *Property) AutoLinkField(s *Schema, v ValueType) {
-	if s == nil || p == nil {
+func (p *Property) AutoLinkField(s *Schema, v ValueType, d DatasetSchemaID, df *DatasetFieldID, ds *DatasetID) {
+	if s == nil || p == nil || df == nil {
 		return
 	}
 
@@ -448,20 +503,37 @@ func (p *Property) AutoLinkField(s *Schema, v ValueType) {
 		return
 	}
 
-	p.GetOrCreateField(s, sf.Pointer())
+	f, _, _, ok := p.GetOrCreateField(s, sf.Pointer())
+	if ok {
+		if ds == nil {
+			f.Link(NewLinks([]*Link{NewLinkFieldOnly(d, *df)}))
+		} else {
+			f.Link(NewLinks([]*Link{NewLink(*ds, d, *df)}))
+		}
+	}
 }
 
 // TODO: group migration
-func (p *Property) MigrateSchema(ctx context.Context, newSchema *Schema) {
-	if p == nil {
+func (p *Property) MigrateSchema(ctx context.Context, newSchema *Schema, dl dataset.Loader) {
+	if p == nil || dl == nil {
 		return
 	}
 	p.schema = newSchema.ID()
 
 	for _, f := range p.items {
-		f.MigrateSchema(ctx, newSchema)
+		f.MigrateSchema(ctx, newSchema, dl)
 	}
 
+	p.Prune()
+}
+
+func (p *Property) MigrateDataset(q DatasetMigrationParam) {
+	if p == nil {
+		return
+	}
+	for _, f := range p.items {
+		f.MigrateDataset(q)
+	}
 	p.Prune()
 }
 
@@ -558,7 +630,7 @@ func (p *Property) GuessSchema() *Schema {
 	return nil
 }
 
-func (p *Property) updateSchema(s id.PropertySchemaID) bool {
+func (p *Property) updateSchema(s SchemaID) bool {
 	if p == nil || s.IsNil() || p.schema.Equal(s) {
 		return false
 	}
@@ -566,6 +638,6 @@ func (p *Property) updateSchema(s id.PropertySchemaID) bool {
 	return true
 }
 
-func (p *Property) SetSchema(schema id.PropertySchemaID) {
+func (p *Property) SetSchema(schema SchemaID) {
 	p.schema = schema.Clone()
 }

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
@@ -52,7 +52,7 @@ func NewCMS(opts CMSOpts) *CMS {
 	}
 }
 
-func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
+func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	cmsinfo, err := c.GetCMSInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CMS info: %w", err)
@@ -65,6 +65,7 @@ func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
 	all := AllData{
 		Name:    c.project,
 		Year:    c.year,
+		Host:    host,
 		CMSInfo: *cmsinfo,
 	}
 
@@ -101,17 +102,50 @@ func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
 		return c.GetGeospatialjpDataItems(ctx, c.project)
 	})
 
-	featureItemsChans := make([]<-chan lo.Tuple3[string, []*PlateauFeatureItem, error], 0, len(all.FeatureTypes.Plateau))
-	for _, featureType := range all.FeatureTypes.Plateau {
-		featureType := featureType
+	// Only fetch flow items if Flow is enabled in metadata
+	var flowItemsChan <-chan lo.Tuple2[[]*PlateauFeatureItem, error]
+	if cmsinfo.FlowEnabled {
+		flowItemsChan = lo.Async2(func() ([]*PlateauFeatureItem, error) {
+			return c.GetFlowItems(ctx, c.project)
+		})
+	}
 
+	// Build set of base feature type codes from plateau-features
+	baseFeatureTypeCodes := make(map[string]bool, len(all.FeatureTypes.Plateau))
+	for _, ft := range all.FeatureTypes.Plateau {
+		baseFeatureTypeCodes[ft.Code] = true
+	}
+
+	// Collect all feature type codes to fetch (base types + derived types from CMS models)
+	featureCodesToFetch := make([]string, 0, len(all.FeatureTypes.Plateau))
+	for _, featureType := range all.FeatureTypes.Plateau {
 		if featureType.MinYear > 0 && c.year < featureType.MinYear {
 			continue
 		}
+		featureCodesToFetch = append(featureCodesToFetch, featureType.Code)
+	}
+
+	// Detect derived types from CMS model list (e.g., bldg2 when bldg exists)
+	for modelKey := range cmsinfo.ModelIDMap {
+		// Skip if already in base feature types
+		if baseFeatureTypeCodes[modelKey] {
+			continue
+		}
+		// Check if this is a derived type (e.g., bldg2 -> bldg)
+		baseCode := ExtractBaseFeatureType(modelKey)
+		if baseCode != modelKey && baseFeatureTypeCodes[baseCode] {
+			// This is a derived type whose base exists in plateau-features
+			featureCodesToFetch = append(featureCodesToFetch, modelKey)
+		}
+	}
+
+	featureItemsChans := make([]<-chan lo.Tuple3[string, []*PlateauFeatureItem, error], 0, len(featureCodesToFetch))
+	for _, featureCode := range featureCodesToFetch {
+		featureCode := featureCode
 
 		featureItemsChan := lo.Async3(func() (string, []*PlateauFeatureItem, error) {
-			res, err := c.GetPlateauItems(ctx, c.project, featureType.Code)
-			return featureType.Code, res, err
+			res, err := c.GetPlateauItems(ctx, c.project, featureCode)
+			return featureCode, res, err
 		})
 		featureItemsChans = append(featureItemsChans, featureItemsChan)
 	}
@@ -144,6 +178,28 @@ func (c *CMS) GetAll(ctx context.Context) (*AllData, error) {
 		return nil, fmt.Errorf("failed to get geospatialjp data items: %w", res.B)
 	} else {
 		all.GeospatialjpDataItems = res.A
+	}
+
+	// Flow items - group by feature type, skip items without City, CityGML, or Data
+	if flowItemsChan != nil {
+		if res := <-flowItemsChan; res.B != nil {
+			// Flow model is optional, so we just log the error
+			log.Warnfc(ctx, "datacatalogv3: failed to get flow items: %v", res.B)
+		} else {
+			all.Flow = make(map[string][]*PlateauFeatureItem)
+			for _, item := range res.A {
+				// Skip items without City, CityGML, or Data
+				if item.City == "" || item.CityGML == "" || len(item.Data) == 0 {
+					continue
+				}
+				// Get feature type from item
+				ft := item.FeatureType
+				if ft == "" {
+					continue
+				}
+				all.Flow[ft] = append(all.Flow[ft], item)
+			}
+		}
 	}
 
 	all.Plateau = make(map[string][]*PlateauFeatureItem)
@@ -342,6 +398,34 @@ func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string) ([]*
 	return items, err
 }
 
+func (c *CMS) GetFlowItems(ctx context.Context, project string) ([]*PlateauFeatureItem, error) {
+	cacheKey := fmt.Sprintf("flow_%s", project)
+	if c.cache {
+		if items, err := loadCache[[]*PlateauFeatureItem](
+			c.cacheDir, cacheKey,
+		); err != nil {
+			return nil, err
+		} else if items != nil {
+			return items, nil
+		}
+	}
+
+	items, err := getItemsAndConv(
+		c.cms, ctx, project, modelPrefix+flowModel,
+		func(i cms.Item) *PlateauFeatureItem {
+			return PlateauFeatureItemFrom(&i, "")
+		},
+	)
+
+	if err == nil && c.cache {
+		if err := saveCache(c.cacheDir, cacheKey, items); err != nil {
+			return nil, err
+		}
+	}
+
+	return items, err
+}
+
 func (c *CMS) GetCMSInfo(ctx context.Context) (*CMSInfo, error) {
 	metadata := plateaucms.GetAllCMSMetadataFromContext(ctx)
 	if len(metadata) == 0 {
@@ -363,6 +447,7 @@ func (c *CMS) GetCMSInfo(ctx context.Context) (*CMSInfo, error) {
 		WorkspaceID: md.WorkspaceID,
 		ProjectID:   md.ProjectID,
 		ModelIDMap:  modelIDs,
+		FlowEnabled: md.DataCatalogFlowEnabled,
 	}, nil
 }
 
@@ -420,7 +505,9 @@ func loadCache[T any](cachePath, key string) (t T, _ error) {
 		return t, fmt.Errorf("failed to open cache file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	var v T
 	if err = json.NewDecoder(f).Decode(&v); err != nil {
@@ -438,7 +525,9 @@ func saveCache(cachePath, key string, content any) error {
 		return fmt.Errorf("failed to create cache file: %w", err)
 	}
 
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	if err = json.NewEncoder(f).Encode(content); err != nil {
 		return fmt.Errorf("failed to encode cache content: %w", err)

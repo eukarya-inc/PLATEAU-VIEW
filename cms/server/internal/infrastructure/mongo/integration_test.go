@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/integration"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/integration"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/mongox/mongotest"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/rerror"
 )
 

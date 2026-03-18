@@ -13,6 +13,8 @@ pub(super) enum PlateauProcessorError {
     MaxLodExtractor(String),
     #[error("AttributeFlattener error: {0}")]
     AttributeFlattener(String),
+    #[error("AttributeFlattener Factory error: {0}")]
+    AttributeFlattenerFactory(String),
     #[error("CityCode Extractor Factory error: {0}")]
     CityCodeExtractorFactory(String),
     #[error("CityCode Extractor error: {0}")]
@@ -25,8 +27,56 @@ pub(super) enum PlateauProcessorError {
     MissingAttributeDetectorFactory(String),
     #[error("MissingAttributeDetector error: {0}")]
     MissingAttributeDetector(String),
+    #[error("DomainOfDefinitionValidator Factory error: {0}")]
+    DomainOfDefinitionValidatorFactory(String),
     #[error("DomainOfDefinitionValidator error: {0}")]
     DomainOfDefinitionValidator(String),
+    #[error("Unmatched Xlink Detector Factory error: {0}")]
+    UnmatchedXlinkDetectorFactory(String),
+    #[error("Unmatched Xlink Detector error: {0}")]
+    UnmatchedXlinkDetector(String),
+    #[error("BuildingInstallationGeometryTypeChecker error: {0}")]
+    BuildingInstallationGeometryTypeChecker(String),
+    #[error("BuildingUsageAttributeValidator error: {0}")]
+    BuildingUsageAttributeValidator(String),
+    #[error("BuildingUsageAttributeValidator Factory error: {0}")]
+    BuildingUsageAttributeValidatorFactory(String),
+    #[error("BuildingPartConnectivityChecker error: {0}")]
+    BuildingPartConnectivityChecker(String),
+    #[error("BuildingPartConnectivityChecker Factory error: {0}")]
+    BuildingPartConnectivityCheckerFactory(String),
+    #[error("SolidIntersectionTestPairCreator error: {0}")]
+    SolidIntersectionTestPairCreator(String),
+    #[error("SolidIntersectionTestPairCreator Factory error: {0}")]
+    SolidIntersectionTestPairCreatorFactory(String),
+    #[error("TranXlinkDetector error: {0}")]
+    TranXlinkDetector(String),
+    #[error("TranXlinkDetector Factory error: {0}")]
+    TranXlinkDetectorFactory(String),
+    #[error("CityGmlMeshBuilder error: {0}")]
+    CityGmlMeshBuilder(String),
+    #[error("CityGmlMeshBuilder Factory error: {0}")]
+    CityGmlMeshBuilderFactory(String),
+    #[error("FaceExtractor Factory error: {0}")]
+    FaceExtractorFactory(String),
+    #[error("FaceExtractor error: {0}")]
+    FaceExtractor(String),
+    #[error("UnsharedEdgeDetector Factory error: {0}")]
+    UnsharedEdgeDetectorFactory(String),
+    #[error("UnsharedEdgeDetector error: {0}")]
+    UnsharedEdgeDetector(String),
+    #[error("DestinationMeshCodeExtractor Factory error: {0}")]
+    DestinationMeshCodeExtractorFactory(String),
+    #[error("DestinationMeshCodeExtractor error: {0}")]
+    DestinationMeshCodeExtractor(String),
+    #[error("FloodingAreaSurfaceGenerator Factory error: {0}")]
+    FloodingAreaSurfaceGeneratorFactory(String),
+    #[error("FloodingAreaSurfaceGenerator error: {0}")]
+    FloodingAreaSurfaceGenerator(String),
+    #[error("GmlNameCodeSpaceValidator Factory error: {0}")]
+    GmlNameCodeSpaceValidatorFactory(String),
+    #[error("GmlNameCodeSpaceValidator error: {0}")]
+    GmlNameCodeSpaceValidator(String),
 }
 
 pub(super) type Result<T, E = PlateauProcessorError> = std::result::Result<T, E>;

@@ -3,7 +3,6 @@ package storytelling
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearthx/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -14,18 +13,18 @@ func TestStoryBuilder(t *testing.T) {
 
 	s, err := b.Build()
 	assert.Nil(t, s)
-	assert.ErrorIs(t, id.ErrInvalidID, err)
+	assert.ErrorIs(t, ErrInvalidID, err)
 
-	assert.PanicsWithError(t, id.ErrInvalidID.Error(), func() {
+	assert.PanicsWithError(t, ErrInvalidID.Error(), func() {
 		b.MustBuild()
 	})
 
 	b = b.NewID()
 	assert.False(t, b.s.id.IsEmpty())
 
-	storyID := id.NewStoryID()
-	propertyID := id.NewPropertyID()
-	sceneID := id.NewSceneID()
+	storyID := NewStoryID()
+	propertyID := NewPropertyID()
+	sceneID := NewSceneID()
 
 	b = b.ID(storyID).
 		Scene(sceneID).

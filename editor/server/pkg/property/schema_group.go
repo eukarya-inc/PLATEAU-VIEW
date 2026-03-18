@@ -1,32 +1,29 @@
 package property
 
 import (
-	"sort"
-
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 // SchemaGroup represents a group of property that has some fields
 type SchemaGroup struct {
-	id                  id.PropertySchemaGroupID
+	id                  SchemaGroupID
 	fields              []*SchemaField
 	list                bool
 	isAvailableIf       *Condition
 	title               i18n.String
-	representativeField *id.PropertyFieldID
+	representativeField *FieldID
 	collection          i18n.String
 }
 
 // ID returns id
-func (s *SchemaGroup) ID() id.PropertySchemaGroupID {
+func (s *SchemaGroup) ID() SchemaGroupID {
 	if s == nil {
-		return id.PropertySchemaGroupID("")
+		return SchemaGroupID("")
 	}
 	return s.id
 }
 
-func (s *SchemaGroup) IDRef() *id.PropertySchemaGroupID {
+func (s *SchemaGroup) IDRef() *SchemaGroupID {
 	if s == nil {
 		return nil
 	}
@@ -38,15 +35,11 @@ func (s *SchemaGroup) Fields() []*SchemaField {
 	if s == nil {
 		return nil
 	}
-	sortedFields := append([]*SchemaField{}, s.fields...)
-	sort.Slice(sortedFields, func(i, j int) bool {
-		return sortedFields[i].id.String() < sortedFields[j].id.String()
-	})
-	return sortedFields
+	return append([]*SchemaField{}, s.fields...)
 }
 
 // Field returns a field whose id is specified
-func (s *SchemaGroup) Field(fid id.PropertyFieldID) *SchemaField {
+func (s *SchemaGroup) Field(fid FieldID) *SchemaField {
 	if s == nil {
 		return nil
 	}
@@ -70,7 +63,7 @@ func (s *SchemaGroup) FieldByPointer(ptr *Pointer) *SchemaField {
 	return s.Field(fid)
 }
 
-func (s *SchemaGroup) HasField(i id.PropertyFieldID) bool {
+func (s *SchemaGroup) HasField(i FieldID) bool {
 	return s.Field(i) != nil
 }
 
@@ -106,7 +99,7 @@ func (s *SchemaGroup) Collection() i18n.String {
 }
 
 // RepresentativeFieldID returns the representative field ID of the group
-func (s *SchemaGroup) RepresentativeFieldID() *id.PropertyFieldID {
+func (s *SchemaGroup) RepresentativeFieldID() *FieldID {
 	if s == nil {
 		return nil
 	}

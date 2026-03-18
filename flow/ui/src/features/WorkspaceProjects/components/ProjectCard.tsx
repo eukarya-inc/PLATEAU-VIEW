@@ -1,11 +1,11 @@
 import {
-  ClipboardText,
-  Copy,
-  DotsThreeVertical,
-  Export,
-  PencilSimple,
-  ShareFat,
-  Trash,
+  ClipboardTextIcon,
+  CopyIcon,
+  DotsThreeVerticalIcon,
+  ExportIcon,
+  PencilSimpleIcon,
+  PaperPlaneTiltIcon,
+  TrashIcon,
 } from "@phosphor-icons/react";
 import { MouseEvent, useState } from "react";
 
@@ -26,11 +26,12 @@ import {
   TooltipTrigger,
 } from "@flow/components";
 import { useToast } from "@flow/features/NotificationSystem/useToast";
-import { useProjectExport } from "@flow/hooks";
 import { useT } from "@flow/lib/i18n";
 import { Project } from "@flow/types";
 import { openLinkInNewTab } from "@flow/utils";
 import { copyToClipboard } from "@flow/utils/copyToClipboard";
+
+import useProjectExportFromCard from "./useProjectExportFromCard";
 
 type Props = {
   project: Project;
@@ -52,7 +53,8 @@ const ProjectCard: React.FC<Props> = ({
   const t = useT();
   const { toast } = useToast();
   const { id, name, description, updatedAt, sharedToken } = project;
-
+  const { handleProjectExportFromCard, isExporting } =
+    useProjectExportFromCard(project);
   const [persistOverlay, setPersistOverlay] = useState(false);
   // TODO: isShared and sharedURL are temp values.
 
@@ -79,41 +81,38 @@ const ProjectCard: React.FC<Props> = ({
     openLinkInNewTab(sharedUrl);
   };
 
-  const { isExporting, handleProjectExport } = useProjectExport(project);
-
   return (
     <Card
-      className="group relative cursor-pointer border-transparent bg-secondary hover:border-border"
+      className="group relative cursor-pointer rounded-xl border-border bg-secondary shadow-md shadow-secondary backdrop-blur-xs"
       key={id}
       onClick={() => onProjectSelect(project)}>
       <CardContent className="relative flex h-[120px] items-center justify-center p-0">
         {isExporting && (
-          <p className="loading-pulse absolute left-2 top-2 font-thin">
+          <p className="loading-pulse absolute top-2 left-2 font-thin">
             {t("Exporting...")}
           </p>
         )}
         {isDuplicating && (
-          <p className="loading-pulse absolute left-2 top-2 font-thin">
+          <p className="loading-pulse absolute top-2 left-2 font-thin">
             {t("Duplicating...")}
           </p>
         )}
         <FlowLogo
-          className={`size-[120px] translate-x-20 opacity-50 ${description ? "group:hover:opacity-90" : ""}`}
+          className={`size-[120px] translate-x-20 opacity-60 dark:opacity-40 ${description ? "group:hover:opacity-90" : ""}`}
         />
       </CardContent>
       <CardHeader className="px-2 py-1">
         <CardTitle className="truncate dark:font-extralight">{name}</CardTitle>
       </CardHeader>
       <CardFooter className="flex px-2 pb-1">
-        <p className="text-xs text-zinc-400 dark:font-thin">
+        <p className="text-xs font-light text-zinc-800 dark:font-thin dark:text-zinc-400 terminal:text-zinc-500 midnight:text-zinc-400 synthwave:text-purple-300">
           {t("Last modified:")} {updatedAt}
         </p>
       </CardFooter>
       <div
-        className={`absolute inset-0 ${persistOverlay ? "flex flex-col" : "hidden"} rounded-lg group-hover:flex group-hover:flex-col`}>
-        <div
-          className={`flex h-[120px] items-center justify-center rounded-t-lg bg-black/30 p-4 ${description ? "backdrop-blur-xs" : ""}`}>
-          <p className="line-clamp-4 overflow-hidden text-ellipsis whitespace-normal break-words text-center text-sm text-secondary dark:font-light dark:text-foreground">
+        className={`absolute inset-0 ${persistOverlay ? "flex flex-col" : "hidden"} rounded-xl group-hover:flex group-hover:flex-col`}>
+        <div className="flex h-[120px] items-center justify-center rounded-t-lg bg-black/10 p-4 backdrop-blur-xs dark:bg-black/30">
+          <p className="wrap-break-words line-clamp-4 overflow-hidden text-center text-sm text-ellipsis whitespace-normal dark:font-light dark:text-foreground">
             {description}
           </p>
         </div>
@@ -124,7 +123,7 @@ const ProjectCard: React.FC<Props> = ({
             <DropdownMenuTrigger
               className="flex h-full w-[30px] items-center justify-center rounded-br-lg hover:bg-primary"
               onClick={(e) => e.stopPropagation()}>
-              <DotsThreeVertical className="size-[24px]" />
+              <DotsThreeVerticalIcon className="size-6" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
@@ -133,27 +132,28 @@ const ProjectCard: React.FC<Props> = ({
                 className="justify-between gap-2 text-warning"
                 onClick={() => setEditProject({ ...project })}>
                 {t("Edit Details")}
-                <PencilSimple />
+                <PencilSimpleIcon />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="justify-between gap-2"
-                onClick={handleProjectExport}>
+                onClick={handleProjectExportFromCard}
+                disabled>
                 {t("Export Project")}
-                <Export weight="light" />
+                <ExportIcon weight="light" />
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="justify-between gap-2"
                 onClick={() => setDuplicateProject({ ...project })}>
                 {t("Duplicate Project")}
-                <Copy weight="light" />
+                <CopyIcon weight="light" />
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="justify-between gap-2"
                 disabled={!sharedUrl}
                 onClick={handleCopyURLToClipBoard}>
                 {t("Copy Share URL")}
-                <ClipboardText weight="light" />
+                <ClipboardTextIcon weight="light" />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -163,7 +163,7 @@ const ProjectCard: React.FC<Props> = ({
                   setProjectToBeDeleted(id);
                 }}>
                 {t("Delete Project")}
-                <Trash weight="light" />
+                <TrashIcon weight="light" />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -173,9 +173,9 @@ const ProjectCard: React.FC<Props> = ({
         <Tooltip>
           {/* <TooltipTrigger className="absolute right-1 top-1 rounded p-1 text-muted-foreground hover:bg-primary group-hover:text-white"> */}
           <TooltipTrigger
-            className="absolute right-1 top-1 rounded p-1 text-muted-foreground hover:bg-primary group-hover:text-white"
+            className="absolute top-1 right-1 rounded p-1 text-muted-foreground group-hover:text-white hover:bg-primary"
             onClick={handleOpenSharedProject}>
-            <ShareFat />
+            <PaperPlaneTiltIcon />
           </TooltipTrigger>
           <TooltipContent>{t("Public Read Access")}</TooltipContent>
         </Tooltip>

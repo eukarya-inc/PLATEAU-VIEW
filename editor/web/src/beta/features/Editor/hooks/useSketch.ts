@@ -11,20 +11,18 @@ import {
   MutableRefObject,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState
 } from "react";
 
 import { Tab } from "../../Navbar";
 
-import { SelectedFeature, SelectedLayer } from "./useLayers";
+import { SelectedLayer } from "./useLayers";
 
 type Props = {
   tab: Tab;
   nlsLayers: NLSLayer[];
   selectedLayer: SelectedLayer | undefined;
-  selectedFeature: SelectedFeature | undefined;
   visualizerRef: MutableRefObject<MapRef | null>;
   ignoreCoreLayerUnselect: MutableRefObject<boolean>;
 };
@@ -52,28 +50,12 @@ export default ({
   tab,
   nlsLayers,
   selectedLayer,
-  selectedFeature,
   visualizerRef,
   ignoreCoreLayerUnselect
 }: Props) => {
   const [sketchType, setSketchType] = useState<SketchType | undefined>(
     undefined
   );
-
-  const selectedSketchFeature = useMemo(() => {
-    if (!selectedLayer?.layer?.sketch) return;
-
-    const { sketch } = selectedLayer.layer;
-    const features = sketch?.featureCollection?.features;
-
-    if (!selectedFeature?.properties?.id) return;
-
-    const selectedFeatureId = selectedFeature.properties.id;
-
-    return features?.find(
-      (feature) => feature.properties.id === selectedFeatureId
-    );
-  }, [selectedLayer, selectedFeature]);
 
   const pendingSketchSelectionRef = useRef<
     { layerId: string; featureId: string } | undefined
@@ -262,7 +244,6 @@ export default ({
   return {
     sketchType,
     sketchEditingFeature,
-    selectedSketchFeature,
     handleSketchTypeChange,
     handleSketchFeatureCreate,
     handleSketchFeatureUpdate,

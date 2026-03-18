@@ -1,6 +1,6 @@
 package main
 
-import "github.com/reearth/reearth-cms/worker/internal/app"
+import "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/app"
 
 var version = ""
 

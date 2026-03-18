@@ -23,6 +23,8 @@ func AllParentAreaCodes(a Area) []AreaCode {
 		return []AreaCode{a2.PrefectureCode}
 	case Ward:
 		return []AreaCode{a2.PrefectureCode, a2.CityCode}
+	case *GlobalArea:
+		return nil // GlobalArea has no parent
 	}
 	return nil
 }
@@ -41,6 +43,8 @@ func ParentAreaCode(a Area) AreaCode {
 		return a2.PrefectureCode
 	case Ward:
 		return a2.CityCode
+	case *GlobalArea:
+		return "" // GlobalArea has no parent
 	}
 	return ""
 }
@@ -128,10 +132,11 @@ func filterDataset(d Dataset, input DatasetsInput, stages []string) bool {
 	}
 
 	if len(input.SearchTokens) > 0 {
-		// all tokens must be included in at least one of the text
+		// all tokens must be included in at least one of the text (case insensitive)
 		if lo.SomeBy(input.SearchTokens, func(t string) bool {
+			tLower := strings.ToLower(t)
 			return lo.EveryBy(text, func(t2 string) bool {
-				return t2 == "" || !strings.Contains(t2, t)
+				return t2 == "" || !strings.Contains(strings.ToLower(t2), tLower)
 			})
 		}) {
 			return false
@@ -312,7 +317,7 @@ func filterArea(area Area, input AreasInput, areasWithoutDataset map[ID]struct{}
 
 	testName := func(name string) bool {
 		return len(input.SearchTokens) == 0 || lo.SomeBy(input.SearchTokens, func(t string) bool {
-			return strings.Contains(name, t)
+			return strings.Contains(strings.ToLower(name), strings.ToLower(t))
 		})
 	}
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/asset"
 	"github.com/reearth/reearth-flow/api/pkg/file"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 type AssetFilterType string
@@ -19,15 +19,42 @@ const (
 )
 
 type CreateAssetParam struct {
-	WorkspaceID accountdomain.WorkspaceID
 	File        *file.File
+	Name        *string
+	Token       string
+	WorkspaceID accountsid.WorkspaceID
+}
+
+type UpdateAssetParam struct {
+	Name    *string
+	AssetID id.AssetID
+}
+
+type CreateAssetUploadParam struct {
+	Filename        string
+	ContentType     string
+	ContentEncoding string
+	Cursor          string
+	ContentLength   int64
+	WorkspaceID     accountsid.WorkspaceID
+}
+
+type AssetUpload struct {
+	URL             string
+	UUID            string
+	ContentType     string
+	ContentEncoding string
+	Next            string
+	ContentLength   int64
 }
 
 var ErrCreateAssetFailed error = errors.New("failed to create asset")
 
 type Asset interface {
 	Fetch(context.Context, []id.AssetID) ([]*asset.Asset, error)
-	FindByWorkspace(context.Context, accountdomain.WorkspaceID, *string, *asset.SortType, *PaginationParam) ([]*asset.Asset, *PageBasedInfo, error)
+	FindByWorkspace(context.Context, accountsid.WorkspaceID, *string, *asset.SortType, *PaginationParam) ([]*asset.Asset, *PageBasedInfo, error)
 	Create(context.Context, CreateAssetParam) (*asset.Asset, error)
-	Remove(context.Context, id.AssetID) (id.AssetID, error)
+	Update(context.Context, UpdateAssetParam) (*asset.Asset, error)
+	Delete(context.Context, id.AssetID) (id.AssetID, error)
+	CreateUpload(context.Context, CreateAssetUploadParam) (*AssetUpload, error)
 }

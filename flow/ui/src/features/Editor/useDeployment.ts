@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { Map as YMap } from "yjs";
 
-import { useDeployment } from "@flow/lib/gql";
+import { useDeployment, useWorkflowVariables } from "@flow/lib/gql";
 import { useT } from "@flow/lib/i18n";
 import { rebuildWorkflow } from "@flow/lib/yjs/conversions";
 import { YWorkflow } from "@flow/lib/yjs/types";
@@ -25,6 +25,11 @@ export default ({
 
   const [currentProject] = useCurrentProject();
   const { createDeployment, useUpdateDeployment } = useDeployment();
+  const { useGetWorkflowVariables } = useWorkflowVariables();
+
+  const { workflowVariables } = useGetWorkflowVariables(
+    currentProject?.id ?? "",
+  );
 
   const allowedToDeploy = useMemo(
     () => currentNodes.length > 0,
@@ -43,6 +48,7 @@ export default ({
 
       const engineReadyWorkflow = createEngineReadyWorkflow(
         projectName,
+        workflowVariables,
         Array.from(yWorkflows.entries())
           .map(([, w]) => rebuildWorkflow(w))
           .filter(isDefined),
@@ -79,6 +85,7 @@ export default ({
     [
       yWorkflows,
       currentProject,
+      workflowVariables,
       t,
       createDeployment,
       useUpdateDeployment,

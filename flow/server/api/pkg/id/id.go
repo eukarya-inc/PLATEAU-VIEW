@@ -7,42 +7,45 @@ type (
 	AuthRequest   struct{}
 	Deployment    struct{}
 	EdgeExecution struct{}
+	Integration   struct{}
 	NodeExecution struct{}
 	Parameter     struct{}
 	Project       struct{}
 	ProjectAccess struct{}
+	Thread        struct{}
 	Trigger       struct{}
-	User          struct{}
 	Workflow      struct{}
-	Workspace     struct{}
+	WorkerConfig  struct{}
 )
 
 func (Asset) Type() string         { return "asset" }
 func (AuthRequest) Type() string   { return "authRequest" }
 func (Deployment) Type() string    { return "deployment" }
 func (EdgeExecution) Type() string { return "edgeExecution" }
+func (Integration) Type() string   { return "integration" }
 func (NodeExecution) Type() string { return "nodeExecution" }
 func (Parameter) Type() string     { return "parameter" }
 func (Project) Type() string       { return "project" }
 func (ProjectAccess) Type() string { return "projectAccess" }
+func (Thread) Type() string        { return "thread" }
 func (Trigger) Type() string       { return "trigger" }
-func (User) Type() string          { return "user" }
 func (Workflow) Type() string      { return "workflow" }
-func (Workspace) Type() string     { return "workspace" }
+func (WorkerConfig) Type() string  { return "workerConfig" }
 
 type (
 	AssetID         = idx.ID[Asset]
 	AuthRequestID   = idx.ID[AuthRequest]
 	DeploymentID    = idx.ID[Deployment]
 	EdgeExecutionID = idx.ID[EdgeExecution]
+	IntegrationID   = idx.ID[Integration]
 	NodeExecutionID = idx.ID[NodeExecution]
 	ParameterID     = idx.ID[Parameter]
 	ProjectID       = idx.ID[Project]
 	ProjectAccessID = idx.ID[ProjectAccess]
+	ThreadID        = idx.ID[Thread]
 	TriggerID       = idx.ID[Trigger]
-	UserID          = idx.ID[User]
 	WorkflowID      = idx.ID[Workflow]
-	WorkspaceID     = idx.ID[Workspace]
+	WorkerConfigID  = idx.ID[WorkerConfig]
 )
 
 var (
@@ -50,14 +53,15 @@ var (
 	NewAuthRequestID   = idx.New[AuthRequest]
 	NewDeploymentID    = idx.New[Deployment]
 	NewEdgeExecutionID = idx.New[EdgeExecution]
+	NewIntegrationID   = idx.New[Integration]
 	NewNodeExecutionID = idx.New[NodeExecution]
 	NewParameterID     = idx.New[Parameter]
 	NewProjectID       = idx.New[Project]
 	NewProjectAccessID = idx.New[ProjectAccess]
+	NewThreadID        = idx.New[Thread]
 	NewTriggerID       = idx.New[Trigger]
-	NewUserID          = idx.New[User]
 	NewWorkflowID      = idx.New[Workflow]
-	NewWorkspaceID     = idx.New[Workspace]
+	NewWorkerConfigID  = idx.New[WorkerConfig]
 )
 
 var (
@@ -65,14 +69,15 @@ var (
 	MustAuthRequestID   = idx.Must[AuthRequest]
 	MustDeploymentID    = idx.Must[Deployment]
 	MustEdgeExecutionID = idx.Must[EdgeExecution]
+	MustIntegrationID   = idx.Must[Integration]
 	MustNodeExecutionID = idx.Must[NodeExecution]
 	MustParameterID     = idx.Must[Parameter]
 	MustProjectID       = idx.Must[Project]
 	MustProjectAccessID = idx.Must[ProjectAccess]
+	MustThreadID        = idx.Must[Thread]
 	MustTriggerID       = idx.Must[Trigger]
-	MustUserID          = idx.Must[User]
 	MustWorkflowID      = idx.Must[Workflow]
-	MustWorkspaceID     = idx.Must[Workspace]
+	MustWorkerConfigID  = idx.Must[WorkerConfig]
 )
 
 var (
@@ -80,14 +85,15 @@ var (
 	AuthRequestIDFrom   = idx.From[AuthRequest]
 	DeploymentIDFrom    = idx.From[Deployment]
 	EdgeExecutionIDFrom = idx.From[EdgeExecution]
+	IntegrationIDFrom   = idx.From[Integration]
 	NodeExecutionIDFrom = idx.From[NodeExecution]
 	ParameterIDFrom     = idx.From[Parameter]
 	ProjectIDFrom       = idx.From[Project]
 	ProjectAccessIDFrom = idx.From[ProjectAccess]
+	ThreadIDFrom        = idx.From[Thread]
 	TriggerIDFrom       = idx.From[Trigger]
-	UserIDFrom          = idx.From[User]
 	WorkflowIDFrom      = idx.From[Workflow]
-	WorkspaceIDFrom     = idx.From[Workspace]
+	WorkerConfigIDFrom  = idx.From[WorkerConfig]
 )
 
 var (
@@ -95,14 +101,15 @@ var (
 	AuthRequestIDFromRef   = idx.FromRef[AuthRequest]
 	DeploymentIDFromRef    = idx.FromRef[Deployment]
 	EdgeExecutionIDFromRef = idx.FromRef[EdgeExecution]
+	IntegrationIDFromRef   = idx.FromRef[Integration]
 	NodeExecutionIDFromRef = idx.FromRef[NodeExecution]
 	ParameterIDFromRef     = idx.FromRef[Parameter]
 	ProjectIDFromRef       = idx.FromRef[Project]
 	ProjectAccessIDFromRef = idx.FromRef[ProjectAccess]
+	ThreadIDFromRef        = idx.FromRef[Thread]
 	TriggerIDFromRef       = idx.FromRef[Trigger]
-	UserIDFromRef          = idx.FromRef[User]
 	WorkflowIDFromRef      = idx.FromRef[Workflow]
-	WorkspaceIDFromRef     = idx.FromRef[Workspace]
+	WorkerConfigIDFromRef  = idx.FromRef[WorkerConfig]
 )
 
 type (
@@ -115,8 +122,6 @@ type (
 	ProjectIDList       = idx.List[Project]
 	ProjectAccessIDList = idx.List[ProjectAccess]
 	TriggerIDList       = idx.List[Trigger]
-	UserIDList          = idx.List[User]
-	WorkspaceIDList     = idx.List[Workspace]
 )
 
 var (
@@ -129,8 +134,6 @@ var (
 	ProjectIDListFrom       = idx.ListFrom[Project]
 	ProjectAccessIDListFrom = idx.ListFrom[ProjectAccess]
 	TriggerIDListFrom       = idx.ListFrom[Trigger]
-	UserIDListFrom          = idx.ListFrom[User]
-	WorkspaceIDListFrom     = idx.ListFrom[Workspace]
 )
 
 type (
@@ -143,8 +146,6 @@ type (
 	ProjectIDSet       = idx.Set[Project]
 	ProjectAccessIDSet = idx.Set[ProjectAccess]
 	TriggerIDSet       = idx.Set[Trigger]
-	UserIDSet          = idx.Set[User]
-	WorkspaceIDSet     = idx.Set[Workspace]
 )
 
 var (
@@ -157,6 +158,4 @@ var (
 	NewProjectIDSet       = idx.NewSet[Project]
 	NewProjectAccessIDSet = idx.NewSet[ProjectAccess]
 	NewTriggerIDSet       = idx.NewSet[Trigger]
-	NewUserIDSet          = idx.NewSet[User]
-	NewWorkspaceIDSet     = idx.NewSet[Workspace]
 )

@@ -6,10 +6,12 @@ import {
   ClockIcon,
   HandIcon,
   MapIcon,
+  MeshLevel2Icon,
   PedestrianIcon,
   PointerArrowIcon,
   SettingsIcon,
   SketchRectangleIcon,
+  SpatialIdIcon,
 } from "../../../prototypes/ui-components";
 
 import helpUIOverview from "./assets/help-ui-overview.webp";
@@ -44,29 +46,41 @@ export const UserInterfacePage: FC = () => {
         title: "モード",
         content: (
           <LegendLine gap={4} wrap={isMobile}>
-            <Legend gap={1} minWidth={70}>
+            <Legend gap={1} minWidth={46}>
               <ButtonLegend>
                 <HandIcon />
               </ButtonLegend>
-              <LegendText>移動モード</LegendText>
+              <LegendText>移動</LegendText>
             </Legend>
-            <Legend gap={1} minWidth={70}>
+            <Legend gap={1} minWidth={46}>
               <ButtonLegend>
                 <PointerArrowIcon />
               </ButtonLegend>
-              <LegendText>選択モード</LegendText>
+              <LegendText>選択</LegendText>
             </Legend>
-            <Legend gap={1} minWidth={70}>
+            <Legend gap={1} minWidth={46}>
               <ButtonLegend>
                 <PedestrianIcon />
               </ButtonLegend>
               <LegendText>歩行者視点</LegendText>
             </Legend>
-            <Legend gap={1} minWidth={70}>
+            <Legend gap={1} minWidth={46}>
               <ButtonLegend>
                 <SketchRectangleIcon />
               </ButtonLegend>
               <LegendText>作図</LegendText>
+            </Legend>
+            <Legend gap={1} minWidth={46}>
+              <ButtonLegend>
+                <SpatialIdIcon />
+              </ButtonLegend>
+              <LegendText>空間ID</LegendText>
+            </Legend>
+            <Legend gap={1} minWidth={46}>
+              <ButtonLegend>
+                <MeshLevel2Icon />
+              </ButtonLegend>
+              <LegendText>メッシュ</LegendText>
             </Legend>
           </LegendLine>
         ),

@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/JamesLMilner/quadtree-go"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2/datacatalogv2adapter"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/geocoding"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/govpolygon"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2/datacatalogv2adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/geocoding"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
@@ -29,13 +29,16 @@ func init() {
 	qt = govpolygon.NewQuadtree(nil, 1.0/60.0)
 }
 
-type reposHandler struct {
+// ReposHandler handles data catalog repositories
+type ReposHandler struct {
 	reposv3            *datacatalogv3.Repos
 	reposv2            *datacatalogv2adapter.Repos
 	pcms               *plateaucms.CMS
 	gqlComplexityLimit int
 	cacheUpdateKey     string
 	geocodingAppID     string
+	cityConcurrency    int
+	cacheURL           string
 
 	qt *govpolygon.Quadtree
 }
@@ -45,13 +48,19 @@ const conditionsParamName = "conditions"
 const gqlComplexityLimit = 1000
 const cmsSchemaVersion = "v3"
 const cmsSchemaVersionV2 = "v2"
+const defaultCityConcurrency = 10
 
-func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
+// NewReposHandler creates a new ReposHandler
+func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 	reposv3 := datacatalogv3.NewRepos(pcms)
 	reposv2 := datacatalogv2adapter.NewRepos()
 
 	if conf.GraphqlMaxComplexity <= 0 {
 		conf.GraphqlMaxComplexity = gqlComplexityLimit
+	}
+
+	if conf.CityConcurrency <= 0 {
+		conf.CityConcurrency = defaultCityConcurrency
 	}
 
 	if conf.DiskCache {
@@ -62,18 +71,24 @@ func newReposHandler(conf Config, pcms *plateaucms.CMS) (*reposHandler, error) {
 		reposv3.EnableDebug(true)
 	}
 
-	return &reposHandler{
+	if conf.Host != "" {
+		reposv3.SetHost(conf.Host)
+	}
+
+	return &ReposHandler{
 		reposv3:            reposv3,
 		reposv2:            reposv2,
 		pcms:               pcms,
 		gqlComplexityLimit: conf.GraphqlMaxComplexity,
 		cacheUpdateKey:     conf.CacheUpdateKey,
 		geocodingAppID:     conf.GeocodingAppID,
+		cityConcurrency:    conf.CityConcurrency,
+		cacheURL:           conf.CacheURL,
 		qt:                 qt,
 	}, nil
 }
 
-func (h *reposHandler) Middleware() echo.MiddlewareFunc {
+func (h *ReposHandler) Middleware() echo.MiddlewareFunc {
 	return h.pcms.AuthMiddleware(plateaucms.AuthMiddlewareConfig{
 		Key:             pidParamName,
 		FindDataCatalog: true,
@@ -81,7 +96,7 @@ func (h *reposHandler) Middleware() echo.MiddlewareFunc {
 	})
 }
 
-func (h *reposHandler) Handler(admin bool) echo.HandlerFunc {
+func (h *ReposHandler) Handler(admin bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		merged, err := h.prepareMergedRepo(c, admin)
 		if err != nil {
@@ -96,7 +111,7 @@ func (h *reposHandler) Handler(admin bool) echo.HandlerFunc {
 	}
 }
 
-func (h *reposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
+func (h *ReposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		merged, err := h.prepareMergedRepo(c, false)
 		if err != nil {
@@ -113,7 +128,7 @@ func (h *reposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
 	}
 }
 
-func (h *reposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
+func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 	var geocoder GeoCoder
 	if h.geocodingAppID != "" {
 		g := geocoding.NewClient(h.geocodingAppID)
@@ -126,7 +141,13 @@ func (h *reposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		conditions := c.Param(conditionsParamName)
 
-		bounds, filter, err := parseCityGMLFilesQuery(ctx, conditions, geocoder)
+		// Get feature types from query parameter
+		var featureTypes []string
+		if typesParam := c.QueryParam("types"); typesParam != "" {
+			featureTypes = strings.Split(typesParam, ",")
+		}
+
+		bounds, filter, typeFilter, err := parseCityGMLFilesQuery(ctx, conditions, featureTypes, geocoder)
 		if err != nil {
 			if errors.Is(err, rerror.ErrNotFound) {
 				return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -154,19 +175,52 @@ func (h *reposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		adminContext(c, true, admin, admin && isAlpha(c))
 		ctx = c.Request().Context() // do not forget to update context
 
-		cities := []*CityGMLFilesCity{}
-		for _, cid := range cityIDs {
-			cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid)
-			if err != nil {
-				return err
-			}
-			if cityGMLFiles == nil {
-				continue
-			}
-			cities = append(cities, cityGMLFiles)
+		// Pre-fetch DatasetTypes once to share across all cities
+		datasetTypes, err := merged.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
+			Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get dataset types: %w", err)
 		}
 
-		res := applyCityGMLCityFilter(cities, filter)
+		// Fetch cities concurrently
+		results := make([]*CityGMLFilesCity, len(cityIDs))
+		errg := errgroup.Group{}
+		errg.SetLimit(h.cityConcurrency) // Limit concurrent fetches to avoid overwhelming upstream servers
+
+		for i, cid := range cityIDs {
+			i := i     // Capture loop variable
+			cid := cid // Capture loop variable
+			errg.Go(func() error {
+				start := time.Now()
+				cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid, datasetTypes)
+				duration := time.Since(start)
+
+				if err != nil {
+					log.Warnfc(ctx, "datacatalog: failed to fetch citygml files for city %s in %s: %v", cid, duration, err)
+					return nil // Allow partial failures - continue fetching other cities
+				}
+				if cityGMLFiles != nil {
+					log.Debugfc(ctx, "datacatalog: fetched citygml files for city %s in %s", cid, duration)
+					results[i] = cityGMLFiles
+				}
+				return nil
+			})
+		}
+
+		if err := errg.Wait(); err != nil {
+			return err
+		}
+
+		// Collect non-nil results
+		cities := make([]*CityGMLFilesCity, 0, len(results))
+		for _, city := range results {
+			if city != nil {
+				cities = append(cities, city)
+			}
+		}
+
+		res := applyCityGMLCityFilter(cities, filter, typeFilter)
 		if len(res.Cities) == 0 {
 			return echo.NewHTTPError(http.StatusNotFound, "not found")
 		}
@@ -175,7 +229,7 @@ func (h *reposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 	}
 }
 
-func (h *reposHandler) UpdateCacheHandler(c echo.Context) error {
+func (h *ReposHandler) UpdateCacheHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	if h.cacheUpdateKey != "" {
@@ -205,7 +259,7 @@ func (h *reposHandler) UpdateCacheHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, "ok")
 }
 
-func (h *reposHandler) WarningHandler(c echo.Context) error {
+func (h *ReposHandler) WarningHandler(c echo.Context) error {
 	pid := c.Param(pidParamName)
 	md := plateaucms.GetCMSMetadataFromContext(c.Request().Context())
 	if md.DataCatalogProjectAlias != pid || !isV3(md) {
@@ -225,7 +279,12 @@ func (h *reposHandler) WarningHandler(c echo.Context) error {
 	return c.String(http.StatusOK, res)
 }
 
-func (h *reposHandler) UpdateCache(ctx context.Context) error {
+func (h *ReposHandler) UpdateCache(ctx context.Context) error {
+	// If cache URL is set, reload from GCS instead of CMS
+	if h.cacheURL != "" {
+		return h.reloadFromCache(ctx)
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, p := range h.reposv3.Projects() {
@@ -245,7 +304,25 @@ func (h *reposHandler) UpdateCache(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (h *reposHandler) Init(ctx context.Context) error {
+// reloadFromCache reloads all repos from cache storage (GCS or local file)
+func (h *ReposHandler) reloadFromCache(ctx context.Context) error {
+	reader, err := datacatalogv3.NewRepoReaderFromURL(ctx, h.cacheURL)
+	if err != nil {
+		return fmt.Errorf("datacatalogv3: failed to create cache reader: %w", err)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	if err := h.reposv3.LoadAllFromStorage(ctx, reader); err != nil {
+		return fmt.Errorf("datacatalogv3: failed to reload from cache: %w", err)
+	}
+
+	log.Infofc(ctx, "datacatalog: reloaded repos from cache: %s", h.cacheURL)
+	return nil
+}
+
+func (h *ReposHandler) Init(ctx context.Context) error {
 	metadata, err := h.pcms.AllMetadata(ctx, true)
 	if err != nil {
 		return fmt.Errorf("datacatalogv3: failed to get all metadata: %w", err)
@@ -261,7 +338,28 @@ func (h *reposHandler) Init(ctx context.Context) error {
 	return nil
 }
 
-func (h *reposHandler) prepareMergedRepo(c echo.Context, auth bool) (plateauapi.Repo, error) {
+// InitFromCache initializes the repository from a cache storage (e.g., GCS or local file).
+// This skips the CMS API calls and loads data directly from the cache.
+// cacheURL can be:
+//   - gs://bucket/path for GCS
+//   - /path/to/cache for local filesystem
+func (h *ReposHandler) InitFromCache(ctx context.Context, cacheURL string) error {
+	reader, err := datacatalogv3.NewRepoReaderFromURL(ctx, cacheURL)
+	if err != nil {
+		return fmt.Errorf("datacatalogv3: failed to create cache reader: %w", err)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	if err := h.reposv3.LoadAllFromStorage(ctx, reader); err != nil {
+		return fmt.Errorf("datacatalogv3: failed to load from cache: %w", err)
+	}
+
+	return nil
+}
+
+func (h *ReposHandler) prepareMergedRepo(c echo.Context, auth bool) (plateauapi.Repo, error) {
 	ctx := c.Request().Context()
 	md := plateaucms.GetCMSMetadataFromContext(ctx)
 	if auth && !md.Auth {
@@ -270,7 +368,7 @@ func (h *reposHandler) prepareMergedRepo(c echo.Context, auth bool) (plateauapi.
 
 	pid := c.Param(pidParamName)
 	mds := plateaucms.GetAllCMSMetadataFromContext(ctx)
-	merged := h.prepareAndGetMergedRepo(ctx, pid, mds)
+	merged := h.PrepareAndGetMergedRepo(ctx, pid, mds)
 	if merged == nil {
 		return nil, echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
@@ -279,7 +377,8 @@ func (h *reposHandler) prepareMergedRepo(c echo.Context, auth bool) (plateauapi.
 	return merged, nil
 }
 
-func (h *reposHandler) prepareAndGetMergedRepo(ctx context.Context, project string, metadata plateaucms.MetadataList) plateauapi.Repo {
+// PrepareAndGetMergedRepo prepares and returns a merged repo for the given project
+func (h *ReposHandler) PrepareAndGetMergedRepo(ctx context.Context, project string, metadata plateaucms.MetadataList) plateauapi.Repo {
 	var mds plateaucms.MetadataList
 	if project == "" {
 		mds = metadata.PlateauProjects()
@@ -293,7 +392,7 @@ func (h *reposHandler) prepareAndGetMergedRepo(ctx context.Context, project stri
 
 	repos := make([]plateauapi.Repo, 0, len(mds))
 	for _, s := range mds {
-		if r := h.getRepo(s); r != nil {
+		if r := h.getRepo(ctx, s); r != nil {
 			repos = append(repos, r)
 		}
 	}
@@ -315,20 +414,21 @@ func (h *reposHandler) prepareAndGetMergedRepo(ctx context.Context, project stri
 	return merged
 }
 
-func (h *reposHandler) getRepo(md plateaucms.Metadata) (repo plateauapi.Repo) {
+func (h *ReposHandler) getRepo(ctx context.Context, md plateaucms.Metadata) (repo plateauapi.Repo) {
 	if md.DataCatalogProjectAlias == "" {
 		return
 	}
 
 	if isV2(md) {
-		repo = h.reposv2.Repo(md.DataCatalogProjectAlias)
+		// v2: fetch lazily if not cached
+		repo = h.reposv2.GetOrFetch(ctx, md.DataCatalogProjectAlias)
 	} else if isV3(md) {
 		repo = h.reposv3.Repo(md.DataCatalogProjectAlias)
 	}
 	return
 }
 
-func (h *reposHandler) prepareAll(ctx context.Context, metadata plateaucms.MetadataList) error {
+func (h *ReposHandler) prepareAll(ctx context.Context, metadata plateaucms.MetadataList) error {
 	errg, ctx := errgroup.WithContext(ctx)
 	for _, md := range metadata {
 		md := md
@@ -343,14 +443,14 @@ func (h *reposHandler) prepareAll(ctx context.Context, metadata plateaucms.Metad
 	return errg.Wait()
 }
 
-func (h *reposHandler) prepare(ctx context.Context, md plateaucms.Metadata) error {
+func (h *ReposHandler) prepare(ctx context.Context, md plateaucms.Metadata) error {
 	if isV2(md) {
 		return h.prepareV2(ctx, md)
 	}
 	return h.prepareV3(ctx, md)
 }
 
-func (h *reposHandler) prepareV2(ctx context.Context, md plateaucms.Metadata) error {
+func (h *ReposHandler) prepareV2(ctx context.Context, md plateaucms.Metadata) error {
 	if !isV2(md) {
 		return nil
 	}
@@ -367,7 +467,7 @@ func (h *reposHandler) prepareV2(ctx context.Context, md plateaucms.Metadata) er
 	return nil
 }
 
-func (h *reposHandler) prepareV3(ctx context.Context, md plateaucms.Metadata) error {
+func (h *ReposHandler) prepareV3(ctx context.Context, md plateaucms.Metadata) error {
 	if !isV3(md) {
 		return nil
 	}
@@ -384,14 +484,14 @@ func (h *reposHandler) prepareV3(ctx context.Context, md plateaucms.Metadata) er
 	return nil
 }
 
-func (h *reposHandler) updateV2(ctx context.Context, prj string) error {
+func (h *ReposHandler) updateV2(ctx context.Context, prj string) error {
 	if _, err := h.reposv2.Update(ctx, prj); err != nil {
 		return fmt.Errorf("datacatalogv2: failed to update repo %s: %w", prj, err)
 	}
 	return nil
 }
 
-func (h *reposHandler) updateV3(ctx context.Context, prj string) error {
+func (h *ReposHandler) updateV3(ctx context.Context, prj string) error {
 	if _, err := h.reposv3.Update(ctx, prj); err != nil {
 		return fmt.Errorf("datacatalogv3: failed to update repo %s: %w", prj, err)
 	}

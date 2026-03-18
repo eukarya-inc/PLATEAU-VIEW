@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/ckan"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/joho/godotenv"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"

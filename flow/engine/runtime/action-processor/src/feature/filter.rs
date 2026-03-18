@@ -26,7 +26,7 @@ impl ProcessorFactory for FeatureFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Filters features based on conditions"
+        "Filter Features Based on Custom Conditions"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +55,12 @@ impl ProcessorFactory for FeatureFilterFactory {
         let params: FeatureFilterParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::FilterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::FilterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -77,7 +75,7 @@ impl ProcessorFactory for FeatureFilterFactory {
             let expr = &condition.expr;
             let template_ast = expr_engine
                 .compile(expr.as_ref())
-                .map_err(|e| FeatureProcessorError::FilterFactory(format!("{:?}", e)))?;
+                .map_err(|e| FeatureProcessorError::FilterFactory(format!("{e:?}")))?;
             let output_port = &condition.output_port;
             conditions.push(CompiledCondition {
                 expr: template_ast,
@@ -98,10 +96,13 @@ struct FeatureFilter {
     conditions: Vec<CompiledCondition>,
 }
 
+/// # Feature Filter Parameters
+/// Configure the conditions and output ports for filtering features based on expressions
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct FeatureFilterParam {
-    /// # Conditions to filter by
+    /// # Filter Conditions
+    /// List of conditions and their corresponding output ports for routing filtered features
     conditions: Vec<Condition>,
 }
 
@@ -146,7 +147,7 @@ impl Processor for FeatureFilter {
                 Err(err) => {
                     ctx.event_hub.error_log(
                         Some(ctx.error_span()),
-                        format!("filter eval error = {:?}", err),
+                        format!("filter eval error = {err:?}"),
                     );
                     continue;
                 }
@@ -159,11 +160,19 @@ impl Processor for FeatureFilter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
     fn name(&self) -> &str {
         "FeatureFilter"
+    }
+
+    fn num_threads(&self) -> usize {
+        5
     }
 }

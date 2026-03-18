@@ -30,7 +30,7 @@ export const getPropertyName = (operand: string) =>
     ? operand.slice(2, operand.length - 1)
     : operand;
 
-// Ref: https://github.com/eukarya-inc/reearth-plateauview/blob/9e4b96a3f36f2f57732e1367de9a568be23127e6/plugin/web/extensions/sidebar/core/components/content/common/FieldComponent/Fields/general/CurrentTime.tsx#L13
+// Ref: https://github.com/eukarya-inc/PLATEAU-VIEW/blob/9e4b96a3f36f2f57732e1367de9a568be23127e6/plugin/web/extensions/sidebar/core/components/content/common/FieldComponent/Fields/general/CurrentTime.tsx#L13
 export const formatDateTime = (d: string, t: string) => {
   const date = d
     ?.split(/-|\//)

@@ -23,7 +23,7 @@ impl ProcessorFactory for AttributeBulkArrayJoinerFactory {
     }
 
     fn description(&self) -> &str {
-        "Flattens features by attributes"
+        "Join Array Attributes Into Single Values"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +52,12 @@ impl ProcessorFactory for AttributeBulkArrayJoinerFactory {
         let params: AttributeBulkArrayJoinerParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::FlattenerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::FlattenerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -81,10 +79,13 @@ struct AttributeBulkArrayJoiner {
     ignore_attributes: Vec<Attribute>,
 }
 
+/// # AttributeBulkArrayJoiner Parameters
+/// Configure which array attributes to join into single values
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeBulkArrayJoinerParam {
-    /// # Attributes to ignore
+    /// # Attributes to Ignore
+    /// List of attribute names to skip during array joining process
     ignore_attributes: Option<Vec<Attribute>>,
 }
 
@@ -128,12 +129,16 @@ impl Processor for AttributeBulkArrayJoiner {
             }
             new_attributes.insert(key.clone(), AttributeValue::String(new_value.join(",")));
         }
-        feature.attributes.extend(new_attributes);
+        feature.extend(new_attributes);
         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -213,7 +218,7 @@ mod test {
             assert_eq!(noop.send_features.lock().unwrap().len(), 1);
             let feature = noop.send_features.lock().unwrap().first().unwrap().clone();
             assert_eq!(feature.attributes.len(), 1);
-            let Some(AttributeValue::String(v)) = feature.get(&"test".to_string()) else {
+            let Some(AttributeValue::String(v)) = feature.get("test") else {
                 panic!();
             };
             assert_eq!(v, "fugafuga");
@@ -248,7 +253,7 @@ mod test {
             assert_eq!(noop.send_features.lock().unwrap().len(), 1);
             let feature = noop.send_features.lock().unwrap().first().unwrap().clone();
             assert_eq!(feature.attributes.len(), 1);
-            let Some(AttributeValue::String(v)) = feature.get(&"test".to_string()) else {
+            let Some(AttributeValue::String(v)) = feature.get("test") else {
                 panic!();
             };
             assert_eq!(v, "hogehoge,fugafuga");

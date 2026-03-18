@@ -3,11 +3,102 @@ package datacatalogv3
 import (
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestPlateauDataset_ToDatasets_Interior(t *testing.T) {
+	item := &PlateauFeatureItem{
+		ID:   "id",
+		Desc: "desc",
+		Data: []string{
+			"https://example.com/11111_bar-shi_city_2023_citygml_1_op_bldg_3dtiles_11112_hoge-ku_lod1.zip",
+			"https://example.com/11111_bar-shi_city_2023_citygml_1_op_bldg_3dtiles_11112_hoge-ku_lod1_interior.zip",
+			"https://example.com/11111_bar-shi_city_2023_citygml_1_op_bldg_3dtiles_11112_hoge-ku_lod2.zip",
+			"https://example.com/11111_bar-shi_city_2023_citygml_1_op_bldg_3dtiles_11112_hoge-ku_lod2_interior.zip",
+		},
+	}
+
+	opts := ToPlateauDatasetsOptions{
+		ID: "id",
+		Area: &areaContext{
+			City: &plateauapi.City{
+				ID:   plateauapi.NewID("11111", plateauapi.TypeCity),
+				Code: plateauapi.AreaCode("11111"),
+				Name: "bar市",
+			},
+			CityID:   lo.ToPtr(plateauapi.NewID("11111", plateauapi.TypeCity)),
+			CityCode: lo.ToPtr(plateauapi.AreaCode("11111")),
+			Pref: &plateauapi.Prefecture{
+				ID:   plateauapi.NewID("11", plateauapi.TypePrefecture),
+				Code: plateauapi.AreaCode("11"),
+			},
+			PrefID:   lo.ToPtr(plateauapi.NewID("11", plateauapi.TypePrefecture)),
+			PrefCode: lo.ToPtr(plateauapi.AreaCode("11")),
+			CityItem: &CityItem{
+				ID:          "cityid",
+				Year:        "2023年",
+				CityNameEn:  "bar-shi",
+				CityCode:    "11111",
+				OpenDataURL: "https://www.geospatial.jp/ckan/dataset/plateau-11111-bar-shi-2023",
+			},
+			Wards: []*plateauapi.Ward{
+				{
+					ID:             plateauapi.NewID("11112", plateauapi.TypeWard),
+					Name:           "hoge区",
+					Type:           plateauapi.AreaTypeWard,
+					Code:           plateauapi.AreaCode("11112"),
+					PrefectureID:   plateauapi.NewID("11", plateauapi.TypePrefecture),
+					PrefectureCode: plateauapi.AreaCode("11"),
+					CityID:         plateauapi.NewID("11111", plateauapi.TypeCity),
+					CityCode:       plateauapi.AreaCode("11111"),
+				},
+			},
+		},
+		Spec: &plateauapi.PlateauSpecMinor{
+			ID:           plateauapi.NewID("3.2", plateauapi.TypePlateauSpec),
+			MajorVersion: 3,
+			Year:         2023,
+			Version:      "3.2",
+		},
+		DatasetType: &plateauapi.PlateauDatasetType{
+			ID:   plateauapi.NewID("bldg", plateauapi.TypeDatasetType),
+			Code: "bldg",
+			Name: "建築物モデル",
+		},
+		Year: 2024,
+		FeatureType: &FeatureType{
+			Code: "bldg",
+		},
+	}
+
+	datasets, warning := item.toDatasets(opts)
+	assert.Empty(t, warning)
+	assert.Len(t, datasets, 2)
+
+	// Check regular dataset
+	regularDatasets := lo.Filter(datasets, func(d *plateauapi.PlateauDataset, _ int) bool {
+		return d.ID == plateauapi.NewID("11112_bldg", plateauapi.TypeDataset)
+	})
+	assert.Len(t, regularDatasets, 1)
+	regularDataset := regularDatasets[0]
+
+	assert.Equal(t, "建築物モデル（hoge区）", regularDataset.Name)
+	assert.Len(t, regularDataset.Items, 2)
+
+	// Check interior dataset
+	interiorDatasets := lo.Filter(datasets, func(d *plateauapi.PlateauDataset, _ int) bool {
+		return d.ID == plateauapi.NewID("11112_bldg_interior", plateauapi.TypeDataset)
+	})
+	assert.Len(t, interiorDatasets, 1)
+	interiorDataset := interiorDatasets[0]
+
+	assert.Equal(t, "建築物モデル（屋内）（hoge区）", interiorDataset.Name)
+	assert.Nil(t, interiorDataset.Subcode) // bldg type doesn't use subcode
+	assert.Len(t, interiorDataset.Items, 2)
+}
 
 func TestPlateauDataset_ToWards(t *testing.T) {
 	dic := `{

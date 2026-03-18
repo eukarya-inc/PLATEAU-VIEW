@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/reearth/reearthx/mongox"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,6 +23,7 @@ import (
 	"github.com/reearth/reearth-flow/subscriber/internal/infrastructure"
 	flow_mongo "github.com/reearth/reearth-flow/subscriber/internal/infrastructure/mongo"
 	flow_redis "github.com/reearth/reearth-flow/subscriber/internal/infrastructure/redis"
+	"github.com/reearth/reearth-flow/subscriber/internal/telemetry"
 	"github.com/reearth/reearth-flow/subscriber/internal/usecase/gateway"
 	"github.com/reearth/reearth-flow/subscriber/internal/usecase/interactor"
 )
@@ -29,6 +31,7 @@ import (
 const databaseName = "reearth-flow"
 
 func main() {
+
 	ctx, cancel := context.WithCancel(context.Background())
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -38,6 +41,64 @@ func main() {
 		log.Fatalf("failed to load config: %v", cerr)
 	}
 	log.Printf("config: %s", conf.Print())
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := fmt.Fprintf(w, "Subscriber is running"); err != nil {
+			log.Printf("failed to write response: %v", err)
+		}
+	})
+
+	// Health checker will be initialized after clients are created
+	var healthChecker *HealthChecker
+
+	listener, err := net.Listen("tcp", ":"+conf.Port)
+	if err != nil {
+		log.Fatalf("failed to listen on port %s: %v", conf.Port, err)
+	}
+	log.Printf("[subscriber] HTTP server listening on port %s", conf.Port)
+
+	server := &http.Server{
+		Handler: http.DefaultServeMux,
+	}
+
+	go func() {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			log.Printf("[subscriber] HTTP server error: %v", err)
+			cancel()
+		}
+	}()
+
+	// Initialize OpenTelemetry
+	tel, err := telemetry.New(ctx, telemetry.Config{
+		Enabled:      conf.TelemetryEnabled,
+		TracerType:   conf.TracerType,
+		GCPProjectID: conf.GCPProject,
+		OTLPEndpoint: conf.OTLPEndpoint,
+		Insecure:     conf.OTLPInsecure,
+	})
+	if err != nil {
+		log.Fatalf("failed to initialize telemetry: %v", err)
+	}
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := tel.Shutdown(shutdownCtx); err != nil {
+			log.Printf("failed to shutdown telemetry: %v", err)
+		}
+	}()
+	if conf.TelemetryEnabled {
+		tracerType := conf.TracerType
+		if tracerType == "" {
+			if conf.GCPProject != "" {
+				tracerType = "gcp (auto)"
+			} else {
+				tracerType = "otlp (auto)"
+			}
+		}
+		log.Printf("[subscriber] OpenTelemetry enabled, tracer type: %s", tracerType)
+	} else {
+		log.Println("[subscriber] OpenTelemetry disabled")
+	}
 
 	// Initialize PubSub client
 	pubsubClient, err := pubsub.NewClient(ctx, conf.GCPProject)
@@ -65,9 +126,15 @@ func main() {
 		}
 	}()
 
+	// Initialize health checker with the clients we have so far
+	// MongoDB client will be nil if not needed
+	healthChecker = NewHealthChecker(conf, "dev", redisClient, nil, pubsubClient)
+	http.HandleFunc("/health", healthChecker.Handler())
+
 	// Initialize storage components
 	redisStorage := flow_redis.NewRedisStorage(redisClient)
 	logStorage := infrastructure.NewLogStorageImpl(redisStorage)
+	userFacingLogStorage := infrastructure.NewUserFacingLogStorageImpl(redisStorage)
 
 	// Initialize MongoDB client and node storage if needed
 	var mongoClient *mongo.Client
@@ -101,7 +168,7 @@ func main() {
 
 	// Set up log subscriber if configured
 	if conf.LogSubscriptionID != "" {
-		logSub := pubsubClient.Subscription(conf.LogSubscriptionID)
+		logSub := pubsubClient.Subscriber(conf.LogSubscriptionID)
 		logSubAdapter := flow_pubsub.NewRealSubscription(logSub)
 		logSubscriberUC := interactor.NewLogSubscriberUseCase(logStorage)
 		logSubscriber := flow_pubsub.NewLogSubscriber(logSubAdapter, logSubscriberUC)
@@ -122,7 +189,7 @@ func main() {
 
 	// Set up node subscriber if configured
 	if conf.NodeSubscriptionID != "" && nodeStorage != nil {
-		nodeSub := pubsubClient.Subscription(conf.NodeSubscriptionID)
+		nodeSub := pubsubClient.Subscriber(conf.NodeSubscriptionID)
 		nodeSubAdapter := flow_pubsub.NewRealSubscription(nodeSub)
 		nodeSubscriberUC := interactor.NewNodeSubscriberUseCase(nodeStorage)
 		nodeSubscriber := flow_pubsub.NewNodeSubscriber(nodeSubAdapter, nodeSubscriberUC)
@@ -143,32 +210,47 @@ func main() {
 		log.Println("Node subscription ID not provided, node subscriber will not be started")
 	}
 
-	// Set up HTTP server
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := fmt.Fprintf(w, "Subscriber is running"); err != nil {
-			log.Printf("failed to write response: %v", err)
-		}
-	})
+	// Set up user-facing log subscriber if configured
+	if conf.UserFacingLogSubscriptionID != "" {
+		userFacingLogSub := pubsubClient.Subscriber(conf.UserFacingLogSubscriptionID)
+		userFacingLogSubAdapter := flow_pubsub.NewRealSubscription(userFacingLogSub)
+		userFacingLogSubscriberUC := interactor.NewUserFacingLogSubscriberUseCase(userFacingLogStorage)
+		userFacingLogSubscriber := flow_pubsub.NewUserFacingLogSubscriber(userFacingLogSubAdapter, userFacingLogSubscriberUC)
 
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		if _, err := fmt.Fprintf(w, "OK"); err != nil {
-			log.Printf("failed to write response: %v", err)
-		}
-	})
-
-	server := &http.Server{
-		Addr:    ":" + conf.Port,
-		Handler: http.DefaultServeMux,
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Println("[subscriber] Starting user facing log subscriber...")
+			if err := userFacingLogSubscriber.StartListening(ctx); err != nil {
+				log.Printf("[subscriber] User facing log subscriber error: %v", err)
+				cancel()
+			}
+			log.Println("[subscriber] User facing log subscriber stopped")
+		}()
+	} else {
+		log.Println("User facing log subscription ID not provided, user facing log subscriber will not be started")
 	}
 
-	go func() {
-		log.Printf("[subscriber] Starting HTTP server on port %s...", conf.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[subscriber] HTTP server error: %v", err)
-			cancel()
-		}
-	}()
+	if conf.JobCompleteSubscriptionID != "" {
+		jobStorage := infrastructure.NewJobStorageImpl(redisStorage)
+		jobSub := pubsubClient.Subscriber(conf.JobCompleteSubscriptionID)
+		jobSubAdapter := flow_pubsub.NewRealSubscription(jobSub)
+		jobSubscriberUC := interactor.NewJobSubscriberUseCase(jobStorage)
+		jobSubscriber := flow_pubsub.NewJobSubscriber(jobSubAdapter, jobSubscriberUC)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Println("[subscriber] Starting job complete subscriber...")
+			if err := jobSubscriber.StartListening(ctx); err != nil {
+				log.Printf("[subscriber] Job complete subscriber error: %v", err)
+				cancel()
+			}
+			log.Println("[subscriber] Job complete subscriber stopped")
+		}()
+	} else {
+		log.Println("Job complete subscription ID not provided, job subscriber will not be started")
+	}
 
 	// Set up graceful shutdown handler
 	go func() {

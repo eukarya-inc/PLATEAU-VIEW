@@ -1,7 +1,7 @@
 package mongogit
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/mongox"
 	"go.mongodb.org/mongo-driver/bson"
 )

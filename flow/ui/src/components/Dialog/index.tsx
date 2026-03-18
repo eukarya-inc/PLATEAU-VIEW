@@ -19,23 +19,32 @@ const DialogOverlay = forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
     overlayBgClass?: string;
   }
->(({ className, overlayBgClass = "bg-black/40", ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      overlayBgClass,
-      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+>(
+  (
+    {
       className,
-    )}
-    {...props}
-  />
-));
+      overlayBgClass = "bg-zinc-300/40 dark:bg-black/40 terminal:bg-black/40 midnight:bg-zinc-900/40 synthwave:bg-purple-900/40",
+      ...props
+    },
+    ref,
+  ) => (
+    <DialogPrimitive.Overlay
+      ref={ref}
+      className={cn(
+        overlayBgClass,
+        "fixed inset-0 z-50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-    size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+    size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "full";
     position?: "center" | "off-center" | "top";
     overlayBgClass?: string;
     hideCloseButton?: boolean;
@@ -59,8 +68,9 @@ const DialogContent = forwardRef<
       <DialogOverlay overlayBgClass={overlayBgClass} />
       <DialogPrimitive.Content
         ref={ref}
+        id="dialog-content"
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-xl translate-x-[-50%] gap-4 border shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-xl translate-x-[-50%] gap-4 border border-accent bg-card/50 shadow-lg backdrop-blur duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:rounded-lg dark:border-primary dark:bg-card/50",
           size === "xs"
             ? "max-w-[300px]"
             : size === "sm"
@@ -73,14 +83,19 @@ const DialogContent = forwardRef<
                     ? "max-w-[700px]"
                     : size === "2xl"
                       ? "max-w-[900px]"
-                      : undefined,
+                      : size === "3xl"
+                        ? "max-w-[1000px]"
+                        : undefined,
           position === "top"
-            ? "top-[5%]"
+            ? "top-[15%]"
             : position === "off-center"
               ? "top-[40%] translate-y-[-50%]"
               : position === "center"
                 ? "top-[50%] translate-y-[-50%]"
                 : undefined,
+          size === "full"
+            ? "top-0 right-0 bottom-0 left-0 max-w-full translate-0"
+            : undefined,
           className,
         )}
         onOpenAutoFocus={(e) =>
@@ -90,11 +105,11 @@ const DialogContent = forwardRef<
           onCloseAutoFocus ? onCloseAutoFocus(e) : e.preventDefault()
         }
         {...props}>
-        <div className="overflow-hidden rounded-lg bg-secondary">
+        <div className="overflow-hidden rounded-lg">
           {children}
           {!hideCloseButton && (
-            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-              <Cross2Icon className="size-4" />
+            <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <Cross2Icon className="size-5" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
           )}
@@ -125,7 +140,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse px-6 pb-6 sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse px-4 pb-4 sm:flex-row sm:justify-end sm:space-x-2",
       className,
     )}
     {...props}
@@ -140,7 +155,7 @@ const DialogTitle = forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-xl text-center dark:font-thin border-b leading-none tracking-tight px-6 py-4 rounded-t-lg",
+      "rounded-t-lg p-4 text-xl leading-none font-light tracking-tight dark:font-thin",
       className,
     )}
     {...props}
@@ -154,7 +169,7 @@ const DialogDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm", className)}
+    className={cn("px-4 text-sm", className)}
     {...props}
   />
 ));
@@ -180,7 +195,7 @@ const DialogContentWrapper = forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("py-4 px-6 flex flex-col gap-4 overflow-hidden", className)}
+    className={cn("flex flex-col gap-4 overflow-hidden px-6 py-4", className)}
     {...props}
   />
 ));

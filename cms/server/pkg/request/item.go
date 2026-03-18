@@ -1,8 +1,8 @@
 package request
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 )
 
 type ItemList []*Item
@@ -20,7 +20,7 @@ func (i *Item) Pointer() version.VersionOrRef {
 	return i.pointer
 }
 
-func (i *Item) SetPointer(p version.VersionOrRef)  {
+func (i *Item) SetPointer(p version.VersionOrRef) {
 	i.pointer = p
 }
 

@@ -3,7 +3,7 @@ package event
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/operator"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/operator"
 )
 
 type Type string

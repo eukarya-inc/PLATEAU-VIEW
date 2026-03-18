@@ -5,7 +5,7 @@ use reearth_flow_runtime::node::SYSTEM_ACTION_FACTORY_MAPPINGS;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    factory::{BUILTIN_ACTION_FACTORIES, PLATEAU_ACTION_FACTORIES, WASM_ACTION_FACTORIES},
+    factory::{BUILTIN_ACTION_FACTORIES, PLATEAU_ACTION_FACTORIES, PYTHON_ACTION_FACTORIES},
     utils::{create_action_schema, ActionSchema, I18nSchema},
 };
 
@@ -52,10 +52,10 @@ impl SchemaActionCliCommand {
     pub fn execute(&self) -> crate::Result<()> {
         let i18n = if let Some(language_file_path) = &self.language_file_path {
             let file = File::open(language_file_path)
-                .map_err(|e| crate::errors::Error::init(format!("{:?}", e)))?;
+                .map_err(|e| crate::errors::Error::init(format!("{e:?}")))?;
             let reader = BufReader::new(file);
             let i18n: RootI18nSchema = serde_json::from_reader(reader)
-                .map_err(|e| crate::errors::Error::init(format!("{:?}", e)))?;
+                .map_err(|e| crate::errors::Error::init(format!("{e:?}")))?;
             i18n.actions
                 .into_iter()
                 .map(|action| (action.name.clone(), action.clone()))
@@ -77,12 +77,12 @@ impl SchemaActionCliCommand {
             .map(|kind| create_action_schema(kind, false, &i18n))
             .collect::<Vec<_>>();
         actions.extend(plateau_actions);
-        let wasm_actions = WASM_ACTION_FACTORIES
+        let python_actions = PYTHON_ACTION_FACTORIES
             .clone()
             .values()
             .map(|kind| create_action_schema(kind, false, &i18n))
             .collect::<Vec<_>>();
-        actions.extend(wasm_actions);
+        actions.extend(python_actions);
         actions.sort_by(|a, b| a.name.cmp(&b.name));
         let root = RootActionSchema { actions };
         println!("{}", serde_json::to_string_pretty(&root).unwrap());

@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/mongo/mongodoc"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/asset"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/rerror"
 	"go.mongodb.org/mongo-driver/bson"
@@ -63,13 +64,9 @@ func (r *Asset) FindByIDs(ctx context.Context, ids id.AssetIDList) ([]*asset.Ass
 	return filterAssets(ids, res), nil
 }
 
-func (r *Asset) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, uFilter repo.AssetFilter) ([]*asset.Asset, *interfaces.PageBasedInfo, error) {
-	if !r.f.CanRead(id) {
-		return nil, interfaces.NewPageBasedInfo(0, 1, 1), nil
-	}
-
+func (r *Asset) FindByWorkspace(ctx context.Context, wid accountsid.WorkspaceID, uFilter repo.AssetFilter) ([]*asset.Asset, *interfaces.PageBasedInfo, error) {
 	var filter any = bson.M{
-		"workspace": id.String(),
+		"workspace": wid.String(),
 	}
 
 	if uFilter.Keyword != nil {
@@ -81,11 +78,7 @@ func (r *Asset) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceI
 	return r.paginate(ctx, filter, uFilter.Sort, uFilter.Pagination)
 }
 
-func (r *Asset) TotalSizeByWorkspace(ctx context.Context, wid accountdomain.WorkspaceID) (int64, error) {
-	if !r.f.CanRead(wid) {
-		return 0, repo.ErrOperationDenied
-	}
-
+func (r *Asset) TotalSizeByWorkspace(ctx context.Context, wid accountsid.WorkspaceID) (uint64, error) {
 	c, err := r.client.Client().Aggregate(ctx, []bson.M{
 		{"$match": bson.M{"workspace": wid.String()}},
 		{"$group": bson.M{"_id": nil, "size": bson.M{"$sum": "$size"}}},
@@ -102,7 +95,7 @@ func (r *Asset) TotalSizeByWorkspace(ctx context.Context, wid accountdomain.Work
 	}
 
 	type resp struct {
-		Size int64
+		Size uint64
 	}
 	var res resp
 	if err := c.Decode(&res); err != nil {
@@ -119,7 +112,7 @@ func (r *Asset) Save(ctx context.Context, asset *asset.Asset) error {
 	return r.client.SaveOne(ctx, id, doc)
 }
 
-func (r *Asset) Remove(ctx context.Context, id id.AssetID) error {
+func (r *Asset) Delete(ctx context.Context, id id.AssetID) error {
 	return r.client.RemoveOne(ctx, r.writeFilter(bson.M{
 		"id": id.String(),
 	}))
@@ -139,7 +132,20 @@ func (r *Asset) paginate(ctx context.Context, filter any, sort *asset.SortType, 
 
 		opts := options.Find()
 		if sort != nil {
-			opts.SetSort(bson.D{{Key: string(*sort), Value: 1}})
+			opts.SetSort(bson.D{{Key: sort.Key, Value: 1}})
+		} else {
+			if pagination.Page.OrderBy != nil && *pagination.Page.OrderBy != "" {
+				key := mapAssetOrderByToField(*pagination.Page.OrderBy)
+
+				dir := -1
+				if pagination.Page.OrderDir != nil && strings.ToUpper(*pagination.Page.OrderDir) == "ASC" {
+					dir = 1
+				}
+
+				if key != "" {
+					opts.SetSort(bson.D{{Key: key, Value: dir}})
+				}
+			}
 		}
 
 		opts.SetSkip(int64(skip)).SetLimit(int64(limit))
@@ -191,4 +197,17 @@ func filterAssets(ids []id.AssetID, rows []*asset.Asset) []*asset.Asset {
 
 func (r *Asset) writeFilter(filter any) any {
 	return applyWorkspaceFilter(filter, r.f.Writable)
+}
+
+func mapAssetOrderByToField(orderBy string) string {
+	switch orderBy {
+	case "createdAt":
+		return "createdat"
+	case "name":
+		return "name"
+	case "size":
+		return "size"
+	default:
+		return ""
+	}
 }

@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter"
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
@@ -61,7 +61,7 @@ func (c *Controller) GetItem(ctx context.Context, prj, mkey, i string) (Item, er
 		}
 	}
 
-	return NewItem(itv, sp, assets, c.assetUrlResolver, getReferencedItems(ctx, itv, pr.Publication().AssetPublic(), c.assetUrlResolver)), nil
+	return NewItem(itv, sp, assets, getReferencedItems(ctx, itv, pr.Publication().AssetPublic())), nil
 }
 
 func (c *Controller) GetItems(ctx context.Context, prj, model string, p ListParam) (ListResult[Item], *schema.Schema, error) {
@@ -104,7 +104,7 @@ func (c *Controller) GetItems(ctx context.Context, prj, model string, p ListPara
 		if err != nil {
 			return Item{}, err
 		}
-		return NewItem(i, sp, assets, c.assetUrlResolver, getReferencedItems(ctx, i, pr.Publication().AssetPublic(), c.assetUrlResolver)), nil
+		return NewItem(i, sp, assets, getReferencedItems(ctx, i, pr.Publication().AssetPublic())), nil
 	})
 	if err != nil {
 		return ListResult[Item]{}, nil, err
@@ -141,7 +141,7 @@ func (c *Controller) GetVersionedItems(ctx context.Context, prj, model string, p
 	return items, sp.Schema(), nil
 }
 
-func getReferencedItems(ctx context.Context, i *item.Item, prp bool, urlResolver asset.URLResolver) []Item {
+func getReferencedItems(ctx context.Context, i *item.Item, prp bool) []Item {
 	op := adapter.Operator(ctx)
 	uc := adapter.Usecases(ctx)
 
@@ -174,7 +174,7 @@ func getReferencedItems(ctx context.Context, i *item.Item, prp bool, urlResolver
 					continue
 				}
 			}
-			vi = append(vi, NewItem(ii.Value(), sp, assets, urlResolver, nil))
+			vi = append(vi, NewItem(ii.Value(), sp, assets, nil))
 		}
 	}
 

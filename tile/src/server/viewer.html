@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLATEAU Tiles</title>
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        #map { position: absolute; top: 50px; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 16px;
+            z-index: 1000;
+        }
+        .title {
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .title a {
+            color: #4fc3f7;
+            text-decoration: none;
+        }
+        .title a:hover {
+            text-decoration: underline;
+        }
+        .controls label {
+            color: #fff;
+            font-size: 14px;
+        }
+        .controls select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            background: #16213e;
+            color: #fff;
+            font-size: 14px;
+        }
+        .controls select#source {
+            min-width: 200px;
+        }
+        .controls select#format {
+            min-width: 80px;
+        }
+        .controls select:focus {
+            outline: 2px solid #0f4c75;
+        }
+        .controls button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            background: #16213e;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .controls button:hover {
+            background: #1f3460;
+        }
+        .controls button.active {
+            background: #0f4c75;
+        }
+        .controls button.copied {
+            background: #2e7d32;
+        }
+        .spacer {
+            flex: 1;
+        }
+        .info {
+            color: #888;
+            font-size: 12px;
+        }
+        .help-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border-radius: 50%;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .maplibregl-ctrl-attrib {
+            background: rgba(255,255,255,0.8) !important;
+        }
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.visible {
+            display: flex;
+        }
+        .modal {
+            background: #fff;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .modal-header h2 {
+            font-size: 18px;
+            color: #1a1a2e;
+            margin: 0;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            line-height: 1;
+        }
+        .modal-close:hover {
+            color: #333;
+        }
+        .modal-body {
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .modal-body h3 {
+            font-size: 15px;
+            color: #1a1a2e;
+            margin: 16px 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #eee;
+        }
+        .modal-body h3:first-of-type {
+            margin-top: 12px;
+        }
+        .modal-body p {
+            margin: 0 0 8px 0;
+        }
+        .modal-body a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        .modal-body a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <span class="title"><a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">PLATEAU</a> Tiles</span>
+        <select id="source"></select>
+        <select id="format">
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+            <option value="avif">AVIF</option>
+        </select>
+        <button id="copyUrl" title="Copy tile URL template">URL</button>
+        <button id="gsiToggle" class="active">地理院</button>
+        <span class="spacer"></span>
+        <span class="info" id="coords"></span>
+        <button class="help-btn" id="helpBtn">?</button>
+    </div>
+    <div id="map"></div>
+
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>About PLATEAU Tiles</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <p>このビューワでは、<a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">Project PLATEAU</a>が配信しているタイルデータをプレビューできます。</p>
+
+                <h3>PLATEAU-Ortho</h3>
+                <p>航空写真測量によって作成したオルソ画像をタイル化し、配信しています。</p>
+
+                <h3>PLATEAU-Terrain</h3>
+                <p><a href="https://plateauview.mlit.go.jp/" target="_blank" rel="noopener">PLATEAU VIEW</a>で利用する、日本全国の地形データを配信しています。</p>
+
+                <h3>ドキュメント</h3>
+                <p>詳細な仕様や利用方法については、<a href="https://docs.plateauview.mlit.go.jp/" target="_blank" rel="noopener">docs.plateauview.mlit.go.jp</a> をご覧ください。</p>
+
+                <h3>免責事項</h3>
+                <p>本サービスは無保証で提供されています。<br>お問い合わせは <a href="https://www.mlit.go.jp/plateau/contact/" target="_blank" rel="noopener">こちら</a> からお願いします。</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sources = {{SOURCES_JSON}};
+        const sourceSelect = document.getElementById('source');
+        const formatSelect = document.getElementById('format');
+        const copyUrlBtn = document.getElementById('copyUrl');
+        const gsiToggle = document.getElementById('gsiToggle');
+        const coordsEl = document.getElementById('coords');
+        const helpBtn = document.getElementById('helpBtn');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalClose = document.getElementById('modalClose');
+        let gsiEnabled = true;
+
+        // Populate source dropdown
+        sources.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            sourceSelect.appendChild(option);
+        });
+
+        // Initialize map with GSI (国土地理院) base
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    gsi: {
+                        type: 'raster',
+                        tiles: ['https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
+                    }
+                },
+                layers: [{
+                    id: 'gsi',
+                    type: 'raster',
+                    source: 'gsi',
+                    minzoom: 0,
+                    maxzoom: 18
+                }]
+            },
+            center: [139.7, 35.7],
+            zoom: 10,
+            hash: true
+        });
+
+        map.addControl(new maplibregl.NavigationControl());
+
+        function toggleGsi() {
+            gsiEnabled = !gsiEnabled;
+            gsiToggle.classList.toggle('active', gsiEnabled);
+            if (map.getLayer('gsi')) {
+                map.setLayoutProperty('gsi', 'visibility', gsiEnabled ? 'visible' : 'none');
+            }
+        }
+
+        function updateSource() {
+            const sourceName = sourceSelect.value;
+            const format = formatSelect.value;
+
+            // Remove old layers and sources
+            if (map.getLayer('tiles')) map.removeLayer('tiles');
+            if (map.getSource('tiles')) map.removeSource('tiles');
+
+            if (!sourceName) return;
+
+            // Add new source
+            map.addSource('tiles', {
+                type: 'raster',
+                tiles: [`${window.location.origin}/tiles/${sourceName}/{z}/{x}/{y}.${format}`],
+                tileSize: 256,
+                attribution: `${sourceName} (${format.toUpperCase()})`
+            });
+
+            map.addLayer({
+                id: 'tiles',
+                type: 'raster',
+                source: 'tiles',
+                minzoom: 0,
+                maxzoom: 22
+            });
+        }
+
+        // Modal functions
+        function openModal() {
+            modalOverlay.classList.add('visible');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.remove('visible');
+        }
+
+        // Copy URL template to clipboard
+        async function copyUrlTemplate() {
+            const sourceName = sourceSelect.value;
+            const format = formatSelect.value;
+            if (!sourceName) return;
+
+            const urlTemplate = `${window.location.origin}/tiles/${sourceName}/{z}/{x}/{y}.${format}`;
+
+            try {
+                await navigator.clipboard.writeText(urlTemplate);
+                copyUrlBtn.textContent = 'Copied!';
+                copyUrlBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyUrlBtn.textContent = 'URL';
+                    copyUrlBtn.classList.remove('copied');
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        // Update coords display
+        map.on('mousemove', (e) => {
+            const { lng, lat } = e.lngLat;
+            const zoom = map.getZoom().toFixed(1);
+            coordsEl.textContent = `z${zoom} ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        });
+
+        // Event listeners
+        gsiToggle.addEventListener('click', toggleGsi);
+        sourceSelect.addEventListener('change', updateSource);
+        formatSelect.addEventListener('change', updateSource);
+        copyUrlBtn.addEventListener('click', copyUrlTemplate);
+        helpBtn.addEventListener('click', openModal);
+        modalClose.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+
+        // Load first source
+        if (sources.length > 0) {
+            sourceSelect.value = sources[0];
+            map.on('load', updateSource);
+        }
+    </script>
+</body>
+</html>

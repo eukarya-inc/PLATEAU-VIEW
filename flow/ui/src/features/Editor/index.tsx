@@ -1,16 +1,11 @@
 import { useMemo } from "react";
+import type { Awareness } from "y-protocols/awareness";
 import { Doc, Map as YMap, UndoManager as YUndoManager } from "yjs";
 
 import Canvas from "@flow/features/Canvas";
 import { YWorkflow } from "@flow/lib/yjs/types";
 
-import {
-  BottomBar,
-  LeftPanel,
-  OverlayUI,
-  ParamsPanel,
-  RightPanel,
-} from "./components";
+import { OverlayUI, ParamsDialog, NodeDeletionDialog } from "./components";
 import { EditorContextType, EditorProvider } from "./editorContext";
 import useHooks from "./hooks";
 
@@ -22,6 +17,7 @@ type Props = {
     originPrepend?: string,
   ) => void;
   yDoc: Doc | null;
+  yAwareness: Awareness;
 };
 
 export default function Editor({
@@ -29,128 +25,203 @@ export default function Editor({
   undoManager,
   undoTrackerActionWrapper,
   yDoc,
+  yAwareness,
 }: Props) {
   const {
     currentWorkflowId,
+    currentYWorkflow,
     openWorkflows,
     currentProject,
+    self,
+    users,
     nodes,
     edges,
-    selectedEdgeIds,
-    // lockedNodeIds,
-    locallyLockedNode,
-    hoveredDetails,
+    openNode,
     nodePickerOpen,
-    openPanel,
     canUndo,
     canRedo,
     allowedToDeploy,
     isMainWorkflow,
-    hasReader,
-    rightPanelContent,
-    handleRightPanelOpen,
+    deferredDeleteRef,
+    showBeforeDeleteDialog,
+    isSaving,
+    spotlightUserClientId,
+    spotlightUser,
+    activeUsersDebugRuns,
+    rawWorkflows,
+    customDebugRunWorkflowVariables,
+    refetchWorkflowVariables,
+    showSearchPanel,
+    openNodePickerViaShortcut,
+    handleDebugRunVariableValueChange,
+    loadExternalDebugJob,
     handleWorkflowAdd,
     handleWorkflowDeployment,
     handleProjectShare,
-    handlePanelOpen,
+    handleCurrentProjectExport,
+    handleWorkflowOpen,
     handleWorkflowClose,
     handleWorkflowChange,
     handleNodesAdd,
     handleNodesChange,
-    handleNodeDataUpdate,
-    handleNodeHover,
-    handleNodeDoubleClick,
+    handleBeforeDeleteNodes,
+    handleDeleteDialogClose,
+    handleNodesDataUpdate,
+    handleNodeSettings,
+    handleOpenNode,
     handleNodePickerOpen,
     handleNodePickerClose,
     handleEdgesAdd,
     handleEdgesChange,
-    handleEdgeHover,
     handleWorkflowRedo,
     handleWorkflowUndo,
     handleWorkflowRename,
+    handleWorkflowAddFromSelection,
     handleDebugRunStart,
+    handleFromSelectedNodeDebugRunStart,
     handleDebugRunStop,
     handleLayoutChange,
-  } = useHooks({ yWorkflows, undoManager, undoTrackerActionWrapper });
+    handleCopy,
+    handleCut,
+    handlePaste,
+    handleProjectSnapshotSave,
+    handleSpotlightUserSelect,
+    handleSpotlightUserDeselect,
+    handleNodesDisable,
+    handlePaneClick,
+    handlePointerDown,
+    handleConnectStart,
+    handleConnectEnd,
+    awarenessSelectionsMap,
+    setShowSearchPanel,
+    selectedNodeIds,
+  } = useHooks({
+    yDoc,
+    yWorkflows,
+    yAwareness,
+    undoManager,
+    undoTrackerActionWrapper,
+  });
 
   const editorContext = useMemo(
     (): EditorContextType => ({
       onNodesChange: handleNodesChange,
-      onSecondaryNodeAction: handleNodeDoubleClick,
+      onNodeSettings: handleNodeSettings,
+      currentYWorkflow,
+      undoTrackerActionWrapper,
+      awarenessSelectionsMap,
     }),
-    [handleNodesChange, handleNodeDoubleClick],
+    [
+      handleNodesChange,
+      handleNodeSettings,
+      currentYWorkflow,
+      undoTrackerActionWrapper,
+      awarenessSelectionsMap,
+    ],
   );
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="relative flex flex-1">
-        <EditorProvider value={editorContext}>
-          <LeftPanel
+      <EditorProvider value={editorContext}>
+        <div
+          className={`flex flex-1 flex-col ${spotlightUser ? "border" : ""}`}
+          style={{ borderColor: spotlightUser?.color || "" }}>
+          <OverlayUI
+            nodePickerOpen={nodePickerOpen}
+            selectedNodeIds={selectedNodeIds}
             nodes={nodes}
-            isOpen={openPanel === "left"}
-            onOpen={handlePanelOpen}
-            onNodesAdd={handleNodesAdd}
-            isMainWorkflow={isMainWorkflow}
-            hasReader={hasReader}
-            onNodesChange={handleNodesChange}
-            onNodeDoubleClick={handleNodeDoubleClick}
-            selected={locallyLockedNode}
-          />
-          <div className="flex flex-1 flex-col">
-            <OverlayUI
-              hoveredDetails={hoveredDetails}
-              nodePickerOpen={nodePickerOpen}
-              allowedToDeploy={allowedToDeploy}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              isMainWorkflow={isMainWorkflow}
-              hasReader={hasReader}
-              onWorkflowDeployment={handleWorkflowDeployment}
-              onProjectShare={handleProjectShare}
-              onNodesAdd={handleNodesAdd}
-              onNodePickerClose={handleNodePickerClose}
-              onRightPanelOpen={handleRightPanelOpen}
-              onWorkflowUndo={handleWorkflowUndo}
-              onWorkflowRedo={handleWorkflowRedo}
-              onDebugRunStart={handleDebugRunStart}
-              onDebugRunStop={handleDebugRunStop}
-              onLayoutChange={handleLayoutChange}>
-              <Canvas
-                nodes={nodes}
-                edges={edges}
-                selectedEdgeIds={selectedEdgeIds}
-                canvasLock={!!locallyLockedNode}
-                onWorkflowAdd={handleWorkflowAdd}
-                onNodesAdd={handleNodesAdd}
-                onNodesChange={handleNodesChange}
-                onNodeHover={handleNodeHover}
-                onNodeDoubleClick={handleNodeDoubleClick}
-                onNodePickerOpen={handleNodePickerOpen}
-                onEdgesAdd={handleEdgesAdd}
-                onEdgesChange={handleEdgesChange}
-                onEdgeHover={handleEdgeHover}
-              />
-            </OverlayUI>
-            <BottomBar
-              currentWorkflowId={currentWorkflowId}
-              openWorkflows={openWorkflows}
-              onWorkflowClose={handleWorkflowClose}
-              onWorkflowChange={handleWorkflowChange}
-              onWorkflowRename={handleWorkflowRename}
-            />
-          </div>
-          <RightPanel
-            contentType={rightPanelContent}
-            onClose={() => handleRightPanelOpen(undefined)}
+            edges={edges}
             project={currentProject}
             yDoc={yDoc}
-          />
-          <ParamsPanel
-            selected={locallyLockedNode}
-            onDataSubmit={handleNodeDataUpdate}
-          />
-        </EditorProvider>
-      </div>
+            self={self}
+            users={users}
+            spotlightUserClientId={spotlightUserClientId}
+            isSaving={isSaving}
+            allowedToDeploy={allowedToDeploy}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            isMainWorkflow={isMainWorkflow}
+            rawWorkflows={rawWorkflows}
+            openWorkflows={openWorkflows}
+            currentWorkflowId={currentWorkflowId}
+            customDebugRunWorkflowVariables={customDebugRunWorkflowVariables}
+            openNodePickerViaShortcut={openNodePickerViaShortcut}
+            refetchWorkflowVariables={refetchWorkflowVariables}
+            onWorkflowChange={handleWorkflowChange}
+            onWorkflowOpen={handleWorkflowOpen}
+            onWorkflowClose={handleWorkflowClose}
+            onNodesAdd={handleNodesAdd}
+            onNodesChange={handleNodesChange}
+            onNodePickerClose={handleNodePickerClose}
+            onEdgesAdd={handleEdgesAdd}
+            onEdgesChange={handleEdgesChange}
+            onWorkflowRedo={handleWorkflowRedo}
+            onWorkflowUndo={handleWorkflowUndo}
+            onProjectShare={handleProjectShare}
+            onProjectExport={handleCurrentProjectExport}
+            onWorkflowDeployment={handleWorkflowDeployment}
+            onDebugRunStart={handleDebugRunStart}
+            onDebugRunStartFromSelectedNode={
+              handleFromSelectedNodeDebugRunStart
+            }
+            onDebugRunStop={handleDebugRunStop}
+            onDebugRunVariableValueChange={handleDebugRunVariableValueChange}
+            onProjectSnapshotSave={handleProjectSnapshotSave}
+            onSpotlightUserSelect={handleSpotlightUserSelect}
+            onSpotlightUserDeselect={handleSpotlightUserDeselect}
+            onLayoutChange={handleLayoutChange}
+            onDebugRunJoin={loadExternalDebugJob}
+            activeUsersDebugRuns={activeUsersDebugRuns}
+            showSearchPanel={showSearchPanel}
+            onShowSearchPanel={setShowSearchPanel}>
+            <Canvas
+              nodes={nodes}
+              edges={edges}
+              yDoc={yDoc}
+              users={users}
+              currentWorkflowId={currentWorkflowId}
+              isMainWorkflow={isMainWorkflow}
+              onWorkflowAdd={handleWorkflowAdd}
+              onWorkflowOpen={handleWorkflowOpen}
+              onWorkflowAddFromSelection={handleWorkflowAddFromSelection}
+              onNodesAdd={handleNodesAdd}
+              onBeforeDelete={handleBeforeDeleteNodes}
+              onNodesChange={handleNodesChange}
+              onNodeSettings={handleNodeSettings}
+              onNodePickerOpen={handleNodePickerOpen}
+              onEdgesAdd={handleEdgesAdd}
+              onEdgesChange={handleEdgesChange}
+              onCopy={handleCopy}
+              onCut={handleCut}
+              onPaste={handlePaste}
+              onNodesDisable={handleNodesDisable}
+              onPaneClick={handlePaneClick}
+              onDebugRunStartFromSelectedNode={
+                handleFromSelectedNodeDebugRunStart
+              }
+              onConnectStart={handleConnectStart}
+              onConnectEnd={handleConnectEnd}
+              onPointerDown={handlePointerDown}
+            />
+          </OverlayUI>
+
+          {openNode && (
+            <ParamsDialog
+              openNode={openNode}
+              onOpenNode={handleOpenNode}
+              onDataSubmit={handleNodesDataUpdate}
+              onWorkflowRename={handleWorkflowRename}
+            />
+          )}
+          {showBeforeDeleteDialog && (
+            <NodeDeletionDialog
+              showBeforeDeleteDialog={showBeforeDeleteDialog}
+              deferredDeleteRef={deferredDeleteRef}
+              onDialogClose={handleDeleteDialogClose}
+            />
+          )}
+        </div>
+      </EditorProvider>
     </div>
   );
 }

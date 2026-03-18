@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/event"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/event"
 )
 
 type Webhook struct {

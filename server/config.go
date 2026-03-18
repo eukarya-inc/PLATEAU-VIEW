@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/citygml"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
-	"github.com/eukarya-inc/reearth-plateauview/server/opinion"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
-	"github.com/eukarya-inc/reearth-plateauview/server/sdkapi/sdkapiv3"
-	"github.com/eukarya-inc/reearth-plateauview/server/searchindex"
-	"github.com/eukarya-inc/reearth-plateauview/server/sidebar"
-	"github.com/eukarya-inc/reearth-plateauview/server/tiles"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/joho/godotenv"
 	"github.com/k0kubun/pp/v3"
 	"github.com/kelseyhightower/envconfig"
@@ -38,7 +39,6 @@ type Config struct {
 	Debug                              bool     `pp:",omitempty"`
 	Origin                             []string `pp:",omitempty"`
 	Secret                             string   `pp:",omitempty"`
-	Delegate_URL                       string   `pp:",omitempty"`
 	CMS_Webhook_Secret                 string   `pp:",omitempty"`
 	CMS_BaseURL                        string   `pp:",omitempty"`
 	CMS_Token                          string   `pp:",omitempty"`
@@ -75,9 +75,9 @@ type Config struct {
 	Geospatialjp_CloudBuildRegion      string   `pp:",omitempty"`
 	Geospatialjp_CloudBuildDiskSizeGb  int64    `pp:",omitempty"`
 	DataConv_Disable                   bool     `pp:",omitempty"`
-	Indexer_Delegate                   bool     `pp:",omitempty"`
 	DataCatalog_DisableCache           bool     `pp:",omitempty"`
 	DataCatalog_CacheUpdateKey         string   `pp:",omitempty"`
+	DataCatalog_CacheUpdateURL         string   `pp:",omitempty"`
 	DataCatalog_PlaygroundEndpoint     string   `pp:",omitempty"`
 	DataCatalog_CacheTTL               int      `pp:",omitempty"`
 	DataCatalog_GQL_MaxComplexity      int      `pp:",omitempty"`
@@ -85,6 +85,7 @@ type Config struct {
 	DataCatalog_GeocodingAppID         string   `pp:",omitempty"`
 	DataCatalog_DiskCache              bool     `pp:",omitempty"`
 	DataCatalog_Debug                  bool     `pp:",omitempty"`
+	DataCatalog_CacheURL               string   `pp:",omitempty"` // gs://bucket/path for GCS cache
 	GCParcent                          int      `pp:",omitempty"`
 	CityGML_Domain                     string   `pp:",omitempty"`
 	CityGML_Bucket                     string   `pp:",omitempty"`
@@ -94,9 +95,7 @@ type Config struct {
 	CityGML_PackerTimeout              uint     `pp:",omitempty"`
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
-	Tiles_Cache_Control                string   `pp:",omitempty"`
-	Chiitiler_URL                      string   `pp:",omitempty"`
-	Chiitiler_Bucket                   string   `pp:",omitempty"`
+	Tile_URL                           string   `pp:",omitempty"` // If set, redirects /tiles/* to this URL (except config.json and styles)
 }
 
 func NewConfig() (*Config, error) {
@@ -166,19 +165,6 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 	}
 }
 
-func (c *Config) SearchIndex() searchindex.Config {
-	return searchindex.Config{
-		CMSBase:           c.CMS_BaseURL,
-		CMSToken:          c.CMS_Token,
-		CMSStorageProject: c.CMS_SystemProject,
-		Delegate:          c.Indexer_Delegate,
-		DelegateURL:       c.Delegate_URL,
-		Debug:             c.Debug,
-		// CMSModel: c.CMS_Model,
-		// CMSStorageModel:   c.CMS_IndexerStorageModel,
-	}
-}
-
 func (c *Config) SDKAPI() sdkapiv3.Config {
 	return sdkapiv3.Config{
 		DataCatalogAPIURL: c.LocalURL("/datacatalog"),
@@ -206,6 +192,7 @@ func (c *Config) Sidebar() sidebar.Config {
 func (c *Config) DataCatalog() datacatalog.Config {
 	return datacatalog.Config{
 		Config:               c.plateauCMS(),
+		Host:                 c.Host,
 		CacheUpdateKey:       c.DataCatalog_CacheUpdateKey,
 		PlaygroundEndpoint:   c.DataCatalog_PlaygroundEndpoint,
 		GraphqlMaxComplexity: c.DataCatalog_GQL_MaxComplexity,
@@ -215,16 +202,15 @@ func (c *Config) DataCatalog() datacatalog.Config {
 		CacheTTL:             c.DataCatalog_CacheTTL,
 		ErrorOnInit:          c.DataCatalog_PanicOnInit,
 		GeocodingAppID:       c.DataCatalog_GeocodingAppID,
+		CacheURL:             c.DataCatalog_CacheURL,
 	}
 }
 
 func (c *Config) Tiles() tiles.Config {
 	return tiles.Config{
-		CMS:                  c.plateauCMS(),
-		Host:                 c.Host,
-		CacheControl:         c.Tiles_Cache_Control,
-		ChiitilerURL:         c.Chiitiler_URL,
-		ChiitilerCacheBucket: c.Chiitiler_Bucket,
+		CMS:     c.plateauCMS(),
+		Host:    c.Host,
+		TileURL: c.Tile_URL,
 	}
 }
 
@@ -260,5 +246,18 @@ func (c *Config) CityGML() citygml.Config {
 		WorkerProject:      workProject,
 		DataCatalogAPIURL:  c.LocalURL("/datacatalog"),
 		PackerTimeout:      c.CityGML_PackerTimeout,
+	}
+}
+
+func (c *Config) LodStat() lodstat.Config {
+	return lodstat.Config{
+		DataCatalogAPIURL:   c.LocalURL("/datacatalog"),
+		DataCatalogAPIToken: c.SDK_Token,
+	}
+}
+
+func (c *Config) Geocoding() *geocoding.HandlerConfig {
+	return &geocoding.HandlerConfig{
+		GSIURL: "", // Use default GSI URL
 	}
 }

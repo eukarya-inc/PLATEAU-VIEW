@@ -3,20 +3,18 @@ package builder
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/url"
 	"strings"
 
 	"github.com/reearth/reearth/server/internal/adapter"
-	"github.com/reearth/reearth/server/internal/usecase/repo"
-	"github.com/reearth/reearth/server/pkg/builtin"
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/property"
 	"github.com/reearth/reearth/server/pkg/scene"
-	"github.com/reearth/reearth/server/pkg/value"
+	"github.com/reearth/reearthx/idx"
+	"github.com/reearth/reearthx/log"
 )
 
-func ParseSceneJSON(sceneJSONData map[string]any) (*sceneJSON, error) {
+func ParseSceneJSON(ctx context.Context, sceneJSONData map[string]interface{}) (*sceneJSON, error) {
 	sceneBytes, err := json.MarshalIndent(sceneJSONData, "", "  ")
 	if err != nil {
 		return nil, err
@@ -28,66 +26,55 @@ func ParseSceneJSON(sceneJSONData map[string]any) (*sceneJSON, error) {
 	return &result, nil
 }
 
-func ParseSceneJSONByByte(data *[]byte) (*sceneJSON, error) {
-	var d map[string]any
-	if err := json.Unmarshal(*data, &d); err != nil {
-		return nil, err
-	}
-	sceneData, ok := d["scene"].(map[string]any)
-	if !ok {
-		return nil, errors.New("scene parse error")
-	}
-	return ParseSceneJSON(sceneData)
-}
-
-func ParserWidgetAlignSystem(data *[]byte) (*scene.WidgetAlignSystem, error) {
-	sceneJSON, err := ParseSceneJSONByByte(data)
-	if err != nil {
-		return nil, err
-	}
-	widgetAlignSystemJSON := sceneJSON.WidgetAlignSystem
+func ParserWidgetAlignSystem(widgetAlignSystemJSON *widgetAlignSystemJSON, replaceWidgetIDs map[string]idx.ID[id.Widget]) *scene.WidgetAlignSystem {
 	if widgetAlignSystemJSON == nil {
-		return nil, nil
+		return nil
 	}
 	was := scene.NewWidgetAlignSystem()
-	was.SetZone(scene.WidgetZoneInner, parseWidgetZone(widgetAlignSystemJSON.Inner))
-	was.SetZone(scene.WidgetZoneOuter, parseWidgetZone(widgetAlignSystemJSON.Outer))
-	return was, nil
-}
-
-func parseWidgetZone(widgetZoneJSON *widgetZoneJSON) *scene.WidgetZone {
-	if widgetZoneJSON == nil {
-		return nil
+	if widgetAlignSystemJSON.Inner != nil {
+		parseWidgetZone(was.Zone(scene.WidgetZoneInner), widgetAlignSystemJSON.Inner, replaceWidgetIDs)
 	}
-	zone := scene.NewWidgetZone()
-	zone.SetSection(scene.WidgetSectionLeft, parseWidgetSection(widgetZoneJSON.Left))
-	zone.SetSection(scene.WidgetSectionCenter, parseWidgetSection(widgetZoneJSON.Center))
-	zone.SetSection(scene.WidgetSectionRight, parseWidgetSection(widgetZoneJSON.Right))
-	return zone
-}
-
-func parseWidgetSection(widgetSectionJSON *widgetSectionJSON) *scene.WidgetSection {
-	if widgetSectionJSON == nil {
-		return nil
+	if widgetAlignSystemJSON.Outer != nil {
+		parseWidgetZone(was.Zone(scene.WidgetZoneOuter), widgetAlignSystemJSON.Outer, replaceWidgetIDs)
 	}
-	section := scene.NewWidgetSection()
-	section.SetArea(scene.WidgetAreaTop, parseWidgetArea(widgetSectionJSON.Top))
-	section.SetArea(scene.WidgetAreaMiddle, parseWidgetArea(widgetSectionJSON.Middle))
-	section.SetArea(scene.WidgetAreaBottom, parseWidgetArea(widgetSectionJSON.Bottom))
-	return section
+	return was
 }
 
-func parseWidgetArea(widgetAreaJSON *widgetAreaJSON) *scene.WidgetArea {
+func parseWidgetZone(zone *scene.WidgetZone, widgetZoneJSON *widgetZoneJSON, replaceWidgetIDs map[string]idx.ID[id.Widget]) {
+	if zone == nil || widgetZoneJSON == nil {
+		return
+	}
+	if widgetZoneJSON.Left != nil {
+		setWidgetSection(zone.Section(scene.WidgetSectionLeft), widgetZoneJSON.Left, replaceWidgetIDs)
+	}
+	if widgetZoneJSON.Center != nil {
+		setWidgetSection(zone.Section(scene.WidgetSectionCenter), widgetZoneJSON.Center, replaceWidgetIDs)
+	}
+	if widgetZoneJSON.Right != nil {
+		setWidgetSection(zone.Section(scene.WidgetSectionRight), widgetZoneJSON.Right, replaceWidgetIDs)
+	}
+}
+
+func setWidgetSection(section *scene.WidgetSection, widgetSectionJSON *widgetSectionJSON, replaceWidgetIDs map[string]idx.ID[id.Widget]) {
+	if section == nil || widgetSectionJSON == nil {
+		return
+	}
+	section.SetArea(scene.WidgetAreaTop, parseWidgetArea(widgetSectionJSON.Top, replaceWidgetIDs))
+	section.SetArea(scene.WidgetAreaMiddle, parseWidgetArea(widgetSectionJSON.Middle, replaceWidgetIDs))
+	section.SetArea(scene.WidgetAreaBottom, parseWidgetArea(widgetSectionJSON.Bottom, replaceWidgetIDs))
+}
+
+func parseWidgetArea(widgetAreaJSON *widgetAreaJSON, replaceWidgetIDs map[string]idx.ID[id.Widget]) *scene.WidgetArea {
 	if widgetAreaJSON == nil {
 		return nil
 	}
-	var widgetIDs id.WidgetIDList
-	for _, widgetID := range widgetAreaJSON.WidgetIDs {
-		if wid, err := id.WidgetIDFrom(widgetID); err == nil {
-			widgetIDs = append(widgetIDs, wid)
-		}
+
+	var widgetIDs []idx.ID[id.Widget]
+	for _, oldId := range widgetAreaJSON.WidgetIDs {
+		widgetIDs = append(widgetIDs, replaceWidgetIDs[oldId])
 	}
-	area := scene.NewWidgetArea(
+
+	return scene.NewWidgetArea(
 		widgetIDs,
 		parseWidgetAlign(widgetAreaJSON.Align),
 		parseWidgetAreaPadding(widgetAreaJSON.Padding),
@@ -95,7 +82,6 @@ func parseWidgetArea(widgetAreaJSON *widgetAreaJSON) *scene.WidgetArea {
 		widgetAreaJSON.Centered,
 		widgetAreaJSON.Background,
 	)
-	return area
 }
 
 func parseWidgetAlign(align string) scene.WidgetAlignType {
@@ -115,118 +101,106 @@ func parseWidgetAreaPadding(paddingJSON *widgetAreaPaddingJSON) *scene.WidgetAre
 	if paddingJSON == nil {
 		return nil
 	}
-	padding := scene.NewWidgetAreaPadding(
+	return scene.NewWidgetAreaPadding(
 		paddingJSON.Left,
 		paddingJSON.Right,
 		paddingJSON.Top,
 		paddingJSON.Bottom,
 	)
-	return padding
 }
 
-func Filter(s id.SceneID) repo.SceneFilter {
-	return repo.SceneFilter{Readable: id.SceneIDList{s}, Writable: id.SceneIDList{s}}
-}
+func AddItemFromPropertyJSON(ctx context.Context, prop *property.Property, ps *property.Schema, pj propertyJSON) (*property.Property, error) {
+	for sgKey, value := range pj {
 
-func PropertyUpdate(
-	ctx context.Context,
-	p *property.Property,
-	propertyRepo repo.Property,
-	propertySchemaRepo repo.PropertySchema,
-	data propertyJSON) {
+		if items, ok := value.(map[string]interface{}); ok {
+			// simple property
 
-	ps, err := propertySchemaRepo.Filtered(Filter(p.Scene())).FindByID(ctx, p.Schema())
-	if ps == nil || err != nil {
-		return
-	}
+			sgID := id.PropertySchemaGroupIDFromRef(&sgKey)
 
-	for schemaGroupId, v1 := range data {
+			for fieldKey, value := range items {
 
-		if v1Map, ok := v1.(map[string]interface{}); ok {
-			for fieldId, v2 := range v1Map {
-				pv := ToPropertyValue(v2)
-				sg := id.PropertySchemaGroupIDFromRef(&schemaGroupId)
-				pt := property.NewPointer(sg, nil, id.PropertyFieldIDFromRef(&fieldId))
-				if _, _, _, err := p.UpdateValue(ps, pt, pv); err != nil {
-					return
-				}
+				fieldID := id.PropertyFieldIDFromRef(&fieldKey)
+				ptr := property.NewPointer(sgID, nil, fieldID)
+				pv, ok := parsePropertyValue(ctx, value)
 
-				if err := propertyRepo.Filtered(Filter(p.Scene())).Save(ctx, p); err != nil {
-					return
+				if ok && ps != nil {
+					_, _, _, err := prop.UpdateValue(ps, ptr, pv)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
-		} else if v1List, ok := v1.([]interface{}); ok {
 
-			sg := id.PropertySchemaGroupID(schemaGroupId)
-			gl := p.GetOrCreateGroupList(ps, property.PointItemBySchema(sg))
+		} else if arrayProperty, ok := value.([]interface{}); ok {
+			// group property
 
-			for i, v2 := range v1List {
-				var g *property.Group
+			for _, groupProperty := range arrayProperty {
 
-				if i == 0 && len(p.GroupListBySchema(sg).Groups()) > 0 && //
-					(builtin.PropertySchemaIDVisualizerCesium == ps.ID() ||
-						builtin.PropertySchemaIDVisualizerBetaCesium == ps.ID()) {
-
-					// The initial properties of tiles have already been created by CreateScene.
-					g = p.GroupListBySchema(sg).Groups()[0]
-
-				} else {
-
-					g = property.NewGroup().NewID().SchemaGroup(sg).MustBuild()
-
-				}
-
+				sg := id.PropertySchemaGroupID(sgKey)
+				gl := prop.GetOrCreateGroupList(ps, property.PointItemBySchema(sg))
+				g := property.NewGroup().NewID().SchemaGroup(sg).MustBuild()
 				gl.Add(g, -1)
 
-				if v2Map, ok := v2.(map[string]interface{}); ok {
-					for fieldId, v3 := range v2Map {
-						if fieldId == "id" {
+				if items, ok := groupProperty.(map[string]interface{}); ok {
+
+					for fieldKey, value := range items {
+						if fieldKey == "id" {
 							continue
 						}
-						pv := ToPropertyValue(v3)
-						ov := property.NewOptionalValue(pv.Type(), pv)
-						field := id.PropertyFieldIDFromRef(&fieldId)
-						g.AddFields(
-							property.NewField(*field).
+						ov, ok := parsePropertyOptionalValue(ctx, value)
+						if ok {
+							fieldID := id.PropertyFieldIDFromRef(&fieldKey)
+							field := property.NewField(*fieldID).
 								Value(ov).
-								Build(),
-						)
-						if err := propertyRepo.Filtered(Filter(p.Scene())).Save(ctx, p); err != nil {
-							return
+								// Links(flinks).
+								Build()
+							g.AddFields(field)
 						}
 					}
 				}
 			}
 		}
 	}
+	return prop, nil
 }
 
-func ToPropertyValue(data interface{}) *property.Value {
-	if dataMap, ok := data.(map[string]interface{}); ok {
-		if t, ok := dataMap["type"].(string); ok {
-			return property.ValueType(value.Type(t)).ValueFrom(dataMap["value"])
+func parsePropertyValue(ctx context.Context, value interface{}) (*property.Value, bool) {
+	if fieldObj, ok := value.(map[string]interface{}); ok {
+		if fieldType, ok := fieldObj["type"].(string); ok {
+			if fieldVal, ok := fieldObj["value"]; ok {
+				if fieldType == "url" {
+					urlVal, err := url.Parse(fieldVal.(string))
+					if err != nil {
+						log.Infofc(ctx, "invalid url: %v\n", err.Error())
+						return nil, false
+					}
+					if urlVal.Host == "localhost:8080" || strings.HasSuffix(urlVal.Host, ".reearth.dev") || strings.HasSuffix(urlVal.Host, ".reearth.io") {
+						currentHost := adapter.CurrentHost(ctx)
+						currentHost = strings.TrimPrefix(currentHost, "https://")
+						currentHost = strings.TrimPrefix(currentHost, "http://")
+						urlVal.Host = currentHost
+						if currentHost == "localhost:8080" {
+							urlVal.Scheme = "http"
+						} else {
+							urlVal.Scheme = "https"
+						}
+						fieldVal = urlVal.String()
+
+					}
+				}
+				return property.ValueType(fieldType).ValueFrom(fieldVal), ok
+			}
 		}
 	}
-	return nil
+	log.Infofc(ctx, "property is unreadable %v\n", value)
+	return nil, false
 }
 
-func IsCurrentHostAssets(ctx context.Context, u string) bool {
-	if strings.HasPrefix(u, "assets/") || strings.HasPrefix(u, "/assets") {
-		return true
+func parsePropertyOptionalValue(ctx context.Context, value interface{}) (*property.OptionalValue, bool) {
+	pv, ok := parsePropertyValue(ctx, value)
+	if ok {
+		ov := property.NewOptionalValue(pv.Type(), pv)
+		return ov, true
 	}
-	return strings.HasPrefix(u, adapter.CurrentHost(ctx))
-}
-
-func ReplaceToCurrentHost(ctx context.Context, urlString string) string {
-	u, err := url.Parse(urlString)
-	if err != nil {
-		return urlString
-	}
-	u2, err := url.Parse(adapter.CurrentHost(ctx))
-	if err != nil {
-		return urlString
-	}
-	u.Scheme = u2.Scheme
-	u.Host = u2.Host
-	return u.String()
+	return nil, false
 }

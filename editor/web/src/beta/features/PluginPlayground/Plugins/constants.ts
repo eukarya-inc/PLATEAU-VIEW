@@ -1,5 +1,6 @@
 export type PluginType = {
   id: string;
+  title: string;
   files: FileType[];
 };
 
@@ -12,5 +13,3 @@ export type FileType = {
 };
 
 export const ALLOWED_FILE_EXTENSIONS = ["js"] as const;
-
-export const SHARED_PLUGIN_ID = "shared-plugin-id";

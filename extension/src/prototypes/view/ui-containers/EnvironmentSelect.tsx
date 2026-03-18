@@ -99,7 +99,7 @@ const environmentItems = {
     label: "色付き地図",
   },
   satellite: {
-    image: "https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/16/58212/25808.png",
+    image: "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2024/16/58212/25808.webp",
     label: "衛星写真",
   },
   elevation: {

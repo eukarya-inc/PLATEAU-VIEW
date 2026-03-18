@@ -1,4 +1,4 @@
-import { NLSLayer } from "@reearth/services/api/layersApi/utils";
+import { useVisualizer } from "@reearth/core";
 import { useT } from "@reearth/services/i18n";
 import { debounce } from "lodash-es";
 import { useCallback, useMemo } from "react";
@@ -19,8 +19,7 @@ export default ({
   onPropertyUpdate,
   onPropertyItemAdd,
   onPropertyItemDelete,
-  onPropertyItemMove,
-  nlsLayers
+  onPropertyItemMove
 }: {
   items: LayerBlock[];
   propertyId?: string;
@@ -48,23 +47,18 @@ export default ({
     schemaGroupId?: string,
     itemId?: string
   ) => Promise<void>;
-  nlsLayers?: NLSLayer[];
 }) => {
+  const visualizer = useVisualizer();
   const t = useT();
 
   const layers = useMemo(
     () =>
-      nlsLayers
-        ?.sort((a, b) => {
-          return (a?.index ?? 0) - (b?.index ?? 0);
-        })
-        .map(({ id, title }) => ({
-          value: id,
-          label: title ?? `Layer: ${id}`
-        })) || [],
-    [nlsLayers]
+      visualizer.current?.layers?.layers()?.map(({ id, title }) => ({
+        value: id,
+        label: title ?? `Layer: ${id}`
+      })) || [],
+    [visualizer]
   );
-
   const editorProperties = useMemo(
     () => items.find((i) => i.id === selected),
     [items, selected]

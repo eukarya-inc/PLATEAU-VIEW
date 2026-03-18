@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 

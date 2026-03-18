@@ -43,6 +43,7 @@ type ResolverRoot interface {
 	GenericDataset() GenericDatasetResolver
 	GenericDatasetItem() GenericDatasetItemResolver
 	GenericDatasetType() GenericDatasetTypeResolver
+	GlobalArea() GlobalAreaResolver
 	PlateauDataset() PlateauDatasetResolver
 	PlateauDatasetItem() PlateauDatasetItemResolver
 	PlateauDatasetType() PlateauDatasetTypeResolver
@@ -79,21 +80,22 @@ type ComplexityRoot struct {
 	}
 
 	CityGMLDataset struct {
-		Admin              func(childComplexity int) int
-		City               func(childComplexity int) int
-		CityCode           func(childComplexity int) int
-		CityID             func(childComplexity int) int
-		FeatureTypes       func(childComplexity int) int
-		ID                 func(childComplexity int) int
-		MetadataZipUrls    func(childComplexity int) int
-		PlateauSpecMinor   func(childComplexity int) int
-		PlateauSpecMinorID func(childComplexity int) int
-		Prefecture         func(childComplexity int) int
-		PrefectureCode     func(childComplexity int) int
-		PrefectureID       func(childComplexity int) int
-		RegistrationYear   func(childComplexity int) int
-		URL                func(childComplexity int) int
-		Year               func(childComplexity int) int
+		Admin                func(childComplexity int) int
+		City                 func(childComplexity int) int
+		CityCode             func(childComplexity int) int
+		CityID               func(childComplexity int) int
+		FeatureTypes         func(childComplexity int) int
+		GspatialjpDatasetURL func(childComplexity int) int
+		ID                   func(childComplexity int) int
+		MetadataZipUrls      func(childComplexity int) int
+		PlateauSpecMinor     func(childComplexity int) int
+		PlateauSpecMinorID   func(childComplexity int) int
+		Prefecture           func(childComplexity int) int
+		PrefectureCode       func(childComplexity int) int
+		PrefectureID         func(childComplexity int) int
+		RegistrationYear     func(childComplexity int) int
+		URL                  func(childComplexity int) int
+		Year                 func(childComplexity int) int
 	}
 
 	GenericDataset struct {
@@ -138,6 +140,17 @@ type ComplexityRoot struct {
 		ID       func(childComplexity int) int
 		Name     func(childComplexity int) int
 		Order    func(childComplexity int) int
+	}
+
+	GlobalArea struct {
+		Children func(childComplexity int) int
+		Code     func(childComplexity int) int
+		Datasets func(childComplexity int, input *DatasetsInput) int
+		ID       func(childComplexity int) int
+		Name     func(childComplexity int) int
+		Parent   func(childComplexity int) int
+		ParentID func(childComplexity int) int
+		Type     func(childComplexity int) int
 	}
 
 	PlateauDataset struct {
@@ -337,6 +350,12 @@ type GenericDatasetItemResolver interface {
 type GenericDatasetTypeResolver interface {
 	Datasets(ctx context.Context, obj *GenericDatasetType, input *DatasetsInput) ([]*GenericDataset, error)
 }
+type GlobalAreaResolver interface {
+	Datasets(ctx context.Context, obj *GlobalArea, input *DatasetsInput) ([]Dataset, error)
+
+	Parent(ctx context.Context, obj *GlobalArea) (Area, error)
+	Children(ctx context.Context, obj *GlobalArea) ([]Area, error)
+}
 type PlateauDatasetResolver interface {
 	Prefecture(ctx context.Context, obj *PlateauDataset) (*Prefecture, error)
 	City(ctx context.Context, obj *PlateauDataset) (*City, error)
@@ -412,7 +431,7 @@ func (e *executableSchema) Schema() *ast.Schema {
 	return parsedSchema
 }
 
-func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]interface{}) (int, bool) {
+func (e *executableSchema) Complexity(ctx context.Context, typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
@@ -450,7 +469,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_City_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_City_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -561,6 +580,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CityGMLDataset.FeatureTypes(childComplexity), true
+
+	case "CityGMLDataset.gspatialjpDatasetUrl":
+		if e.complexity.CityGMLDataset.GspatialjpDatasetURL == nil {
+			break
+		}
+
+		return e.complexity.CityGMLDataset.GspatialjpDatasetURL(childComplexity), true
 
 	case "CityGMLDataset.id":
 		if e.complexity.CityGMLDataset.ID == nil {
@@ -854,7 +880,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_GenericDatasetType_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_GenericDatasetType_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -881,6 +907,67 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.GenericDatasetType.Order(childComplexity), true
+
+	case "GlobalArea.children":
+		if e.complexity.GlobalArea.Children == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Children(childComplexity), true
+
+	case "GlobalArea.code":
+		if e.complexity.GlobalArea.Code == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Code(childComplexity), true
+
+	case "GlobalArea.datasets":
+		if e.complexity.GlobalArea.Datasets == nil {
+			break
+		}
+
+		args, err := ec.field_GlobalArea_datasets_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.GlobalArea.Datasets(childComplexity, args["input"].(*DatasetsInput)), true
+
+	case "GlobalArea.id":
+		if e.complexity.GlobalArea.ID == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.ID(childComplexity), true
+
+	case "GlobalArea.name":
+		if e.complexity.GlobalArea.Name == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Name(childComplexity), true
+
+	case "GlobalArea.parent":
+		if e.complexity.GlobalArea.Parent == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Parent(childComplexity), true
+
+	case "GlobalArea.parentId":
+		if e.complexity.GlobalArea.ParentID == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.ParentID(childComplexity), true
+
+	case "GlobalArea.type":
+		if e.complexity.GlobalArea.Type == nil {
+			break
+		}
+
+		return e.complexity.GlobalArea.Type(childComplexity), true
 
 	case "PlateauDataset.admin":
 		if e.complexity.PlateauDataset.Admin == nil {
@@ -1181,7 +1268,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_PlateauDatasetType_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_PlateauDatasetType_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1277,7 +1364,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_PlateauSpecMinor_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_PlateauSpecMinor_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1359,7 +1446,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Prefecture_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_Prefecture_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1406,7 +1493,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_area_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_area_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1418,7 +1505,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_areas_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_areas_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1430,7 +1517,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_datasetTypes_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_datasetTypes_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1442,7 +1529,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1454,7 +1541,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_node_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_node_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1466,7 +1553,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_nodes_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_nodes_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1723,7 +1810,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_RelatedDatasetType_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_RelatedDatasetType_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1805,7 +1892,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Ward_datasets_args(context.TODO(), rawArgs)
+		args, err := ec.field_Ward_datasets_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -1873,8 +1960,8 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 }
 
 func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
-	rc := graphql.GetOperationContext(ctx)
-	ec := executionContext{rc, e, 0, 0, make(chan graphql.DeferredResult)}
+	opCtx := graphql.GetOperationContext(ctx)
+	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAreasInput,
 		ec.unmarshalInputDatasetTypesInput,
@@ -1882,7 +1969,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	)
 	first := true
 
-	switch rc.Operation.Operation {
+	switch opCtx.Operation.Operation {
 	case ast.Query:
 		return func(ctx context.Context) *graphql.Response {
 			var response graphql.Response
@@ -1890,7 +1977,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			if first {
 				first = false
 				ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
-				data = ec._Query(ctx, rc.Operation.SelectionSet)
+				data = ec._Query(ctx, opCtx.Operation.SelectionSet)
 			} else {
 				if atomic.LoadInt32(&ec.pendingDeferred) > 0 {
 					result := <-ec.deferredResults
@@ -1980,244 +2067,536 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
-func (ec *executionContext) field_City_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_City_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
-	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_City_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_City_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_GenericDatasetType_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_GenericDatasetType_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_GenericDatasetType_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_GenericDatasetType_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_PlateauDatasetType_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_GlobalArea_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_GlobalArea_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_GlobalArea_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_PlateauSpecMinor_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_PlateauDatasetType_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_PlateauDatasetType_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_PlateauDatasetType_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Prefecture_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_PlateauSpecMinor_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_PlateauSpecMinor_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_PlateauSpecMinor_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Prefecture_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Prefecture_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Prefecture_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query___type_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query___type_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_area_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_area_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 AreaCode
-	if tmp, ok := rawArgs["code"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
-		arg0, err = ec.unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query_area_argsCode(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["code"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_area_argsCode(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (AreaCode, error) {
+	if _, ok := rawArgs["code"]; !ok {
+		var zeroVal AreaCode
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_areas_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
+	if tmp, ok := rawArgs["code"]; ok {
+		return ec.unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, tmp)
+	}
+
+	var zeroVal AreaCode
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_areas_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 *AreasInput
-	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreasInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query_areas_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_areas_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*AreasInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *AreasInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_datasetTypes_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetTypesInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetTypesInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypesInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreasInput(ctx, tmp)
+	}
+
+	var zeroVal *AreasInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_datasetTypes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_datasetTypes_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_datasetTypes_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetTypesInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetTypesInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetTypesInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypesInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetTypesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_node_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_node_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 ID
-	if tmp, ok := rawArgs["id"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-		arg0, err = ec.unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query_node_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["id"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_node_argsID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (ID, error) {
+	if _, ok := rawArgs["id"]; !ok {
+		var zeroVal ID
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query_nodes_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, tmp)
+	}
+
+	var zeroVal ID
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_nodes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 []ID
-	if tmp, ok := rawArgs["ids"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ids"))
-		arg0, err = ec.unmarshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query_nodes_argsIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["ids"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query_nodes_argsIds(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]ID, error) {
+	if _, ok := rawArgs["ids"]; !ok {
+		var zeroVal []ID
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_RelatedDatasetType_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("ids"))
+	if tmp, ok := rawArgs["ids"]; ok {
+		return ec.unmarshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx, tmp)
+	}
+
+	var zeroVal []ID
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_RelatedDatasetType_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
-	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_RelatedDatasetType_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_RelatedDatasetType_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Ward_datasets_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *DatasetsInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Ward_datasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Ward_datasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Ward_datasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*DatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *DatasetsInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field___Type_enumValues_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Directive_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 bool
-	if tmp, ok := rawArgs["includeDeprecated"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
-		arg0, err = ec.unmarshalOBoolean2bool(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field___Directive_args_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["includeDeprecated"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field___Directive_args_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 bool
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
 	if tmp, ok := rawArgs["includeDeprecated"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
-		arg0, err = ec.unmarshalOBoolean2bool(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Field_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Field_args_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["includeDeprecated"] = arg0
 	return args, nil
+}
+func (ec *executionContext) field___Field_args_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Type_enumValues_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Type_enumValues_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["includeDeprecated"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field___Type_enumValues_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2bool(ctx, tmp)
+	}
+
+	var zeroVal bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Type_fields_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["includeDeprecated"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field___Type_fields_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2bool(ctx, tmp)
+	}
+
+	var zeroVal bool
+	return zeroVal, nil
 }
 
 // endregion ***************************** args.gotpl *****************************
@@ -2240,7 +2619,7 @@ func (ec *executionContext) _City_id(ctx context.Context, field graphql.Collecte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -2256,10 +2635,10 @@ func (ec *executionContext) _City_id(ctx context.Context, field graphql.Collecte
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2284,7 +2663,7 @@ func (ec *executionContext) _City_type(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -2300,10 +2679,10 @@ func (ec *executionContext) _City_type(ctx context.Context, field graphql.Collec
 	}
 	res := resTmp.(AreaType)
 	fc.Result = res
-	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
+	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2328,7 +2707,7 @@ func (ec *executionContext) _City_code(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -2344,10 +2723,10 @@ func (ec *executionContext) _City_code(ctx context.Context, field graphql.Collec
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2372,7 +2751,7 @@ func (ec *executionContext) _City_name(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2391,7 +2770,7 @@ func (ec *executionContext) _City_name(ctx context.Context, field graphql.Collec
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2416,7 +2795,7 @@ func (ec *executionContext) _City_prefectureId(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -2432,10 +2811,10 @@ func (ec *executionContext) _City_prefectureId(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2460,7 +2839,7 @@ func (ec *executionContext) _City_prefectureCode(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -2476,10 +2855,10 @@ func (ec *executionContext) _City_prefectureCode(ctx context.Context, field grap
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2504,7 +2883,7 @@ func (ec *executionContext) _City_prefecture(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Prefecture(rctx, obj)
 	})
@@ -2517,10 +2896,10 @@ func (ec *executionContext) _City_prefecture(ctx context.Context, field graphql.
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2565,7 +2944,7 @@ func (ec *executionContext) _City_wards(ctx context.Context, field graphql.Colle
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Wards(rctx, obj)
 	})
@@ -2581,10 +2960,10 @@ func (ec *executionContext) _City_wards(ctx context.Context, field graphql.Colle
 	}
 	res := resTmp.([]*Ward)
 	fc.Result = res
-	return ec.marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWardᚄ(ctx, field.Selections, res)
+	return ec.marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWardᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_wards(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_wards(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2639,7 +3018,7 @@ func (ec *executionContext) _City_datasets(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -2655,7 +3034,7 @@ func (ec *executionContext) _City_datasets(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.([]Dataset)
 	fc.Result = res
-	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_City_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2694,7 +3073,7 @@ func (ec *executionContext) _City_parentId(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -2707,10 +3086,10 @@ func (ec *executionContext) _City_parentId(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2735,7 +3114,7 @@ func (ec *executionContext) _City_parent(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Parent(rctx, obj)
 	})
@@ -2751,10 +3130,10 @@ func (ec *executionContext) _City_parent(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2799,7 +3178,7 @@ func (ec *executionContext) _City_planarCrsEpsgCode(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PlanarCrsEpsgCode, nil
 	})
@@ -2815,7 +3194,7 @@ func (ec *executionContext) _City_planarCrsEpsgCode(ctx context.Context, field g
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_planarCrsEpsgCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_planarCrsEpsgCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2840,7 +3219,7 @@ func (ec *executionContext) _City_citygmlId(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CitygmlID, nil
 	})
@@ -2853,10 +3232,10 @@ func (ec *executionContext) _City_citygmlId(ctx context.Context, field graphql.C
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_citygmlId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_citygmlId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2881,7 +3260,7 @@ func (ec *executionContext) _City_citygml(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Citygml(rctx, obj)
 	})
@@ -2894,10 +3273,10 @@ func (ec *executionContext) _City_citygml(ctx context.Context, field graphql.Col
 	}
 	res := resTmp.(*CityGMLDataset)
 	fc.Result = res
-	return ec.marshalOCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx, field.Selections, res)
+	return ec.marshalOCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_citygml(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_citygml(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2923,6 +3302,8 @@ func (ec *executionContext) fieldContext_City_citygml(ctx context.Context, field
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "gspatialjpDatasetUrl":
+				return ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
 			case "prefecture":
 				return ec.fieldContext_CityGMLDataset_prefecture(ctx, field)
 			case "city":
@@ -2954,7 +3335,7 @@ func (ec *executionContext) _City_children(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.City().Children(rctx, obj)
 	})
@@ -2970,10 +3351,10 @@ func (ec *executionContext) _City_children(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.([]Area)
 	fc.Result = res
-	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_City_children(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_City_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "City",
 		Field:      field,
@@ -2998,7 +3379,7 @@ func (ec *executionContext) _CityGMLDataset_id(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -3014,10 +3395,10 @@ func (ec *executionContext) _CityGMLDataset_id(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3042,7 +3423,7 @@ func (ec *executionContext) _CityGMLDataset_year(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -3061,7 +3442,7 @@ func (ec *executionContext) _CityGMLDataset_year(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3086,7 +3467,7 @@ func (ec *executionContext) _CityGMLDataset_registrationYear(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.RegistrationYear, nil
 	})
@@ -3105,7 +3486,7 @@ func (ec *executionContext) _CityGMLDataset_registrationYear(ctx context.Context
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_registrationYear(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_registrationYear(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3130,7 +3511,7 @@ func (ec *executionContext) _CityGMLDataset_prefectureId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -3146,10 +3527,10 @@ func (ec *executionContext) _CityGMLDataset_prefectureId(ctx context.Context, fi
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3174,7 +3555,7 @@ func (ec *executionContext) _CityGMLDataset_prefectureCode(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -3190,10 +3571,10 @@ func (ec *executionContext) _CityGMLDataset_prefectureCode(ctx context.Context, 
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3218,7 +3599,7 @@ func (ec *executionContext) _CityGMLDataset_cityId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityID, nil
 	})
@@ -3234,10 +3615,10 @@ func (ec *executionContext) _CityGMLDataset_cityId(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_cityId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_cityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3262,7 +3643,7 @@ func (ec *executionContext) _CityGMLDataset_cityCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityCode, nil
 	})
@@ -3278,10 +3659,10 @@ func (ec *executionContext) _CityGMLDataset_cityCode(ctx context.Context, field 
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_cityCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_cityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3306,7 +3687,7 @@ func (ec *executionContext) _CityGMLDataset_plateauSpecMinorId(ctx context.Conte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PlateauSpecMinorID, nil
 	})
@@ -3322,10 +3703,10 @@ func (ec *executionContext) _CityGMLDataset_plateauSpecMinorId(ctx context.Conte
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_plateauSpecMinorId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_plateauSpecMinorId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3350,7 +3731,7 @@ func (ec *executionContext) _CityGMLDataset_url(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.URL, nil
 	})
@@ -3369,7 +3750,48 @@ func (ec *executionContext) _CityGMLDataset_url(ctx context.Context, field graph
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_url(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CityGMLDataset",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CityGMLDataset_gspatialjpDatasetUrl(ctx context.Context, field graphql.CollectedField, obj *CityGMLDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GspatialjpDatasetURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CityGMLDataset_gspatialjpDatasetUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3394,7 +3816,7 @@ func (ec *executionContext) _CityGMLDataset_prefecture(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.CityGMLDataset().Prefecture(rctx, obj)
 	})
@@ -3410,10 +3832,10 @@ func (ec *executionContext) _CityGMLDataset_prefecture(ctx context.Context, fiel
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3458,7 +3880,7 @@ func (ec *executionContext) _CityGMLDataset_city(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.CityGMLDataset().City(rctx, obj)
 	})
@@ -3474,10 +3896,10 @@ func (ec *executionContext) _CityGMLDataset_city(ctx context.Context, field grap
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_city(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3534,7 +3956,7 @@ func (ec *executionContext) _CityGMLDataset_plateauSpecMinor(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.CityGMLDataset().PlateauSpecMinor(rctx, obj)
 	})
@@ -3550,10 +3972,10 @@ func (ec *executionContext) _CityGMLDataset_plateauSpecMinor(ctx context.Context
 	}
 	res := resTmp.(*PlateauSpecMinor)
 	fc.Result = res
-	return ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, field.Selections, res)
+	return ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_plateauSpecMinor(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_plateauSpecMinor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3596,7 +4018,7 @@ func (ec *executionContext) _CityGMLDataset_featureTypes(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.FeatureTypes, nil
 	})
@@ -3615,7 +4037,7 @@ func (ec *executionContext) _CityGMLDataset_featureTypes(ctx context.Context, fi
 	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_featureTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_featureTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3640,7 +4062,7 @@ func (ec *executionContext) _CityGMLDataset_metadataZipUrls(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MetadataZipUrls, nil
 	})
@@ -3659,7 +4081,7 @@ func (ec *executionContext) _CityGMLDataset_metadataZipUrls(ctx context.Context,
 	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_metadataZipUrls(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_metadataZipUrls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3684,7 +4106,7 @@ func (ec *executionContext) _CityGMLDataset_admin(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Admin, nil
 	})
@@ -3695,12 +4117,12 @@ func (ec *executionContext) _CityGMLDataset_admin(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(interface{})
+	res := resTmp.(any)
 	fc.Result = res
 	return ec.marshalOAny2interface(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_CityGMLDataset_admin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_CityGMLDataset_admin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CityGMLDataset",
 		Field:      field,
@@ -3725,7 +4147,7 @@ func (ec *executionContext) _GenericDataset_id(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -3741,10 +4163,10 @@ func (ec *executionContext) _GenericDataset_id(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3769,7 +4191,7 @@ func (ec *executionContext) _GenericDataset_name(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -3788,7 +4210,7 @@ func (ec *executionContext) _GenericDataset_name(ctx context.Context, field grap
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3813,7 +4235,7 @@ func (ec *executionContext) _GenericDataset_description(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description, nil
 	})
@@ -3829,7 +4251,7 @@ func (ec *executionContext) _GenericDataset_description(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3854,7 +4276,7 @@ func (ec *executionContext) _GenericDataset_year(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -3873,7 +4295,7 @@ func (ec *executionContext) _GenericDataset_year(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3898,7 +4320,7 @@ func (ec *executionContext) _GenericDataset_registerationYear(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.RegisterationYear, nil
 	})
@@ -3917,7 +4339,7 @@ func (ec *executionContext) _GenericDataset_registerationYear(ctx context.Contex
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_registerationYear(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_registerationYear(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3942,7 +4364,7 @@ func (ec *executionContext) _GenericDataset_groups(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Groups, nil
 	})
@@ -3958,7 +4380,7 @@ func (ec *executionContext) _GenericDataset_groups(ctx context.Context, field gr
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_groups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_groups(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -3983,7 +4405,7 @@ func (ec *executionContext) _GenericDataset_openDataUrl(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OpenDataURL, nil
 	})
@@ -3999,7 +4421,7 @@ func (ec *executionContext) _GenericDataset_openDataUrl(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_openDataUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_openDataUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4024,7 +4446,7 @@ func (ec *executionContext) _GenericDataset_prefectureId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -4037,10 +4459,10 @@ func (ec *executionContext) _GenericDataset_prefectureId(ctx context.Context, fi
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4065,7 +4487,7 @@ func (ec *executionContext) _GenericDataset_prefectureCode(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -4078,10 +4500,10 @@ func (ec *executionContext) _GenericDataset_prefectureCode(ctx context.Context, 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4106,7 +4528,7 @@ func (ec *executionContext) _GenericDataset_cityId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityID, nil
 	})
@@ -4119,10 +4541,10 @@ func (ec *executionContext) _GenericDataset_cityId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_cityId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_cityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4147,7 +4569,7 @@ func (ec *executionContext) _GenericDataset_cityCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityCode, nil
 	})
@@ -4160,10 +4582,10 @@ func (ec *executionContext) _GenericDataset_cityCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_cityCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_cityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4188,7 +4610,7 @@ func (ec *executionContext) _GenericDataset_wardId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardID, nil
 	})
@@ -4201,10 +4623,10 @@ func (ec *executionContext) _GenericDataset_wardId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_wardId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_wardId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4229,7 +4651,7 @@ func (ec *executionContext) _GenericDataset_wardCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardCode, nil
 	})
@@ -4242,10 +4664,10 @@ func (ec *executionContext) _GenericDataset_wardCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_wardCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_wardCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4270,7 +4692,7 @@ func (ec *executionContext) _GenericDataset_typeId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeID, nil
 	})
@@ -4286,10 +4708,10 @@ func (ec *executionContext) _GenericDataset_typeId(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_typeId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_typeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4314,7 +4736,7 @@ func (ec *executionContext) _GenericDataset_typeCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeCode, nil
 	})
@@ -4333,7 +4755,7 @@ func (ec *executionContext) _GenericDataset_typeCode(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_typeCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4358,7 +4780,7 @@ func (ec *executionContext) _GenericDataset_prefecture(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDataset().Prefecture(rctx, obj)
 	})
@@ -4371,10 +4793,10 @@ func (ec *executionContext) _GenericDataset_prefecture(ctx context.Context, fiel
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4419,7 +4841,7 @@ func (ec *executionContext) _GenericDataset_city(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDataset().City(rctx, obj)
 	})
@@ -4432,10 +4854,10 @@ func (ec *executionContext) _GenericDataset_city(ctx context.Context, field grap
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_city(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4492,7 +4914,7 @@ func (ec *executionContext) _GenericDataset_ward(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDataset().Ward(rctx, obj)
 	})
@@ -4505,10 +4927,10 @@ func (ec *executionContext) _GenericDataset_ward(ctx context.Context, field grap
 	}
 	res := resTmp.(*Ward)
 	fc.Result = res
-	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
+	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_ward(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_ward(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4563,7 +4985,7 @@ func (ec *executionContext) _GenericDataset_type(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDataset().Type(rctx, obj)
 	})
@@ -4579,10 +5001,10 @@ func (ec *executionContext) _GenericDataset_type(ctx context.Context, field grap
 	}
 	res := resTmp.(*GenericDatasetType)
 	fc.Result = res
-	return ec.marshalNGenericDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx, field.Selections, res)
+	return ec.marshalNGenericDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4621,7 +5043,7 @@ func (ec *executionContext) _GenericDataset_items(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Items, nil
 	})
@@ -4637,10 +5059,10 @@ func (ec *executionContext) _GenericDataset_items(ctx context.Context, field gra
 	}
 	res := resTmp.([]*GenericDatasetItem)
 	fc.Result = res
-	return ec.marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItemᚄ(ctx, field.Selections, res)
+	return ec.marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItemᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_items(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4681,7 +5103,7 @@ func (ec *executionContext) _GenericDataset_ar(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Ar, nil
 	})
@@ -4700,7 +5122,7 @@ func (ec *executionContext) _GenericDataset_ar(ctx context.Context, field graphq
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_ar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_ar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4725,7 +5147,7 @@ func (ec *executionContext) _GenericDataset_admin(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Admin, nil
 	})
@@ -4736,12 +5158,12 @@ func (ec *executionContext) _GenericDataset_admin(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(interface{})
+	res := resTmp.(any)
 	fc.Result = res
 	return ec.marshalOAny2interface(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDataset_admin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDataset_admin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDataset",
 		Field:      field,
@@ -4766,7 +5188,7 @@ func (ec *executionContext) _GenericDatasetItem_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -4782,10 +5204,10 @@ func (ec *executionContext) _GenericDatasetItem_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -4810,7 +5232,7 @@ func (ec *executionContext) _GenericDatasetItem_format(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Format, nil
 	})
@@ -4826,10 +5248,10 @@ func (ec *executionContext) _GenericDatasetItem_format(ctx context.Context, fiel
 	}
 	res := resTmp.(DatasetFormat)
 	fc.Result = res
-	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
+	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_format(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -4854,7 +5276,7 @@ func (ec *executionContext) _GenericDatasetItem_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -4873,7 +5295,7 @@ func (ec *executionContext) _GenericDatasetItem_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -4898,7 +5320,7 @@ func (ec *executionContext) _GenericDatasetItem_url(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.URL, nil
 	})
@@ -4917,7 +5339,7 @@ func (ec *executionContext) _GenericDatasetItem_url(ctx context.Context, field g
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_url(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -4942,7 +5364,7 @@ func (ec *executionContext) _GenericDatasetItem_layers(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Layers, nil
 	})
@@ -4958,7 +5380,7 @@ func (ec *executionContext) _GenericDatasetItem_layers(ctx context.Context, fiel
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_layers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_layers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -4983,7 +5405,7 @@ func (ec *executionContext) _GenericDatasetItem_parentId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -4999,10 +5421,10 @@ func (ec *executionContext) _GenericDatasetItem_parentId(ctx context.Context, fi
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -5027,7 +5449,7 @@ func (ec *executionContext) _GenericDatasetItem_parent(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDatasetItem().Parent(rctx, obj)
 	})
@@ -5040,10 +5462,10 @@ func (ec *executionContext) _GenericDatasetItem_parent(ctx context.Context, fiel
 	}
 	res := resTmp.(*GenericDataset)
 	fc.Result = res
-	return ec.marshalOGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx, field.Selections, res)
+	return ec.marshalOGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetItem_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetItem_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetItem",
 		Field:      field,
@@ -5114,7 +5536,7 @@ func (ec *executionContext) _GenericDatasetType_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -5130,10 +5552,10 @@ func (ec *executionContext) _GenericDatasetType_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetType_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetType_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetType",
 		Field:      field,
@@ -5158,7 +5580,7 @@ func (ec *executionContext) _GenericDatasetType_code(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -5177,7 +5599,7 @@ func (ec *executionContext) _GenericDatasetType_code(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetType_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetType_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetType",
 		Field:      field,
@@ -5202,7 +5624,7 @@ func (ec *executionContext) _GenericDatasetType_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -5221,7 +5643,7 @@ func (ec *executionContext) _GenericDatasetType_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetType_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetType_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetType",
 		Field:      field,
@@ -5246,7 +5668,7 @@ func (ec *executionContext) _GenericDatasetType_category(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Category, nil
 	})
@@ -5262,10 +5684,10 @@ func (ec *executionContext) _GenericDatasetType_category(ctx context.Context, fi
 	}
 	res := resTmp.(DatasetTypeCategory)
 	fc.Result = res
-	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
+	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetType_category(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetType_category(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetType",
 		Field:      field,
@@ -5290,7 +5712,7 @@ func (ec *executionContext) _GenericDatasetType_order(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Order, nil
 	})
@@ -5309,7 +5731,7 @@ func (ec *executionContext) _GenericDatasetType_order(ctx context.Context, field
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_GenericDatasetType_order(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GenericDatasetType_order(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "GenericDatasetType",
 		Field:      field,
@@ -5334,7 +5756,7 @@ func (ec *executionContext) _GenericDatasetType_datasets(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.GenericDatasetType().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -5350,7 +5772,7 @@ func (ec *executionContext) _GenericDatasetType_datasets(ctx context.Context, fi
 	}
 	res := resTmp.([]*GenericDataset)
 	fc.Result = res
-	return ec.marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_GenericDatasetType_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -5423,8 +5845,8 @@ func (ec *executionContext) fieldContext_GenericDatasetType_datasets(ctx context
 	return fc, nil
 }
 
-func (ec *executionContext) _PlateauDataset_id(ctx context.Context, field graphql.CollectedField, obj *PlateauDataset) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_PlateauDataset_id(ctx, field)
+func (ec *executionContext) _GlobalArea_id(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_id(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -5435,7 +5857,7 @@ func (ec *executionContext) _PlateauDataset_id(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -5451,10 +5873,367 @@ func (ec *executionContext) _PlateauDataset_id(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_GlobalArea_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_type(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_type(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Type, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(AreaType)
+	fc.Result = res
+	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AreaType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_code(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_code(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Code, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(AreaCode)
+	fc.Result = res
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AreaCode does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_name(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_datasets(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_datasets(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]Dataset)
+	fc.Result = res
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_GlobalArea_datasets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_parentId(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_parentId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ParentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*ID)
+	fc.Result = res
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_parent(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_parent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Parent(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(Area)
+	fc.Result = res
+	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GlobalArea_children(ctx context.Context, field graphql.CollectedField, obj *GlobalArea) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GlobalArea_children(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.GlobalArea().Children(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]Area)
+	fc.Result = res
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GlobalArea_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GlobalArea",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDataset_id(ctx context.Context, field graphql.CollectedField, obj *PlateauDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDataset_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(ID)
+	fc.Result = res
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDataset_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5479,7 +6258,7 @@ func (ec *executionContext) _PlateauDataset_name(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -5498,7 +6277,7 @@ func (ec *executionContext) _PlateauDataset_name(ctx context.Context, field grap
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5523,7 +6302,7 @@ func (ec *executionContext) _PlateauDataset_subname(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Subname, nil
 	})
@@ -5539,7 +6318,7 @@ func (ec *executionContext) _PlateauDataset_subname(ctx context.Context, field g
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_subname(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_subname(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5564,7 +6343,7 @@ func (ec *executionContext) _PlateauDataset_subcode(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Subcode, nil
 	})
@@ -5580,7 +6359,7 @@ func (ec *executionContext) _PlateauDataset_subcode(ctx context.Context, field g
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_subcode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_subcode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5605,7 +6384,7 @@ func (ec *executionContext) _PlateauDataset_suborder(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Suborder, nil
 	})
@@ -5621,7 +6400,7 @@ func (ec *executionContext) _PlateauDataset_suborder(ctx context.Context, field 
 	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_suborder(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_suborder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5646,7 +6425,7 @@ func (ec *executionContext) _PlateauDataset_description(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description, nil
 	})
@@ -5662,7 +6441,7 @@ func (ec *executionContext) _PlateauDataset_description(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5687,7 +6466,7 @@ func (ec *executionContext) _PlateauDataset_year(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -5706,7 +6485,7 @@ func (ec *executionContext) _PlateauDataset_year(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5731,7 +6510,7 @@ func (ec *executionContext) _PlateauDataset_registerationYear(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.RegisterationYear, nil
 	})
@@ -5750,7 +6529,7 @@ func (ec *executionContext) _PlateauDataset_registerationYear(ctx context.Contex
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_registerationYear(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_registerationYear(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5775,7 +6554,7 @@ func (ec *executionContext) _PlateauDataset_groups(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Groups, nil
 	})
@@ -5791,7 +6570,7 @@ func (ec *executionContext) _PlateauDataset_groups(ctx context.Context, field gr
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_groups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_groups(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5816,7 +6595,7 @@ func (ec *executionContext) _PlateauDataset_openDataUrl(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OpenDataURL, nil
 	})
@@ -5832,7 +6611,7 @@ func (ec *executionContext) _PlateauDataset_openDataUrl(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_openDataUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_openDataUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5857,7 +6636,7 @@ func (ec *executionContext) _PlateauDataset_prefectureId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -5870,10 +6649,10 @@ func (ec *executionContext) _PlateauDataset_prefectureId(ctx context.Context, fi
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5898,7 +6677,7 @@ func (ec *executionContext) _PlateauDataset_prefectureCode(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -5911,10 +6690,10 @@ func (ec *executionContext) _PlateauDataset_prefectureCode(ctx context.Context, 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5939,7 +6718,7 @@ func (ec *executionContext) _PlateauDataset_cityId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityID, nil
 	})
@@ -5952,10 +6731,10 @@ func (ec *executionContext) _PlateauDataset_cityId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_cityId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_cityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -5980,7 +6759,7 @@ func (ec *executionContext) _PlateauDataset_cityCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityCode, nil
 	})
@@ -5993,10 +6772,10 @@ func (ec *executionContext) _PlateauDataset_cityCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_cityCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_cityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6021,7 +6800,7 @@ func (ec *executionContext) _PlateauDataset_wardId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardID, nil
 	})
@@ -6034,10 +6813,10 @@ func (ec *executionContext) _PlateauDataset_wardId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_wardId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_wardId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6062,7 +6841,7 @@ func (ec *executionContext) _PlateauDataset_wardCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardCode, nil
 	})
@@ -6075,10 +6854,10 @@ func (ec *executionContext) _PlateauDataset_wardCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_wardCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_wardCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6103,7 +6882,7 @@ func (ec *executionContext) _PlateauDataset_typeId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeID, nil
 	})
@@ -6119,10 +6898,10 @@ func (ec *executionContext) _PlateauDataset_typeId(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_typeId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_typeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6147,7 +6926,7 @@ func (ec *executionContext) _PlateauDataset_typeCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeCode, nil
 	})
@@ -6166,7 +6945,7 @@ func (ec *executionContext) _PlateauDataset_typeCode(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_typeCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6191,7 +6970,7 @@ func (ec *executionContext) _PlateauDataset_prefecture(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDataset().Prefecture(rctx, obj)
 	})
@@ -6204,10 +6983,10 @@ func (ec *executionContext) _PlateauDataset_prefecture(ctx context.Context, fiel
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6252,7 +7031,7 @@ func (ec *executionContext) _PlateauDataset_city(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDataset().City(rctx, obj)
 	})
@@ -6265,10 +7044,10 @@ func (ec *executionContext) _PlateauDataset_city(ctx context.Context, field grap
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_city(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6325,7 +7104,7 @@ func (ec *executionContext) _PlateauDataset_ward(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDataset().Ward(rctx, obj)
 	})
@@ -6338,10 +7117,10 @@ func (ec *executionContext) _PlateauDataset_ward(ctx context.Context, field grap
 	}
 	res := resTmp.(*Ward)
 	fc.Result = res
-	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
+	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_ward(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_ward(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6396,7 +7175,7 @@ func (ec *executionContext) _PlateauDataset_type(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDataset().Type(rctx, obj)
 	})
@@ -6412,10 +7191,10 @@ func (ec *executionContext) _PlateauDataset_type(ctx context.Context, field grap
 	}
 	res := resTmp.(*PlateauDatasetType)
 	fc.Result = res
-	return ec.marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx, field.Selections, res)
+	return ec.marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6462,7 +7241,7 @@ func (ec *executionContext) _PlateauDataset_items(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Items, nil
 	})
@@ -6478,10 +7257,10 @@ func (ec *executionContext) _PlateauDataset_items(ctx context.Context, field gra
 	}
 	res := resTmp.([]*PlateauDatasetItem)
 	fc.Result = res
-	return ec.marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx, field.Selections, res)
+	return ec.marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_items(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6532,7 +7311,7 @@ func (ec *executionContext) _PlateauDataset_ar(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Ar, nil
 	})
@@ -6551,7 +7330,7 @@ func (ec *executionContext) _PlateauDataset_ar(ctx context.Context, field graphq
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_ar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_ar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6576,7 +7355,7 @@ func (ec *executionContext) _PlateauDataset_admin(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Admin, nil
 	})
@@ -6587,12 +7366,12 @@ func (ec *executionContext) _PlateauDataset_admin(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(interface{})
+	res := resTmp.(any)
 	fc.Result = res
 	return ec.marshalOAny2interface(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_admin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_admin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6617,7 +7396,7 @@ func (ec *executionContext) _PlateauDataset_plateauSpecMinorId(ctx context.Conte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PlateauSpecMinorID, nil
 	})
@@ -6633,10 +7412,10 @@ func (ec *executionContext) _PlateauDataset_plateauSpecMinorId(ctx context.Conte
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_plateauSpecMinorId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_plateauSpecMinorId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6661,7 +7440,7 @@ func (ec *executionContext) _PlateauDataset_plateauSpecMinor(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDataset().PlateauSpecMinor(rctx, obj)
 	})
@@ -6677,10 +7456,10 @@ func (ec *executionContext) _PlateauDataset_plateauSpecMinor(ctx context.Context
 	}
 	res := resTmp.(*PlateauSpecMinor)
 	fc.Result = res
-	return ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, field.Selections, res)
+	return ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_plateauSpecMinor(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_plateauSpecMinor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6723,7 +7502,7 @@ func (ec *executionContext) _PlateauDataset_river(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.River, nil
 	})
@@ -6736,10 +7515,10 @@ func (ec *executionContext) _PlateauDataset_river(ctx context.Context, field gra
 	}
 	res := resTmp.(*River)
 	fc.Result = res
-	return ec.marshalORiver2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRiver(ctx, field.Selections, res)
+	return ec.marshalORiver2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRiver(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_river(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_river(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
@@ -6770,7 +7549,7 @@ func (ec *executionContext) _PlateauDatasetItem_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -6786,10 +7565,10 @@ func (ec *executionContext) _PlateauDatasetItem_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -6814,7 +7593,7 @@ func (ec *executionContext) _PlateauDatasetItem_format(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Format, nil
 	})
@@ -6830,10 +7609,10 @@ func (ec *executionContext) _PlateauDatasetItem_format(ctx context.Context, fiel
 	}
 	res := resTmp.(DatasetFormat)
 	fc.Result = res
-	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
+	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_format(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -6858,7 +7637,7 @@ func (ec *executionContext) _PlateauDatasetItem_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -6877,7 +7656,7 @@ func (ec *executionContext) _PlateauDatasetItem_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -6902,7 +7681,7 @@ func (ec *executionContext) _PlateauDatasetItem_url(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.URL, nil
 	})
@@ -6921,7 +7700,7 @@ func (ec *executionContext) _PlateauDatasetItem_url(ctx context.Context, field g
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_url(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -6946,7 +7725,7 @@ func (ec *executionContext) _PlateauDatasetItem_layers(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Layers, nil
 	})
@@ -6962,7 +7741,7 @@ func (ec *executionContext) _PlateauDatasetItem_layers(ctx context.Context, fiel
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_layers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_layers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -6987,7 +7766,7 @@ func (ec *executionContext) _PlateauDatasetItem_parentId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -7003,10 +7782,10 @@ func (ec *executionContext) _PlateauDatasetItem_parentId(ctx context.Context, fi
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7031,7 +7810,7 @@ func (ec *executionContext) _PlateauDatasetItem_parent(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDatasetItem().Parent(rctx, obj)
 	})
@@ -7044,10 +7823,10 @@ func (ec *executionContext) _PlateauDatasetItem_parent(ctx context.Context, fiel
 	}
 	res := resTmp.(*PlateauDataset)
 	fc.Result = res
-	return ec.marshalOPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx, field.Selections, res)
+	return ec.marshalOPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7130,7 +7909,7 @@ func (ec *executionContext) _PlateauDatasetItem_lod(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Lod, nil
 	})
@@ -7146,7 +7925,7 @@ func (ec *executionContext) _PlateauDatasetItem_lod(ctx context.Context, field g
 	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_lod(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_lod(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7171,7 +7950,7 @@ func (ec *executionContext) _PlateauDatasetItem_lodEx(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.LodEx, nil
 	})
@@ -7187,7 +7966,7 @@ func (ec *executionContext) _PlateauDatasetItem_lodEx(ctx context.Context, field
 	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_lodEx(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_lodEx(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7212,7 +7991,7 @@ func (ec *executionContext) _PlateauDatasetItem_texture(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Texture, nil
 	})
@@ -7225,10 +8004,10 @@ func (ec *executionContext) _PlateauDatasetItem_texture(ctx context.Context, fie
 	}
 	res := resTmp.(*Texture)
 	fc.Result = res
-	return ec.marshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx, field.Selections, res)
+	return ec.marshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_texture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_texture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7253,7 +8032,7 @@ func (ec *executionContext) _PlateauDatasetItem_floodingScale(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.FloodingScale, nil
 	})
@@ -7266,10 +8045,10 @@ func (ec *executionContext) _PlateauDatasetItem_floodingScale(ctx context.Contex
 	}
 	res := resTmp.(*FloodingScale)
 	fc.Result = res
-	return ec.marshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx, field.Selections, res)
+	return ec.marshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_floodingScale(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_floodingScale(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7294,7 +8073,7 @@ func (ec *executionContext) _PlateauDatasetItem_floodingScaleSuffix(ctx context.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.FloodingScaleSuffix, nil
 	})
@@ -7310,7 +8089,7 @@ func (ec *executionContext) _PlateauDatasetItem_floodingScaleSuffix(ctx context.
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetItem_floodingScaleSuffix(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetItem_floodingScaleSuffix(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetItem",
 		Field:      field,
@@ -7335,7 +8114,7 @@ func (ec *executionContext) _PlateauDatasetType_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -7351,10 +8130,10 @@ func (ec *executionContext) _PlateauDatasetType_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7379,7 +8158,7 @@ func (ec *executionContext) _PlateauDatasetType_code(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -7398,7 +8177,7 @@ func (ec *executionContext) _PlateauDatasetType_code(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7423,7 +8202,7 @@ func (ec *executionContext) _PlateauDatasetType_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -7442,7 +8221,7 @@ func (ec *executionContext) _PlateauDatasetType_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7467,7 +8246,7 @@ func (ec *executionContext) _PlateauDatasetType_category(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Category, nil
 	})
@@ -7483,10 +8262,10 @@ func (ec *executionContext) _PlateauDatasetType_category(ctx context.Context, fi
 	}
 	res := resTmp.(DatasetTypeCategory)
 	fc.Result = res
-	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
+	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_category(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_category(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7511,7 +8290,7 @@ func (ec *executionContext) _PlateauDatasetType_order(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Order, nil
 	})
@@ -7530,7 +8309,7 @@ func (ec *executionContext) _PlateauDatasetType_order(ctx context.Context, field
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_order(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_order(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7555,7 +8334,7 @@ func (ec *executionContext) _PlateauDatasetType_plateauSpecId(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PlateauSpecID, nil
 	})
@@ -7571,10 +8350,10 @@ func (ec *executionContext) _PlateauDatasetType_plateauSpecId(ctx context.Contex
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_plateauSpecId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_plateauSpecId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7599,7 +8378,7 @@ func (ec *executionContext) _PlateauDatasetType_plateauSpec(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDatasetType().PlateauSpec(rctx, obj)
 	})
@@ -7612,10 +8391,10 @@ func (ec *executionContext) _PlateauDatasetType_plateauSpec(ctx context.Context,
 	}
 	res := resTmp.(*PlateauSpec)
 	fc.Result = res
-	return ec.marshalOPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, field.Selections, res)
+	return ec.marshalOPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_plateauSpec(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_plateauSpec(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7652,7 +8431,7 @@ func (ec *executionContext) _PlateauDatasetType_year(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -7671,7 +8450,7 @@ func (ec *executionContext) _PlateauDatasetType_year(ctx context.Context, field 
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7696,7 +8475,7 @@ func (ec *executionContext) _PlateauDatasetType_flood(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Flood, nil
 	})
@@ -7715,7 +8494,7 @@ func (ec *executionContext) _PlateauDatasetType_flood(ctx context.Context, field
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDatasetType_flood(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDatasetType_flood(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDatasetType",
 		Field:      field,
@@ -7740,7 +8519,7 @@ func (ec *executionContext) _PlateauDatasetType_datasets(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauDatasetType().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -7756,7 +8535,7 @@ func (ec *executionContext) _PlateauDatasetType_datasets(ctx context.Context, fi
 	}
 	res := resTmp.([]*PlateauDataset)
 	fc.Result = res
-	return ec.marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_PlateauDatasetType_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -7853,7 +8632,7 @@ func (ec *executionContext) _PlateauSpec_id(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -7869,10 +8648,10 @@ func (ec *executionContext) _PlateauSpec_id(ctx context.Context, field graphql.C
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpec_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpec_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpec",
 		Field:      field,
@@ -7897,7 +8676,7 @@ func (ec *executionContext) _PlateauSpec_majorVersion(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MajorVersion, nil
 	})
@@ -7916,7 +8695,7 @@ func (ec *executionContext) _PlateauSpec_majorVersion(ctx context.Context, field
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpec_majorVersion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpec_majorVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpec",
 		Field:      field,
@@ -7941,7 +8720,7 @@ func (ec *executionContext) _PlateauSpec_year(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -7960,7 +8739,7 @@ func (ec *executionContext) _PlateauSpec_year(ctx context.Context, field graphql
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpec_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpec_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpec",
 		Field:      field,
@@ -7985,7 +8764,7 @@ func (ec *executionContext) _PlateauSpec_datasetTypes(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauSpec().DatasetTypes(rctx, obj)
 	})
@@ -8001,10 +8780,10 @@ func (ec *executionContext) _PlateauSpec_datasetTypes(ctx context.Context, field
 	}
 	res := resTmp.([]*PlateauDatasetType)
 	fc.Result = res
-	return ec.marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetTypeᚄ(ctx, field.Selections, res)
+	return ec.marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpec_datasetTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpec_datasetTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpec",
 		Field:      field,
@@ -8051,7 +8830,7 @@ func (ec *executionContext) _PlateauSpec_minorVersions(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MinorVersions, nil
 	})
@@ -8067,10 +8846,10 @@ func (ec *executionContext) _PlateauSpec_minorVersions(ctx context.Context, fiel
 	}
 	res := resTmp.([]*PlateauSpecMinor)
 	fc.Result = res
-	return ec.marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinorᚄ(ctx, field.Selections, res)
+	return ec.marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinorᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpec_minorVersions(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpec_minorVersions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpec",
 		Field:      field,
@@ -8113,7 +8892,7 @@ func (ec *executionContext) _PlateauSpecMinor_id(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -8129,10 +8908,10 @@ func (ec *executionContext) _PlateauSpecMinor_id(ctx context.Context, field grap
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8157,7 +8936,7 @@ func (ec *executionContext) _PlateauSpecMinor_name(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -8176,7 +8955,7 @@ func (ec *executionContext) _PlateauSpecMinor_name(ctx context.Context, field gr
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8201,7 +8980,7 @@ func (ec *executionContext) _PlateauSpecMinor_version(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Version, nil
 	})
@@ -8220,7 +8999,7 @@ func (ec *executionContext) _PlateauSpecMinor_version(ctx context.Context, field
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_version(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8245,7 +9024,7 @@ func (ec *executionContext) _PlateauSpecMinor_majorVersion(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MajorVersion, nil
 	})
@@ -8264,7 +9043,7 @@ func (ec *executionContext) _PlateauSpecMinor_majorVersion(ctx context.Context, 
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_majorVersion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_majorVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8289,7 +9068,7 @@ func (ec *executionContext) _PlateauSpecMinor_year(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -8308,7 +9087,7 @@ func (ec *executionContext) _PlateauSpecMinor_year(ctx context.Context, field gr
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8333,7 +9112,7 @@ func (ec *executionContext) _PlateauSpecMinor_parentId(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -8349,10 +9128,10 @@ func (ec *executionContext) _PlateauSpecMinor_parentId(ctx context.Context, fiel
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8377,7 +9156,7 @@ func (ec *executionContext) _PlateauSpecMinor_parent(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauSpecMinor().Parent(rctx, obj)
 	})
@@ -8393,10 +9172,10 @@ func (ec *executionContext) _PlateauSpecMinor_parent(ctx context.Context, field 
 	}
 	res := resTmp.(*PlateauSpec)
 	fc.Result = res
-	return ec.marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, field.Selections, res)
+	return ec.marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauSpecMinor_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauSpecMinor_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauSpecMinor",
 		Field:      field,
@@ -8433,7 +9212,7 @@ func (ec *executionContext) _PlateauSpecMinor_datasets(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.PlateauSpecMinor().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -8449,7 +9228,7 @@ func (ec *executionContext) _PlateauSpecMinor_datasets(ctx context.Context, fiel
 	}
 	res := resTmp.([]Dataset)
 	fc.Result = res
-	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_PlateauSpecMinor_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -8488,7 +9267,7 @@ func (ec *executionContext) _Prefecture_id(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -8504,10 +9283,10 @@ func (ec *executionContext) _Prefecture_id(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8532,7 +9311,7 @@ func (ec *executionContext) _Prefecture_type(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -8548,10 +9327,10 @@ func (ec *executionContext) _Prefecture_type(ctx context.Context, field graphql.
 	}
 	res := resTmp.(AreaType)
 	fc.Result = res
-	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
+	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8576,7 +9355,7 @@ func (ec *executionContext) _Prefecture_code(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -8592,10 +9371,10 @@ func (ec *executionContext) _Prefecture_code(ctx context.Context, field graphql.
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8620,7 +9399,7 @@ func (ec *executionContext) _Prefecture_name(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -8639,7 +9418,7 @@ func (ec *executionContext) _Prefecture_name(ctx context.Context, field graphql.
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8664,7 +9443,7 @@ func (ec *executionContext) _Prefecture_cities(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Prefecture().Cities(rctx, obj)
 	})
@@ -8680,10 +9459,10 @@ func (ec *executionContext) _Prefecture_cities(ctx context.Context, field graphq
 	}
 	res := resTmp.([]*City)
 	fc.Result = res
-	return ec.marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCityᚄ(ctx, field.Selections, res)
+	return ec.marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_cities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_cities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8740,7 +9519,7 @@ func (ec *executionContext) _Prefecture_datasets(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Prefecture().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -8756,7 +9535,7 @@ func (ec *executionContext) _Prefecture_datasets(ctx context.Context, field grap
 	}
 	res := resTmp.([]Dataset)
 	fc.Result = res
-	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Prefecture_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -8795,7 +9574,7 @@ func (ec *executionContext) _Prefecture_parentId(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -8808,10 +9587,10 @@ func (ec *executionContext) _Prefecture_parentId(ctx context.Context, field grap
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8836,7 +9615,7 @@ func (ec *executionContext) _Prefecture_parent(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Prefecture().Parent(rctx, obj)
 	})
@@ -8849,10 +9628,10 @@ func (ec *executionContext) _Prefecture_parent(ctx context.Context, field graphq
 	}
 	res := resTmp.(Area)
 	fc.Result = res
-	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
+	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8877,7 +9656,7 @@ func (ec *executionContext) _Prefecture_children(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Prefecture().Children(rctx, obj)
 	})
@@ -8893,10 +9672,10 @@ func (ec *executionContext) _Prefecture_children(ctx context.Context, field grap
 	}
 	res := resTmp.([]Area)
 	fc.Result = res
-	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Prefecture_children(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Prefecture_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Prefecture",
 		Field:      field,
@@ -8921,7 +9700,7 @@ func (ec *executionContext) _Query_node(ctx context.Context, field graphql.Colle
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Node(rctx, fc.Args["id"].(ID))
 	})
@@ -8934,7 +9713,7 @@ func (ec *executionContext) _Query_node(ctx context.Context, field graphql.Colle
 	}
 	res := resTmp.(Node)
 	fc.Result = res
-	return ec.marshalONode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, field.Selections, res)
+	return ec.marshalONode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_node(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -8973,7 +9752,7 @@ func (ec *executionContext) _Query_nodes(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Nodes(rctx, fc.Args["ids"].([]ID))
 	})
@@ -8989,7 +9768,7 @@ func (ec *executionContext) _Query_nodes(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.([]Node)
 	fc.Result = res
-	return ec.marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, field.Selections, res)
+	return ec.marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_nodes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -9028,7 +9807,7 @@ func (ec *executionContext) _Query_area(ctx context.Context, field graphql.Colle
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Area(rctx, fc.Args["code"].(AreaCode))
 	})
@@ -9041,7 +9820,7 @@ func (ec *executionContext) _Query_area(ctx context.Context, field graphql.Colle
 	}
 	res := resTmp.(Area)
 	fc.Result = res
-	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
+	return ec.marshalOArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_area(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -9080,7 +9859,7 @@ func (ec *executionContext) _Query_areas(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Areas(rctx, fc.Args["input"].(*AreasInput))
 	})
@@ -9096,7 +9875,7 @@ func (ec *executionContext) _Query_areas(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.([]Area)
 	fc.Result = res
-	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_areas(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -9135,7 +9914,7 @@ func (ec *executionContext) _Query_datasetTypes(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().DatasetTypes(rctx, fc.Args["input"].(*DatasetTypesInput))
 	})
@@ -9151,7 +9930,7 @@ func (ec *executionContext) _Query_datasetTypes(ctx context.Context, field graph
 	}
 	res := resTmp.([]DatasetType)
 	fc.Result = res
-	return ec.marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeᚄ(ctx, field.Selections, res)
+	return ec.marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_datasetTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -9190,7 +9969,7 @@ func (ec *executionContext) _Query_datasets(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Datasets(rctx, fc.Args["input"].(*DatasetsInput))
 	})
@@ -9206,7 +9985,7 @@ func (ec *executionContext) _Query_datasets(ctx context.Context, field graphql.C
 	}
 	res := resTmp.([]Dataset)
 	fc.Result = res
-	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -9245,7 +10024,7 @@ func (ec *executionContext) _Query_plateauSpecs(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().PlateauSpecs(rctx)
 	})
@@ -9261,10 +10040,10 @@ func (ec *executionContext) _Query_plateauSpecs(ctx context.Context, field graph
 	}
 	res := resTmp.([]*PlateauSpec)
 	fc.Result = res
-	return ec.marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecᚄ(ctx, field.Selections, res)
+	return ec.marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_plateauSpecs(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_plateauSpecs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9301,7 +10080,7 @@ func (ec *executionContext) _Query_years(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().Years(rctx)
 	})
@@ -9320,7 +10099,7 @@ func (ec *executionContext) _Query_years(ctx context.Context, field graphql.Coll
 	return ec.marshalNInt2ᚕintᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_years(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_years(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9345,7 +10124,7 @@ func (ec *executionContext) _Query___type(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.introspectType(fc.Args["name"].(string))
 	})
@@ -9375,6 +10154,8 @@ func (ec *executionContext) fieldContext_Query___type(ctx context.Context, field
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -9387,8 +10168,8 @@ func (ec *executionContext) fieldContext_Query___type(ctx context.Context, field
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -9419,7 +10200,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.introspectSchema()
 	})
@@ -9435,7 +10216,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query___schema(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -9474,7 +10255,7 @@ func (ec *executionContext) _RelatedDataset_id(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -9490,10 +10271,10 @@ func (ec *executionContext) _RelatedDataset_id(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9518,7 +10299,7 @@ func (ec *executionContext) _RelatedDataset_name(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -9537,7 +10318,7 @@ func (ec *executionContext) _RelatedDataset_name(ctx context.Context, field grap
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9562,7 +10343,7 @@ func (ec *executionContext) _RelatedDataset_description(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description, nil
 	})
@@ -9578,7 +10359,7 @@ func (ec *executionContext) _RelatedDataset_description(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9603,7 +10384,7 @@ func (ec *executionContext) _RelatedDataset_year(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Year, nil
 	})
@@ -9622,7 +10403,7 @@ func (ec *executionContext) _RelatedDataset_year(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_year(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9647,7 +10428,7 @@ func (ec *executionContext) _RelatedDataset_registerationYear(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.RegisterationYear, nil
 	})
@@ -9666,7 +10447,7 @@ func (ec *executionContext) _RelatedDataset_registerationYear(ctx context.Contex
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_registerationYear(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_registerationYear(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9691,7 +10472,7 @@ func (ec *executionContext) _RelatedDataset_groups(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Groups, nil
 	})
@@ -9707,7 +10488,7 @@ func (ec *executionContext) _RelatedDataset_groups(ctx context.Context, field gr
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_groups(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_groups(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9732,7 +10513,7 @@ func (ec *executionContext) _RelatedDataset_openDataUrl(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OpenDataURL, nil
 	})
@@ -9748,7 +10529,7 @@ func (ec *executionContext) _RelatedDataset_openDataUrl(ctx context.Context, fie
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_openDataUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_openDataUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9773,7 +10554,7 @@ func (ec *executionContext) _RelatedDataset_prefectureId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -9786,10 +10567,10 @@ func (ec *executionContext) _RelatedDataset_prefectureId(ctx context.Context, fi
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9814,7 +10595,7 @@ func (ec *executionContext) _RelatedDataset_prefectureCode(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -9827,10 +10608,10 @@ func (ec *executionContext) _RelatedDataset_prefectureCode(ctx context.Context, 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9855,7 +10636,7 @@ func (ec *executionContext) _RelatedDataset_cityId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityID, nil
 	})
@@ -9868,10 +10649,10 @@ func (ec *executionContext) _RelatedDataset_cityId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_cityId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_cityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9896,7 +10677,7 @@ func (ec *executionContext) _RelatedDataset_cityCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityCode, nil
 	})
@@ -9909,10 +10690,10 @@ func (ec *executionContext) _RelatedDataset_cityCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_cityCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_cityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9937,7 +10718,7 @@ func (ec *executionContext) _RelatedDataset_wardId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardID, nil
 	})
@@ -9950,10 +10731,10 @@ func (ec *executionContext) _RelatedDataset_wardId(ctx context.Context, field gr
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_wardId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_wardId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -9978,7 +10759,7 @@ func (ec *executionContext) _RelatedDataset_wardCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.WardCode, nil
 	})
@@ -9991,10 +10772,10 @@ func (ec *executionContext) _RelatedDataset_wardCode(ctx context.Context, field 
 	}
 	res := resTmp.(*AreaCode)
 	fc.Result = res
-	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_wardCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_wardCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10019,7 +10800,7 @@ func (ec *executionContext) _RelatedDataset_typeId(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeID, nil
 	})
@@ -10035,10 +10816,10 @@ func (ec *executionContext) _RelatedDataset_typeId(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_typeId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_typeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10063,7 +10844,7 @@ func (ec *executionContext) _RelatedDataset_typeCode(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TypeCode, nil
 	})
@@ -10082,7 +10863,7 @@ func (ec *executionContext) _RelatedDataset_typeCode(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_typeCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10107,7 +10888,7 @@ func (ec *executionContext) _RelatedDataset_prefecture(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDataset().Prefecture(rctx, obj)
 	})
@@ -10120,10 +10901,10 @@ func (ec *executionContext) _RelatedDataset_prefecture(ctx context.Context, fiel
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10168,7 +10949,7 @@ func (ec *executionContext) _RelatedDataset_city(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDataset().City(rctx, obj)
 	})
@@ -10181,10 +10962,10 @@ func (ec *executionContext) _RelatedDataset_city(ctx context.Context, field grap
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_city(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10241,7 +11022,7 @@ func (ec *executionContext) _RelatedDataset_ward(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDataset().Ward(rctx, obj)
 	})
@@ -10254,10 +11035,10 @@ func (ec *executionContext) _RelatedDataset_ward(ctx context.Context, field grap
 	}
 	res := resTmp.(*Ward)
 	fc.Result = res
-	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
+	return ec.marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_ward(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_ward(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10312,7 +11093,7 @@ func (ec *executionContext) _RelatedDataset_type(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDataset().Type(rctx, obj)
 	})
@@ -10328,10 +11109,10 @@ func (ec *executionContext) _RelatedDataset_type(ctx context.Context, field grap
 	}
 	res := resTmp.(*RelatedDatasetType)
 	fc.Result = res
-	return ec.marshalNRelatedDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx, field.Selections, res)
+	return ec.marshalNRelatedDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10370,7 +11151,7 @@ func (ec *executionContext) _RelatedDataset_items(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Items, nil
 	})
@@ -10386,10 +11167,10 @@ func (ec *executionContext) _RelatedDataset_items(ctx context.Context, field gra
 	}
 	res := resTmp.([]*RelatedDatasetItem)
 	fc.Result = res
-	return ec.marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItemᚄ(ctx, field.Selections, res)
+	return ec.marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItemᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_items(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10434,7 +11215,7 @@ func (ec *executionContext) _RelatedDataset_ar(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Ar, nil
 	})
@@ -10453,7 +11234,7 @@ func (ec *executionContext) _RelatedDataset_ar(ctx context.Context, field graphq
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_ar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_ar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10478,7 +11259,7 @@ func (ec *executionContext) _RelatedDataset_admin(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Admin, nil
 	})
@@ -10489,12 +11270,12 @@ func (ec *executionContext) _RelatedDataset_admin(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(interface{})
+	res := resTmp.(any)
 	fc.Result = res
 	return ec.marshalOAny2interface(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDataset_admin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDataset_admin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDataset",
 		Field:      field,
@@ -10519,7 +11300,7 @@ func (ec *executionContext) _RelatedDatasetItem_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -10535,10 +11316,10 @@ func (ec *executionContext) _RelatedDatasetItem_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10563,7 +11344,7 @@ func (ec *executionContext) _RelatedDatasetItem_format(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Format, nil
 	})
@@ -10579,10 +11360,10 @@ func (ec *executionContext) _RelatedDatasetItem_format(ctx context.Context, fiel
 	}
 	res := resTmp.(DatasetFormat)
 	fc.Result = res
-	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
+	return ec.marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_format(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10607,7 +11388,7 @@ func (ec *executionContext) _RelatedDatasetItem_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -10626,7 +11407,7 @@ func (ec *executionContext) _RelatedDatasetItem_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10651,7 +11432,7 @@ func (ec *executionContext) _RelatedDatasetItem_url(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.URL, nil
 	})
@@ -10670,7 +11451,7 @@ func (ec *executionContext) _RelatedDatasetItem_url(ctx context.Context, field g
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_url(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10695,7 +11476,7 @@ func (ec *executionContext) _RelatedDatasetItem_originalFormat(ctx context.Conte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OriginalFormat, nil
 	})
@@ -10708,10 +11489,10 @@ func (ec *executionContext) _RelatedDatasetItem_originalFormat(ctx context.Conte
 	}
 	res := resTmp.(*DatasetFormat)
 	fc.Result = res
-	return ec.marshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
+	return ec.marshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_originalFormat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_originalFormat(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10736,7 +11517,7 @@ func (ec *executionContext) _RelatedDatasetItem_originalUrl(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OriginalURL, nil
 	})
@@ -10752,7 +11533,7 @@ func (ec *executionContext) _RelatedDatasetItem_originalUrl(ctx context.Context,
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_originalUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_originalUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10777,7 +11558,7 @@ func (ec *executionContext) _RelatedDatasetItem_layers(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Layers, nil
 	})
@@ -10793,7 +11574,7 @@ func (ec *executionContext) _RelatedDatasetItem_layers(ctx context.Context, fiel
 	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_layers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_layers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10818,7 +11599,7 @@ func (ec *executionContext) _RelatedDatasetItem_parentId(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -10834,10 +11615,10 @@ func (ec *executionContext) _RelatedDatasetItem_parentId(ctx context.Context, fi
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10862,7 +11643,7 @@ func (ec *executionContext) _RelatedDatasetItem_parent(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDatasetItem().Parent(rctx, obj)
 	})
@@ -10875,10 +11656,10 @@ func (ec *executionContext) _RelatedDatasetItem_parent(ctx context.Context, fiel
 	}
 	res := resTmp.(*RelatedDataset)
 	fc.Result = res
-	return ec.marshalORelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx, field.Selections, res)
+	return ec.marshalORelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetItem_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetItem_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetItem",
 		Field:      field,
@@ -10949,7 +11730,7 @@ func (ec *executionContext) _RelatedDatasetType_id(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -10965,10 +11746,10 @@ func (ec *executionContext) _RelatedDatasetType_id(ctx context.Context, field gr
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetType_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetType_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetType",
 		Field:      field,
@@ -10993,7 +11774,7 @@ func (ec *executionContext) _RelatedDatasetType_code(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -11012,7 +11793,7 @@ func (ec *executionContext) _RelatedDatasetType_code(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetType_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetType_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetType",
 		Field:      field,
@@ -11037,7 +11818,7 @@ func (ec *executionContext) _RelatedDatasetType_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -11056,7 +11837,7 @@ func (ec *executionContext) _RelatedDatasetType_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetType_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetType_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetType",
 		Field:      field,
@@ -11081,7 +11862,7 @@ func (ec *executionContext) _RelatedDatasetType_category(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Category, nil
 	})
@@ -11097,10 +11878,10 @@ func (ec *executionContext) _RelatedDatasetType_category(ctx context.Context, fi
 	}
 	res := resTmp.(DatasetTypeCategory)
 	fc.Result = res
-	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
+	return ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetType_category(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetType_category(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetType",
 		Field:      field,
@@ -11125,7 +11906,7 @@ func (ec *executionContext) _RelatedDatasetType_order(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Order, nil
 	})
@@ -11144,7 +11925,7 @@ func (ec *executionContext) _RelatedDatasetType_order(ctx context.Context, field
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_RelatedDatasetType_order(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_RelatedDatasetType_order(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RelatedDatasetType",
 		Field:      field,
@@ -11169,7 +11950,7 @@ func (ec *executionContext) _RelatedDatasetType_datasets(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.RelatedDatasetType().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -11185,7 +11966,7 @@ func (ec *executionContext) _RelatedDatasetType_datasets(ctx context.Context, fi
 	}
 	res := resTmp.([]*RelatedDataset)
 	fc.Result = res
-	return ec.marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_RelatedDatasetType_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -11270,7 +12051,7 @@ func (ec *executionContext) _River_name(ctx context.Context, field graphql.Colle
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -11289,7 +12070,7 @@ func (ec *executionContext) _River_name(ctx context.Context, field graphql.Colle
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_River_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_River_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "River",
 		Field:      field,
@@ -11314,7 +12095,7 @@ func (ec *executionContext) _River_admin(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Admin, nil
 	})
@@ -11330,10 +12111,10 @@ func (ec *executionContext) _River_admin(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.(RiverAdmin)
 	fc.Result = res
-	return ec.marshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx, field.Selections, res)
+	return ec.marshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_River_admin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_River_admin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "River",
 		Field:      field,
@@ -11358,7 +12139,7 @@ func (ec *executionContext) _Ward_id(ctx context.Context, field graphql.Collecte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ID, nil
 	})
@@ -11374,10 +12155,10 @@ func (ec *executionContext) _Ward_id(ctx context.Context, field graphql.Collecte
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_id(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11402,7 +12183,7 @@ func (ec *executionContext) _Ward_type(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -11418,10 +12199,10 @@ func (ec *executionContext) _Ward_type(ctx context.Context, field graphql.Collec
 	}
 	res := resTmp.(AreaType)
 	fc.Result = res
-	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
+	return ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11446,7 +12227,7 @@ func (ec *executionContext) _Ward_code(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Code, nil
 	})
@@ -11462,10 +12243,10 @@ func (ec *executionContext) _Ward_code(ctx context.Context, field graphql.Collec
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_code(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11490,7 +12271,7 @@ func (ec *executionContext) _Ward_name(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -11509,7 +12290,7 @@ func (ec *executionContext) _Ward_name(ctx context.Context, field graphql.Collec
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11534,7 +12315,7 @@ func (ec *executionContext) _Ward_prefectureId(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureID, nil
 	})
@@ -11550,10 +12331,10 @@ func (ec *executionContext) _Ward_prefectureId(ctx context.Context, field graphq
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_prefectureId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_prefectureId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11578,7 +12359,7 @@ func (ec *executionContext) _Ward_prefectureCode(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PrefectureCode, nil
 	})
@@ -11594,10 +12375,10 @@ func (ec *executionContext) _Ward_prefectureCode(ctx context.Context, field grap
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_prefectureCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_prefectureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11622,7 +12403,7 @@ func (ec *executionContext) _Ward_cityId(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityID, nil
 	})
@@ -11638,10 +12419,10 @@ func (ec *executionContext) _Ward_cityId(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.(ID)
 	fc.Result = res
-	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_cityId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_cityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11666,7 +12447,7 @@ func (ec *executionContext) _Ward_cityCode(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.CityCode, nil
 	})
@@ -11682,10 +12463,10 @@ func (ec *executionContext) _Ward_cityCode(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.(AreaCode)
 	fc.Result = res
-	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
+	return ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_cityCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_cityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11710,7 +12491,7 @@ func (ec *executionContext) _Ward_prefecture(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Ward().Prefecture(rctx, obj)
 	})
@@ -11723,10 +12504,10 @@ func (ec *executionContext) _Ward_prefecture(ctx context.Context, field graphql.
 	}
 	res := resTmp.(*Prefecture)
 	fc.Result = res
-	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
+	return ec.marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_prefecture(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_prefecture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11771,7 +12552,7 @@ func (ec *executionContext) _Ward_city(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Ward().City(rctx, obj)
 	})
@@ -11784,10 +12565,10 @@ func (ec *executionContext) _Ward_city(ctx context.Context, field graphql.Collec
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_city(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11844,7 +12625,7 @@ func (ec *executionContext) _Ward_datasets(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Ward().Datasets(rctx, obj, fc.Args["input"].(*DatasetsInput))
 	})
@@ -11860,7 +12641,7 @@ func (ec *executionContext) _Ward_datasets(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.([]Dataset)
 	fc.Result = res
-	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
+	return ec.marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Ward_datasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -11899,7 +12680,7 @@ func (ec *executionContext) _Ward_parentId(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.ParentID, nil
 	})
@@ -11912,10 +12693,10 @@ func (ec *executionContext) _Ward_parentId(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.(*ID)
 	fc.Result = res
-	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
+	return ec.marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_parentId(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -11940,7 +12721,7 @@ func (ec *executionContext) _Ward_parent(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Ward().Parent(rctx, obj)
 	})
@@ -11956,10 +12737,10 @@ func (ec *executionContext) _Ward_parent(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.(*City)
 	fc.Result = res
-	return ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
+	return ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_parent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -12016,7 +12797,7 @@ func (ec *executionContext) _Ward_children(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Ward().Children(rctx, obj)
 	})
@@ -12032,10 +12813,10 @@ func (ec *executionContext) _Ward_children(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.([]Area)
 	fc.Result = res
-	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
+	return ec.marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Ward_children(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Ward_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Ward",
 		Field:      field,
@@ -12060,7 +12841,7 @@ func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -12079,7 +12860,7 @@ func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -12104,7 +12885,7 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -12120,7 +12901,7 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -12128,6 +12909,50 @@ func (ec *executionContext) fieldContext___Directive_description(ctx context.Con
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___Directive_isRepeatable(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___Directive_isRepeatable(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsRepeatable, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___Directive_isRepeatable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__Directive",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -12145,7 +12970,7 @@ func (ec *executionContext) ___Directive_locations(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Locations, nil
 	})
@@ -12164,7 +12989,7 @@ func (ec *executionContext) ___Directive_locations(ctx context.Context, field gr
 	return ec.marshalN__DirectiveLocation2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_locations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_locations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -12189,7 +13014,7 @@ func (ec *executionContext) ___Directive_args(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Args, nil
 	})
@@ -12224,53 +13049,24 @@ func (ec *executionContext) fieldContext___Directive_args(ctx context.Context, f
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
 	}
-	return fc, nil
-}
-
-func (ec *executionContext) ___Directive_isRepeatable(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext___Directive_isRepeatable(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
 	defer func() {
 		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.IsRepeatable, nil
-	})
-	if err != nil {
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field___Directive_args_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext___Directive_isRepeatable(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "__Directive",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
+		return fc, err
 	}
 	return fc, nil
 }
@@ -12287,7 +13083,7 @@ func (ec *executionContext) ___EnumValue_name(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -12306,7 +13102,7 @@ func (ec *executionContext) ___EnumValue_name(ctx context.Context, field graphql
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -12331,7 +13127,7 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -12347,7 +13143,7 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -12372,7 +13168,7 @@ func (ec *executionContext) ___EnumValue_isDeprecated(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.IsDeprecated(), nil
 	})
@@ -12391,7 +13187,7 @@ func (ec *executionContext) ___EnumValue_isDeprecated(ctx context.Context, field
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_isDeprecated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -12416,7 +13212,7 @@ func (ec *executionContext) ___EnumValue_deprecationReason(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DeprecationReason(), nil
 	})
@@ -12432,7 +13228,7 @@ func (ec *executionContext) ___EnumValue_deprecationReason(ctx context.Context, 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_deprecationReason(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -12457,7 +13253,7 @@ func (ec *executionContext) ___Field_name(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -12476,7 +13272,7 @@ func (ec *executionContext) ___Field_name(ctx context.Context, field graphql.Col
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -12501,7 +13297,7 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -12517,7 +13313,7 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -12542,7 +13338,7 @@ func (ec *executionContext) ___Field_args(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Args, nil
 	})
@@ -12577,9 +13373,24 @@ func (ec *executionContext) fieldContext___Field_args(ctx context.Context, field
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field___Field_args_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -12596,7 +13407,7 @@ func (ec *executionContext) ___Field_type(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -12615,7 +13426,7 @@ func (ec *executionContext) ___Field_type(ctx context.Context, field graphql.Col
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -12629,6 +13440,8 @@ func (ec *executionContext) fieldContext___Field_type(ctx context.Context, field
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -12641,8 +13454,8 @@ func (ec *executionContext) fieldContext___Field_type(ctx context.Context, field
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -12662,7 +13475,7 @@ func (ec *executionContext) ___Field_isDeprecated(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.IsDeprecated(), nil
 	})
@@ -12681,7 +13494,7 @@ func (ec *executionContext) ___Field_isDeprecated(ctx context.Context, field gra
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_isDeprecated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -12706,7 +13519,7 @@ func (ec *executionContext) ___Field_deprecationReason(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DeprecationReason(), nil
 	})
@@ -12722,7 +13535,7 @@ func (ec *executionContext) ___Field_deprecationReason(ctx context.Context, fiel
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_deprecationReason(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -12747,7 +13560,7 @@ func (ec *executionContext) ___InputValue_name(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -12766,7 +13579,7 @@ func (ec *executionContext) ___InputValue_name(ctx context.Context, field graphq
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -12791,7 +13604,7 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -12807,7 +13620,7 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -12832,7 +13645,7 @@ func (ec *executionContext) ___InputValue_type(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -12851,7 +13664,7 @@ func (ec *executionContext) ___InputValue_type(ctx context.Context, field graphq
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -12865,6 +13678,8 @@ func (ec *executionContext) fieldContext___InputValue_type(ctx context.Context, 
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -12877,8 +13692,8 @@ func (ec *executionContext) fieldContext___InputValue_type(ctx context.Context, 
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -12898,7 +13713,7 @@ func (ec *executionContext) ___InputValue_defaultValue(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DefaultValue, nil
 	})
@@ -12914,11 +13729,96 @@ func (ec *executionContext) ___InputValue_defaultValue(ctx context.Context, fiel
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_defaultValue(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_defaultValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
 		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___InputValue_isDeprecated(ctx context.Context, field graphql.CollectedField, obj *introspection.InputValue) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___InputValue_isDeprecated(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDeprecated(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___InputValue_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__InputValue",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___InputValue_deprecationReason(ctx context.Context, field graphql.CollectedField, obj *introspection.InputValue) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___InputValue_deprecationReason(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeprecationReason(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___InputValue_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__InputValue",
+		Field:      field,
+		IsMethod:   true,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
@@ -12939,7 +13839,7 @@ func (ec *executionContext) ___Schema_description(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -12955,7 +13855,7 @@ func (ec *executionContext) ___Schema_description(ctx context.Context, field gra
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -12980,7 +13880,7 @@ func (ec *executionContext) ___Schema_types(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Types(), nil
 	})
@@ -12999,7 +13899,7 @@ func (ec *executionContext) ___Schema_types(ctx context.Context, field graphql.C
 	return ec.marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_types(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_types(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -13013,6 +13913,8 @@ func (ec *executionContext) fieldContext___Schema_types(ctx context.Context, fie
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13025,8 +13927,8 @@ func (ec *executionContext) fieldContext___Schema_types(ctx context.Context, fie
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13046,7 +13948,7 @@ func (ec *executionContext) ___Schema_queryType(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.QueryType(), nil
 	})
@@ -13065,7 +13967,7 @@ func (ec *executionContext) ___Schema_queryType(ctx context.Context, field graph
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_queryType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_queryType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -13079,6 +13981,8 @@ func (ec *executionContext) fieldContext___Schema_queryType(ctx context.Context,
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13091,8 +13995,8 @@ func (ec *executionContext) fieldContext___Schema_queryType(ctx context.Context,
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13112,7 +14016,7 @@ func (ec *executionContext) ___Schema_mutationType(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MutationType(), nil
 	})
@@ -13128,7 +14032,7 @@ func (ec *executionContext) ___Schema_mutationType(ctx context.Context, field gr
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_mutationType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_mutationType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -13142,6 +14046,8 @@ func (ec *executionContext) fieldContext___Schema_mutationType(ctx context.Conte
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13154,8 +14060,8 @@ func (ec *executionContext) fieldContext___Schema_mutationType(ctx context.Conte
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13175,7 +14081,7 @@ func (ec *executionContext) ___Schema_subscriptionType(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.SubscriptionType(), nil
 	})
@@ -13191,7 +14097,7 @@ func (ec *executionContext) ___Schema_subscriptionType(ctx context.Context, fiel
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_subscriptionType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_subscriptionType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -13205,6 +14111,8 @@ func (ec *executionContext) fieldContext___Schema_subscriptionType(ctx context.C
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13217,8 +14125,8 @@ func (ec *executionContext) fieldContext___Schema_subscriptionType(ctx context.C
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13238,7 +14146,7 @@ func (ec *executionContext) ___Schema_directives(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Directives(), nil
 	})
@@ -13257,7 +14165,7 @@ func (ec *executionContext) ___Schema_directives(ctx context.Context, field grap
 	return ec.marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirectiveᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_directives(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_directives(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -13269,12 +14177,12 @@ func (ec *executionContext) fieldContext___Schema_directives(ctx context.Context
 				return ec.fieldContext___Directive_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Directive_description(ctx, field)
+			case "isRepeatable":
+				return ec.fieldContext___Directive_isRepeatable(ctx, field)
 			case "locations":
 				return ec.fieldContext___Directive_locations(ctx, field)
 			case "args":
 				return ec.fieldContext___Directive_args(ctx, field)
-			case "isRepeatable":
-				return ec.fieldContext___Directive_isRepeatable(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Directive", field.Name)
 		},
@@ -13294,7 +14202,7 @@ func (ec *executionContext) ___Type_kind(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Kind(), nil
 	})
@@ -13313,7 +14221,7 @@ func (ec *executionContext) ___Type_kind(ctx context.Context, field graphql.Coll
 	return ec.marshalN__TypeKind2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_kind(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13338,7 +14246,7 @@ func (ec *executionContext) ___Type_name(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name(), nil
 	})
@@ -13354,7 +14262,7 @@ func (ec *executionContext) ___Type_name(ctx context.Context, field graphql.Coll
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13379,7 +14287,7 @@ func (ec *executionContext) ___Type_description(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -13395,7 +14303,48 @@ func (ec *executionContext) ___Type_description(ctx context.Context, field graph
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__Type",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___Type_specifiedByURL(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SpecifiedByURL(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___Type_specifiedByURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13420,7 +14369,7 @@ func (ec *executionContext) ___Type_fields(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Fields(fc.Args["includeDeprecated"].(bool)), nil
 	})
@@ -13486,7 +14435,7 @@ func (ec *executionContext) ___Type_interfaces(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Interfaces(), nil
 	})
@@ -13502,7 +14451,7 @@ func (ec *executionContext) ___Type_interfaces(ctx context.Context, field graphq
 	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_interfaces(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_interfaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13516,6 +14465,8 @@ func (ec *executionContext) fieldContext___Type_interfaces(ctx context.Context, 
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13528,8 +14479,8 @@ func (ec *executionContext) fieldContext___Type_interfaces(ctx context.Context, 
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13549,7 +14500,7 @@ func (ec *executionContext) ___Type_possibleTypes(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PossibleTypes(), nil
 	})
@@ -13565,7 +14516,7 @@ func (ec *executionContext) ___Type_possibleTypes(ctx context.Context, field gra
 	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_possibleTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_possibleTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13579,6 +14530,8 @@ func (ec *executionContext) fieldContext___Type_possibleTypes(ctx context.Contex
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13591,8 +14544,8 @@ func (ec *executionContext) fieldContext___Type_possibleTypes(ctx context.Contex
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13612,7 +14565,7 @@ func (ec *executionContext) ___Type_enumValues(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.EnumValues(fc.Args["includeDeprecated"].(bool)), nil
 	})
@@ -13674,7 +14627,7 @@ func (ec *executionContext) ___Type_inputFields(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.InputFields(), nil
 	})
@@ -13690,7 +14643,7 @@ func (ec *executionContext) ___Type_inputFields(ctx context.Context, field graph
 	return ec.marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValueᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_inputFields(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_inputFields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13706,6 +14659,10 @@ func (ec *executionContext) fieldContext___Type_inputFields(ctx context.Context,
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
@@ -13725,7 +14682,7 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OfType(), nil
 	})
@@ -13741,7 +14698,7 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_ofType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -13755,6 +14712,8 @@ func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, fiel
 				return ec.fieldContext___Type_name(ctx, field)
 			case "description":
 				return ec.fieldContext___Type_description(ctx, field)
+			case "specifiedByURL":
+				return ec.fieldContext___Type_specifiedByURL(ctx, field)
 			case "fields":
 				return ec.fieldContext___Type_fields(ctx, field)
 			case "interfaces":
@@ -13767,8 +14726,8 @@ func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, fiel
 				return ec.fieldContext___Type_inputFields(ctx, field)
 			case "ofType":
 				return ec.fieldContext___Type_ofType(ctx, field)
-			case "specifiedByURL":
-				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -13776,8 +14735,8 @@ func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, fiel
 	return fc, nil
 }
 
-func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext___Type_specifiedByURL(ctx, field)
+func (ec *executionContext) ___Type_isOneOf(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___Type_isOneOf(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -13788,9 +14747,9 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.SpecifiedByURL(), nil
+		return obj.IsOneOf(), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -13799,19 +14758,19 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*string)
+	res := resTmp.(bool)
 	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+	return ec.marshalOBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
 		IsMethod:   true,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -13821,10 +14780,10 @@ func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Conte
 
 // region    **************************** input.gotpl *****************************
 
-func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj interface{}) (AreasInput, error) {
+func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj any) (AreasInput, error) {
 	var it AreasInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -13837,7 +14796,7 @@ func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj in
 		switch k {
 		case "parentCode":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("parentCode"))
-			data, err := ec.unmarshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, v)
+			data, err := ec.unmarshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -13851,14 +14810,14 @@ func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj in
 			it.DatasetTypes = data
 		case "categories":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("categories"))
-			data, err := ec.unmarshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx, v)
+			data, err := ec.unmarshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Categories = data
 		case "areaTypes":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("areaTypes"))
-			data, err := ec.unmarshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx, v)
+			data, err := ec.unmarshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -13897,10 +14856,10 @@ func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj in
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputDatasetTypesInput(ctx context.Context, obj interface{}) (DatasetTypesInput, error) {
+func (ec *executionContext) unmarshalInputDatasetTypesInput(ctx context.Context, obj any) (DatasetTypesInput, error) {
 	var it DatasetTypesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -13913,7 +14872,7 @@ func (ec *executionContext) unmarshalInputDatasetTypesInput(ctx context.Context,
 		switch k {
 		case "category":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("category"))
-			data, err := ec.unmarshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, v)
+			data, err := ec.unmarshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -13938,10 +14897,10 @@ func (ec *executionContext) unmarshalInputDatasetTypesInput(ctx context.Context,
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputDatasetsInput(ctx context.Context, obj interface{}) (DatasetsInput, error) {
+func (ec *executionContext) unmarshalInputDatasetsInput(ctx context.Context, obj any) (DatasetsInput, error) {
 	var it DatasetsInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -13954,7 +14913,7 @@ func (ec *executionContext) unmarshalInputDatasetsInput(ctx context.Context, obj
 		switch k {
 		case "areaCodes":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("areaCodes"))
-			data, err := ec.unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx, v)
+			data, err := ec.unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -14036,20 +14995,6 @@ func (ec *executionContext) _Area(ctx context.Context, sel ast.SelectionSet, obj
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case Prefecture:
-		return ec._Prefecture(ctx, sel, &obj)
-	case *Prefecture:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._Prefecture(ctx, sel, obj)
-	case City:
-		return ec._City(ctx, sel, &obj)
-	case *City:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._City(ctx, sel, obj)
 	case Ward:
 		return ec._Ward(ctx, sel, &obj)
 	case *Ward:
@@ -14057,6 +15002,27 @@ func (ec *executionContext) _Area(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._Ward(ctx, sel, obj)
+	case Prefecture:
+		return ec._Prefecture(ctx, sel, &obj)
+	case *Prefecture:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._Prefecture(ctx, sel, obj)
+	case GlobalArea:
+		return ec._GlobalArea(ctx, sel, &obj)
+	case *GlobalArea:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._GlobalArea(ctx, sel, obj)
+	case City:
+		return ec._City(ctx, sel, &obj)
+	case *City:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._City(ctx, sel, obj)
 	default:
 		panic(fmt.Errorf("unexpected type %T", obj))
 	}
@@ -14066,13 +15032,6 @@ func (ec *executionContext) _Dataset(ctx context.Context, sel ast.SelectionSet, 
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case PlateauDataset:
-		return ec._PlateauDataset(ctx, sel, &obj)
-	case *PlateauDataset:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDataset(ctx, sel, obj)
 	case RelatedDataset:
 		return ec._RelatedDataset(ctx, sel, &obj)
 	case *RelatedDataset:
@@ -14080,6 +15039,13 @@ func (ec *executionContext) _Dataset(ctx context.Context, sel ast.SelectionSet, 
 			return graphql.Null
 		}
 		return ec._RelatedDataset(ctx, sel, obj)
+	case PlateauDataset:
+		return ec._PlateauDataset(ctx, sel, &obj)
+	case *PlateauDataset:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._PlateauDataset(ctx, sel, obj)
 	case GenericDataset:
 		return ec._GenericDataset(ctx, sel, &obj)
 	case *GenericDataset:
@@ -14096,13 +15062,6 @@ func (ec *executionContext) _DatasetItem(ctx context.Context, sel ast.SelectionS
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case PlateauDatasetItem:
-		return ec._PlateauDatasetItem(ctx, sel, &obj)
-	case *PlateauDatasetItem:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDatasetItem(ctx, sel, obj)
 	case RelatedDatasetItem:
 		return ec._RelatedDatasetItem(ctx, sel, &obj)
 	case *RelatedDatasetItem:
@@ -14110,6 +15069,13 @@ func (ec *executionContext) _DatasetItem(ctx context.Context, sel ast.SelectionS
 			return graphql.Null
 		}
 		return ec._RelatedDatasetItem(ctx, sel, obj)
+	case PlateauDatasetItem:
+		return ec._PlateauDatasetItem(ctx, sel, &obj)
+	case *PlateauDatasetItem:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._PlateauDatasetItem(ctx, sel, obj)
 	case GenericDatasetItem:
 		return ec._GenericDatasetItem(ctx, sel, &obj)
 	case *GenericDatasetItem:
@@ -14126,13 +15092,6 @@ func (ec *executionContext) _DatasetType(ctx context.Context, sel ast.SelectionS
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case PlateauDatasetType:
-		return ec._PlateauDatasetType(ctx, sel, &obj)
-	case *PlateauDatasetType:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDatasetType(ctx, sel, obj)
 	case RelatedDatasetType:
 		return ec._RelatedDatasetType(ctx, sel, &obj)
 	case *RelatedDatasetType:
@@ -14140,6 +15099,13 @@ func (ec *executionContext) _DatasetType(ctx context.Context, sel ast.SelectionS
 			return graphql.Null
 		}
 		return ec._RelatedDatasetType(ctx, sel, obj)
+	case PlateauDatasetType:
+		return ec._PlateauDatasetType(ctx, sel, &obj)
+	case *PlateauDatasetType:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._PlateauDatasetType(ctx, sel, obj)
 	case GenericDatasetType:
 		return ec._GenericDatasetType(ctx, sel, &obj)
 	case *GenericDatasetType:
@@ -14156,6 +15122,27 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
+	case Ward:
+		return ec._Ward(ctx, sel, &obj)
+	case *Ward:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._Ward(ctx, sel, obj)
+	case RelatedDatasetType:
+		return ec._RelatedDatasetType(ctx, sel, &obj)
+	case *RelatedDatasetType:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._RelatedDatasetType(ctx, sel, obj)
+	case RelatedDatasetItem:
+		return ec._RelatedDatasetItem(ctx, sel, &obj)
+	case *RelatedDatasetItem:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._RelatedDatasetItem(ctx, sel, obj)
 	case RelatedDataset:
 		return ec._RelatedDataset(ctx, sel, &obj)
 	case *RelatedDataset:
@@ -14170,20 +15157,34 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._Prefecture(ctx, sel, obj)
-	case City:
-		return ec._City(ctx, sel, &obj)
-	case *City:
+	case PlateauDatasetType:
+		return ec._PlateauDatasetType(ctx, sel, &obj)
+	case *PlateauDatasetType:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._City(ctx, sel, obj)
-	case Ward:
-		return ec._Ward(ctx, sel, &obj)
-	case *Ward:
+		return ec._PlateauDatasetType(ctx, sel, obj)
+	case PlateauDatasetItem:
+		return ec._PlateauDatasetItem(ctx, sel, &obj)
+	case *PlateauDatasetItem:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._Ward(ctx, sel, obj)
+		return ec._PlateauDatasetItem(ctx, sel, obj)
+	case PlateauDataset:
+		return ec._PlateauDataset(ctx, sel, &obj)
+	case *PlateauDataset:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._PlateauDataset(ctx, sel, obj)
+	case GlobalArea:
+		return ec._GlobalArea(ctx, sel, &obj)
+	case *GlobalArea:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._GlobalArea(ctx, sel, obj)
 	case GenericDatasetType:
 		return ec._GenericDatasetType(ctx, sel, &obj)
 	case *GenericDatasetType:
@@ -14205,41 +15206,20 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._GenericDataset(ctx, sel, obj)
-	case RelatedDatasetType:
-		return ec._RelatedDatasetType(ctx, sel, &obj)
-	case *RelatedDatasetType:
+	case City:
+		return ec._City(ctx, sel, &obj)
+	case *City:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._RelatedDatasetType(ctx, sel, obj)
-	case RelatedDatasetItem:
-		return ec._RelatedDatasetItem(ctx, sel, &obj)
-	case *RelatedDatasetItem:
+		return ec._City(ctx, sel, obj)
+	case PlateauSpecMinor:
+		return ec._PlateauSpecMinor(ctx, sel, &obj)
+	case *PlateauSpecMinor:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._RelatedDatasetItem(ctx, sel, obj)
-	case PlateauDataset:
-		return ec._PlateauDataset(ctx, sel, &obj)
-	case *PlateauDataset:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDataset(ctx, sel, obj)
-	case PlateauDatasetItem:
-		return ec._PlateauDatasetItem(ctx, sel, &obj)
-	case *PlateauDatasetItem:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDatasetItem(ctx, sel, obj)
-	case PlateauDatasetType:
-		return ec._PlateauDatasetType(ctx, sel, &obj)
-	case *PlateauDatasetType:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauDatasetType(ctx, sel, obj)
+		return ec._PlateauSpecMinor(ctx, sel, obj)
 	case PlateauSpec:
 		return ec._PlateauSpec(ctx, sel, &obj)
 	case *PlateauSpec:
@@ -14262,18 +15242,6 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._Dataset(ctx, sel, obj)
-	case PlateauSpecMinor:
-		return ec._PlateauSpecMinor(ctx, sel, &obj)
-	case *PlateauSpecMinor:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._PlateauSpecMinor(ctx, sel, obj)
-	case Area:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._Area(ctx, sel, obj)
 	case CityGMLDataset:
 		return ec._CityGMLDataset(ctx, sel, &obj)
 	case *CityGMLDataset:
@@ -14281,6 +15249,11 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			return graphql.Null
 		}
 		return ec._CityGMLDataset(ctx, sel, obj)
+	case Area:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._Area(ctx, sel, obj)
 	default:
 		panic(fmt.Errorf("unexpected type %T", obj))
 	}
@@ -14334,7 +15307,7 @@ func (ec *executionContext) _City(ctx context.Context, sel ast.SelectionSet, obj
 		case "prefecture":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -14481,7 +15454,7 @@ func (ec *executionContext) _City(ctx context.Context, sel ast.SelectionSet, obj
 		case "citygml":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -14626,6 +15599,8 @@ func (ec *executionContext) _CityGMLDataset(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "gspatialjpDatasetUrl":
+			out.Values[i] = ec._CityGMLDataset_gspatialjpDatasetUrl(ctx, field, obj)
 		case "prefecture":
 			field := field
 
@@ -14831,7 +15806,7 @@ func (ec *executionContext) _GenericDataset(ctx context.Context, sel ast.Selecti
 		case "prefecture":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -14864,7 +15839,7 @@ func (ec *executionContext) _GenericDataset(ctx context.Context, sel ast.Selecti
 		case "city":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -14897,7 +15872,7 @@ func (ec *executionContext) _GenericDataset(ctx context.Context, sel ast.Selecti
 		case "ward":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15039,7 +16014,7 @@ func (ec *executionContext) _GenericDatasetItem(ctx context.Context, sel ast.Sel
 		case "parent":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15187,6 +16162,167 @@ func (ec *executionContext) _GenericDatasetType(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var globalAreaImplementors = []string{"GlobalArea", "Area", "Node"}
+
+func (ec *executionContext) _GlobalArea(ctx context.Context, sel ast.SelectionSet, obj *GlobalArea) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, globalAreaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("GlobalArea")
+		case "id":
+			out.Values[i] = ec._GlobalArea_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "type":
+			out.Values[i] = ec._GlobalArea_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "code":
+			out.Values[i] = ec._GlobalArea_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "name":
+			out.Values[i] = ec._GlobalArea_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "datasets":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_datasets(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "parentId":
+			out.Values[i] = ec._GlobalArea_parentId(ctx, field, obj)
+		case "parent":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_parent(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "children":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._GlobalArea_children(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var plateauDatasetImplementors = []string{"PlateauDataset", "Dataset", "Node"}
 
 func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.SelectionSet, obj *PlateauDataset) graphql.Marshaler {
@@ -15255,7 +16391,7 @@ func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.Selecti
 		case "prefecture":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15288,7 +16424,7 @@ func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.Selecti
 		case "city":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15321,7 +16457,7 @@ func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.Selecti
 		case "ward":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15506,7 +16642,7 @@ func (ec *executionContext) _PlateauDatasetItem(ctx context.Context, sel ast.Sel
 		case "parent":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -15613,7 +16749,7 @@ func (ec *executionContext) _PlateauDatasetType(ctx context.Context, sel ast.Sel
 		case "plateauSpec":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16046,7 +17182,7 @@ func (ec *executionContext) _Prefecture(ctx context.Context, sel ast.SelectionSe
 		case "parent":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16157,7 +17293,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		case "node":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16198,7 +17334,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		case "area":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16417,7 +17553,7 @@ func (ec *executionContext) _RelatedDataset(ctx context.Context, sel ast.Selecti
 		case "prefecture":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16450,7 +17586,7 @@ func (ec *executionContext) _RelatedDataset(ctx context.Context, sel ast.Selecti
 		case "city":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16483,7 +17619,7 @@ func (ec *executionContext) _RelatedDataset(ctx context.Context, sel ast.Selecti
 		case "ward":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16629,7 +17765,7 @@ func (ec *executionContext) _RelatedDatasetItem(ctx context.Context, sel ast.Sel
 		case "parent":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16875,7 +18011,7 @@ func (ec *executionContext) _Ward(ctx context.Context, sel ast.SelectionSet, obj
 		case "prefecture":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -16908,7 +18044,7 @@ func (ec *executionContext) _Ward(ctx context.Context, sel ast.SelectionSet, obj
 		case "city":
 			field := field
 
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -17089,6 +18225,11 @@ func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionS
 			}
 		case "description":
 			out.Values[i] = ec.___Directive_description(ctx, field, obj)
+		case "isRepeatable":
+			out.Values[i] = ec.___Directive_isRepeatable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "locations":
 			out.Values[i] = ec.___Directive_locations(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -17096,11 +18237,6 @@ func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionS
 			}
 		case "args":
 			out.Values[i] = ec.___Directive_args(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "isRepeatable":
-			out.Values[i] = ec.___Directive_isRepeatable(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -17258,6 +18394,13 @@ func (ec *executionContext) ___InputValue(ctx context.Context, sel ast.Selection
 			}
 		case "defaultValue":
 			out.Values[i] = ec.___InputValue_defaultValue(ctx, field, obj)
+		case "isDeprecated":
+			out.Values[i] = ec.___InputValue_isDeprecated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deprecationReason":
+			out.Values[i] = ec.___InputValue_deprecationReason(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -17356,6 +18499,8 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 			out.Values[i] = ec.___Type_name(ctx, field, obj)
 		case "description":
 			out.Values[i] = ec.___Type_description(ctx, field, obj)
+		case "specifiedByURL":
+			out.Values[i] = ec.___Type_specifiedByURL(ctx, field, obj)
 		case "fields":
 			out.Values[i] = ec.___Type_fields(ctx, field, obj)
 		case "interfaces":
@@ -17368,8 +18513,8 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 			out.Values[i] = ec.___Type_inputFields(ctx, field, obj)
 		case "ofType":
 			out.Values[i] = ec.___Type_ofType(ctx, field, obj)
-		case "specifiedByURL":
-			out.Values[i] = ec.___Type_specifiedByURL(ctx, field, obj)
+		case "isOneOf":
+			out.Values[i] = ec.___Type_isOneOf(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -17397,7 +18542,7 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) marshalNArea2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx context.Context, sel ast.SelectionSet, v Area) graphql.Marshaler {
+func (ec *executionContext) marshalNArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx context.Context, sel ast.SelectionSet, v Area) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17407,7 +18552,7 @@ func (ec *executionContext) marshalNArea2githubᚗcomᚋeukaryaᚑincᚋreearth�
 	return ec._Area(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx context.Context, sel ast.SelectionSet, v []Area) graphql.Marshaler {
+func (ec *executionContext) marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaᚄ(ctx context.Context, sel ast.SelectionSet, v []Area) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17431,7 +18576,7 @@ func (ec *executionContext) marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreear
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNArea2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, sel, v[i])
+			ret[i] = ec.marshalNArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17451,13 +18596,14 @@ func (ec *executionContext) marshalNArea2ᚕgithubᚗcomᚋeukaryaᚑincᚋreear
 	return ret
 }
 
-func (ec *executionContext) unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, v interface{}) (AreaCode, error) {
+func (ec *executionContext) unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, v any) (AreaCode, error) {
 	tmp, err := graphql.UnmarshalString(v)
 	res := AreaCode(tmp)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, sel ast.SelectionSet, v AreaCode) graphql.Marshaler {
+func (ec *executionContext) marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, sel ast.SelectionSet, v AreaCode) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(string(v))
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -17467,22 +18613,23 @@ func (ec *executionContext) marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreea
 	return res
 }
 
-func (ec *executionContext) unmarshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx context.Context, v interface{}) (AreaType, error) {
+func (ec *executionContext) unmarshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx context.Context, v any) (AreaType, error) {
 	var res AreaType
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx context.Context, sel ast.SelectionSet, v AreaType) graphql.Marshaler {
+func (ec *executionContext) marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx context.Context, sel ast.SelectionSet, v AreaType) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
+func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -17492,11 +18639,11 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNCity2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v City) graphql.Marshaler {
+func (ec *executionContext) marshalNCity2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v City) graphql.Marshaler {
 	return ec._City(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCityᚄ(ctx context.Context, sel ast.SelectionSet, v []*City) graphql.Marshaler {
+func (ec *executionContext) marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityᚄ(ctx context.Context, sel ast.SelectionSet, v []*City) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17520,7 +18667,7 @@ func (ec *executionContext) marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋre
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, sel, v[i])
+			ret[i] = ec.marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17540,7 +18687,7 @@ func (ec *executionContext) marshalNCity2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋre
 	return ret
 }
 
-func (ec *executionContext) marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v *City) graphql.Marshaler {
+func (ec *executionContext) marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v *City) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17550,7 +18697,7 @@ func (ec *executionContext) marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreear
 	return ec._City(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDataset(ctx context.Context, sel ast.SelectionSet, v Dataset) graphql.Marshaler {
+func (ec *executionContext) marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDataset(ctx context.Context, sel ast.SelectionSet, v Dataset) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17560,7 +18707,7 @@ func (ec *executionContext) marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋreear
 	return ec._Dataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []Dataset) graphql.Marshaler {
+func (ec *executionContext) marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []Dataset) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17584,7 +18731,7 @@ func (ec *executionContext) marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋre
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDataset(ctx, sel, v[i])
+			ret[i] = ec.marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDataset(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17604,17 +18751,17 @@ func (ec *executionContext) marshalNDataset2ᚕgithubᚗcomᚋeukaryaᚑincᚋre
 	return ret
 }
 
-func (ec *executionContext) unmarshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v interface{}) (DatasetFormat, error) {
+func (ec *executionContext) unmarshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v any) (DatasetFormat, error) {
 	var res DatasetFormat
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, sel ast.SelectionSet, v DatasetFormat) graphql.Marshaler {
+func (ec *executionContext) marshalNDatasetFormat2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, sel ast.SelectionSet, v DatasetFormat) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) marshalNDatasetType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetType(ctx context.Context, sel ast.SelectionSet, v DatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNDatasetType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetType(ctx context.Context, sel ast.SelectionSet, v DatasetType) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17624,7 +18771,7 @@ func (ec *executionContext) marshalNDatasetType2githubᚗcomᚋeukaryaᚑincᚋr
 	return ec._DatasetType(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []DatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []DatasetType) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17648,7 +18795,7 @@ func (ec *executionContext) marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑinc�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNDatasetType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetType(ctx, sel, v[i])
+			ret[i] = ec.marshalNDatasetType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetType(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17668,17 +18815,17 @@ func (ec *executionContext) marshalNDatasetType2ᚕgithubᚗcomᚋeukaryaᚑinc�
 	return ret
 }
 
-func (ec *executionContext) unmarshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, v interface{}) (DatasetTypeCategory, error) {
+func (ec *executionContext) unmarshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, v any) (DatasetTypeCategory, error) {
 	var res DatasetTypeCategory
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, sel ast.SelectionSet, v DatasetTypeCategory) graphql.Marshaler {
+func (ec *executionContext) marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, sel ast.SelectionSet, v DatasetTypeCategory) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*GenericDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*GenericDataset) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17702,7 +18849,7 @@ func (ec *executionContext) marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukarya�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx, sel, v[i])
+			ret[i] = ec.marshalNGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17722,7 +18869,7 @@ func (ec *executionContext) marshalNGenericDataset2ᚕᚖgithubᚗcomᚋeukarya�
 	return ret
 }
 
-func (ec *executionContext) marshalNGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx context.Context, sel ast.SelectionSet, v *GenericDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx context.Context, sel ast.SelectionSet, v *GenericDataset) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17732,7 +18879,7 @@ func (ec *executionContext) marshalNGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑi
 	return ec._GenericDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*GenericDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*GenericDatasetItem) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17756,7 +18903,7 @@ func (ec *executionContext) marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNGenericDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItem(ctx, sel, v[i])
+			ret[i] = ec.marshalNGenericDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItem(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17776,7 +18923,7 @@ func (ec *executionContext) marshalNGenericDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 	return ret
 }
 
-func (ec *executionContext) marshalNGenericDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItem(ctx context.Context, sel ast.SelectionSet, v *GenericDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetItem(ctx context.Context, sel ast.SelectionSet, v *GenericDatasetItem) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17786,11 +18933,11 @@ func (ec *executionContext) marshalNGenericDatasetItem2ᚖgithubᚗcomᚋeukarya
 	return ec._GenericDatasetItem(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNGenericDatasetType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx context.Context, sel ast.SelectionSet, v GenericDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDatasetType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx context.Context, sel ast.SelectionSet, v GenericDatasetType) graphql.Marshaler {
 	return ec._GenericDatasetType(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNGenericDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx context.Context, sel ast.SelectionSet, v *GenericDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNGenericDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDatasetType(ctx context.Context, sel ast.SelectionSet, v *GenericDatasetType) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17800,13 +18947,14 @@ func (ec *executionContext) marshalNGenericDatasetType2ᚖgithubᚗcomᚋeukarya
 	return ec._GenericDatasetType(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, v interface{}) (ID, error) {
+func (ec *executionContext) unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, v any) (ID, error) {
 	tmp, err := graphql.UnmarshalString(v)
 	res := ID(tmp)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, sel ast.SelectionSet, v ID) graphql.Marshaler {
+func (ec *executionContext) marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, sel ast.SelectionSet, v ID) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(string(v))
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -17816,16 +18964,14 @@ func (ec *executionContext) marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑ
 	return res
 }
 
-func (ec *executionContext) unmarshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx context.Context, v interface{}) ([]ID, error) {
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+func (ec *executionContext) unmarshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx context.Context, v any) ([]ID, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]ID, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -17833,10 +18979,10 @@ func (ec *executionContext) unmarshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋreear
 	return res, nil
 }
 
-func (ec *executionContext) marshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx context.Context, sel ast.SelectionSet, v []ID) graphql.Marshaler {
+func (ec *executionContext) marshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐIDᚄ(ctx context.Context, sel ast.SelectionSet, v []ID) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
-		ret[i] = ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, sel, v[i])
+		ret[i] = ec.marshalNID2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx, sel, v[i])
 	}
 
 	for _, e := range ret {
@@ -17848,12 +18994,13 @@ func (ec *executionContext) marshalNID2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearth
 	return ret
 }
 
-func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalInt(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -17863,11 +19010,9 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
-func (ec *executionContext) unmarshalNInt2ᚕintᚄ(ctx context.Context, v interface{}) ([]int, error) {
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+func (ec *executionContext) unmarshalNInt2ᚕintᚄ(ctx context.Context, v any) ([]int, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]int, len(vSlice))
 	for i := range vSlice {
@@ -17895,7 +19040,7 @@ func (ec *executionContext) marshalNInt2ᚕintᚄ(ctx context.Context, sel ast.S
 	return ret
 }
 
-func (ec *executionContext) marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx context.Context, sel ast.SelectionSet, v []Node) graphql.Marshaler {
+func (ec *executionContext) marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx context.Context, sel ast.SelectionSet, v []Node) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17919,7 +19064,7 @@ func (ec *executionContext) marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreear
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalONode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, sel, v[i])
+			ret[i] = ec.marshalONode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17933,7 +19078,7 @@ func (ec *executionContext) marshalNNode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreear
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDataset) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -17957,7 +19102,7 @@ func (ec *executionContext) marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukarya�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx, sel, v[i])
+			ret[i] = ec.marshalNPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -17977,7 +19122,7 @@ func (ec *executionContext) marshalNPlateauDataset2ᚕᚖgithubᚗcomᚋeukarya�
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx context.Context, sel ast.SelectionSet, v *PlateauDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx context.Context, sel ast.SelectionSet, v *PlateauDataset) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -17987,7 +19132,7 @@ func (ec *executionContext) marshalNPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑi
 	return ec._PlateauDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDatasetItem) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18011,7 +19156,7 @@ func (ec *executionContext) marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNPlateauDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItem(ctx, sel, v[i])
+			ret[i] = ec.marshalNPlateauDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItem(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18031,7 +19176,7 @@ func (ec *executionContext) marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItem(ctx context.Context, sel ast.SelectionSet, v *PlateauDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItem(ctx context.Context, sel ast.SelectionSet, v *PlateauDatasetItem) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18041,11 +19186,11 @@ func (ec *executionContext) marshalNPlateauDatasetItem2ᚖgithubᚗcomᚋeukarya
 	return ec._PlateauDatasetItem(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlateauDatasetType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx context.Context, sel ast.SelectionSet, v PlateauDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDatasetType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx context.Context, sel ast.SelectionSet, v PlateauDatasetType) graphql.Marshaler {
 	return ec._PlateauDatasetType(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauDatasetType) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18069,7 +19214,7 @@ func (ec *executionContext) marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeuka
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx, sel, v[i])
+			ret[i] = ec.marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18089,7 +19234,7 @@ func (ec *executionContext) marshalNPlateauDatasetType2ᚕᚖgithubᚗcomᚋeuka
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx context.Context, sel ast.SelectionSet, v *PlateauDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetType(ctx context.Context, sel ast.SelectionSet, v *PlateauDatasetType) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18099,11 +19244,11 @@ func (ec *executionContext) marshalNPlateauDatasetType2ᚖgithubᚗcomᚋeukarya
 	return ec._PlateauDatasetType(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlateauSpec2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v PlateauSpec) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpec2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v PlateauSpec) graphql.Marshaler {
 	return ec._PlateauSpec(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauSpec) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauSpec) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18127,7 +19272,7 @@ func (ec *executionContext) marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑi
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, sel, v[i])
+			ret[i] = ec.marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18147,7 +19292,7 @@ func (ec *executionContext) marshalNPlateauSpec2ᚕᚖgithubᚗcomᚋeukaryaᚑi
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v *PlateauSpec) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v *PlateauSpec) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18157,11 +19302,11 @@ func (ec *executionContext) marshalNPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑinc�
 	return ec._PlateauSpec(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlateauSpecMinor2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx context.Context, sel ast.SelectionSet, v PlateauSpecMinor) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpecMinor2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx context.Context, sel ast.SelectionSet, v PlateauSpecMinor) graphql.Marshaler {
 	return ec._PlateauSpecMinor(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinorᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauSpecMinor) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinorᚄ(ctx context.Context, sel ast.SelectionSet, v []*PlateauSpecMinor) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18185,7 +19330,7 @@ func (ec *executionContext) marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukary
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, sel, v[i])
+			ret[i] = ec.marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18205,7 +19350,7 @@ func (ec *executionContext) marshalNPlateauSpecMinor2ᚕᚖgithubᚗcomᚋeukary
 	return ret
 }
 
-func (ec *executionContext) marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx context.Context, sel ast.SelectionSet, v *PlateauSpecMinor) graphql.Marshaler {
+func (ec *executionContext) marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpecMinor(ctx context.Context, sel ast.SelectionSet, v *PlateauSpecMinor) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18215,11 +19360,11 @@ func (ec *executionContext) marshalNPlateauSpecMinor2ᚖgithubᚗcomᚋeukarya�
 	return ec._PlateauSpecMinor(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPrefecture2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v Prefecture) graphql.Marshaler {
+func (ec *executionContext) marshalNPrefecture2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v Prefecture) graphql.Marshaler {
 	return ec._Prefecture(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v *Prefecture) graphql.Marshaler {
+func (ec *executionContext) marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v *Prefecture) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18229,7 +19374,7 @@ func (ec *executionContext) marshalNPrefecture2ᚖgithubᚗcomᚋeukaryaᚑinc�
 	return ec._Prefecture(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*RelatedDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*RelatedDataset) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18253,7 +19398,7 @@ func (ec *executionContext) marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukarya�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNRelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx, sel, v[i])
+			ret[i] = ec.marshalNRelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18273,7 +19418,7 @@ func (ec *executionContext) marshalNRelatedDataset2ᚕᚖgithubᚗcomᚋeukarya�
 	return ret
 }
 
-func (ec *executionContext) marshalNRelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx context.Context, sel ast.SelectionSet, v *RelatedDataset) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx context.Context, sel ast.SelectionSet, v *RelatedDataset) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18283,7 +19428,7 @@ func (ec *executionContext) marshalNRelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑi
 	return ec._RelatedDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*RelatedDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*RelatedDatasetItem) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18307,7 +19452,7 @@ func (ec *executionContext) marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNRelatedDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItem(ctx, sel, v[i])
+			ret[i] = ec.marshalNRelatedDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItem(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18327,7 +19472,7 @@ func (ec *executionContext) marshalNRelatedDatasetItem2ᚕᚖgithubᚗcomᚋeuka
 	return ret
 }
 
-func (ec *executionContext) marshalNRelatedDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItem(ctx context.Context, sel ast.SelectionSet, v *RelatedDatasetItem) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDatasetItem2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetItem(ctx context.Context, sel ast.SelectionSet, v *RelatedDatasetItem) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18337,11 +19482,11 @@ func (ec *executionContext) marshalNRelatedDatasetItem2ᚖgithubᚗcomᚋeukarya
 	return ec._RelatedDatasetItem(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNRelatedDatasetType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx context.Context, sel ast.SelectionSet, v RelatedDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDatasetType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx context.Context, sel ast.SelectionSet, v RelatedDatasetType) graphql.Marshaler {
 	return ec._RelatedDatasetType(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNRelatedDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx context.Context, sel ast.SelectionSet, v *RelatedDatasetType) graphql.Marshaler {
+func (ec *executionContext) marshalNRelatedDatasetType2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDatasetType(ctx context.Context, sel ast.SelectionSet, v *RelatedDatasetType) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18351,22 +19496,23 @@ func (ec *executionContext) marshalNRelatedDatasetType2ᚖgithubᚗcomᚋeukarya
 	return ec._RelatedDatasetType(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx context.Context, v interface{}) (RiverAdmin, error) {
+func (ec *executionContext) unmarshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx context.Context, v any) (RiverAdmin, error) {
 	var res RiverAdmin
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx context.Context, sel ast.SelectionSet, v RiverAdmin) graphql.Marshaler {
+func (ec *executionContext) marshalNRiverAdmin2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRiverAdmin(ctx context.Context, sel ast.SelectionSet, v RiverAdmin) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -18376,11 +19522,9 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]string, len(vSlice))
 	for i := range vSlice {
@@ -18408,7 +19552,7 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 	return ret
 }
 
-func (ec *executionContext) marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWardᚄ(ctx context.Context, sel ast.SelectionSet, v []*Ward) graphql.Marshaler {
+func (ec *executionContext) marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWardᚄ(ctx context.Context, sel ast.SelectionSet, v []*Ward) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -18432,7 +19576,7 @@ func (ec *executionContext) marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋre
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, sel, v[i])
+			ret[i] = ec.marshalNWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18452,7 +19596,7 @@ func (ec *executionContext) marshalNWard2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋre
 	return ret
 }
 
-func (ec *executionContext) marshalNWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx context.Context, sel ast.SelectionSet, v *Ward) graphql.Marshaler {
+func (ec *executionContext) marshalNWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx context.Context, sel ast.SelectionSet, v *Ward) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -18510,12 +19654,13 @@ func (ec *executionContext) marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgq
 	return ret
 }
 
-func (ec *executionContext) unmarshalN__DirectiveLocation2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalN__DirectiveLocation2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -18525,11 +19670,9 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	return res
 }
 
-func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]string, len(vSlice))
 	for i := range vSlice {
@@ -18700,12 +19843,13 @@ func (ec *executionContext) marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgen�
 	return ec.___Type(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalN__TypeKind2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalN__TypeKind2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -18715,7 +19859,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) unmarshalOAny2interface(ctx context.Context, v interface{}) (interface{}, error) {
+func (ec *executionContext) unmarshalOAny2interface(ctx context.Context, v any) (any, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -18723,34 +19867,34 @@ func (ec *executionContext) unmarshalOAny2interface(ctx context.Context, v inter
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOAny2interface(ctx context.Context, sel ast.SelectionSet, v interface{}) graphql.Marshaler {
+func (ec *executionContext) marshalOAny2interface(ctx context.Context, sel ast.SelectionSet, v any) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalAny(v)
 	return res
 }
 
-func (ec *executionContext) marshalOArea2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx context.Context, sel ast.SelectionSet, v Area) graphql.Marshaler {
+func (ec *executionContext) marshalOArea2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐArea(ctx context.Context, sel ast.SelectionSet, v Area) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Area(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx context.Context, v interface{}) ([]AreaCode, error) {
+func (ec *executionContext) unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx context.Context, v any) ([]AreaCode, error) {
 	if v == nil {
 		return nil, nil
 	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]AreaCode, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -18758,13 +19902,13 @@ func (ec *executionContext) unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑinc�
 	return res, nil
 }
 
-func (ec *executionContext) marshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx context.Context, sel ast.SelectionSet, v []AreaCode) graphql.Marshaler {
+func (ec *executionContext) marshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx context.Context, sel ast.SelectionSet, v []AreaCode) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	ret := make(graphql.Array, len(v))
 	for i := range v {
-		ret[i] = ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, sel, v[i])
+		ret[i] = ec.marshalNAreaCode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx, sel, v[i])
 	}
 
 	for _, e := range ret {
@@ -18776,7 +19920,7 @@ func (ec *executionContext) marshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋr
 	return ret
 }
 
-func (ec *executionContext) unmarshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, v interface{}) (*AreaCode, error) {
+func (ec *executionContext) unmarshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, v any) (*AreaCode, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -18785,27 +19929,27 @@ func (ec *executionContext) unmarshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑinc�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, sel ast.SelectionSet, v *AreaCode) graphql.Marshaler {
+func (ec *executionContext) marshalOAreaCode2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCode(ctx context.Context, sel ast.SelectionSet, v *AreaCode) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalString(string(*v))
 	return res
 }
 
-func (ec *executionContext) unmarshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx context.Context, v interface{}) ([]AreaType, error) {
+func (ec *executionContext) unmarshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx context.Context, v any) ([]AreaType, error) {
 	if v == nil {
 		return nil, nil
 	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]AreaType, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -18813,7 +19957,7 @@ func (ec *executionContext) unmarshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑinc�
 	return res, nil
 }
 
-func (ec *executionContext) marshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []AreaType) graphql.Marshaler {
+func (ec *executionContext) marshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []AreaType) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -18840,7 +19984,7 @@ func (ec *executionContext) marshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋr
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, sel, v[i])
+			ret[i] = ec.marshalNAreaType2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaType(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18860,7 +20004,7 @@ func (ec *executionContext) marshalOAreaType2ᚕgithubᚗcomᚋeukaryaᚑincᚋr
 	return ret
 }
 
-func (ec *executionContext) unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐAreasInput(ctx context.Context, v interface{}) (*AreasInput, error) {
+func (ec *executionContext) unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreasInput(ctx context.Context, v any) (*AreasInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -18868,17 +20012,19 @@ func (ec *executionContext) unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑinc
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
+func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalBoolean(v)
 	return res
 }
 
-func (ec *executionContext) unmarshalOBoolean2ᚖbool(ctx context.Context, v interface{}) (*bool, error) {
+func (ec *executionContext) unmarshalOBoolean2ᚖbool(ctx context.Context, v any) (*bool, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -18890,25 +20036,27 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
 }
 
-func (ec *executionContext) marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v *City) graphql.Marshaler {
+func (ec *executionContext) marshalOCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCity(ctx context.Context, sel ast.SelectionSet, v *City) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._City(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx context.Context, sel ast.SelectionSet, v *CityGMLDataset) graphql.Marshaler {
+func (ec *executionContext) marshalOCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx context.Context, sel ast.SelectionSet, v *CityGMLDataset) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._CityGMLDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v interface{}) (*DatasetFormat, error) {
+func (ec *executionContext) unmarshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v any) (*DatasetFormat, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -18917,26 +20065,24 @@ func (ec *executionContext) unmarshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑ
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, sel ast.SelectionSet, v *DatasetFormat) graphql.Marshaler {
+func (ec *executionContext) marshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, sel ast.SelectionSet, v *DatasetFormat) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) unmarshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx context.Context, v interface{}) ([]DatasetTypeCategory, error) {
+func (ec *executionContext) unmarshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx context.Context, v any) ([]DatasetTypeCategory, error) {
 	if v == nil {
 		return nil, nil
 	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]DatasetTypeCategory, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -18944,7 +20090,7 @@ func (ec *executionContext) unmarshalODatasetTypeCategory2ᚕgithubᚗcomᚋeuka
 	return res, nil
 }
 
-func (ec *executionContext) marshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx context.Context, sel ast.SelectionSet, v []DatasetTypeCategory) graphql.Marshaler {
+func (ec *executionContext) marshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategoryᚄ(ctx context.Context, sel ast.SelectionSet, v []DatasetTypeCategory) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -18971,7 +20117,7 @@ func (ec *executionContext) marshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukary
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, sel, v[i])
+			ret[i] = ec.marshalNDatasetTypeCategory2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -18991,7 +20137,7 @@ func (ec *executionContext) marshalODatasetTypeCategory2ᚕgithubᚗcomᚋeukary
 	return ret
 }
 
-func (ec *executionContext) unmarshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, v interface{}) (*DatasetTypeCategory, error) {
+func (ec *executionContext) unmarshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, v any) (*DatasetTypeCategory, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19000,14 +20146,14 @@ func (ec *executionContext) unmarshalODatasetTypeCategory2ᚖgithubᚗcomᚋeuka
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, sel ast.SelectionSet, v *DatasetTypeCategory) graphql.Marshaler {
+func (ec *executionContext) marshalODatasetTypeCategory2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypeCategory(ctx context.Context, sel ast.SelectionSet, v *DatasetTypeCategory) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) unmarshalODatasetTypesInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypesInput(ctx context.Context, v interface{}) (*DatasetTypesInput, error) {
+func (ec *executionContext) unmarshalODatasetTypesInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetTypesInput(ctx context.Context, v any) (*DatasetTypesInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19015,7 +20161,7 @@ func (ec *executionContext) unmarshalODatasetTypesInput2ᚖgithubᚗcomᚋeukary
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx context.Context, v interface{}) (*DatasetsInput, error) {
+func (ec *executionContext) unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetsInput(ctx context.Context, v any) (*DatasetsInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19023,7 +20169,7 @@ func (ec *executionContext) unmarshalODatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑ
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx context.Context, v interface{}) (*FloodingScale, error) {
+func (ec *executionContext) unmarshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx context.Context, v any) (*FloodingScale, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19032,21 +20178,21 @@ func (ec *executionContext) unmarshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑ
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx context.Context, sel ast.SelectionSet, v *FloodingScale) graphql.Marshaler {
+func (ec *executionContext) marshalOFloodingScale2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐFloodingScale(ctx context.Context, sel ast.SelectionSet, v *FloodingScale) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) marshalOGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx context.Context, sel ast.SelectionSet, v *GenericDataset) graphql.Marshaler {
+func (ec *executionContext) marshalOGenericDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐGenericDataset(ctx context.Context, sel ast.SelectionSet, v *GenericDataset) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._GenericDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, v interface{}) (*ID, error) {
+func (ec *executionContext) unmarshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, v any) (*ID, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19055,15 +20201,17 @@ func (ec *executionContext) unmarshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreear
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, sel ast.SelectionSet, v *ID) graphql.Marshaler {
+func (ec *executionContext) marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐID(ctx context.Context, sel ast.SelectionSet, v *ID) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalString(string(*v))
 	return res
 }
 
-func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19075,60 +20223,60 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalInt(*v)
 	return res
 }
 
-func (ec *executionContext) marshalONode2githubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx context.Context, sel ast.SelectionSet, v Node) graphql.Marshaler {
+func (ec *executionContext) marshalONode2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐNode(ctx context.Context, sel ast.SelectionSet, v Node) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Node(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx context.Context, sel ast.SelectionSet, v *PlateauDataset) graphql.Marshaler {
+func (ec *executionContext) marshalOPlateauDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDataset(ctx context.Context, sel ast.SelectionSet, v *PlateauDataset) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._PlateauDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v *PlateauSpec) graphql.Marshaler {
+func (ec *executionContext) marshalOPlateauSpec2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauSpec(ctx context.Context, sel ast.SelectionSet, v *PlateauSpec) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._PlateauSpec(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v *Prefecture) graphql.Marshaler {
+func (ec *executionContext) marshalOPrefecture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPrefecture(ctx context.Context, sel ast.SelectionSet, v *Prefecture) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Prefecture(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalORelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx context.Context, sel ast.SelectionSet, v *RelatedDataset) graphql.Marshaler {
+func (ec *executionContext) marshalORelatedDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRelatedDataset(ctx context.Context, sel ast.SelectionSet, v *RelatedDataset) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._RelatedDataset(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalORiver2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐRiver(ctx context.Context, sel ast.SelectionSet, v *River) graphql.Marshaler {
+func (ec *executionContext) marshalORiver2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐRiver(ctx context.Context, sel ast.SelectionSet, v *River) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._River(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
 	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]string, len(vSlice))
 	for i := range vSlice {
@@ -19159,7 +20307,7 @@ func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel
 	return ret
 }
 
-func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {
+func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19171,11 +20319,13 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalString(*v)
 	return res
 }
 
-func (ec *executionContext) unmarshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx context.Context, v interface{}) (*Texture, error) {
+func (ec *executionContext) unmarshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx context.Context, v any) (*Texture, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -19184,14 +20334,14 @@ func (ec *executionContext) unmarshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋ
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx context.Context, sel ast.SelectionSet, v *Texture) graphql.Marshaler {
+func (ec *executionContext) marshalOTexture2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐTexture(ctx context.Context, sel ast.SelectionSet, v *Texture) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋreearthᚑplateauviewᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx context.Context, sel ast.SelectionSet, v *Ward) graphql.Marshaler {
+func (ec *executionContext) marshalOWard2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐWard(ctx context.Context, sel ast.SelectionSet, v *Ward) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

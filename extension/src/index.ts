@@ -1,5 +1,6 @@
 import overlayscrollbarsCss from "overlayscrollbars/overlayscrollbars.css?inline";
 
+import DataAttribution from "./dataAttribution";
 import Editor from "./editor";
 import Inspector from "./inspector";
 import Notification from "./notification";
@@ -22,7 +23,16 @@ const pluginId = `plateau-view-3~${process.env.VERSION}`;
 const localPlugin = {
   id: pluginId,
   name: "plateau-view-3",
-  widgets: [Toolbar, Search, Inspector, StreetView, Editor, SampleEdtitor, Notification],
+  widgets: [
+    Toolbar,
+    Search,
+    Inspector,
+    StreetView,
+    Editor,
+    SampleEdtitor,
+    Notification,
+    DataAttribution,
+  ],
   //    blocks: [
   //      {
   //        type: "block",

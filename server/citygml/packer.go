@@ -26,7 +26,7 @@ const (
 	PackStatusSucceeded = "succeeded"
 
 	timeoutSignedURL = 10 * time.Minute
-	urlsCountLimit   = 100
+	urlsCountLimit   = 5
 )
 
 type packer struct {
@@ -167,11 +167,11 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 	// check if the object already exists
 	obj := p.bucket.Object(hash + ".zip").If(storage.Conditions{DoesNotExist: true})
 	w := obj.NewWriter(ctx)
-	w.ObjectAttrs.Metadata = Status(PackStatusAccepted)
+	w.Metadata = Status(PackStatusAccepted)
 	_, _ = w.Write(nil)
 	if err := w.Close(); err != nil {
 		var gErr *googleapi.Error
-		if !(errors.As(err, &gErr) && gErr.Code == http.StatusPreconditionFailed) {
+		if !errors.As(err, &gErr) || gErr.Code != http.StatusPreconditionFailed {
 			log.Errorfc(ctx, "citygml: packer: failed to write metadata: %v", err)
 			return c.JSON(http.StatusInternalServerError, map[string]any{
 				"error": "failed to write metadata",

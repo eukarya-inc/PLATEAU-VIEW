@@ -16,6 +16,12 @@ type Project implements Node {
   workspaceId: ID!
 }
 
+enum ProjectSortField {
+  NAME
+  CREATED_AT
+  UPDATED_AT
+}
+
 # InputType
 
 input CreateProjectInput {
@@ -43,6 +49,8 @@ input RunProjectInput {
   projectId: ID!
   workspaceId: ID!
   file: Upload!
+  previousJobId: ID
+  startNodeId: ID
 }
 
 # Payload
@@ -73,6 +81,7 @@ extend type Query {
   projects(
     workspaceId: ID!
     includeArchived: Boolean
+    keyword: String
     pagination: PageBasedPagination!
   ): ProjectConnection!
 }

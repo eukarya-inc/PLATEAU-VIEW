@@ -195,7 +195,6 @@ reearth.ui.show(\`
 </script>
 \`);
 
-// Documentation on Extension "on" event: https://visualizer.developer.reearth.io/plugin-api/extension/#message-1
 reearth.extension.on("message", (msg) => {
   switch (msg.type) {
     case "delete":
@@ -217,6 +216,7 @@ reearth.extension.on("message", (msg) => {
 };
 
 export const hideFlyToDeleteLayer: PluginType = {
-  id: "hide-fly-to-delete-layer",
-  files: [yamlFile, widgetFile]
+  id: "hide-flyto-delete-layer",
+  title: "Hide, FlyTo or Delete a Layer",
+  files: [widgetFile, yamlFile]
 };

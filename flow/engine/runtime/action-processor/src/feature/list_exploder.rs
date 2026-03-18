@@ -23,7 +23,7 @@ impl ProcessorFactory for ListExploderFactory {
     }
 
     fn description(&self) -> &str {
-        "Explodes list attributes"
+        "Explodes array attributes into separate features, creating one feature per array element"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +52,12 @@ impl ProcessorFactory for ListExploderFactory {
         let process: ListExploder = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::TransformerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::TransformerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -72,10 +70,13 @@ impl ProcessorFactory for ListExploderFactory {
     }
 }
 
+/// # ListExploder Parameters
+///
+/// Configuration for exploding array attributes into individual features.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct ListExploder {
-    /// The attribute to explode
+    /// Attribute containing the array to explode (each element becomes a separate feature)
     source_attribute: Attribute,
 }
 
@@ -109,7 +110,11 @@ impl Processor for ListExploder {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

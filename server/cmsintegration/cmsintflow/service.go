@@ -9,9 +9,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/gcptaskrunner"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/gcptaskrunner"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
 )
@@ -38,6 +38,7 @@ type Services struct {
 type PCMS interface {
 	plateaucms.FeatureTypeStore
 	plateaucms.MetadataStore
+	plateaucms.SpecStore
 }
 
 func NewServices(c Config) (s *Services, _ error) {
@@ -76,10 +77,28 @@ func (s *Services) UpdateFeatureItemStatus(ctx context.Context, itemID string, t
 	case cmsintegrationcommon.ReqTypeQC:
 		qcStatus = status
 	case cmsintegrationcommon.ReqTypeQCConv:
+		// 品質検査・変換の場合、品質検査ステータスのみを「実行中」に更新し、
+		// 変換ステータスは「未実行」にリセットする（CMS側で設定されている場合があるため）
+		// 変換ステータスは品質検査成功後にReqTypeConvとして更新される
 		qcStatus = status
-		convStatus = status
+		convStatus = cmsintegrationcommon.ConvertionStatusNotStarted
 	}
 
+	fields := (&cmsintegrationcommon.FeatureItem{
+		ConvertionStatus: cmsintegrationcommon.TagFrom(convStatus),
+		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),
+	}).CMSItem().MetadataFields
+	_, err := s.CMS.UpdateItem(ctx, itemID, nil, fields)
+	if err != nil {
+		j, _ := json.Marshal(fields)
+		log.Debugfc(ctx, "cmsintegrationv3: item update for %s: %s", itemID, j)
+	}
+	return err
+}
+
+// UpdateStatus updates the QC/Conv status fields directly.
+// This is used by the workflow state machine's action execution.
+func (s *Services) UpdateStatus(ctx context.Context, itemID string, qcStatus, convStatus cmsintegrationcommon.ConvertionStatus) error {
 	fields := (&cmsintegrationcommon.FeatureItem{
 		ConvertionStatus: cmsintegrationcommon.TagFrom(convStatus),
 		QCStatus:         cmsintegrationcommon.TagFrom(qcStatus),
@@ -212,4 +231,20 @@ func (s *Services) Fail(ctx context.Context, itemID string, ty cmsintegrationcom
 	}
 
 	return nil
+}
+
+func (s *Services) UpdateFlowRunID(ctx context.Context, itemID, runID, triggerID string) error {
+	fields := []*cms.Field{
+		{Key: "flow_run_id", Type: "text", Value: runID},
+		{Key: "flow_trigger_id", Type: "text", Value: triggerID},
+	}
+	_, err := s.CMS.UpdateItem(ctx, itemID, nil, fields)
+	if err != nil {
+		return fmt.Errorf("failed to update flow run id: %w", err)
+	}
+	return nil
+}
+
+func (s *Services) ClearFlowRunID(ctx context.Context, itemID string) error {
+	return s.UpdateFlowRunID(ctx, itemID, "", "")
 }

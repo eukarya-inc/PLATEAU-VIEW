@@ -6,15 +6,22 @@ import {
   useContext,
 } from "react";
 
-import { NodeChange } from "@flow/types";
+import type { YWorkflow } from "@flow/lib/yjs/types";
+import {
+  NodeChange,
+  type AwarenessSelection,
+  type AwarenessSelectionsMap,
+} from "@flow/types";
 
 export type EditorContextType = {
   onNodesChange?: (changes: NodeChange[]) => void;
-  onSecondaryNodeAction?: (
-    _e: MouseEvent | undefined,
-    nodeId: string,
-    subworkflowId?: string,
+  onNodeSettings?: (_e: MouseEvent | undefined, nodeId: string) => void;
+  currentYWorkflow?: YWorkflow;
+  undoTrackerActionWrapper?: (
+    callback: () => void,
+    originPrepend?: string,
   ) => void;
+  awarenessSelectionsMap?: AwarenessSelectionsMap;
 };
 
 const EditorContext = createContext<EditorContextType | undefined>(undefined);
@@ -32,4 +39,11 @@ export const useEditorContext = (): EditorContextType => {
   }
 
   return ctx;
+};
+
+export const useAwarenessNodeSelections = (
+  nodeId: string,
+): AwarenessSelection[] => {
+  const { awarenessSelectionsMap } = useEditorContext();
+  return awarenessSelectionsMap?.[nodeId] ?? [];
 };

@@ -1,6 +1,6 @@
 package view
 
-import "github.com/reearth/reearth-cms/server/pkg/id"
+import "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 
 type FieldType string
 

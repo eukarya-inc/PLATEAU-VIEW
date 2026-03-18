@@ -2,8 +2,6 @@ package interfaces
 
 import (
 	"errors"
-
-	"github.com/reearth/reearthx/account/accountusecase/accountinterfaces"
 )
 
 type ListOperation string
@@ -19,10 +17,12 @@ var (
 	ErrOperationDenied error = errors.New("operation denied")
 	ErrFileNotIncluded error = errors.New("file not included")
 	ErrFeatureNotFound error = errors.New("feature not found")
+	ErrInvalidOperator error = errors.New("invalid operator")
 )
 
 type Container struct {
 	Asset         Asset
+	CMS           CMS
 	Deployment    Deployment
 	EdgeExecution EdgeExecution
 	Job           Job
@@ -32,6 +32,9 @@ type Container struct {
 	Project       Project
 	ProjectAccess ProjectAccess
 	Trigger       Trigger
-	User          accountinterfaces.User
-	Workspace     accountinterfaces.Workspace
+	UserFacingLog UserFacingLog
+	User          User
+	Workspace     Workspace
+	Websocket     WebsocketClient
+	WorkerConfig  WorkerConfig
 }

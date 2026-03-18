@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/reearth/reearth-cms/worker/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/repo"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 	"go.mongodb.org/mongo-driver/bson"

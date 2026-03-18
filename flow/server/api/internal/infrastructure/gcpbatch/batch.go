@@ -6,25 +6,27 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	batch "cloud.google.com/go/batch/apiv1"
 	batchpb "cloud.google.com/go/batch/apiv1/batchpb"
+	"github.com/google/uuid"
 	"github.com/googleapis/gax-go/v2"
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/log"
 	"google.golang.org/api/iterator"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type BatchConfig struct {
-	AllowedLocations                []string
 	BinaryPath                      string
-	BootDiskSizeGB                  int
 	BootDiskType                    string
-	ComputeCpuMilli                 int
-	ComputeMemoryMib                int
+	ChannelBufferSize               string
+	FeatureFlushThreshold           string
 	ImageURI                        string
 	MachineType                     string
 	NodeStatusPropagationDelayMS    string
@@ -32,17 +34,45 @@ type BatchConfig struct {
 	PubSubLogStreamTopic            string
 	PubSubJobCompleteTopic          string
 	PubSubNodeStatusTopic           string
+	PubSubUserFacingLogTopic        string
 	ProjectID                       string
 	Region                          string
+	RustLog                         string
 	SAEmail                         string
+	ThreadPoolSize                  string
+	AllowedLocations                []string
+	BootDiskSizeGB                  int
+	ComputeCpuMilli                 int
+	ComputeMemoryMib                int
+	MaxRunDurationSeconds           int
+	MaxRetryCount                   int
 	TaskCount                       int
+	CompressIntermediateData        bool
+	FeatureWriterDisable            bool
+	UseSpotVMs                      bool
 }
 
 type BatchClient interface {
-	CreateJob(ctx context.Context, req *batchpb.CreateJobRequest, opts ...gax.CallOption) (*batchpb.Job, error)
-	GetJob(ctx context.Context, req *batchpb.GetJobRequest, opts ...gax.CallOption) (*batchpb.Job, error)
-	ListJobs(ctx context.Context, req *batchpb.ListJobsRequest, opts ...gax.CallOption) *batch.JobIterator
-	DeleteJob(ctx context.Context, req *batchpb.DeleteJobRequest, opts ...gax.CallOption) (*batch.DeleteJobOperation, error)
+	CreateJob(
+		ctx context.Context,
+		req *batchpb.CreateJobRequest,
+		opts ...gax.CallOption,
+	) (*batchpb.Job, error)
+	GetJob(
+		ctx context.Context,
+		req *batchpb.GetJobRequest,
+		opts ...gax.CallOption,
+	) (*batchpb.Job, error)
+	ListJobs(
+		ctx context.Context,
+		req *batchpb.ListJobsRequest,
+		opts ...gax.CallOption,
+	) *batch.JobIterator
+	DeleteJob(
+		ctx context.Context,
+		req *batchpb.DeleteJobRequest,
+		opts ...gax.CallOption,
+	) (*batch.DeleteJobOperation, error)
 	Close() error
 }
 
@@ -63,16 +93,37 @@ func NewBatch(ctx context.Context, config BatchConfig) (gateway.Batch, error) {
 	}, nil
 }
 
-func (b *BatchRepo) SubmitJob(ctx context.Context, jobID id.JobID, workflowsURL, metadataURL string, variables map[string]interface{}, projectID id.ProjectID, workspaceID accountdomain.WorkspaceID) (string, error) {
-
+func (b *BatchRepo) SubmitJob(
+	ctx context.Context,
+	jobID id.JobID,
+	workflowsURL, metadataURL string,
+	variables map[string]string,
+	projectID id.ProjectID,
+	workspaceID accountsid.WorkspaceID,
+	previousJobID *id.JobID,
+	startNodeID *uuid.UUID,
+) (string, error) {
 	formattedJobID := formatJobID(jobID.String())
 
-	jobName := fmt.Sprintf("projects/%s/locations/%s/jobs/%s", b.config.ProjectID, b.config.Region, formattedJobID)
+	jobName := fmt.Sprintf(
+		"projects/%s/locations/%s/jobs/%s",
+		b.config.ProjectID,
+		b.config.Region,
+		formattedJobID,
+	)
 	parent := fmt.Sprintf("projects/%s/locations/%s", b.config.ProjectID, b.config.Region)
 
 	binaryPath := b.config.BinaryPath
 	if binaryPath == "" {
 		binaryPath = "reearth-flow-worker"
+	}
+
+	var flagArgs []string
+	if previousJobID != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("--previous-job-id %s", previousJobID.String()))
+	}
+	if startNodeID != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("--start-node-id %s", startNodeID.String()))
 	}
 
 	var varArgs []string
@@ -82,12 +133,14 @@ func (b *BatchRepo) SubmitJob(ctx context.Context, jobID id.JobID, workflowsURL,
 		}
 	}
 
+	flagString := strings.Join(flagArgs, " ")
 	varString := strings.Join(varArgs, " ")
 	workflowCommand := fmt.Sprintf(
-		"%s --workflow %q --metadata-path %q %s",
+		"%s --workflow %q --metadata-path %q %s %s",
 		binaryPath,
 		workflowsURL,
 		metadataURL,
+		flagString,
 		varString,
 	)
 
@@ -118,20 +171,76 @@ func (b *BatchRepo) SubmitJob(ctx context.Context, jobID id.JobID, workflowsURL,
 		MemoryMib:   int64(b.config.ComputeMemoryMib),
 	}
 
+	maxRunDuration := b.config.MaxRunDurationSeconds
+	if maxRunDuration <= 0 {
+		maxRunDuration = 21600 // default 6 hours
+	}
+
+	// Configure task retry for spot VM preemption.
+	// MaxRetryCount and LifecyclePolicies are only set when using spot VMs to avoid
+	// unintended retries on standard VMs. Without lifecycle policies, GCP Batch retries
+	// on any non-zero exit code, which is not desired for standard VM failures.
+	var maxRetryCount int32
+	var lifecyclePolicies []*batchpb.LifecyclePolicy
+	if b.config.UseSpotVMs && b.config.MaxRetryCount > 0 {
+		maxRetryCount = int32(b.config.MaxRetryCount)
+		// Exit code 50001 is emitted by GCP Batch when a spot VM is preempted.
+		// See: https://cloud.google.com/batch/docs/automate-task-retries
+		lifecyclePolicies = []*batchpb.LifecyclePolicy{{
+			Action: batchpb.LifecyclePolicy_RETRY_TASK,
+			ActionCondition: &batchpb.LifecyclePolicy_ActionCondition{
+				ExitCodes: []int32{50001},
+			},
+		}}
+	}
+
 	taskSpec := &batchpb.TaskSpec{
-		ComputeResource: computeResource,
+		ComputeResource:   computeResource,
+		MaxRetryCount:     maxRetryCount,
+		LifecyclePolicies: lifecyclePolicies,
+		MaxRunDuration:    durationpb.New(time.Duration(maxRunDuration) * time.Second),
 		Runnables: []*batchpb.Runnable{
 			runnable,
 		},
 		Environment: &batchpb.Environment{
-			Variables: map[string]string{
-				"FLOW_RUNTIME_NODE_STATUS_PROPAGATION_DELAY_MS": b.config.NodeStatusPropagationDelayMS,
-				"FLOW_WORKER_ENABLE_JSON_LOG":                   "true",
-				"FLOW_WORKER_EDGE_PASS_THROUGH_EVENT_TOPIC":     b.config.PubSubEdgePassThroughEventTopic,
-				"FLOW_WORKER_LOG_STREAM_TOPIC":                  b.config.PubSubLogStreamTopic,
-				"FLOW_WORKER_JOB_COMPLETE_TOPIC":                b.config.PubSubJobCompleteTopic,
-				"FLOW_WORKER_NODE_STATUS_TOPIC":                 b.config.PubSubNodeStatusTopic,
-			},
+			Variables: func() map[string]string {
+				rustLog := b.config.RustLog
+				if rustLog == "" {
+					rustLog = "info"
+				}
+				vars := map[string]string{
+					"FLOW_WORKER_ENABLE_JSON_LOG":               "true",
+					"FLOW_WORKER_EDGE_PASS_THROUGH_EVENT_TOPIC": b.config.PubSubEdgePassThroughEventTopic,
+					"FLOW_WORKER_LOG_STREAM_TOPIC":              b.config.PubSubLogStreamTopic,
+					"FLOW_WORKER_JOB_COMPLETE_TOPIC":            b.config.PubSubJobCompleteTopic,
+					"FLOW_WORKER_NODE_STATUS_TOPIC":             b.config.PubSubNodeStatusTopic,
+					"FLOW_WORKER_USER_FACING_LOG_TOPIC":         b.config.PubSubUserFacingLogTopic,
+					"RUST_LOG":                                  rustLog,
+					"RUST_BACKTRACE":                            "1",
+				}
+
+				// Only set runtime config if values are provided
+				if b.config.NodeStatusPropagationDelayMS != "" {
+					vars["FLOW_RUNTIME_NODE_STATUS_PROPAGATION_DELAY_MS"] = b.config.NodeStatusPropagationDelayMS
+				}
+				if b.config.ChannelBufferSize != "" {
+					vars["FLOW_RUNTIME_CHANNEL_BUFFER_SIZE"] = b.config.ChannelBufferSize
+				}
+				if b.config.ThreadPoolSize != "" {
+					vars["FLOW_RUNTIME_THREAD_POOL_SIZE"] = b.config.ThreadPoolSize
+				}
+				if b.config.FeatureFlushThreshold != "" {
+					vars["FLOW_RUNTIME_FEATURE_FLUSH_THRESHOLD"] = b.config.FeatureFlushThreshold
+				}
+				if b.config.CompressIntermediateData {
+					vars["FLOW_RUNTIME_COMPRESS_INTERMEDIATE_DATA"] = strconv.FormatBool(b.config.CompressIntermediateData)
+				}
+				if b.config.FeatureWriterDisable {
+					vars["FLOW_RUNTIME_FEATURE_WRITER_DISABLE"] = strconv.FormatBool(b.config.FeatureWriterDisable)
+				}
+
+				return vars
+			}(),
 		},
 	}
 
@@ -145,8 +254,13 @@ func (b *BatchRepo) SubmitJob(ctx context.Context, jobID id.JobID, workflowsURL,
 		SizeGb: int64(b.config.BootDiskSizeGB),
 	}
 
+	provisioningModel := batchpb.AllocationPolicy_STANDARD
+	if b.config.UseSpotVMs {
+		provisioningModel = batchpb.AllocationPolicy_SPOT
+	}
+
 	instancePolicy := &batchpb.AllocationPolicy_InstancePolicy{
-		ProvisioningModel: batchpb.AllocationPolicy_STANDARD,
+		ProvisioningModel: provisioningModel,
 		MachineType:       b.config.MachineType,
 		BootDisk:          bootDisk,
 	}
@@ -174,6 +288,7 @@ func (b *BatchRepo) SubmitJob(ctx context.Context, jobID id.JobID, workflowsURL,
 	}
 
 	labels := map[string]string{
+		"app":         "flow",
 		"project_id":  projectID.String(),
 		"original_id": jobID.String(),
 	}
@@ -224,6 +339,11 @@ func (b *BatchRepo) GetJobStatus(ctx context.Context, jobName string) (gateway.J
 
 	job, err := b.client.GetJob(ctx, req)
 	if err != nil {
+		if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "404") {
+			log.Debugfc(ctx, "Job not found (possibly deleted): %s", jobName)
+			return gateway.JobStatusCancelled, nil
+		}
+
 		if strings.Contains(err.Error(), "RESOURCE_PROJECT_INVALID") {
 			log.Debugfc(ctx, "Detected project invalid error, inspecting job name: %s", jobName)
 
@@ -240,11 +360,18 @@ func (b *BatchRepo) GetJobStatus(ctx context.Context, jobName string) (gateway.J
 			}
 
 			job, err = b.client.GetJob(ctx, retryReq)
-			if err == nil {
-				status := convertGCPStatusToGatewayStatus(job.Status.State)
-				return status, nil
+			if err != nil {
+				if strings.Contains(err.Error(), "NotFound") ||
+					strings.Contains(err.Error(), "404") {
+					log.Debugfc(ctx, "Job not found after retry (possibly deleted): %s", fixedName)
+					return gateway.JobStatusCancelled, nil
+				}
+				log.Debugfc(ctx, "Retry failed: %v", err)
+				return gateway.JobStatusUnknown, fmt.Errorf("failed to get job status: %v", err)
 			}
-			log.Debugfc(ctx, "Retry failed: %v", err)
+
+			status := convertGCPStatusToGatewayStatus(job.Status.State)
+			return status, nil
 		}
 
 		return gateway.JobStatusUnknown, fmt.Errorf("failed to get job status: %v", err)
@@ -258,7 +385,10 @@ func (b *BatchRepo) Close() error {
 	return b.client.Close()
 }
 
-func (b *BatchRepo) ListJobs(ctx context.Context, projectID id.ProjectID) ([]gateway.JobInfo, error) {
+func (b *BatchRepo) ListJobs(
+	ctx context.Context,
+	projectID id.ProjectID,
+) ([]gateway.JobInfo, error) {
 	req := &batchpb.ListJobsRequest{
 		Parent: fmt.Sprintf("projects/%s/locations/%s", b.config.ProjectID, b.config.Region),
 		Filter: fmt.Sprintf("labels.project_id=%s", projectID.String()),
@@ -307,12 +437,16 @@ func convertGCPStatusToGatewayStatus(gcpStatus batchpb.JobStatus_State) gateway.
 		return gateway.JobStatusUnknown
 	case batchpb.JobStatus_QUEUED:
 		return gateway.JobStatusPending
+	case batchpb.JobStatus_SCHEDULED:
+		return gateway.JobStatusPending
 	case batchpb.JobStatus_RUNNING:
 		return gateway.JobStatusRunning
 	case batchpb.JobStatus_SUCCEEDED:
 		return gateway.JobStatusCompleted
 	case batchpb.JobStatus_FAILED:
 		return gateway.JobStatusFailed
+	case batchpb.JobStatus_DELETION_IN_PROGRESS:
+		return gateway.JobStatusCancelled
 	default:
 		return gateway.JobStatusUnknown
 	}

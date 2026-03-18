@@ -23,6 +23,8 @@ export const GetTeamsDocument = gql`
       publishedProjectCount
       layerCount
       assetStorageSize
+      datasetSchemaCount
+      datasetCount
     }
   }
 

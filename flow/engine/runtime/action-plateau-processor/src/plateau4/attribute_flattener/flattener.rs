@@ -3,27 +3,64 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use reearth_flow_types::{Attribute, AttributeValue};
 
+/// Sort key for flooding risk schema attributes, matching FME's fldAttrsSorter.
+/// Sorted by (desc_code, admin_code, scale_code, order) where desc_code
+/// is compared numerically when parseable as i64.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) struct FldSortEntry {
+    /// uro:description_code — river system identifier, e.g. "1" for "利根川水系利根川"
+    pub desc_code: String,
+    /// uro:adminType_code — admin jurisdiction code, e.g. "1" for "国", "2" for "都道府県"
+    pub admin_code: String,
+    /// uro:scale_code — flood scale code, e.g. "1" for "L1（計画規模）", "2" for "L2（想定最大規模）"
+    pub scale_code: String,
+    /// Sub-attribute ordering: 1=浸水ランク, 2=浸水ランクコード, 3=浸水深, 4=浸水継続時間
+    pub order: u8,
+    /// Full flattened attribute name, e.g. "利根川水系利根川（国管理区間）_L1（計画規模）_浸水ランク"
+    pub attr_name: String,
+}
+
+impl FldSortEntry {
+    fn sort_key(&self) -> impl Ord + '_ {
+        let desc_num = self.desc_code.parse::<i64>().ok();
+        (
+            desc_num,
+            &self.desc_code,
+            &self.admin_code,
+            &self.scale_code,
+            self.order,
+        )
+    }
+}
+
+/// Sort fld entries by (desc_code numeric, desc_code string, admin_code, scale_code, order)
+pub(super) fn sort_fld_entries(entries: &mut [FldSortEntry]) {
+    entries.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct Flattener {
     pub(super) risk_to_attribute_definitions: HashMap<String, IndexMap<String, AttributeValue>>,
+    /// Unsorted entries for fld risk attributes; sorted once at schema generation time.
+    pub(super) fld_sort_entries: Vec<FldSortEntry>,
 }
 
 impl Flattener {
     pub(super) fn extract_fld_risk_attribute(
         &mut self,
         attributes: &HashMap<String, AttributeValue>,
-    ) -> HashMap<Attribute, AttributeValue> {
+    ) -> IndexMap<Attribute, AttributeValue> {
         let Some(disaster_risks) = attributes.get("uro:RiverFloodingRiskAttribute") else {
-            return HashMap::new();
+            return IndexMap::new();
         };
         let disaster_risks = match disaster_risks {
             AttributeValue::Array(disaster_risks) => disaster_risks,
             AttributeValue::Map(disaster_risks) => {
                 &vec![AttributeValue::Map(disaster_risks.clone())]
             }
-            _ => return HashMap::new(),
+            _ => return IndexMap::new(),
         };
-        let mut result = HashMap::new();
+        let mut result = IndexMap::new();
         for risk in disaster_risks {
             let risk_obj = match risk.as_map() {
                 Some(obj) => obj,
@@ -40,7 +77,7 @@ impl Flattener {
             let admin = admin.unwrap();
             let scale = scale.unwrap();
 
-            let basename = format!("{}（{}管理区間）_{}", desc, admin, scale);
+            let basename = format!("{desc}（{admin}管理区間）_{scale}");
 
             let mut rank = risk_obj.get("uro:rank").map(|v| v.to_string());
             let mut rank_code = risk_obj.get("uro:rank_code").map(|v| v.to_string());
@@ -52,20 +89,35 @@ impl Flattener {
             let depth = risk_obj.get("uro:depth").map(|v| v.to_string());
             let duration = risk_obj.get("uro:duration").map(|v| v.to_string());
 
+            // Extract code values for schema sort order (matching FME's fldAttrsSorter)
+            let desc_code = risk_obj
+                .get("uro:description_code")
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| desc.clone());
+            let admin_code = risk_obj
+                .get("uro:adminType_code")
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| admin.clone());
+            let scale_code = risk_obj
+                .get("uro:scale_code")
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| scale.clone());
+
             let attribs = vec![
-                ("浸水ランク", AttributeValue::default_string(), rank),
+                ("浸水ランク", AttributeValue::default_string(), rank, 1u8),
                 (
                     "浸水ランクコード",
                     AttributeValue::default_number(),
                     rank_code,
+                    2,
                 ),
-                ("浸水深", AttributeValue::default_number(), depth),
-                ("浸水継続時間", AttributeValue::default_number(), duration),
+                ("浸水深", AttributeValue::default_float(), depth, 3),
+                ("浸水継続時間", AttributeValue::default_float(), duration, 4),
             ];
 
-            for (label, value, value_opt) in attribs {
+            for (label, value, value_opt, order) in attribs {
                 if let Some(value_str) = value_opt {
-                    let name = format!("{}_{}", basename, label);
+                    let name = format!("{basename}_{label}");
                     result.insert(
                         Attribute::new(name.clone()),
                         AttributeValue::String(value_str),
@@ -74,6 +126,13 @@ impl Flattener {
                         .entry("fld".to_string())
                         .or_default()
                         .insert(name.clone(), value);
+                    self.fld_sort_entries.push(FldSortEntry {
+                        desc_code: desc_code.clone(),
+                        admin_code: admin_code.clone(),
+                        scale_code: scale_code.clone(),
+                        order,
+                        attr_name: name,
+                    });
                 }
             }
         }
@@ -83,7 +142,7 @@ impl Flattener {
     pub(super) fn extract_tnm_htd_ifld_risk_attribute(
         &mut self,
         attributes: &HashMap<String, AttributeValue>,
-    ) -> HashMap<Attribute, AttributeValue> {
+    ) -> IndexMap<Attribute, AttributeValue> {
         let src = [
             ("uro:TsunamiRiskAttribute", "津波浸水想定", "tnm"),
             ("uro:HighTideRiskAttribute", "高潮浸水想定", "htd"),
@@ -95,7 +154,7 @@ impl Flattener {
             ),
         ];
 
-        let mut result = HashMap::new();
+        let mut result = IndexMap::new();
         for (tag, title, package) in src.iter() {
             let Some(disaster_risks) = attributes.get(*tag) else {
                 continue;
@@ -105,7 +164,7 @@ impl Flattener {
                 AttributeValue::Map(disaster_risks) => {
                     &vec![AttributeValue::Map(disaster_risks.clone())]
                 }
-                _ => return HashMap::new(),
+                _ => return IndexMap::new(),
             };
 
             for risk_value in disaster_risks {
@@ -119,7 +178,7 @@ impl Flattener {
                     continue;
                 }
                 let desc = desc_opt.unwrap();
-                let basename = format!("{}_{}", title, desc);
+                let basename = format!("{title}_{desc}");
 
                 let mut rank_opt = risk_obj.get("uro:rank").map(|v| v.to_string());
                 let mut rank_code_opt = risk_obj.get("uro:rank_code").map(|v| v.to_string());
@@ -137,12 +196,12 @@ impl Flattener {
                         rank_code_opt,
                         AttributeValue::default_number(),
                     ),
-                    ("浸水深", depth_opt, AttributeValue::default_number()),
+                    ("浸水深", depth_opt, AttributeValue::default_float()),
                 ];
 
                 for (label, value_str_opt, value_type) in attribs {
                     if let Some(value_str) = value_str_opt {
-                        let name = format!("{}_{}", basename, label);
+                        let name = format!("{basename}_{label}");
                         result.insert(
                             Attribute::new(name.clone()),
                             AttributeValue::String(value_str),
@@ -161,18 +220,18 @@ impl Flattener {
     pub(super) fn extract_lsld_risk_attribute(
         &mut self,
         attributes: &HashMap<String, AttributeValue>,
-    ) -> HashMap<Attribute, AttributeValue> {
+    ) -> IndexMap<Attribute, AttributeValue> {
         let Some(disaster_risks) = attributes.get("uro:LandSlideRiskAttribute") else {
-            return HashMap::new();
+            return IndexMap::new();
         };
         let disaster_risks = match disaster_risks {
             AttributeValue::Array(disaster_risks) => disaster_risks,
             AttributeValue::Map(disaster_risks) => {
                 &vec![AttributeValue::Map(disaster_risks.clone())]
             }
-            _ => return HashMap::new(),
+            _ => return IndexMap::new(),
         };
-        let mut result = HashMap::new();
+        let mut result = IndexMap::new();
         for risk_value in disaster_risks {
             let risk_obj = match risk_value.as_map() {
                 Some(obj) => obj,
@@ -199,12 +258,12 @@ impl Flattener {
 
             let entries = vec![
                 (
-                    format!("土砂災害リスク_{}_区域区分", desc),
+                    format!("土砂災害リスク_{desc}_区域区分"),
                     area_type_opt.unwrap_or("".to_string()),
                     AttributeValue::default_string(),
                 ),
                 (
-                    format!("土砂災害リスク_{}_区域区分コード", desc),
+                    format!("土砂災害リスク_{desc}_区域区分コード"),
                     type_code_str,
                     AttributeValue::default_number(),
                 ),
@@ -214,10 +273,17 @@ impl Flattener {
                 if attr_value.is_empty() {
                     continue;
                 }
-                result.insert(
-                    Attribute::new(attr_key.clone()),
-                    AttributeValue::String(attr_value.clone()),
-                );
+                let attr_value = match &value_type {
+                    AttributeValue::Number(_) => {
+                        if let Ok(n) = attr_value.parse::<i64>() {
+                            AttributeValue::Number(n.into())
+                        } else {
+                            AttributeValue::String(attr_value.clone())
+                        }
+                    }
+                    _ => AttributeValue::String(attr_value.clone()),
+                };
+                result.insert(Attribute::new(attr_key.clone()), attr_value);
                 self.risk_to_attribute_definitions
                     .entry("lsld".to_string())
                     .or_default()
@@ -226,6 +292,40 @@ impl Flattener {
         }
         result
     }
+
+    /// Extract bldg:address from core:Address nested structure
+    /// core:Address[0].xAL:AddressDetails[0].xAL:Country[0].xAL:Locality -> bldg:address
+    pub(super) fn extract_address(
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> Option<AttributeValue> {
+        let address_array = attributes.get("core:Address")?;
+        let address_list = address_array.as_vec()?;
+        let address_obj = address_list.first()?.as_map()?;
+
+        let details_array = address_obj.get("xAL:AddressDetails")?;
+        let details_list = details_array.as_vec()?;
+        let details_obj = details_list.first()?.as_map()?;
+
+        let country_array = details_obj.get("xAL:Country")?;
+        let country_list = country_array.as_vec()?;
+        let country_obj = country_list.first()?.as_map()?;
+
+        match country_obj.get("xAL:Locality")? {
+            AttributeValue::Array(arr) => {
+                let joined = arr
+                    .iter()
+                    .filter_map(|v| v.as_string())
+                    .collect::<Vec<_>>()
+                    .join("");
+                if joined.is_empty() {
+                    None
+                } else {
+                    Some(AttributeValue::String(joined))
+                }
+            }
+            other => Some(other.clone()),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -233,15 +333,15 @@ impl Flattener {
 pub(super) struct CommonAttributeProcessor {
     max_lod: i64,
     gml_path_to_max_lod: HashMap<String, i64>,
-    attribute_to_attribute_type: HashMap<String, String>,
+    attribute_to_attribute_type: IndexMap<String, String>,
 }
 
 impl CommonAttributeProcessor {
-    pub(super) fn get_generic_schema(&self) -> HashMap<Attribute, AttributeValue> {
-        let mut result = HashMap::new();
+    pub(super) fn get_generic_schema(&self) -> IndexMap<Attribute, AttributeValue> {
+        let mut result = IndexMap::new();
         for (key, value) in self.attribute_to_attribute_type.iter() {
             match value.as_str() {
-                "string" | "date" => {
+                "string" | "date" | "buffer" => {
                     result.insert(
                         Attribute::new(key.clone()),
                         AttributeValue::default_string(),
@@ -262,18 +362,18 @@ impl CommonAttributeProcessor {
         &mut self,
         attribute: &HashMap<String, AttributeValue>,
         prefix: &str,
-    ) -> HashMap<Attribute, AttributeValue> {
-        let mut result = HashMap::new();
+    ) -> IndexMap<Attribute, AttributeValue> {
+        let mut result = IndexMap::new();
         if let (Some(AttributeValue::String(name)), Some(AttributeValue::String(typ))) =
             (attribute.get("name"), attribute.get("type"))
         {
-            let name = format!("{}{}", prefix, name);
+            let name = format!("{prefix}{name}");
             let value = attribute.get("value").unwrap_or(&AttributeValue::Null);
             if typ == "attributeSet" {
                 if let AttributeValue::Array(attribute_set) = value {
                     for attribute in attribute_set {
                         if let AttributeValue::Map(attribute) = attribute {
-                            let prefix = format!("{}_", name);
+                            let prefix = format!("{name}_");
                             self.flatten_generic_attribute(attribute, prefix.as_str());
                         }
                     }
@@ -287,7 +387,7 @@ impl CommonAttributeProcessor {
                 .insert(name.clone(), typ.clone());
             if typ == "measure" {
                 if let Some(uom) = attribute.get("uom") {
-                    let name = format!("{}_uom", name);
+                    let name = format!("{name}_uom");
                     result.insert(Attribute::new(name.clone()), uom.clone());
                     self.attribute_to_attribute_type
                         .insert(name, "string".to_string());
@@ -299,9 +399,33 @@ impl CommonAttributeProcessor {
 
     pub(super) fn flatten_generic_attributes(
         &mut self,
-        attribute: &HashMap<String, AttributeValue>,
-    ) -> HashMap<Attribute, AttributeValue> {
-        self.flatten_generic_attribute(attribute, "")
+        attributes: &HashMap<String, AttributeValue>,
+    ) -> IndexMap<Attribute, AttributeValue> {
+        let mut result = IndexMap::new();
+
+        // Extract gen:genericAttribute array from the citygml attributes
+        let Some(generic_attrs) = attributes.get("gen:genericAttribute") else {
+            return result;
+        };
+
+        let generic_attrs = match generic_attrs {
+            AttributeValue::Array(arr) => arr,
+            AttributeValue::Map(map) => {
+                // Single attribute case
+                result.extend(self.flatten_generic_attribute(map, ""));
+                return result;
+            }
+            _ => return result,
+        };
+
+        // Process each generic attribute in the array
+        for attr in generic_attrs {
+            if let AttributeValue::Map(attr_map) = attr {
+                result.extend(self.flatten_generic_attribute(attr_map, ""));
+            }
+        }
+
+        result
     }
 
     #[allow(dead_code)]
@@ -332,7 +456,7 @@ impl CommonAttributeProcessor {
                 None => continue,
             };
             if s.to_string() == "2" || s.to_string() == "3" || s.to_string() == "4" {
-                let key = format!("lod_type_{}", s);
+                let key = format!("lod_type_{s}");
                 let attribute_name = Attribute::new(key.clone());
                 result.insert(attribute_name, lod_type.clone());
             }
@@ -351,9 +475,11 @@ pub(super) fn get_value_from_json_path(
         if let Some(AttributeValue::Map(map)) = &array.first() {
             get_value_from_json_path(&paths[1..], map)
         } else if *key == "uro:lodType" {
+            // NOTE: reference implementation uses list joining with comma, maybe fix later
             Some(AttributeValue::String(value.to_string()))
         } else {
-            None
+            // take first element
+            Some(array.first()?.clone())
         }
     } else if let AttributeValue::Number(num) = value {
         match num.as_i64() {

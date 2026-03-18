@@ -3,7 +3,7 @@ package memory
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
 )
 
 type Lock struct{}

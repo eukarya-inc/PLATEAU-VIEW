@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	gqlworkspace "github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace"
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/rbac"
 	"github.com/reearth/reearth-flow/api/internal/usecase/gateway"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
@@ -12,8 +14,6 @@ import (
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/job"
 	"github.com/reearth/reearth-flow/api/pkg/project"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
 	"github.com/reearth/reearthx/usecasex"
 )
 
@@ -22,8 +22,8 @@ type Project struct {
 	workflowRepo      repo.Workflow
 	projectRepo       repo.Project
 	jobRepo           repo.Job
-	userRepo          accountrepo.User
-	workspaceRepo     accountrepo.Workspace
+	workerConfigRepo  repo.WorkerConfig
+	workspaceRepo     gqlworkspace.WorkspaceRepo
 	transaction       usecasex.Transaction
 	file              gateway.File
 	batch             gateway.Batch
@@ -31,14 +31,14 @@ type Project struct {
 	permissionChecker gateway.PermissionChecker
 }
 
-func NewProject(r *repo.Container, gr *gateway.Container, jobUsecase interfaces.Job, permissionChecker gateway.PermissionChecker) interfaces.Project {
+func NewProject(r *repo.Container, gr *gateway.Container, jobUsecase interfaces.Job, permissionChecker gateway.PermissionChecker, workspaceRepo gqlworkspace.WorkspaceRepo) interfaces.Project {
 	return &Project{
 		assetRepo:         r.Asset,
 		workflowRepo:      r.Workflow,
 		projectRepo:       r.Project,
 		jobRepo:           r.Job,
-		userRepo:          r.User,
-		workspaceRepo:     r.Workspace,
+		workerConfigRepo:  r.WorkerConfig,
+		workspaceRepo:     workspaceRepo,
 		transaction:       r.Transaction,
 		file:              gr.File,
 		batch:             gr.Batch,
@@ -59,12 +59,12 @@ func (i *Project) Fetch(ctx context.Context, ids []id.ProjectID) ([]*project.Pro
 	return i.projectRepo.FindByIDs(ctx, ids)
 }
 
-func (i *Project) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, pagination *interfaces.PaginationParam) ([]*project.Project, *interfaces.PageBasedInfo, error) {
+func (i *Project) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, pagination *interfaces.PaginationParam, keyword *string, includeArchived *bool) ([]*project.Project, *interfaces.PageBasedInfo, error) {
 	if err := i.checkPermission(ctx, rbac.ActionList); err != nil {
 		return nil, nil, err
 	}
 
-	return i.projectRepo.FindByWorkspace(ctx, id, pagination)
+	return i.projectRepo.FindByWorkspace(ctx, id, pagination, keyword, includeArchived)
 }
 
 func (i *Project) Create(ctx context.Context, p interfaces.CreateProjectParam) (_ *project.Project, err error) {
@@ -84,7 +84,7 @@ func (i *Project) Create(ctx context.Context, p interfaces.CreateProjectParam) (
 		}
 	}()
 
-	_, err = i.workspaceRepo.FindByID(ctx, p.WorkspaceID)
+	_, err = i.workspaceRepo.FindByID(ctx, p.WorkspaceID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (i *Project) Run(ctx context.Context, p interfaces.RunProjectParam) (_ *job
 		return nil, err
 	}
 
-	gcpJobID, err := i.batch.SubmitJob(ctx, j.ID(), workflowURL.String(), j.MetadataURL(), nil, p.ProjectID, prj.Workspace())
+	gcpJobID, err := i.batch.SubmitJob(ctx, j.ID(), workflowURL.String(), j.MetadataURL(), nil, p.ProjectID, prj.Workspace(), p.PreviousJobID, p.StartNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to submit job: %v", err)
 	}

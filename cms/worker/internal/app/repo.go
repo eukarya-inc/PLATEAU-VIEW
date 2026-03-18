@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/worker/internal/infrastructure/aws"
-	"github.com/reearth/reearth-cms/worker/internal/infrastructure/gcp"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/infrastructure/aws"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/infrastructure/gcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
 	"github.com/reearth/reearthx/log"
 )
 

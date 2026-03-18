@@ -5,25 +5,26 @@ import (
 	"time"
 
 	"github.com/reearth/reearth/server/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 )
 
 var ErrSceneIsLocked error = errors.New("scene is locked")
 
 type Scene struct {
-	id        id.SceneID
-	project   id.ProjectID
-	workspace accountdomain.WorkspaceID
+	id        ID
+	project   ProjectID
+	workspace WorkspaceID
+	rootLayer id.LayerID
 	widgets   *Widgets
 	plugins   *Plugins
 	updatedAt time.Time
-	property  id.PropertyID
+	property  PropertyID
+	clusters  *ClusterList
 	styles    *StyleList
 }
 
-func (s *Scene) ID() id.SceneID {
+func (s *Scene) ID() ID {
 	if s == nil {
-		return id.SceneID{}
+		return ID{}
 	}
 	return s.id
 }
@@ -35,25 +36,32 @@ func (s *Scene) CreatedAt() time.Time {
 	return s.id.Timestamp()
 }
 
-func (s *Scene) Project() id.ProjectID {
+func (s *Scene) Project() ProjectID {
 	if s == nil {
-		return id.ProjectID{}
+		return ProjectID{}
 	}
 	return s.project
 }
 
-func (s *Scene) Workspace() accountdomain.WorkspaceID {
+func (s *Scene) Workspace() WorkspaceID {
 	if s == nil {
-		return accountdomain.WorkspaceID{}
+		return WorkspaceID{}
 	}
 	return s.workspace
 }
 
-func (s *Scene) Property() id.PropertyID {
+func (s *Scene) Property() PropertyID {
 	if s == nil {
-		return id.PropertyID{}
+		return PropertyID{}
 	}
 	return s.property
+}
+
+func (s *Scene) RootLayer() id.LayerID {
+	if s == nil {
+		return id.LayerID{}
+	}
+	return s.rootLayer
 }
 
 func (s *Scene) Widgets() *Widgets {
@@ -68,13 +76,6 @@ func (s *Scene) Plugins() *Plugins {
 		return nil
 	}
 	return s.plugins
-}
-
-func (s *Scene) AddPlugin(plugin *Plugin) bool {
-	if s == nil {
-		return false
-	}
-	return s.plugins.Add(plugin)
 }
 
 func (s *Scene) PluginIds() []id.PluginID {
@@ -102,12 +103,20 @@ func (s *Scene) SetUpdatedAt(updatedAt time.Time) {
 	s.updatedAt = updatedAt
 }
 
-func (s *Scene) Properties() []id.PropertyID {
+func (s *Scene) Properties() []PropertyID {
 	if s == nil {
 		return nil
 	}
-	ids := []id.PropertyID{s.property}
+	ids := []PropertyID{s.property}
 	ids = append(ids, s.plugins.Properties()...)
 	ids = append(ids, s.widgets.Properties()...)
+	ids = append(ids, s.clusters.Properties()...)
 	return ids
+}
+
+func (s *Scene) Clusters() *ClusterList {
+	if s == nil {
+		return nil
+	}
+	return s.clusters
 }

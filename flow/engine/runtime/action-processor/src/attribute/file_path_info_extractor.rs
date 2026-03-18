@@ -24,7 +24,7 @@ impl ProcessorFactory for AttributeFilePathInfoExtractorFactory {
     }
 
     fn description(&self) -> &str {
-        "Extracts file path information from attributes"
+        "Extract File System Information from Path Attributes"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -53,14 +53,12 @@ impl ProcessorFactory for AttributeFilePathInfoExtractorFactory {
         let processor: AttributeFilePathInfoExtractor = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::FilePathInfoExtractor(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::FilePathInfoExtractor(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -73,10 +71,12 @@ impl ProcessorFactory for AttributeFilePathInfoExtractorFactory {
     }
 }
 
+/// # AttributeFilePathInfoExtractor Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeFilePathInfoExtractor {
-    /// # Attribute to extract file path from
+    /// # Source Path Attribute
+    /// Attribute containing the file path to analyze for extracting file system information
     attribute: Attribute,
 }
 
@@ -96,62 +96,43 @@ impl Processor for AttributeFilePathInfoExtractor {
             return Ok(());
         };
         let path = Path::new(path);
-        let mut attributes = feature.attributes.clone();
+        let mut new_feature = feature.clone();
         if path.exists() && !path.is_symlink() {
             let metadata = metadata(&path)?;
             if metadata.is_dir {
-                attributes.insert(
-                    Attribute::new("fileType"),
-                    AttributeValue::String("Directory".to_string()),
-                );
+                new_feature.insert("fileType", AttributeValue::String("Directory".to_string()));
                 let size = get_dir_size(path)?;
-                attributes.insert(
-                    Attribute::new("fileSize"),
-                    AttributeValue::Number(Number::from(size)),
-                );
+                new_feature.insert("fileSize", AttributeValue::Number(Number::from(size)));
             } else {
-                attributes.insert(
-                    Attribute::new("fileType"),
-                    AttributeValue::String("File".to_string()),
-                );
-                attributes.insert(
-                    Attribute::new("fileSize"),
+                new_feature.insert("fileType", AttributeValue::String("File".to_string()));
+                new_feature.insert(
+                    "fileSize",
                     AttributeValue::Number(Number::from(metadata.size)),
                 );
             }
 
             if let Some(atime) = chrono::DateTime::<chrono::Utc>::from_timestamp(metadata.atime, 0)
             {
-                attributes.insert(
-                    Attribute::new("fileAtime"),
-                    AttributeValue::DateTime(atime.into()),
-                );
+                new_feature.insert("fileAtime", AttributeValue::DateTime(atime.into()));
             }
             if let Some(mtime) = chrono::DateTime::<chrono::Utc>::from_timestamp(metadata.mtime, 0)
             {
-                attributes.insert(
-                    Attribute::new("fileMtime"),
-                    AttributeValue::DateTime(mtime.into()),
-                );
+                new_feature.insert("fileMtime", AttributeValue::DateTime(mtime.into()));
             }
             if let Some(ctime) = chrono::DateTime::<chrono::Utc>::from_timestamp(metadata.ctime, 0)
             {
-                attributes.insert(
-                    Attribute::new("fileCtime"),
-                    AttributeValue::DateTime(ctime.into()),
-                );
+                new_feature.insert("fileCtime", AttributeValue::DateTime(ctime.into()));
             }
         }
-        fw.send(
-            ctx.new_with_feature_and_port(
-                feature.with_attributes(attributes),
-                DEFAULT_PORT.clone(),
-            ),
-        );
+        fw.send(ctx.new_with_feature_and_port(new_feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

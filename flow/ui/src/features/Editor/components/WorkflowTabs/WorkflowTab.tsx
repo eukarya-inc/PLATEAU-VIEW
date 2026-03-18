@@ -1,72 +1,45 @@
-import { X } from "@phosphor-icons/react";
-
-import { Input } from "@flow/components";
-import { useT } from "@flow/lib/i18n";
+import { GraphIcon, XIcon } from "@phosphor-icons/react";
 
 type Props = {
   currentWorkflowId?: string;
-  editId?: string;
   id: string;
   name?: string;
-  setName: (name: string) => void;
   onWorkflowChange: (workflowId?: string) => void;
   onWorkflowClose: (
     workflowId: string,
   ) => (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
-  onDoubleClick?: (workflowId: string, name: string | undefined) => void;
-  onSubmit: () => void;
 };
 
 const WorkflowTab: React.FC<Props> = ({
   currentWorkflowId,
-  editId,
   id,
   name,
-  setName,
   onWorkflowChange,
   onWorkflowClose,
-  onDoubleClick,
-  onSubmit,
 }) => {
-  const t = useT();
-  const isEditing = editId === id;
-
   return (
     <div
-      className={`relative flex h-4/5 w-[150px] shrink-0 items-center justify-center rounded transition-colors ${currentWorkflowId === id ? "bg-node-entrance/60" : "bg-node-entrance/30 hover:bg-node-entrance/60"} group cursor-pointer`}
+      className={`relative flex h-4/5 w-[150px] shrink-0 items-end gap-1 rounded-t transition-colors ${currentWorkflowId === id ? "bg-node-subworkflow" : "bg-node-subworkflow/50 hover:bg-node-subworkflow"} group cursor-pointer`}
       onClick={() => onWorkflowChange(id)}
-      onDoubleClick={() => onDoubleClick?.(id, name)}
       key={id}>
-      {isEditing ? (
-        <Input
-          className="h-4 border-none text-center text-xs focus-visible:ring-0 dark:font-extralight"
-          defaultValue={name}
-          placeholder={t("Set Workflow name")}
-          autoFocus
-          onKeyDownCapture={(e) => e.key === "Enter" && onSubmit()}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={onSubmit}
-        />
-      ) : (
-        <p
-          className={`ml-[15px] mr-[19px] select-none truncate text-center text-xs group-hover:text-white dark:font-extralight ${currentWorkflowId !== id && "text-accent-foreground"}`}>
+      <div
+        className={`ml-[8px] flex h-full items-center gap-2 text-white dark:font-extralight ${currentWorkflowId !== id && "text-accent-foreground"}`}>
+        <GraphIcon weight="light" />
+      </div>
+      <div className="flex h-full w-[100px] items-center justify-center overflow-hidden text-center">
+        <p className="w-full truncate text-center text-xs text-white select-none">
           {name}
         </p>
-      )}
-      {!isEditing && (
-        <div className="absolute right-0 flex h-full justify-end rounded">
+      </div>
+      <div className="absolute right-0 flex h-full w-[35px] bg-secondary opacity-0 shadow-[-8px_0_8px_rgba(0,0,0,0.1)] transition-all delay-0 group-hover:opacity-100 group-hover:delay-200">
+        <div className="flex w-full items-center justify-center rounded-tr bg-node-entrance/60">
           <div
-            className="group flex h-full w-[20px] items-center justify-self-end overflow-hidden rounded px-1 hover:w-[150px] hover:bg-node-exit hover:transition-all hover:delay-200"
+            className="rounded p-1 transition-all hover:bg-node-entrance/40"
             onClick={onWorkflowClose(id)}>
-            <div className="flex-1 overflow-hidden">
-              <p className="rounded-l text-center text-xs opacity-0 transition-all delay-200 group-hover:opacity-100 dark:font-extralight">
-                {t("Close canvas")}
-              </p>
-            </div>
-            <X className="size-[12px] opacity-0 group-hover:opacity-100" />
+            <XIcon />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

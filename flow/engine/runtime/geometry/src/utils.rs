@@ -3,13 +3,14 @@ use num_traits::FromPrimitive;
 
 use crate::{
     algorithm::{
+        geo_distance_converter::coordinate_diff_to_meter,
         intersects::Intersects,
         kernels::{Orientation, RobustKernel},
         remove_repeated_points::RemoveRepeatedPoints,
         GeoNum,
     },
     types::{
-        coordinate::{Coordinate, Coordinate2D},
+        coordinate::{Coordinate, Coordinate2D, Coordinate3D},
         coordnum::{CoordFloat, CoordNum},
         line::Line,
         line_string::LineString,
@@ -259,14 +260,90 @@ pub fn check_too_few_points<T: CoordFloat + FromPrimitive, Z: CoordFloat + FromP
     false
 }
 
-pub fn linestring_has_self_intersection<T: GeoNum, Z: GeoNum>(geom: &LineString<T, Z>) -> bool {
-    for (i, line) in geom.lines().enumerate() {
-        for (j, other_line) in geom.lines().enumerate() {
-            if i != j
-                && line.intersects(&other_line)
-                && line.start != other_line.end
-                && line.end != other_line.start
-            {
+/// Check for self-intersection with 3D-aware analysis
+/// This function first checks if the LineString is planar, and if so, rotates it to XY plane for accurate intersection testing
+/// If tolerance is Some(t) where t > 0.0, intersections where the lines are within tolerance distance are ignored.
+pub fn linestring_has_self_intersection_3d<
+    T: GeoNum + num_traits::FromPrimitive + num_traits::ToPrimitive,
+    Z: GeoNum + num_traits::FromPrimitive + num_traits::ToPrimitive,
+>(
+    geom: &LineString<T, Z>,
+    tolerance: Option<f64>,
+) -> bool {
+    if let Some(planarity_info) = is_linestring_planar(geom, 1e-6) {
+        if let Some(rotated_geom) = rotate_linestring_to_xy_plane(geom, &planarity_info) {
+            return linestring_has_self_intersection(&rotated_geom, tolerance);
+        }
+    }
+
+    // If not planar or rotation failed, use 2D projection method (fallback)
+    linestring_has_self_intersection(geom, tolerance)
+}
+
+/// Check for self-intersection in a LineString with optional tolerance.
+/// If tolerance is Some(t) where t > 0.0, intersections caused by segments that are
+/// "nearly adjacent" (endpoints within tolerance) or numerical precision issues are ignored.
+pub fn linestring_has_self_intersection<
+    T: GeoNum + num_traits::ToPrimitive,
+    Z: GeoNum + num_traits::ToPrimitive,
+>(
+    geom: &LineString<T, Z>,
+    tolerance: Option<f64>,
+) -> bool {
+    let tol = tolerance.unwrap_or(0.0);
+    let lines: Vec<_> = geom.lines().collect();
+    let n = lines.len();
+
+    for (i, line) in lines.iter().enumerate() {
+        for (j, other_line) in lines.iter().enumerate() {
+            // Skip same segment
+            if i == j {
+                continue;
+            }
+
+            // Skip truly adjacent segments (share an exact endpoint)
+            if line.start == other_line.end || line.end == other_line.start {
+                continue;
+            }
+
+            // For closed rings, skip the first and last segments (they share the closing point)
+            if n > 2 && ((i == 0 && j == n - 1) || (i == n - 1 && j == 0)) {
+                continue;
+            }
+
+            // Check if lines intersect
+            if line.intersects(other_line) {
+                if tol > 0.0 {
+                    // Check if segments are "nearly adjacent" — connecting endpoints
+                    // within tolerance (would share a vertex if not for precision)
+                    let near_adjacent = [
+                        line_euclidean_length(Line::new_(line.end, other_line.start)),
+                        line_euclidean_length(Line::new_(line.start, other_line.end)),
+                    ]
+                    .into_iter()
+                    .filter_map(|d| d.to_f64())
+                    .any(|d| d < tol);
+
+                    if near_adjacent {
+                        continue;
+                    }
+
+                    // Check if any pair of endpoints is very close — indicates the
+                    // intersection is a floating-point artifact near a shared vertex
+                    let endpoints_close = [
+                        line_euclidean_length(Line::new_(line.start, other_line.start)),
+                        line_euclidean_length(Line::new_(line.start, other_line.end)),
+                        line_euclidean_length(Line::new_(line.end, other_line.start)),
+                        line_euclidean_length(Line::new_(line.end, other_line.end)),
+                    ]
+                    .into_iter()
+                    .filter_map(|d| d.to_f64())
+                    .any(|d| d < tol);
+
+                    if endpoints_close {
+                        continue;
+                    }
+                }
                 return true;
             }
         }
@@ -274,15 +351,13 @@ pub fn linestring_has_self_intersection<T: GeoNum, Z: GeoNum>(geom: &LineString<
     false
 }
 
+#[derive(Debug)]
 pub struct PointsCoplanar {
     pub normal: Point3D<f64>,
     pub center: Point3D<f64>,
 }
 
-pub fn are_points_coplanar(
-    points: Vec<nalgebra::Point3<f64>>,
-    tolerance: f64,
-) -> Option<PointsCoplanar> {
+pub fn are_points_coplanar(points: &[Coordinate3D<f64>], tolerance: f64) -> Option<PointsCoplanar> {
     let n = points.len();
     if points.len() < 3 {
         return None; // Three points or less are always on the same plane.
@@ -291,14 +366,15 @@ pub fn are_points_coplanar(
     // Calculate the mean value of the point cloud.
     let mean: nalgebra::Vector3<f64> = points
         .iter()
-        .map(|p| p.coords)
+        .map(|p| nalgebra::Vector3::new(p.x, p.y, p.z))
         .sum::<nalgebra::Vector3<f64>>()
         / (n as f64);
 
     // Calculate the covariance matrix
     let mut covariance_matrix = DMatrix::<f64>::zeros(3, 3);
     for point in points {
-        let centered = point.coords - mean;
+        let point = nalgebra::Vector3::new(point.x, point.y, point.z);
+        let centered = point - mean;
         covariance_matrix += centered * centered.transpose();
     }
     covariance_matrix /= n as f64;
@@ -363,4 +439,276 @@ fn is_colinear<Z: CoordFloat>(
     let area =
         ((p1.x * (p2.y - p3.y)) + (p2.x * (p3.y - p1.y)) + (p3.x * (p1.y - p2.y))).abs() / 2.0;
     area < tolerance
+}
+
+/// Calculate 3D distance between two coordinates using geo-distance conversion
+/// Returns None if coordinate conversion fails
+pub fn calculate_geo_distance_3d<T: CoordFloat, Z: CoordFloat>(
+    p1: &Coordinate<T, Z>,
+    p2: &Coordinate<T, Z>,
+) -> Option<f64> {
+    let lng1 = p1.x.to_f64()?;
+    let lat1 = p1.y.to_f64()?;
+    let lng2 = p2.x.to_f64()?;
+    let lat2 = p2.y.to_f64()?;
+
+    let dlng = lng2 - lng1;
+    let dlat = lat2 - lat1;
+    let mid_lat = (lat1 + lat2) / 2.0;
+
+    // Convert coordinate differences to meters
+    let (dx_meters, dy_meters) = coordinate_diff_to_meter(dlng, dlat, mid_lat);
+
+    // Handle Z coordinate (already in meters)
+    let dz_meters = match (p1.z.to_f64(), p2.z.to_f64()) {
+        (Some(z1), Some(z2)) => z2 - z1,
+        (None, None) => 0.0, // Both missing Z is valid
+        _ => return None,    // Inconsistent Z coordinate availability
+    };
+
+    Some((dx_meters * dx_meters + dy_meters * dy_meters + dz_meters * dz_meters).sqrt())
+}
+
+/// Check if a LineString is planar (all points lie on the same plane)
+/// Returns Some(PointsCoplanar) if planar, None if not planar
+pub fn is_linestring_planar<T, Z>(
+    line_string: &LineString<T, Z>,
+    tolerance: f64,
+) -> Option<PointsCoplanar>
+where
+    T: CoordFloat + num_traits::ToPrimitive,
+    Z: CoordFloat + num_traits::ToPrimitive,
+{
+    if line_string.0.len() < 3 {
+        return None; // Less than 3 points cannot define a plane
+    }
+    let points = line_string
+        .coords()
+        .map(|coord| {
+            Some(Coordinate3D::new__(
+                coord.x.to_f64()?,
+                coord.y.to_f64()?,
+                coord.z.to_f64()?,
+            ))
+        })
+        .collect::<Option<Vec<_>>>()?;
+
+    are_points_coplanar(&points, tolerance)
+}
+
+/// Rotate a planar LineString to lie on the XY plane (Z=0)
+/// Returns the rotated LineString if successful, None if the operation fails
+pub fn rotate_linestring_to_xy_plane<T, Z>(
+    line_string: &LineString<T, Z>,
+    planarity_info: &PointsCoplanar,
+) -> Option<LineString<T, Z>>
+where
+    T: CoordFloat + num_traits::FromPrimitive + num_traits::ToPrimitive,
+    Z: CoordFloat + num_traits::FromPrimitive + num_traits::ToPrimitive,
+{
+    use nalgebra::{Matrix3, Vector3};
+
+    // Calculate rotation matrix to align surface normal with Z-axis
+    let from_vector = Vector3::new(
+        planarity_info.normal.x(),
+        planarity_info.normal.y(),
+        planarity_info.normal.z(),
+    );
+    let to_vector = Vector3::new(0.0, 0.0, 1.0);
+
+    // Skip rotation if already aligned with Z-axis
+    if (from_vector - to_vector).norm() < 1e-6 {
+        return Some(line_string.clone());
+    }
+
+    // Calculate rotation axis and angle
+    let cross_product = from_vector.cross(&to_vector);
+
+    let (rotation_axis, rotation_angle) = if cross_product.norm() < 1e-10 {
+        // Vectors are parallel - either same direction (already handled above) or opposite
+        // For opposite direction, we need a 180-degree rotation around any perpendicular axis
+        let perpendicular = if from_vector.x.abs() < 0.9 {
+            Vector3::new(1.0, 0.0, 0.0).cross(&from_vector)
+        } else {
+            Vector3::new(0.0, 1.0, 0.0).cross(&from_vector)
+        };
+        (perpendicular.normalize(), std::f64::consts::PI)
+    } else {
+        (
+            cross_product.normalize(),
+            from_vector.dot(&to_vector).acos(),
+        )
+    };
+
+    // Create rotation matrix using Rodrigues' rotation formula
+    let k = rotation_axis;
+    let cos_theta = rotation_angle.cos();
+    let sin_theta = rotation_angle.sin();
+
+    let rotation_matrix = Matrix3::identity() * cos_theta
+        + Matrix3::from_columns(&[
+            Vector3::new(0.0, -k.z, k.y),
+            Vector3::new(k.z, 0.0, -k.x),
+            Vector3::new(-k.y, k.x, 0.0),
+        ]) * sin_theta
+        + k * k.transpose() * (1.0 - cos_theta);
+
+    // Apply rotation to each coordinate
+    let rotated_coords: Result<Vec<Coordinate<T, Z>>, &str> = line_string
+        .coords()
+        .map(|coord| {
+            let original = Vector3::new(
+                coord.x.to_f64().ok_or("Failed to convert x coordinate")?,
+                coord.y.to_f64().ok_or("Failed to convert y coordinate")?,
+                coord.z.to_f64().ok_or("Failed to convert z coordinate")?,
+            );
+
+            let rotated = rotation_matrix * original;
+
+            Ok(Coordinate::new__(
+                T::from_f64(rotated.x).ok_or("Failed to convert rotated x coordinate")?,
+                T::from_f64(rotated.y).ok_or("Failed to convert rotated y coordinate")?,
+                Z::from_f64(0.0).ok_or("Failed to convert z coordinate to zero")?, // Force Z to 0 for XY plane
+            ))
+        })
+        .collect();
+
+    let rotated_coords = rotated_coords.ok()?;
+    Some(LineString::from(rotated_coords))
+}
+
+/// Returns the circumcenter and the circumradius if the triangle is non-degenerate.
+pub fn circumcenter(
+    a: Coordinate<f64>,
+    b: Coordinate<f64>,
+    c: Coordinate<f64>,
+) -> Result<(Coordinate<f64>, f64), String> {
+    let t = [a, b, c];
+    // Work in the triangle's plane basis: x = A + α(B−A) + β(C−A),
+    // with constraints x·(B−A) = |B−A|²/2 and x·(C−A) = |C−A|²/2.
+    let ab = t[1] - t[0];
+    let ac = t[2] - t[0];
+
+    let g11 = ab.dot(&ab);
+    let g12 = ab.dot(&ac);
+    let g22 = ac.dot(&ac);
+
+    // det = |ab×ac|² (Gram determinant). Near-zero => collinear/degenerate.
+    let det = g11 * g22 - g12 * g12;
+    let eps = 1e-10 * (g11 + g22).max(1.0);
+    if det.abs() < eps {
+        return Err(format!("Degenerate triangle: [{a:?}, {b:?}, {c:?}]"));
+    }
+
+    let rhs1 = 0.5 * g11;
+    let rhs2 = 0.5 * g22;
+
+    let alpha = (rhs1 * g22 - rhs2 * g12) / det;
+    let beta = (g11 * rhs2 - g12 * rhs1) / det;
+
+    let center = a + ab * alpha + ac * beta;
+    let radius = (center - a).norm();
+    Ok((center, radius))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_self_intersection_3d_ok() {
+        assert!(!linestring_has_self_intersection_3d(&floor_surface(), None));
+        assert!(!linestring_has_self_intersection_3d(&roof_surface(), None));
+        assert!(!linestring_has_self_intersection_3d(&wall_surface(), None));
+    }
+
+    #[test]
+    fn test_self_intersection_3d_error() {
+        assert!(linestring_has_self_intersection_3d(
+            &floor_surface_with_self_intersection(),
+            None
+        ));
+
+        assert!(linestring_has_self_intersection_3d(
+            &roof_surface_with_self_intersection(),
+            None
+        ));
+
+        assert!(linestring_has_self_intersection_3d(
+            &wall_surface_with_self_intersection(),
+            None
+        ));
+    }
+
+    fn floor_surface() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 0.0),
+            Coordinate::new__(1.0, 0.0, 0.0),
+            Coordinate::new__(1.0, 1.0, 0.0),
+            Coordinate::new__(0.0, 1.0, 0.0),
+            Coordinate::new__(0.0, 0.0, 0.0),
+        ])
+    }
+
+    fn floor_surface_with_self_intersection() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 0.0),
+            Coordinate::new__(1.0, 0.0, 0.0),
+            Coordinate::new__(0.0, 1.0, 0.0),
+            Coordinate::new__(1.0, 1.0, 0.0),
+            Coordinate::new__(0.0, 0.0, 0.0),
+        ])
+    }
+
+    fn roof_surface() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 8.0),
+            Coordinate::new__(1.0, 0.0, 8.0),
+            Coordinate::new__(1.0, 1.0, 8.0),
+            Coordinate::new__(0.0, 1.0, 8.0),
+            Coordinate::new__(0.0, 0.0, 8.0),
+        ])
+    }
+
+    fn roof_surface_with_self_intersection() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 8.0),
+            Coordinate::new__(1.0, 0.0, 8.0),
+            Coordinate::new__(0.0, 1.0, 8.0),
+            Coordinate::new__(1.0, 1.0, 8.0),
+            Coordinate::new__(0.0, 0.0, 8.0),
+        ])
+    }
+
+    fn wall_surface() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 0.0),
+            Coordinate::new__(0.0, 1.0, 0.0),
+            Coordinate::new__(0.0, 1.0, 8.0),
+            Coordinate::new__(0.0, 0.0, 8.0),
+            Coordinate::new__(0.0, 0.0, 0.0),
+        ])
+    }
+
+    fn wall_surface_with_self_intersection() -> LineString<f64, f64> {
+        LineString::from(vec![
+            Coordinate::new__(0.0, 0.0, 0.0),
+            Coordinate::new__(1.0, 0.0, 8.0),
+            Coordinate::new__(0.0, 1.0, 8.0),
+            Coordinate::new__(1.0, 0.0, 0.0),
+            Coordinate::new__(0.0, 0.0, 0.0),
+        ])
+    }
+
+    #[test]
+    fn circum_center_test() {
+        let a = Coordinate::new__(0.0, 0.0, 0.0);
+        let b = Coordinate::new__(2.0, 0.0, 0.0);
+        let c = Coordinate::new__(1.0, 3_f64.sqrt(), 0.0);
+        let (center, radius) = circumcenter(a, b, c).unwrap();
+        assert!((center.x - 1.0).abs() < 1e-10);
+        assert!((center.y - 1.0 / 3_f64.sqrt()).abs() < 1e-10);
+        assert!((center.z - 0.0).abs() < 1e-10);
+        assert!((radius - 2.0 / (3_f64).sqrt()).abs() < 1e-10);
+    }
 }

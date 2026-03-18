@@ -3,8 +3,8 @@ package repo
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/request"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/request"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/usecasex"
 )

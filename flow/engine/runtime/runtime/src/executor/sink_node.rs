@@ -2,8 +2,9 @@ use std::{
     borrow::Cow,
     env,
     fmt::Debug,
+    io::BufRead,
     mem::swap,
-    sync::Arc,
+    sync::{atomic::AtomicU64, Arc},
     time::{self, Duration},
 };
 
@@ -12,6 +13,7 @@ use futures::Future;
 use once_cell::sync::Lazy;
 use petgraph::graph::NodeIndex;
 use reearth_flow_eval_expr::engine::Engine;
+use reearth_flow_state::State;
 use reearth_flow_storage::resolve::StorageResolver;
 use tokio::runtime::Handle;
 use tracing::info_span;
@@ -26,6 +28,7 @@ use crate::{
 };
 
 use super::receiver_loop::ReceiverLoop;
+use super::source_intermediate::SourceIntermediateRecorder;
 use super::{execution_dag::ExecutionDag, receiver_loop::init_select};
 
 static NODE_STATUS_PROPAGATION_DELAY: Lazy<Duration> = Lazy::new(|| {
@@ -41,6 +44,8 @@ static NODE_STATUS_PROPAGATION_DELAY: Lazy<Duration> = Lazy::new(|| {
 pub struct SinkNode<F> {
     /// Node handle in description DAG.
     node_handle: NodeHandle,
+    /// Node name from workflow definition.
+    node_name: String,
     /// Input node handles.
     node_handles: Vec<NodeHandle>,
     /// Input data channels.
@@ -55,9 +60,14 @@ pub struct SinkNode<F> {
     #[allow(dead_code)]
     runtime: Arc<Handle>,
     span: tracing::Span,
+    features_written: Arc<AtomicU64>,
     expr_engine: Arc<Engine>,
     storage_resolver: Arc<StorageResolver>,
     kv_store: Arc<dyn KvStore>,
+    source_intermediate_recorder: SourceIntermediateRecorder,
+    /// State for writing source intermediate data
+    feature_state: Arc<State>,
+    incremental_mode: bool,
 }
 
 impl<F: Future + Unpin + Debug> SinkNode<F> {
@@ -67,17 +77,23 @@ impl<F: Future + Unpin + Debug> SinkNode<F> {
         node_index: NodeIndex,
         shutdown: F,
         runtime: Arc<Handle>,
+        incremental_mode: bool,
     ) -> Self {
         let node = dag.node_weight_mut(node_index);
         let Some(kind) = node.kind.take() else {
             panic!("Must pass in a node")
         };
         let node_handle = node.handle.clone();
+        let node_name = node.name.clone();
         let NodeKind::Sink(sink) = kind else {
             panic!("Must pass in a sink node");
         };
 
         let (node_handles, receivers) = dag.collect_receivers(node_index);
+
+        let source_intermediate_recorder =
+            SourceIntermediateRecorder::collect(dag, node_index, &node_handles);
+        let feature_state = dag.feature_state();
 
         let version = env!("CARGO_PKG_VERSION");
         let span = info_span!(
@@ -87,9 +103,11 @@ impl<F: Future + Unpin + Debug> SinkNode<F> {
             "otel.kind" = "Sink Node",
             "workflow.id" = dag.id.to_string().as_str(),
             "node.id" = node_handle.id.to_string().as_str(),
+            "node.name" = node_name.as_str(),
         );
         Self {
             node_handle,
+            node_name,
             node_handles,
             receivers,
             sink,
@@ -97,9 +115,13 @@ impl<F: Future + Unpin + Debug> SinkNode<F> {
             shutdown,
             runtime,
             span,
+            features_written: Arc::new(AtomicU64::new(0)),
             expr_engine: ctx.expr_engine.clone(),
             storage_resolver: ctx.storage_resolver.clone(),
             kv_store: ctx.kv_store.clone(),
+            source_intermediate_recorder,
+            feature_state,
+            incremental_mode,
         }
     }
 
@@ -115,7 +137,7 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
         result
     }
 
-    fn receiver_name(&self, index: usize) -> Cow<str> {
+    fn receiver_name(&'_ self, index: usize) -> Cow<'_, str> {
         Cow::Owned(self.node_handles[index].to_string())
     }
 
@@ -127,6 +149,7 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
         let now = time::Instant::now();
         let span = self.span.clone();
         let mut sel = init_select(&receivers);
+        let mut first_error: Option<ExecutionError> = None;
 
         tracing::info!("Sink node {} is starting", self.node_handle.id);
         self.event_hub.send(Event::NodeStatusChanged {
@@ -134,6 +157,13 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
             status: NodeStatus::Starting,
             feature_id: None,
         });
+
+        self.event_hub.info_log_with_node_info(
+            Some(span.clone()),
+            self.node_handle.clone(),
+            self.node_name.clone(),
+            format!("{} sink start...", self.sink.name()),
+        );
 
         let init_result = self
             .sink
@@ -145,8 +175,16 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
             })
             .map_err(ExecutionError::Sink);
 
-        if init_result.is_err() {
+        if let Err(ref e) = init_result {
             tracing::error!("Sink node {} initialization failed", self.node_handle.id);
+
+            self.event_hub.error_log_with_node_info(
+                Some(span.clone()),
+                self.node_handle.clone(),
+                self.node_name.clone(),
+                format!("{} sink error: {}", self.sink.name(), e),
+            );
+
             self.event_hub.send(Event::NodeStatusChanged {
                 node_handle: self.node_handle.clone(),
                 status: NodeStatus::Failed,
@@ -163,46 +201,141 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
             feature_id: None,
         });
 
-        self.event_hub.info_log_with_node_handle(
-            Some(span.clone()),
-            self.node_handle.clone(),
-            format!("{:?} sink start...", self.sink.name()),
-        );
-
         loop {
             let index = sel.ready();
             let op = receivers[index]
                 .recv()
-                .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{:?}", e)))?;
+                .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{e:?}")))?;
             match op {
                 ExecutorOperation::Op { ctx } => {
+                    if !self.incremental_mode {
+                        self.source_intermediate_recorder.record_if_from_source(
+                            &self.feature_state,
+                            index,
+                            &ctx,
+                            &self.node_name,
+                            self.node_handle.id.as_ref(),
+                        );
+                    }
+
                     let result = self.on_op(ctx.clone());
 
-                    if result.is_err() {
-                        // Track failure but don't emit per-feature status
+                    if let Err(e) = result {
                         has_failed = true;
                         tracing::warn!(
                             "Sink node {} processing failed for feature {:?}",
                             self.node_handle.id,
                             ctx.feature.id
                         );
-                    }
 
-                    // Propagate the result
-                    result?;
+                        self.event_hub.error_log_with_node_info(
+                            Some(span.clone()),
+                            self.node_handle.clone(),
+                            self.node_name.clone(),
+                            format!("{} sink error: {}", self.sink.name(), e),
+                        );
+
+                        if first_error.is_none() {
+                            first_error = Some(e);
+                        }
+                    } else {
+                        self.features_written
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+                ExecutorOperation::FileBackedOp {
+                    path,
+                    port,
+                    context,
+                } => {
+                    let reader = match crate::forwarder::open_jsonl_reader(&path) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            has_failed = true;
+                            let err = ExecutionError::CannotReceiveFromChannel(format!(
+                                "Failed to open file-backed op file {}: {e}",
+                                path.display()
+                            ));
+                            if first_error.is_none() {
+                                first_error = Some(err);
+                            }
+                            continue;
+                        }
+                    };
+                    for line in reader.lines() {
+                        let line = match line {
+                            Ok(l) => l,
+                            Err(e) => {
+                                has_failed = true;
+                                let err = ExecutionError::CannotReceiveFromChannel(format!(
+                                    "Failed to read line from file-backed op: {e}"
+                                ));
+                                if first_error.is_none() {
+                                    first_error = Some(err);
+                                }
+                                break;
+                            }
+                        };
+                        if line.is_empty() {
+                            continue;
+                        }
+                        let feature: reearth_flow_types::Feature = match serde_json::from_str(&line)
+                        {
+                            Ok(f) => f,
+                            Err(e) => {
+                                has_failed = true;
+                                let err = ExecutionError::CannotReceiveFromChannel(format!(
+                                    "Failed to deserialize feature from file-backed op: {e}"
+                                ));
+                                if first_error.is_none() {
+                                    first_error = Some(err);
+                                }
+                                break;
+                            }
+                        };
+                        let ctx = ExecutorContext::new_with_context_feature_and_port(
+                            &context,
+                            feature,
+                            port.clone(),
+                        );
+                        let result = self.on_op(ctx);
+                        if let Err(e) = result {
+                            has_failed = true;
+                            if first_error.is_none() {
+                                first_error = Some(e);
+                            }
+                        } else {
+                            self.features_written
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
                 }
                 ExecutorOperation::Terminate { ctx } => {
                     is_terminated[index] = true;
                     sel.remove(index);
                     if is_terminated.iter().all(|value| *value) {
-                        self.event_hub.info_log_with_node_handle(
-                            Some(span.clone()),
-                            self.node_handle.clone(),
+                        let features_count = self
+                            .features_written
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        let message = if features_count > 0 && !has_failed {
                             format!(
-                                "{:?} sink finish. elapsed = {:?}",
+                                "{} sink finish. elapsed = {:?}",
                                 self.sink.name(),
                                 now.elapsed()
-                            ),
+                            )
+                        } else {
+                            format!(
+                                "{} sink terminate. elapsed = {:?}",
+                                self.sink.name(),
+                                now.elapsed()
+                            )
+                        };
+
+                        self.event_hub.info_log_with_node_info(
+                            Some(span.clone()),
+                            self.node_handle.clone(),
+                            self.node_name.clone(),
+                            message,
                         );
 
                         // Set final status based on overall success/failure
@@ -231,6 +364,11 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
                             });
                         }
 
+                        // If there was an error during processing, return that error
+                        // Otherwise, return the terminate result
+                        if let Some(e) = first_error {
+                            return Err(e);
+                        }
                         return terminate_result;
                     }
                 }
@@ -241,17 +379,17 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for SinkNode<F> {
     fn on_op(&mut self, ctx: ExecutorContext) -> Result<(), ExecutionError> {
         self.sink
             .process(ctx)
-            .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{:?}", e)))
+            .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{e:?}")))
     }
 
     fn on_terminate(&mut self, ctx: NodeContext) -> Result<(), ExecutionError> {
         let result = self
             .sink
             .finish(ctx)
-            .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{:?}", e)));
+            .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{e:?}")));
         self.event_hub.send(Event::SinkFinished {
             node: self.node_handle.clone(),
-            name: self.sink.name().to_string(),
+            name: self.node_name.clone(),
         });
         result
     }

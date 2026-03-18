@@ -3,7 +3,7 @@ package mailer
 import (
 	"sync"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
 )
 
 type Mock struct {

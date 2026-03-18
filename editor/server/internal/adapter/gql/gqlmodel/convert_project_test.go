@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/project"
 	"github.com/reearth/reearth/server/pkg/visualizer"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
@@ -45,7 +44,7 @@ func TestFromPublishmentStatus(t *testing.T) {
 }
 
 func TestToProject(t *testing.T) {
-	pId := id.NewProjectID()
+	pId := project.NewID()
 	wsId := workspace.NewID()
 	now := time.Now().Truncate(time.Millisecond)
 

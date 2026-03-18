@@ -12,11 +12,7 @@ import {
   TextInputProps
 } from "@reearth/beta/lib/reearth-ui";
 import { useT } from "@reearth/services/i18n";
-import {
-  useNotification,
-  useProjectId,
-  useWorkspace
-} from "@reearth/services/state";
+import { useNotification, useWorkspace } from "@reearth/services/state";
 import { styled } from "@reearth/services/theme";
 import { FC, useCallback, useEffect, useState } from "react";
 
@@ -30,7 +26,6 @@ export type AssetFieldProps = CommonFieldProps & {
   assetsTypes?: AcceptedAssetsTypes;
   placeholder?: string;
   onChange?: (value: string | undefined, name: string | undefined) => void;
-  onInputChange?: (value?: string) => void;
 } & Pick<TextInputProps, "disabled" | "appearance">;
 
 const AssetField: FC<AssetFieldProps> = ({
@@ -42,19 +37,18 @@ const AssetField: FC<AssetFieldProps> = ({
   placeholder,
   disabled,
   appearance,
-  onChange,
-  onInputChange
+  onChange
 }) => {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [currentWorkspace] = useWorkspace();
-  const [currentProjectId] = useProjectId();
   const [, setNotification] = useNotification();
   const [currentValue, setCurrentValue] = useState(value);
 
   const handleChange = useCallback(
     (url?: string, name?: string) => {
       if (!url) {
+        setCurrentValue(url);
         onChange?.(url, name);
         return;
       }
@@ -76,23 +70,15 @@ const AssetField: FC<AssetFieldProps> = ({
         });
         setCurrentValue(undefined);
       } else {
+        setCurrentValue(url);
         onChange?.(url, name);
       }
     },
     [inputMethod, onChange, setNotification, t]
   );
 
-  const handleInputChange = useCallback(
-    (url?: string) => {
-      setCurrentValue(url);
-      onInputChange?.(url);
-    },
-    [onInputChange]
-  );
-
   const { handleFileUpload } = useAssetUpload({
     workspaceId: currentWorkspace?.id,
-    projectId: currentProjectId,
     onAssetSelect: handleChange,
     assetsTypes,
     multiple: false
@@ -114,7 +100,6 @@ const AssetField: FC<AssetFieldProps> = ({
           disabled={disabled}
           appearance={appearance}
           placeholder={placeholder ?? t("Not set")}
-          onChange={handleInputChange}
         />
         {inputMethod === "asset" && (
           <ButtonWrapper>
@@ -142,7 +127,6 @@ const AssetField: FC<AssetFieldProps> = ({
           opened={open}
           onClose={handleModalClose}
           workspaceId={currentWorkspace?.id}
-          projectId={currentProjectId}
           onAssetSelect={handleChange}
           assetsTypes={assetsTypes}
         />

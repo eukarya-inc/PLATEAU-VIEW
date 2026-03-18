@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 )
@@ -33,13 +32,20 @@ type CityGMLFile struct {
 	MeshCode string `json:"code"`
 	MaxLOD   int    `json:"maxLod"`
 	URL      string `json:"url"`
+	FileSize *int64 `json:"fileSize,omitempty"`
+	Features *int   `json:"features,omitempty"`
+	LOD0     *int   `json:"lod0,omitempty"`
+	LOD1     *int   `json:"lod1,omitempty"`
+	LOD2     *int   `json:"lod2,omitempty"`
+	LOD3     *int   `json:"lod3,omitempty"`
+	LOD4     *int   `json:"lod4,omitempty"`
 }
 
 type CityGMLFeatureType struct {
 	Name string `json:"name"`
 }
 
-func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*CityGMLFilesCity, error) {
+func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string, datasetTypes []plateauapi.DatasetType) (*CityGMLFilesCity, error) {
 	n, err := r.Node(ctx, plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(id)))
 	if err != nil {
 		return nil, err
@@ -107,14 +113,7 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 
 	files := csvToCityGMLFilesResponse(data, gurls)
 
-	// feature types
-	datasetTypes, err := r.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
-		Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dataset types: %w", err)
-	}
-
+	// Build feature types map from provided datasetTypes
 	featureTypes := make(map[string]CityGMLFeatureType)
 	if datasetTypes != nil {
 		for k := range files {
@@ -138,67 +137,6 @@ func FetchCityGMLFiles(ctx context.Context, r plateauapi.Repo, id string) (*City
 		MetadataZipUrls:  citygml.MetadataZipUrls,
 		FeatureTypes:     featureTypes,
 	}, nil
-}
-
-func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles {
-	res := make(CityGMLFiles)
-
-	for _, record := range data {
-		if len(record) < 3 || record[0] == "" || record[1] == "" {
-			continue
-		}
-
-		if !isNumeric(rune(record[1][0])) {
-			continue // skip header
-		}
-
-		// base,code,type,maxLod(,path)
-		base := record[0]
-		meshCode := record[1]
-		featureType := record[2]
-		maxlod, _ := strconv.Atoi(record[3])
-		citygmlURL := ""
-		gmlPath := record[4]
-
-		if len(record) > 4 && gmlURLs == nil {
-			citygmlURL = citygmlItemURLFrom(base, gmlPath, featureType)
-		} else {
-			// compat for datacatalogv2
-			prefix := fmt.Sprintf("%s_%s_", meshCode, featureType)
-
-			u, ok := lo.Find(gmlURLs, func(u *url.URL) bool {
-				return strings.HasPrefix(path.Base(u.Path), prefix) && path.Ext(u.Path) == ".gml"
-			})
-			if ok {
-				citygmlURL = u.String()
-			}
-			// warning = append(warning, fmt.Sprintf("unmatched:type=%s,code=%s,path=%s", ty, code, f))
-		}
-
-		if citygmlURL == "" {
-			continue
-		}
-
-		item := CityGMLFile{
-			MeshCode: meshCode,
-			MaxLOD:   maxlod,
-			URL:      citygmlURL,
-		}
-
-		if _, ok := res[featureType]; !ok {
-			res[featureType] = make([]CityGMLFile, 0)
-		}
-
-		res[featureType] = append(res[featureType], item)
-	}
-
-	for _, v := range res {
-		slices.SortFunc(v, func(i, j CityGMLFile) int {
-			return strings.Compare(i.MeshCode, j.MeshCode)
-		})
-	}
-
-	return res
 }
 
 func citygmlItemURLFrom(base, p, typeCode string) string {
@@ -237,4 +175,22 @@ func isNumeric(r rune) bool {
 
 func nameWithoutExt(name string) string {
 	return strings.TrimSuffix(name, path.Ext(name))
+}
+
+func parseLOD(s string) *int {
+	if s == "" {
+		return nil
+	}
+	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+		v := int(v)
+		return &v
+	}
+	if v, err := strconv.ParseBool(s); err == nil {
+		x := 0
+		if v {
+			x = 1
+		}
+		return &x
+	}
+	return nil
 }

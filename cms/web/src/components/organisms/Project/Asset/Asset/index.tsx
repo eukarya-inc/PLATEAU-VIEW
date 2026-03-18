@@ -14,6 +14,7 @@ const Asset: React.FC = () => {
     asset,
     assetFileExt,
     isLoading,
+    isDelayed,
     selectedPreviewType,
     isModalVisible,
     collapsed,
@@ -25,6 +26,7 @@ const Asset: React.FC = () => {
     hasUpdateRight,
     handleAssetDecompress,
     handleAssetItemSelect,
+    handleSingleAssetDownload,
     handleToggleCommentMenu,
     handleTypeChange,
     handleModalCancel,
@@ -36,9 +38,15 @@ const Asset: React.FC = () => {
 
   const { workspaceSettings } = useSettingsHooks();
 
-  return isLoading ? (
-    <Loading spinnerSize="large" minHeight="100vh" />
-  ) : asset ? (
+  if (!isDelayed || isLoading) {
+    return <Loading spinnerSize="large" minHeight="100vh" />;
+  }
+
+  if (!asset) {
+    return <NotFound />;
+  }
+
+  return (
     <AssetWrapper
       commentsPanel={
         <CommentsPanel
@@ -63,6 +71,7 @@ const Asset: React.FC = () => {
       hasUpdateRight={hasUpdateRight}
       onAssetItemSelect={handleAssetItemSelect}
       onAssetDecompress={handleAssetDecompress}
+      onAssetDownload={handleSingleAssetDownload}
       onTypeChange={handleTypeChange}
       onModalCancel={handleModalCancel}
       onChangeToFullScreen={handleFullScreen}
@@ -71,8 +80,6 @@ const Asset: React.FC = () => {
       onGetViewer={handleGetViewer}
       workspaceSettings={workspaceSettings}
     />
-  ) : (
-    <NotFound />
   );
 };
 

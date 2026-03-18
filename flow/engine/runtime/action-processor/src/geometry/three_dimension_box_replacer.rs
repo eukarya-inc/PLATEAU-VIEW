@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use reearth_flow_geometry::types::{
     coordinate::Coordinate, geometry::Geometry3D as FlowGeometry3D, rect::Rect,
@@ -26,7 +27,7 @@ impl ProcessorFactory for ThreeDimensionBoxReplacerFactory {
     }
 
     fn description(&self) -> &str {
-        "Replaces a three Dimension box with a polygon."
+        "Replace Geometry with 3D Box from Attributes"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -55,14 +56,12 @@ impl ProcessorFactory for ThreeDimensionBoxReplacerFactory {
         let processor: ThreeDimensionBoxReplacer = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::ThreeDimensionBoxReplacerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::ThreeDimensionBoxReplacerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -75,14 +74,28 @@ impl ProcessorFactory for ThreeDimensionBoxReplacerFactory {
     }
 }
 
+/// # 3D Box Replacer Parameters
+/// Configure which attributes contain the minimum and maximum coordinates for creating a 3D box
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreeDimensionBoxReplacer {
+    /// # Minimum X Attribute
+    /// Name of attribute containing the minimum X coordinate
     min_x: Attribute,
+    /// # Minimum Y Attribute
+    /// Name of attribute containing the minimum Y coordinate
     min_y: Attribute,
+    /// # Minimum Z Attribute
+    /// Name of attribute containing the minimum Z coordinate
     min_z: Attribute,
+    /// # Maximum X Attribute
+    /// Name of attribute containing the maximum X coordinate
     max_x: Attribute,
+    /// # Maximum Y Attribute
+    /// Name of attribute containing the maximum Y coordinate
     max_y: Attribute,
+    /// # Maximum Z Attribute
+    /// Name of attribute containing the maximum Z coordinate
     max_z: Attribute,
 }
 
@@ -103,15 +116,19 @@ impl Processor for ThreeDimensionBoxReplacer {
         let max = Coordinate::new__(max_x, max_y, max_z);
         let rectangle = Rect::new(min, max);
         let geometry = Geometry::with_value(GeometryValue::FlowGeometry3D(
-            FlowGeometry3D::Polygon(rectangle.to_polygon()),
+            FlowGeometry3D::MultiPolygon(rectangle.to_multi_polygon()),
         ));
         let mut feature = ctx.feature.clone();
-        feature.geometry = geometry;
+        feature.geometry = Arc::new(geometry);
         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

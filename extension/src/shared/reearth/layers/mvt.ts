@@ -31,6 +31,20 @@ const DEFAULT_APPEARNACES: Partial<LayerAppearanceTypes> = {
   },
 };
 
+// TileJSON 3.0.0 spec: https://github.com/mapbox/tilejson-spec/blob/master/3.0.0/README.md
+type TileJSON = {
+  tilejson?: string;
+  name?: string;
+  description?: string;
+  version?: string;
+  minzoom?: number;
+  maxzoom?: number;
+  center?: [lng: number, lat: number, zoom: number];
+  bounds?: [left: number, bottom: number, right: number, top: number];
+  vector_layers?: { id: string; fields: Record<string, string> }[];
+};
+
+// FME metadata.json format (legacy)
 type RawMVTMeta = {
   name: string;
   description: string;
@@ -43,7 +57,11 @@ type RawMVTMeta = {
   format: "pbr";
 };
 
-type MVTMeta = Omit<RawMVTMeta, "center" | "bounds"> & {
+type MVTMeta = {
+  name?: string;
+  description?: string;
+  minzoom?: number;
+  maxzoom?: number;
   center: [lng: number, lat: number, z: number];
   bounds: [x: number, y: number, z: number];
 };
@@ -62,6 +80,25 @@ export const MVTLayer: FC<MVTProps> = ({
       const mvtBaseURL = url.match(/(.+)(\/{z}\/{x}\/{y}.mvt)/)?.[1];
       if (!mvtBaseURL) return;
 
+      // Try tilejson.json first (standard format)
+      const tileJSON = await fetch(`${mvtBaseURL}/tilejson.json`)
+        .then(d => d.json())
+        .then(d => d as TileJSON)
+        .catch(() => undefined);
+
+      if (tileJSON?.center && tileJSON?.bounds) {
+        setMeta({
+          name: tileJSON.name,
+          description: tileJSON.description,
+          minzoom: tileJSON.minzoom,
+          maxzoom: tileJSON.maxzoom,
+          center: tileJSON.center,
+          bounds: [tileJSON.bounds[0], tileJSON.bounds[1], tileJSON.bounds[2]],
+        });
+        return;
+      }
+
+      // Fallback to metadata.json (FME legacy format)
       const data = await fetch(`${mvtBaseURL}/metadata.json`)
         .then(d => d.json())
         .then(d => d as RawMVTMeta)
@@ -74,9 +111,12 @@ export const MVTLayer: FC<MVTProps> = ({
       if (!bounds || bounds.length < 2) return;
 
       setMeta({
-        ...data,
+        name: data.name,
+        description: data.description,
+        minzoom: data.minzoom,
+        maxzoom: data.maxzoom,
         center: center as [lng: number, lat: number, z: number],
-        bounds: bounds as [lng: number, lat: number, z: number],
+        bounds: bounds as [x: number, y: number, z: number],
       });
     };
 
@@ -143,7 +183,6 @@ export const MVTLayer: FC<MVTProps> = ({
     visible,
     appearances: mergedAppearances,
     onLoad: handleOnLoad,
-    loading: !meta,
   });
 
   return null;

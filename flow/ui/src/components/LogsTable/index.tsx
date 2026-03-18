@@ -1,12 +1,8 @@
-import { Bug } from "@phosphor-icons/react";
+import { CheckCircleIcon } from "@phosphor-icons/react";
 import {
-  CaretSortIcon,
-  ClockIcon,
   CrossCircledIcon,
-  ExclamationTriangleIcon,
   InfoCircledIcon,
   UpdateIcon,
-  MagnifyingGlassIcon,
 } from "@radix-ui/react-icons";
 import {
   ColumnDef,
@@ -33,14 +29,14 @@ import {
   LoadingSkeleton,
 } from "@flow/components";
 import { useT } from "@flow/lib/i18n";
-import { Log, LogLevel } from "@flow/types";
+import { UserFacingLog, UserFacingLogLevel } from "@flow/types";
 
 import BasicBoiler from "../BasicBoiler";
 import { Table, TableBody, TableCell, TableRow } from "../Table";
 
 type LogProps = {
-  columns: ColumnDef<Log, unknown>[];
-  data: Log[];
+  columns: ColumnDef<UserFacingLog, unknown>[];
+  data: UserFacingLog[];
   isFetching: boolean;
   selectColumns?: boolean;
   showFiltering?: boolean;
@@ -85,41 +81,34 @@ const LogsTable = ({
     },
   });
 
-  const handleStatusChange = (status: LogLevel) => {
+  const handleStatusChange = (status: UserFacingLogLevel) => {
     if (getStatusValue === status) {
       setColumnFilters([]);
     } else {
-      setColumnFilters([{ id: "status", value: status }]);
+      setColumnFilters([{ id: "level", value: status }]);
     }
-  };
-
-  const handleTimeStampColumnVisibility = () => {
-    const column = table.getColumn("timestamp");
-
-    column?.toggleVisibility(!column.getIsVisible());
-    return;
   };
 
   const handleResetTable = () => {
     setColumnFilters([]);
-    table.getColumn("timestamp")?.toggleVisibility(true);
   };
 
   const getStatusValue = useMemo(() => {
-    const value = columnFilters.find((id) => id.id === "status");
+    const value = columnFilters.find((id) => id.id === "level");
     return value?.value;
   }, [columnFilters]);
 
   const hasValidLogs = data.some(
-    (log) => log.timestamp || log.status || log.message,
+    (log) => log.timestamp || log.level || log.message,
   );
 
   return (
     <div className="flex size-full flex-col rounded">
       <div className="flex w-full shrink-0 items-center justify-between px-2 pb-2">
-        <div className="mr-4 flex-1">
+        <div className="mr-4">
           {showFiltering && (
             <Input
+              className="w-[25vw]"
               placeholder={t("Search") + "..."}
               value={globalFilter ?? ""}
               onChange={(e) => setGlobalFilter(String(e.target.value))}
@@ -131,51 +120,23 @@ const LogsTable = ({
             size="icon"
             variant={getStatusValue === "ERROR" ? "default" : "outline"}
             tooltipText={t("Error")}
-            onClick={() => handleStatusChange(LogLevel.Error)}
-            icon={<CrossCircledIcon />}
-          />
-          <IconButton
-            size="icon"
-            variant={getStatusValue === "WARN" ? "default" : "outline"}
-            tooltipText={t("Warning")}
-            onClick={() => handleStatusChange(LogLevel.Warn)}
-            icon={<ExclamationTriangleIcon />}
-          />
-          <IconButton
-            size="icon"
-            variant={getStatusValue === "DEBUG" ? "default" : "outline"}
-            tooltipText={t("Debug")}
-            onClick={() => handleStatusChange(LogLevel.Debug)}
-            icon={<Bug />}
-          />
-          <IconButton
-            size="icon"
-            variant={getStatusValue === "TRACE" ? "default" : "outline"}
-            tooltipText={t("Trace")}
-            onClick={() => handleStatusChange(LogLevel.Trace)}
-            icon={<MagnifyingGlassIcon />}
+            onClick={() => handleStatusChange(UserFacingLogLevel.Error)}
+            icon={<CrossCircledIcon className="text-destructive" />}
           />
           <IconButton
             size="icon"
             variant={getStatusValue === "INFO" ? "default" : "outline"}
             tooltipText={t("Info")}
-            onClick={() => handleStatusChange(LogLevel.Info)}
+            onClick={() => handleStatusChange(UserFacingLogLevel.Info)}
             icon={<InfoCircledIcon />}
           />
           <IconButton
             size="icon"
-            variant={
-              table.getColumn("timestamp")?.getIsVisible()
-                ? "default"
-                : "outline"
-            }
-            tooltipText={t("Include Time Stamp")}
-            onClick={handleTimeStampColumnVisibility}
-            icon={<ClockIcon />}
+            variant={getStatusValue === "SUCCESS" ? "default" : "outline"}
+            tooltipText={t("Success")}
+            onClick={() => handleStatusChange(UserFacingLogLevel.Success)}
+            icon={<CheckCircleIcon className="text-success" />}
           />
-          <Button variant="ghost" size="icon">
-            <CaretSortIcon />
-          </Button>
           <IconButton
             size="icon"
             variant="ghost"
@@ -230,10 +191,12 @@ const LogsTable = ({
               {table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className={`${row.original.status === "ERROR" ? "text-destructive" : row.original.status === "WARN" ? "text-warning" : ""}`}
+                  className={` ${row.original.level === "ERROR" ? "text-destructive" : row.original.level === "SUCCESS" ? "text-success/80" : ""}`}
                   data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell className="cursor-pointer" key={cell.id}>
+                    <TableCell
+                      className="cursor-pointer overflow-scroll"
+                      key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),

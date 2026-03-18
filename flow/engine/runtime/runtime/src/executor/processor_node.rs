@@ -1,6 +1,7 @@
 use std::env;
 use std::fmt::Debug;
-use std::sync::atomic::AtomicU32;
+use std::io::BufRead;
+use std::sync::atomic::{AtomicU32, AtomicU64};
 use std::sync::Arc;
 use std::time::{self, Duration};
 use std::{borrow::Cow, mem::swap};
@@ -10,6 +11,7 @@ use futures::Future;
 use once_cell::sync::Lazy;
 use petgraph::graph::NodeIndex;
 use reearth_flow_eval_expr::engine::Engine;
+use reearth_flow_state::State;
 use reearth_flow_storage::resolve::StorageResolver;
 use tokio::runtime::Handle;
 use tracing::{info_span, Span};
@@ -27,6 +29,7 @@ use crate::{
 };
 
 use super::receiver_loop::init_select;
+use super::source_intermediate::SourceIntermediateRecorder;
 use super::{execution_dag::ExecutionDag, receiver_loop::ReceiverLoop};
 
 static NODE_STATUS_PROPAGATION_DELAY: Lazy<Duration> = Lazy::new(|| {
@@ -50,6 +53,8 @@ static SLOW_ACTION_THRESHOLD: Lazy<Duration> = Lazy::new(|| {
 pub struct ProcessorNode<F> {
     /// Node handle in description DAG.
     node_handle: NodeHandle,
+    /// Node name from workflow definition.
+    node_name: String,
     /// Input node handles.
     node_handles: Vec<NodeHandle>,
     /// Input data channels.
@@ -66,11 +71,22 @@ pub struct ProcessorNode<F> {
     runtime: Arc<Handle>,
     span: tracing::Span,
     thread_pool: rayon::ThreadPool,
+    /// Number of threads in the thread pool (used for backpressure).
+    num_threads: usize,
     thread_counter: Arc<AtomicU32>,
+    features_processed: Arc<AtomicU64>,
+    /// Cumulative process() duration in microseconds.
+    process_duration_us: Arc<AtomicU64>,
+    /// Sum of squared process() durations in microseconds (for std dev).
+    process_duration_sq_us: Arc<AtomicU64>,
     expr_engine: Arc<Engine>,
     storage_resolver: Arc<StorageResolver>,
     kv_store: Arc<dyn KvStore>,
     event_hub: EventHub,
+    source_intermediate_recorder: SourceIntermediateRecorder,
+    /// State for writing source intermediate data
+    feature_state: Arc<State>,
+    incremental_mode: bool,
 }
 
 impl<F: Future + Unpin + Debug> ProcessorNode<F> {
@@ -80,12 +96,14 @@ impl<F: Future + Unpin + Debug> ProcessorNode<F> {
         node_index: NodeIndex,
         shutdown: F,
         runtime: Arc<Handle>,
+        incremental_mode: bool,
     ) -> Self {
         let node = dag.node_weight_mut(node_index);
         let Some(kind) = node.kind.take() else {
             panic!("Must pass in a node")
         };
         let node_handle = node.handle.clone();
+        let node_name = node.name.clone();
         let NodeKind::Processor(processor) = kind else {
             panic!("Must pass in a processor node");
         };
@@ -100,6 +118,7 @@ impl<F: Future + Unpin + Debug> ProcessorNode<F> {
             senders,
             runtime.clone(),
             dag.event_hub().clone(),
+            dag.executor_id(),
         ));
         let version = env!("CARGO_PKG_VERSION");
         let span = info_span!(
@@ -109,14 +128,21 @@ impl<F: Future + Unpin + Debug> ProcessorNode<F> {
             "otel.kind" = "Processor Node",
             "workflow.id" = dag.id.to_string().as_str(),
             "node.id" = node_handle.id.to_string().as_str(),
+            "node.name" = node_name.as_str(),
         );
 
         let expr_engine = Arc::clone(&ctx.expr_engine);
         let storage_resolver = Arc::clone(&ctx.storage_resolver);
         let kv_store = Arc::clone(&ctx.kv_store);
         let num_threads = processor.num_threads();
+
+        let source_intermediate_recorder =
+            SourceIntermediateRecorder::collect(dag, node_index, &node_handles);
+        let feature_state = dag.feature_state();
+
         Self {
             node_handle,
+            node_name,
             node_handles,
             receivers,
             processor: Arc::new(parking_lot::RwLock::new(processor)),
@@ -128,16 +154,36 @@ impl<F: Future + Unpin + Debug> ProcessorNode<F> {
                 .num_threads(num_threads)
                 .build()
                 .unwrap(),
+            num_threads,
             thread_counter: Arc::new(AtomicU32::new(0)),
+            features_processed: Arc::new(AtomicU64::new(0)),
+            process_duration_us: Arc::new(AtomicU64::new(0)),
+            process_duration_sq_us: Arc::new(AtomicU64::new(0)),
             expr_engine,
             storage_resolver,
             kv_store,
             event_hub: dag.event_hub().clone(),
+            source_intermediate_recorder,
+            feature_state,
+            incremental_mode,
         }
     }
 
     pub fn handle(&self) -> &NodeHandle {
         &self.node_handle
+    }
+
+    /// Wait until the thread pool has capacity to accept a new task.
+    /// This ensures no tasks are waiting in the rayon queue, providing
+    /// backpressure based on actual processing capacity.
+    fn wait_until_pool_has_capacity(&self) {
+        while self
+            .thread_counter
+            .load(std::sync::atomic::Ordering::SeqCst)
+            >= self.num_threads as u32
+        {
+            std::thread::yield_now();
+        }
     }
 }
 
@@ -182,10 +228,11 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
             feature_id: None,
         });
 
-        self.event_hub.info_log_with_node_handle(
+        self.event_hub.info_log_with_node_info(
             Some(span.clone()),
             self.node_handle.clone(),
-            format!("{:?} process start...", self.processor.read().name()),
+            self.node_name.clone(),
+            format!("{} process start...", self.processor.read().name()),
         );
 
         let has_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -197,14 +244,53 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
                     .load(std::sync::atomic::Ordering::SeqCst)
                     == 0
                 {
-                    self.event_hub.info_log_with_node_handle(
-                        Some(span.clone()),
-                        self.node_handle.clone(),
+                    let features_count = self
+                        .features_processed
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let is_failed = has_failed.load(std::sync::atomic::Ordering::SeqCst);
+
+                    let total_us = self
+                        .process_duration_us
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let total_duration = Duration::from_micros(total_us);
+
+                    let stats_suffix = if features_count > 1 {
+                        let avg_us = total_us as f64 / features_count as f64;
+                        let sq_us = self
+                            .process_duration_sq_us
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        let variance = (sq_us as f64 / features_count as f64) - (avg_us * avg_us);
+                        let stddev = if variance > 0.0 { variance.sqrt() } else { 0.0 };
                         format!(
-                            "{:?} process finish. elapsed = {:?}",
+                            ", avg = {:.3}ms, stddev = {:.3}ms",
+                            avg_us / 1000.0,
+                            stddev / 1000.0,
+                        )
+                    } else {
+                        String::new()
+                    };
+
+                    let message = if features_count > 0 && !is_failed {
+                        format!(
+                            "{} process finish. elapsed = {:?}, features = {}{}",
+                            self.processor.read().name(),
+                            total_duration,
+                            features_count,
+                            stats_suffix,
+                        )
+                    } else {
+                        format!(
+                            "{} process terminate. elapsed = {:?}",
                             self.processor.read().name(),
                             now.elapsed()
-                        ),
+                        )
+                    };
+
+                    self.event_hub.info_log_with_node_info(
+                        Some(span.clone()),
+                        self.node_handle.clone(),
+                        self.node_name.clone(),
+                        message,
                     );
 
                     let final_status = if has_failed.load(std::sync::atomic::Ordering::SeqCst) {
@@ -250,11 +336,56 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
             let index = sel.ready();
             let op = receivers[index]
                 .recv()
-                .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{:?}", e)))?;
+                .map_err(|e| ExecutionError::CannotReceiveFromChannel(format!("{e:?}")))?;
             match op {
                 ExecutorOperation::Op { ctx } => {
+                    if !self.incremental_mode {
+                        self.source_intermediate_recorder.record_if_from_source(
+                            &self.feature_state,
+                            index,
+                            &ctx,
+                            &self.node_name,
+                            self.node_handle.id.as_ref(),
+                        );
+                    }
+                    self.wait_until_pool_has_capacity();
                     let has_failed_clone = has_failed.clone();
                     self.on_op_with_failure_tracking(ctx, has_failed_clone)?;
+                }
+                ExecutorOperation::FileBackedOp {
+                    path,
+                    port,
+                    context,
+                } => {
+                    let reader = crate::forwarder::open_jsonl_reader(&path).map_err(|e| {
+                        ExecutionError::CannotReceiveFromChannel(format!(
+                            "Failed to open file-backed op file {}: {e}",
+                            path.display()
+                        ))
+                    })?;
+                    for line in reader.lines() {
+                        let line = line.map_err(|e| {
+                            ExecutionError::CannotReceiveFromChannel(format!(
+                                "Failed to read line from file-backed op: {e}"
+                            ))
+                        })?;
+                        if line.is_empty() {
+                            continue;
+                        }
+                        let feature: reearth_flow_types::Feature = serde_json::from_str(&line)
+                            .map_err(|e| {
+                                ExecutionError::CannotReceiveFromChannel(format!(
+                                    "Failed to deserialize feature from file-backed op: {e}"
+                                ))
+                            })?;
+                        let ctx = ExecutorContext::new_with_context_feature_and_port(
+                            &context,
+                            feature,
+                            port.clone(),
+                        );
+                        self.wait_until_pool_has_capacity();
+                        self.on_op_with_failure_tracking(ctx, has_failed.clone())?;
+                    }
                 }
                 ExecutorOperation::Terminate { ctx: _ctx } => {
                     is_terminated[index] = true;
@@ -264,7 +395,7 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
         }
     }
 
-    fn receiver_name(&self, index: usize) -> Cow<str> {
+    fn receiver_name(&'_ self, index: usize) -> Cow<'_, str> {
         Cow::Owned(self.node_handles[index].to_string())
     }
 
@@ -278,18 +409,26 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
 
         let span = self.span.clone();
         let node_handle = self.node_handle.clone();
+        let node_name = self.node_name.clone();
         let counter = Arc::clone(&self.thread_counter);
+        let features_processed = Arc::clone(&self.features_processed);
+        let process_duration_us = Arc::clone(&self.process_duration_us);
+        let process_duration_sq_us = Arc::clone(&self.process_duration_sq_us);
         let event_hub = self.event_hub.clone();
         counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.thread_pool.spawn(move || {
             process(
                 ctx,
                 node_handle,
+                node_name,
                 span,
                 event_hub,
                 channel_manager,
                 processor,
                 has_failed,
+                features_processed,
+                process_duration_us,
+                process_duration_sq_us,
             );
             counter.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         });
@@ -308,19 +447,32 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
         let channel_manager: &ProcessorChannelForwarder = &channel_manager_guard;
         let now = time::Instant::now();
 
+        let _accumulating_guard = if processor.read().is_accumulating() {
+            Some(super::accumulating_coordinator::acquire_permit())
+        } else {
+            None
+        };
+
+        channel_manager.wait_until_downstream_empty(std::time::Duration::from_secs(300));
+        channel_manager.reset_send_count();
         let result = processor
             .write()
             .finish(ctx.clone(), channel_manager)
-            .map_err(|e| ExecutionError::CannotSendToChannel(format!("{:?}", e)));
+            .map_err(|e| ExecutionError::CannotSendToChannel(format!("{e:?}")));
+        let finish_feature_count = channel_manager.get_send_count();
+
+        drop(_accumulating_guard);
 
         let span = self.span.clone();
-        self.event_hub.info_log_with_node_handle(
+        self.event_hub.info_log_with_node_info(
             Some(span),
             self.node_handle.clone(),
+            self.node_name.clone(),
             format!(
-                "{:?} finish process complete. elapsed = {:?}",
-                processor.read().name(),
-                now.elapsed()
+                "{} finish process complete. elapsed = {:?}, features = {}",
+                self.processor.read().name(),
+                now.elapsed(),
+                finish_feature_count
             ),
         );
 
@@ -334,14 +486,19 @@ impl<F: Future + Unpin + Debug> ReceiverLoop for ProcessorNode<F> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process(
     ctx: ExecutorContext,
     node_handle: NodeHandle,
+    node_name: String,
     span: Span,
     event_hub: EventHub,
     channel_manager: Arc<parking_lot::RwLock<ProcessorChannelForwarder>>,
     processor: Arc<parking_lot::RwLock<Box<dyn Processor>>>,
     has_failed: Arc<std::sync::atomic::AtomicBool>,
+    features_processed: Arc<AtomicU64>,
+    process_duration_us: Arc<AtomicU64>,
+    process_duration_sq_us: Arc<AtomicU64>,
 ) {
     let feature_id = ctx.feature.id;
     let channel_manager_guard = channel_manager.read();
@@ -351,12 +508,16 @@ fn process(
     let now = time::Instant::now();
     let result = processor.process(ctx, channel_manager);
     let elapsed = now.elapsed();
+    let us = elapsed.as_micros() as u64;
+    process_duration_us.fetch_add(us, std::sync::atomic::Ordering::Relaxed);
+    process_duration_sq_us.fetch_add(us.saturating_mul(us), std::sync::atomic::Ordering::Relaxed);
     let name = processor.name();
 
     if elapsed >= *SLOW_ACTION_THRESHOLD {
-        event_hub.info_log_with_node_handle(
+        event_hub.info_log_with_node_info(
             Some(span.clone()),
             node_handle.clone(),
+            node_name.clone(),
             format!(
                 "Slow action, processor node name = {:?}, node_id = {}, feature id = {:?}, elapsed = {:?}",
                 name,
@@ -370,12 +531,14 @@ fn process(
     if let Err(e) = result {
         has_failed.store(true, std::sync::atomic::Ordering::SeqCst);
 
-        event_hub.error_log_with_node_handle(
+        event_hub.error_log_with_node_info(
             Some(span.clone()),
             node_handle.clone(),
+            node_name.clone(),
             format!(
-                "Error operation, processor node name = {:?}, node_id = {}, feature id = {:?}, error = {:?}",
+                "Error operation, processor node name = {} ({}), node_id = {}, feature id = {:?}, error = {:?}",
                 processor.name(),
+                node_name,
                 node_handle.id,
                 feature_id,
                 e,
@@ -384,7 +547,9 @@ fn process(
 
         event_hub.send(Event::ProcessorFailed {
             node: node_handle.clone(),
-            name: name.to_string(),
+            name: node_name.clone(),
         });
+    } else {
+        features_processed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }

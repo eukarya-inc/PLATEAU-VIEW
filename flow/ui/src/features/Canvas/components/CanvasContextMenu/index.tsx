@@ -1,0 +1,360 @@
+import {
+  ArrowRightIcon,
+  CircleIcon,
+  ClipboardIcon,
+  CopyIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  GearFineIcon,
+  GraphIcon,
+  ScissorsIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
+import { Edge, EdgeChange, getConnectedEdges, XYPosition } from "@xyflow/react";
+import { useCallback, useMemo } from "react";
+
+import {
+  ContextMenu,
+  ContextMenuItemType,
+  ContextMenuMeta,
+  ContextMenuShortcut,
+} from "@flow/components";
+import { useT } from "@flow/lib/i18n";
+import { useIndexedDB } from "@flow/lib/indexedDB";
+import { useCurrentProject } from "@flow/stores";
+import { Node, NodeChange } from "@flow/types";
+
+type Props = {
+  contextMenu: ContextMenuMeta;
+  data?: Node | Node[];
+  edges: Edge[];
+  allNodes: Node[];
+  isMainWorkflow: boolean;
+  onNodesChange?: (changes: NodeChange[]) => void;
+  onEdgesChange?: (changes: EdgeChange[]) => void;
+  onBeforeDelete?: (args: { nodes: Node[] }) => Promise<boolean>;
+  onWorkflowOpen?: (workflowId: string) => void;
+  onWorkflowAddFromSelection?: (nodes: Node[], edges: Edge[]) => Promise<void>;
+  onNodesDeleteCleanup?: (nodes: Node[]) => void;
+  onNodeSettings?: (e: React.MouseEvent | undefined, nodeId: string) => void;
+  onCopy?: (node?: Node) => void;
+  onCut?: (isCutByShortCut?: boolean, node?: Node) => void;
+  onPaste?: (menuPosition?: XYPosition) => void;
+  onNodesDisable?: (nodes?: Node[]) => void;
+  onClose: () => void;
+  onDebugRunStartFromSelectedNode?: (
+    node?: Node,
+    nodes?: Node[],
+  ) => Promise<void>;
+};
+
+const CanvasContextMenu: React.FC<Props> = ({
+  contextMenu,
+  data,
+  edges,
+  allNodes,
+  isMainWorkflow,
+  onWorkflowOpen,
+  onWorkflowAddFromSelection,
+  onNodeSettings,
+  onNodesChange,
+  onNodesDeleteCleanup,
+  onEdgesChange,
+  onBeforeDelete,
+  onCopy,
+  onCut,
+  onPaste,
+  onNodesDisable,
+  onClose,
+  onDebugRunStartFromSelectedNode,
+}) => {
+  const t = useT();
+  const { value } = useIndexedDB("general");
+  const [currentProject] = useCurrentProject();
+
+  const { value: debugRunState } = useIndexedDB("debugRun");
+
+  const debugRunJob = useMemo(
+    () =>
+      debugRunState?.jobs?.find((job) => job.projectId === currentProject?.id),
+    [debugRunState, currentProject],
+  );
+
+  const freshData = useMemo(() => {
+    if (!data) return undefined;
+
+    if (Array.isArray(data)) {
+      const nodeIds = data.map((n) => n.id);
+      return allNodes.filter((n) => nodeIds.includes(n.id));
+    } else {
+      return allNodes.find((n) => n.id === data.id);
+    }
+  }, [data, allNodes]);
+
+  const nodes = Array.isArray(freshData) ? freshData : undefined;
+  const node = Array.isArray(freshData) ? undefined : freshData;
+
+  const handleNodeSettingsOpen = useCallback(
+    (node: Node) => {
+      onNodeSettings?.(undefined, node.id);
+    },
+    [onNodeSettings],
+  );
+
+  const handleSubworkflowOpen = useCallback(
+    (node: Node) => {
+      if (!node.data?.subworkflowId) return;
+
+      onWorkflowOpen?.(node.data.subworkflowId);
+    },
+    [onWorkflowOpen],
+  );
+
+  const handleWorkflowAddFromSelection = useCallback(() => {
+    onWorkflowAddFromSelection?.(allNodes, edges);
+  }, [onWorkflowAddFromSelection, allNodes, edges]);
+
+  const handleNodeDelete = useCallback(
+    async (node?: Node, nodes?: Node[]) => {
+      if (!nodes && !node) return;
+
+      const toDelete = nodes ?? (node ? [node] : []);
+      const shouldDelete = await onBeforeDelete?.({ nodes: toDelete });
+
+      if (shouldDelete) {
+        onNodesDeleteCleanup?.(toDelete);
+        onNodesChange?.(
+          toDelete.map((node) => ({ id: node.id, type: "remove" as const })),
+        );
+      }
+    },
+    [onBeforeDelete, onNodesChange, onNodesDeleteCleanup],
+  );
+
+  const clipboardHasReadersOrWriters =
+    !isMainWorkflow &&
+    value?.clipboard?.nodes?.some(
+      (n: any) => n.type === "reader" || n.type === "writer",
+    );
+
+  const containsReadersOrWriters = nodes?.some(
+    (n) => n.type === "reader" || n.type === "writer",
+  );
+
+  const menuItems = useMemo(() => {
+    const wrapWithClose = (callback: () => void) => () => {
+      callback();
+      onClose();
+    };
+
+    const items: ContextMenuItemType[] = [
+      ...(node || nodes
+        ? [
+            {
+              type: "action" as const,
+              props: {
+                label: t("Run From Selected Action"),
+                icon: (
+                  <div className="relative flex items-center">
+                    <CircleIcon weight="fill" className="scale-75 transform" />
+                    <ArrowRightIcon
+                      weight="bold"
+                      className="absolute left-1.25 scale-75 transform"
+                    />
+                  </div>
+                ),
+                onCallback: wrapWithClose(() =>
+                  onDebugRunStartFromSelectedNode?.(node, nodes),
+                ),
+                disabled:
+                  !debugRunJob ||
+                  debugRunJob.status !== "completed" ||
+                  (nodes?.length ?? 0) > 1 ||
+                  !node ||
+                  getConnectedEdges([node], edges).length === 0 ||
+                  node?.type === "batch" ||
+                  node?.type === "writer" ||
+                  node?.type === "note" ||
+                  node?.type === "subworkflow",
+              },
+            },
+          ]
+        : []),
+
+      ...(node || nodes
+        ? [
+            {
+              type: "separator" as const,
+            },
+          ]
+        : []),
+      {
+        type: "action",
+        props: {
+          label: t("Copy"),
+          icon: <CopyIcon weight="light" />,
+          shortcut: (
+            <ContextMenuShortcut keyBinding={{ key: "c", commandKey: true }} />
+          ),
+          disabled: (!nodes && !node) || !onCopy,
+          onCallback: wrapWithClose(() => onCopy?.(node) ?? (() => {})),
+        },
+      },
+
+      {
+        type: "action",
+        props: {
+          label: t("Cut"),
+          icon: <ScissorsIcon weight="light" />,
+          shortcut: (
+            <ContextMenuShortcut keyBinding={{ key: "x", commandKey: true }} />
+          ),
+          disabled: (!nodes && !node) || !onCut,
+          onCallback: wrapWithClose(() => onCut?.(false, node) ?? (() => {})),
+        },
+      },
+      {
+        type: "action",
+        props: {
+          label: t("Paste"),
+          icon: <ClipboardIcon weight="light" />,
+          shortcut: (
+            <ContextMenuShortcut keyBinding={{ key: "v", commandKey: true }} />
+          ),
+          disabled:
+            !value?.clipboard || !onPaste || clipboardHasReadersOrWriters,
+          onCallback: wrapWithClose(() => onPaste?.(contextMenu.mousePosition)),
+        },
+      },
+      ...(node && node.type === "subworkflow"
+        ? [
+            {
+              type: "action" as const,
+              props: {
+                label: t("Open Subworkflow"),
+                icon: <GraphIcon weight="light" />,
+                onCallback: wrapWithClose(() => handleSubworkflowOpen(node)),
+              },
+            },
+          ]
+        : []),
+      ...(nodes
+        ? [
+            {
+              type: "action" as const,
+              props: {
+                label: t("Create Subworkflow"),
+                icon: <GraphIcon weight="light" />,
+                shortcut: (
+                  <ContextMenuShortcut
+                    keyBinding={{ key: "s", commandKey: true, shiftKey: true }}
+                  />
+                ),
+                disabled:
+                  !onNodesChange || !onEdgesChange || containsReadersOrWriters,
+                onCallback: wrapWithClose(() =>
+                  handleWorkflowAddFromSelection(),
+                ),
+              },
+            },
+          ]
+        : []),
+      {
+        type: "action",
+        props: {
+          label: (() => {
+            const selectedNodes = node
+              ? [node]
+              : nodes?.filter((n) => n.selected) || [];
+            const anyEnabled = selectedNodes.some((n) => !n.data?.isDisabled);
+            return anyEnabled ? t("Disable Action") : t("Enable Action");
+          })(),
+          icon: (() => {
+            const selectedNodes = node
+              ? [node]
+              : nodes?.filter((n) => n.selected) || [];
+            const anyEnabled = selectedNodes.some((n) => !n.data?.isDisabled);
+            return anyEnabled ? (
+              <EyeSlashIcon weight="light" />
+            ) : (
+              <EyeIcon weight="light" />
+            );
+          })(),
+          shortcut: (
+            <ContextMenuShortcut keyBinding={{ key: "e", commandKey: true }} />
+          ),
+          disabled:
+            (!nodes && !node) ||
+            !onNodesDisable ||
+            nodes?.some((n) => n.type === "note") ||
+            node?.type === "note",
+          onCallback: wrapWithClose(
+            () => onNodesDisable?.(node ? [node] : undefined) ?? (() => {}),
+          ),
+        },
+      },
+      ...(node || nodes
+        ? [
+            {
+              type: "action" as const,
+              props: {
+                label: node ? t("Delete Action") : t("Delete Selection"),
+                icon: <TrashIcon weight="light" />,
+                destructive: true,
+                disabled: !onNodesChange || !onEdgesChange,
+
+                onCallback: wrapWithClose(() => handleNodeDelete(node, nodes)),
+              },
+            },
+          ]
+        : []),
+      ...(node || nodes
+        ? [
+            {
+              type: "separator" as const,
+            },
+          ]
+        : []),
+      ...(node
+        ? [
+            {
+              type: "action" as const,
+              props: {
+                label: t("Action Settings"),
+                icon: <GearFineIcon weight="light" />,
+                onCallback: wrapWithClose(() => handleNodeSettingsOpen(node)),
+              },
+            },
+          ]
+        : []),
+    ];
+
+    return items;
+  }, [
+    t,
+    node,
+    nodes,
+    clipboardHasReadersOrWriters,
+    containsReadersOrWriters,
+    debugRunJob,
+    onCopy,
+    edges,
+    onCut,
+    onPaste,
+    onClose,
+    onNodesChange,
+    onEdgesChange,
+    onNodesDisable,
+    onDebugRunStartFromSelectedNode,
+    contextMenu.mousePosition,
+    value,
+    handleNodeDelete,
+    handleNodeSettingsOpen,
+    handleSubworkflowOpen,
+    handleWorkflowAddFromSelection,
+  ]);
+
+  return <ContextMenu items={menuItems} contextMenuMeta={contextMenu} />;
+};
+
+export default CanvasContextMenu;

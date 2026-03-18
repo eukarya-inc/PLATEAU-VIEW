@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	rhttp "github.com/reearth/reearth-cms/worker/internal/adapter/http"
-	"github.com/reearth/reearth-cms/worker/pkg/webhook"
+	rhttp "github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/adapter/http"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/pkg/webhook"
 	"github.com/reearth/reearthx/log"
 	sns "github.com/robbiet480/go.sns"
 )

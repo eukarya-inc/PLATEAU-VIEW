@@ -1,11 +1,16 @@
 type Asset implements Node {
-  contentType: String!
-  createdAt: DateTime!
   id: ID!
-  name: String!
-  size: FileSize!
-  url: String!
   workspaceId: ID!
+  createdAt: DateTime!
+  fileName: String!
+  size: FileSize!
+  contentType: String!
+  name: String!
+  url: String!
+  uuid: String!
+  flatFiles: Boolean!
+  public: Boolean!
+  archiveExtractionStatus: ArchiveExtractionStatus
   Workspace: Workspace
 }
 
@@ -15,15 +20,38 @@ enum AssetSortType {
   NAME
 }
 
+enum ArchiveExtractionStatus {
+  SKIPPED
+  PENDING
+  IN_PROGRESS
+  DONE
+  FAILED
+}
+
 # InputType
 
 input CreateAssetInput {
   workspaceId: ID!
-  file: Upload!
+  file: Upload
+  name: String
+  token: String
 }
 
-input RemoveAssetInput {
+input DeleteAssetInput {
   assetId: ID!
+}
+
+input UpdateAssetInput {
+  assetId: ID!
+  name: String
+}
+
+input CreateAssetUploadInput {
+  workspaceId: ID!
+  filename: String
+  contentLength: Int
+  contentEncoding: String
+  cursor: String
 }
 
 # Payload
@@ -32,8 +60,21 @@ type CreateAssetPayload {
   asset: Asset!
 }
 
-type RemoveAssetPayload {
+type DeleteAssetPayload {
   assetId: ID!
+}
+
+type UpdateAssetPayload {
+  asset: Asset!
+}
+
+type CreateAssetUploadPayload {
+  token: String!
+  url: String!
+  contentType: String
+  contentLength: Int!
+  contentEncoding: String
+  next: String
 }
 
 # Connection
@@ -57,5 +98,7 @@ extend type Query {
 
 extend type Mutation {
   createAsset(input: CreateAssetInput!): CreateAssetPayload
-  removeAsset(input: RemoveAssetInput!): RemoveAssetPayload
+  updateAsset(input: UpdateAssetInput!): UpdateAssetPayload
+  deleteAsset(input: DeleteAssetInput!): DeleteAssetPayload
+  createAssetUpload(input: CreateAssetUploadInput!): CreateAssetUploadPayload
 }

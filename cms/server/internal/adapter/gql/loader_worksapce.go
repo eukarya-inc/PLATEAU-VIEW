@@ -3,7 +3,7 @@ package gql
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/adapter/gql/gqlmodel"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
 	"github.com/reearth/reearthx/account/accountusecase/accountinterfaces"

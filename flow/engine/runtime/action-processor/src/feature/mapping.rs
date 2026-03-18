@@ -8,7 +8,11 @@ use super::{
     duplicate_filter::FeatureDuplicateFilterFactory,
     file_path_extractor::FeatureFilePathExtractorFactory,
     filter::FeatureFilterFactory,
+    joiner::FeatureJoinerFactory,
+    json_fragmenter::JSONFragmenterFactory,
+    list_concatenator::ListConcatenatorFactory,
     list_exploder::ListExploderFactory,
+    list_indexer::ListIndexerFactory,
     lod_filter::FeatureLodFilterFactory,
     merger::FeatureMergerFactory,
     reader::{citygml::processor::FeatureCityGmlReaderFactory, FeatureReaderFactory},
@@ -21,6 +25,7 @@ use super::{
 
 pub(crate) static ACTION_FACTORY_MAPPINGS: Lazy<HashMap<String, NodeKind>> = Lazy::new(|| {
     let factories: Vec<Box<dyn ProcessorFactory>> = vec![
+        Box::<FeatureJoinerFactory>::default(),
         Box::<FeatureMergerFactory>::default(),
         Box::<FeatureSorterFactory>::default(),
         Box::<FeatureFilterFactory>::default(),
@@ -28,13 +33,16 @@ pub(crate) static ACTION_FACTORY_MAPPINGS: Lazy<HashMap<String, NodeKind>> = Laz
         Box::<FeatureCounterFactory>::default(),
         Box::<FeatureReaderFactory>::default(),
         Box::<RhaiCallerFactory>::default(),
+        Box::<ListConcatenatorFactory>::default(),
         Box::<ListExploderFactory>::default(),
+        Box::<ListIndexerFactory>::default(),
         Box::<FeatureTypeFilterFactory>::default(),
         Box::<FeatureFilePathExtractorFactory>::default(),
         Box::<FeatureLodFilterFactory>::default(),
         Box::<FeatureDuplicateFilterFactory>::default(),
         Box::<FeatureWriterFactory>::default(),
         Box::<FeatureCityGmlReaderFactory>::default(),
+        Box::<JSONFragmenterFactory>::default(),
     ];
     factories
         .into_iter()

@@ -107,3 +107,39 @@ func TestGetGCSObjectURL_WithUnderscores(t *testing.T) {
 		})
 	}
 }
+
+func TestGetJobLogURL(t *testing.T) {
+	baseURL, _ := url.Parse("https://storage.googleapis.com/mybucket")
+	repo := &fileRepo{
+		bucketName: "mybucket",
+		base:       baseURL,
+	}
+
+	logURL := repo.GetJobLogURL("job123")
+	expected := "https://storage.googleapis.com/mybucket/artifacts/job123/action-log/all.log"
+	assert.Equal(t, expected, logURL)
+}
+
+func TestGetJobWorkerLogURL(t *testing.T) {
+	baseURL, _ := url.Parse("https://storage.googleapis.com/mybucket")
+	repo := &fileRepo{
+		bucketName: "mybucket",
+		base:       baseURL,
+	}
+
+	workerLogURL := repo.GetJobWorkerLogURL("job123")
+	expected := "https://storage.googleapis.com/mybucket/artifacts/job123/worker/worker.log"
+	assert.Equal(t, expected, workerLogURL)
+}
+
+func TestGetJobUserFacingLogURL(t *testing.T) {
+	baseURL, _ := url.Parse("https://storage.googleapis.com/mybucket")
+	repo := &fileRepo{
+		bucketName: "mybucket",
+		base:       baseURL,
+	}
+
+	userFacingLogURL := repo.GetJobUserFacingLogURL("job123")
+	expected := "https://storage.googleapis.com/mybucket/artifacts/job123/user-facing-log/user-facing.log"
+	assert.Equal(t, expected, userFacingLogURL)
+}

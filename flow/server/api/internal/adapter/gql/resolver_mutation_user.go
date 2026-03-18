@@ -3,31 +3,17 @@ package gql
 import (
 	"context"
 
-	"github.com/reearth/reearth-flow/api/internal/adapter"
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountusecase/accountinterfaces"
 )
 
 func (r *mutationResolver) Signup(ctx context.Context, input gqlmodel.SignupInput) (*gqlmodel.SignupPayload, error) {
-	au := adapter.GetAuthInfo(ctx)
-	if au == nil {
-		return nil, interfaces.ErrOperationDenied
-	}
-
-	u, err := usecases(ctx).User.SignupOIDC(ctx, accountinterfaces.SignupOIDCParam{
-		Sub:         au.Sub,
-		AccessToken: au.Token,
-		Issuer:      au.Iss,
-		Email:       au.Email,
-		Name:        au.Name,
+	u, err := usecases(ctx).User.SignupOIDC(ctx, interfaces.SignupOIDCParam{
+		UserID:      gqlmodel.ToIDRef[accountsid.User](input.UserID),
+		Lang:        input.Lang,
+		WorkspaceID: gqlmodel.ToIDRef[accountsid.Workspace](input.WorkspaceID),
 		Secret:      input.Secret,
-		User: accountinterfaces.SignupUserParam{
-			Lang:        input.Lang,
-			UserID:      gqlmodel.ToIDRef[accountdomain.User](input.UserID),
-			WorkspaceID: gqlmodel.ToIDRef[accountdomain.Workspace](input.WorkspaceID),
-		},
 	})
 	if err != nil {
 		return nil, err
@@ -37,13 +23,13 @@ func (r *mutationResolver) Signup(ctx context.Context, input gqlmodel.SignupInpu
 }
 
 func (r *mutationResolver) UpdateMe(ctx context.Context, input gqlmodel.UpdateMeInput) (*gqlmodel.UpdateMePayload, error) {
-	res, err := usecases(ctx).User.UpdateMe(ctx, accountinterfaces.UpdateMeParam{
+	res, err := usecases(ctx).User.UpdateMe(ctx, interfaces.UpdateMeParam{
 		Name:                 input.Name,
 		Email:                input.Email,
 		Lang:                 input.Lang,
 		Password:             input.Password,
 		PasswordConfirmation: input.PasswordConfirmation,
-	}, getAcOperator(ctx))
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +38,7 @@ func (r *mutationResolver) UpdateMe(ctx context.Context, input gqlmodel.UpdateMe
 }
 
 func (r *mutationResolver) RemoveMyAuth(ctx context.Context, input gqlmodel.RemoveMyAuthInput) (*gqlmodel.UpdateMePayload, error) {
-	res, err := usecases(ctx).User.RemoveMyAuth(ctx, input.Auth, getAcOperator(ctx))
+	res, err := usecases(ctx).User.RemoveMyAuth(ctx, input.Auth)
 	if err != nil {
 		return nil, err
 	}
@@ -61,12 +47,12 @@ func (r *mutationResolver) RemoveMyAuth(ctx context.Context, input gqlmodel.Remo
 }
 
 func (r *mutationResolver) DeleteMe(ctx context.Context, input gqlmodel.DeleteMeInput) (*gqlmodel.DeleteMePayload, error) {
-	uid, err := gqlmodel.ToID[accountdomain.User](input.UserID)
+	uid, err := gqlmodel.ToID[accountsid.User](input.UserID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := usecases(ctx).User.DeleteMe(ctx, uid, getAcOperator(ctx)); err != nil {
+	if err := usecases(ctx).User.DeleteMe(ctx, uid); err != nil {
 		return nil, err
 	}
 

@@ -1,26 +1,27 @@
 import NotFound from "@reearth/beta/features/NotFound";
 import ProjectSettings, {
-  ProjectSettingsTab,
-  projectSettingsTabs
+  ProjectSettingsTab
 } from "@reearth/beta/features/ProjectSettings";
 import Page from "@reearth/beta/pages/Page";
-import { FC } from "react";
+import { FC, useMemo } from "react";
 import { useParams } from "react-router-dom";
-
-function isProjectSettingTab(
-  tab: string | undefined
-): tab is ProjectSettingsTab {
-  return projectSettingsTabs.includes(tab as ProjectSettingsTab) || !tab;
-}
 
 const ProjectSettingsPage: FC = () => {
   const { projectId, tab, subId } = useParams<{
     projectId: string;
-    tab?: ProjectSettingsTab;
+    tab?: string;
     subId?: string;
   }>();
 
-  return !projectId || !isProjectSettingTab(tab) ? (
+  const namedTab: ProjectSettingsTab = useMemo(
+    () =>
+      tab === "public" || tab === "story" || tab === "plugins"
+        ? tab
+        : "general",
+    [tab]
+  );
+
+  return !projectId ? (
     <NotFound />
   ) : (
     <Page
@@ -28,7 +29,7 @@ const ProjectSettingsPage: FC = () => {
       renderItem={(props) => (
         <ProjectSettings
           projectId={projectId}
-          tab={tab || "general"}
+          tab={namedTab}
           subId={subId}
           {...props}
         />

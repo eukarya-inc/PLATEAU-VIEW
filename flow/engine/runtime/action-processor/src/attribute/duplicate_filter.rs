@@ -23,7 +23,7 @@ impl ProcessorFactory for AttributeDuplicateFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Filters features by duplicate attributes"
+        "Remove Duplicate Features Based on Attribute Values"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -52,14 +52,12 @@ impl ProcessorFactory for AttributeDuplicateFilterFactory {
         let params: AttributeDuplicateFilterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::DuplicateFilterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::DuplicateFilterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -83,14 +81,20 @@ struct AttributeDuplicateFilter {
     buffer: HashMap<String, Feature>,
 }
 
+/// # AttributeDuplicateFilter Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeDuplicateFilterParam {
-    /// # Attributes to filter by
+    /// # Filter Attributes
+    /// Attributes used to identify duplicate features - features with identical values for these attributes will be deduplicated
     filter_by: Vec<Attribute>,
 }
 
 impl Processor for AttributeDuplicateFilter {
+    fn is_accumulating(&self) -> bool {
+        true
+    }
+
     fn process(
         &mut self,
         ctx: ExecutorContext,
@@ -111,7 +115,11 @@ impl Processor for AttributeDuplicateFilter {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         for feature in self.buffer.values() {
             fw.send(ExecutorContext::new_with_node_context_feature_and_port(
                 &ctx,

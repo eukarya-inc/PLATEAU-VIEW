@@ -1,4 +1,4 @@
-import { Loading, Typography } from "@reearth/beta/lib/reearth-ui";
+import { Breadcrumb, Loading, Typography } from "@reearth/beta/lib/reearth-ui";
 import {
   ManagerContent,
   ManagerHeader,
@@ -21,33 +21,31 @@ export type AssetsManagerSize = "medium" | "large";
 
 export type AssetsManagerProps = {
   workspaceId?: string;
-  projectId?: string;
   size?: AssetsManagerSize;
   enableUpload?: boolean;
   enableDelete?: boolean;
   allowMultipleSelection?: boolean;
   assetsTypes?: AcceptedAssetsTypes;
   layout?: ManagerLayout;
-  additionalFilter?: (asset: Asset) => boolean;
   onSelectChange?: (assets: Asset[]) => void;
   onLayoutChange?: (layout: ManagerLayout) => void;
 };
 
 const AssetsManager: FC<AssetsManagerProps> = ({
   workspaceId,
-  projectId,
   size = "medium",
   enableUpload = true,
   enableDelete = true,
   allowMultipleSelection = true,
   assetsTypes,
   layout,
-  additionalFilter,
   onSelectChange,
   onLayoutChange
 }) => {
   const {
     filteredAssets,
+    paths,
+    handlePathClick,
     sortValue,
     sortOptions,
     handleSortChange,
@@ -66,10 +64,8 @@ const AssetsManager: FC<AssetsManagerProps> = ({
   } = useHooks({
     allowMultipleSelection,
     workspaceId,
-    projectId,
     assetsTypes,
     layout,
-    additionalFilter,
     onSelectChange,
     onLayoutChange
   });
@@ -108,47 +104,37 @@ const AssetsManager: FC<AssetsManagerProps> = ({
         onDelete={handleAssetDelete}
         onSearch={handleSearch}
       />
-
       {filteredAssets?.length ? (
         <ManagerContent>
           <ContentWrapper size={size}>
+            <PathWrapper size={size}>
+              <Breadcrumb
+                items={paths}
+                size="large"
+                onClick={handlePathClick}
+              />
+            </PathWrapper>
             <LayoutWrapper>
               {localLayout === "list" && (
                 <ListHeader size={size} width={contentWidth}>
                   <ThumbnailSpacer />
-                  <Col width={45}>
-                    <Typography
-                      weight="bold"
-                      size="body"
-                      color={theme.content.weak}
-                    >
+                  <Col width={50}>
+                    <Typography weight="bold" size="body">
                       {t("Name")}
                     </Typography>
                   </Col>
                   <Col width={20}>
-                    <Typography
-                      weight="bold"
-                      size="body"
-                      color={theme.content.weak}
-                    >
+                    <Typography weight="bold" size="body">
                       {t("Uploaded At")}
                     </Typography>
                   </Col>
-                  <Col width={10}>
-                    <Typography
-                      weight="bold"
-                      size="body"
-                      color={theme.content.weak}
-                    >
+                  <Col width={20}>
+                    <Typography weight="bold" size="body">
                       {t("Size")}
                     </Typography>
                   </Col>
-                  <Col width={20}>
-                    <Typography
-                      weight="bold"
-                      size="body"
-                      color={theme.content.weak}
-                    >
+                  <Col width={10}>
+                    <Typography weight="bold" size="body">
                       {t("Path")}
                     </Typography>
                   </Col>
@@ -212,6 +198,12 @@ const ContentWrapper = styled("div")<{ size: AssetsManagerSize }>(
     gap: theme.spacing.normal,
     flex: 1,
     height: 0
+  })
+);
+
+const PathWrapper = styled("div")<{ size: AssetsManagerSize }>(
+  ({ theme, size }) => ({
+    padding: `0 ${size === "large" ? theme.spacing.large : theme.spacing.small}px`
   })
 );
 

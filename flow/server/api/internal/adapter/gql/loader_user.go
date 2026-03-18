@@ -3,28 +3,30 @@ package gql
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqldataloader"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountusecase/accountinterfaces"
+	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearthx/util"
 )
 
 type UserLoader struct {
-	usecase accountinterfaces.User
+	usecase interfaces.User
 }
 
-func NewUserLoader(usecase accountinterfaces.User) *UserLoader {
-	return &UserLoader{usecase: usecase}
+func NewUserLoader(usecase interfaces.User) *UserLoader {
+	return &UserLoader{
+		usecase: usecase,
+	}
 }
 
 func (c *UserLoader) Fetch(ctx context.Context, ids []gqlmodel.ID) ([]*gqlmodel.User, []error) {
-	uids, err := util.TryMap(ids, gqlmodel.ToID[accountdomain.User])
+	uids, err := util.TryMap(ids, gqlmodel.ToID[accountsid.User])
 	if err != nil {
 		return nil, []error{err}
 	}
 
-	res, err := c.usecase.FetchByID(ctx, uids)
+	res, err := c.usecase.FindByIDs(ctx, uids)
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -38,16 +40,12 @@ func (c *UserLoader) Fetch(ctx context.Context, ids []gqlmodel.ID) ([]*gqlmodel.
 }
 
 func (c *UserLoader) SearchUser(ctx context.Context, nameOrEmail string) (*gqlmodel.User, error) {
-	res, err := c.usecase.SearchUser(ctx, nameOrEmail)
+	res, err := c.usecase.UserByNameOrEmail(ctx, nameOrEmail)
 	if err != nil {
 		return nil, err
 	}
 
-	users := gqlmodel.ToUsersFromSimple(res)
-	if len(users) == 0 {
-		return nil, nil
-	}
-	return users[0], nil
+	return gqlmodel.ToUser(res), nil
 }
 
 // data loader

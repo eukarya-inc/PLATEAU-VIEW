@@ -3,10 +3,10 @@ package interfaces
 import (
 	"context"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/i18n"
 	"github.com/reearth/reearthx/rerror"
 )
@@ -42,6 +42,12 @@ type UpdateFieldParam struct {
 	DefaultValue *value.Multiple
 }
 
+type ModelData struct {
+	ModelID   *id.ModelID
+	SchemaID  id.SchemaID
+	ProjectID id.ProjectID
+}
+
 var (
 	ErrInvalidTypeProperty       = rerror.NewE(i18n.T("invalid type property"))
 	ErrReferencedFiledKeyExists  = rerror.NewE(i18n.T("referenced field key exists"))
@@ -56,7 +62,10 @@ type Schema interface {
 	FindByID(context.Context, id.SchemaID, *usecase.Operator) (*schema.Schema, error)
 	FindByIDs(context.Context, []id.SchemaID, *usecase.Operator) (schema.List, error)
 	FindByModel(context.Context, id.ModelID, *usecase.Operator) (*schema.Package, error)
+	FindByGroup(context.Context, id.GroupID, *usecase.Operator) (*schema.Schema, error)
+	FindByGroups(context.Context, id.GroupIDList, *usecase.Operator) (schema.List, error)
 	CreateField(context.Context, CreateFieldParam, *usecase.Operator) (*schema.Field, error)
+	CreateFields(context.Context, id.SchemaID, []CreateFieldParam, *usecase.Operator) (schema.FieldList, error)
 	UpdateField(context.Context, UpdateFieldParam, *usecase.Operator) (*schema.Field, error)
 	UpdateFields(context.Context, id.SchemaID, []UpdateFieldParam, *usecase.Operator) (schema.FieldList, error)
 	DeleteField(context.Context, id.SchemaID, id.FieldID, *usecase.Operator) error

@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use once_cell::sync::Lazy;
 use reearth_flow_common::{
     uri::Uri,
-    xml::{self, XmlDocument, XmlRoNode},
+    xml::{self, XPathResultExt, XmlDocument, XmlRoNode},
 };
 use reearth_flow_runtime::{
     errors::BoxedError,
@@ -15,6 +15,7 @@ use reearth_flow_runtime::{
 };
 use reearth_flow_types::{Attribute, AttributeValue, Feature};
 use regex::Regex;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -71,7 +72,7 @@ impl Attributes {
         }
     }
 
-    fn iter(&self) -> std::collections::hash_map::Iter<String, serde_json::Value> {
+    fn iter(&'_ self) -> std::collections::hash_map::Iter<'_, String, serde_json::Value> {
         self.0.iter()
     }
 }
@@ -81,8 +82,7 @@ impl TryFrom<Attributes> for serde_json::Value {
     fn try_from(value: Attributes) -> Result<Self, PlateauProcessorError> {
         serde_json::to_value(value.0).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot convert to json with error = {:?}",
-                e
+                "Cannot convert to json with error = {e:?}"
             ))
         })
     }
@@ -94,8 +94,7 @@ impl TryFrom<Attributes> for AttributeValue {
         Ok(AttributeValue::from(
             serde_json::to_value(value.0).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot convert to json with error = {:?}",
-                    e
+                    "Cannot convert to json with error = {e:?}"
                 ))
             })?,
         ))
@@ -161,8 +160,7 @@ impl TryFrom<GenericAttribute> for serde_json::Value {
     fn try_from(value: GenericAttribute) -> Result<Self, PlateauProcessorError> {
         serde_json::to_value(value).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot convert to json with error = {:?}",
-                e
+                "Cannot convert to json with error = {e:?}"
             ))
         })
     }
@@ -248,8 +246,7 @@ impl TryFrom<FilePathResponse> for AttributeValue {
         Ok(AttributeValue::from(serde_json::to_value(value).map_err(
             |e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot convert to json with error = {:?}",
-                    e
+                    "Cannot convert to json with error = {e:?}"
                 ))
             },
         )?))
@@ -262,8 +259,7 @@ impl TryFrom<FilePathResponse> for Feature {
     fn try_from(value: FilePathResponse) -> Result<Self, PlateauProcessorError> {
         let attributes = serde_json::to_value(value).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot convert to json with error = {:?}",
-                e
+                "Cannot convert to json with error = {e:?}"
             ))
         })?;
         let attributes = match attributes {
@@ -306,8 +302,7 @@ impl TryFrom<FeatureResponse> for AttributeValue {
         Ok(AttributeValue::from(serde_json::to_value(value).map_err(
             |e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot convert to json with error = {:?}",
-                    e
+                    "Cannot convert to json with error = {e:?}"
                 ))
             },
         )?))
@@ -320,8 +315,7 @@ impl TryFrom<FeatureResponse> for Feature {
     fn try_from(value: FeatureResponse) -> Result<Self, PlateauProcessorError> {
         let attributes = serde_json::to_value(value).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot convert to json with error = {:?}",
-                e
+                "Cannot convert to json with error = {e:?}"
             ))
         })?;
         let attributes = match attributes {
@@ -351,8 +345,7 @@ impl TryFrom<SummaryResponse> for AttributeValue {
         Ok(AttributeValue::from(serde_json::to_value(value).map_err(
             |e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot convert to json with error = {:?}",
-                    e
+                    "Cannot convert to json with error = {e:?}"
                 ))
             },
         )?))
@@ -365,8 +358,7 @@ impl TryFrom<SummaryResponse> for Feature {
     fn try_from(value: SummaryResponse) -> Result<Self, PlateauProcessorError> {
         let attributes = serde_json::to_value(value).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot convert to json with error = {:?}",
-                e
+                "Cannot convert to json with error = {e:?}"
             ))
         })?;
         let attributes = match attributes {
@@ -414,7 +406,7 @@ impl ProcessorFactory for XmlAttributeExtractorFactory {
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
-        None
+        Some(schemars::schema_for!(XmlAttributeExtractorParam))
     }
 
     fn categories(&self) -> &[&'static str] {
@@ -443,14 +435,12 @@ impl ProcessorFactory for XmlAttributeExtractorFactory {
         let params: XmlAttributeExtractorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -490,7 +480,7 @@ pub struct XmlAttributeExtractor {
     features_group: HashMap<String, Vec<Feature>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct XmlAttributeExtractorParam {
     city_code: Option<String>,
@@ -513,12 +503,11 @@ impl Processor for XmlAttributeExtractor {
     ) -> Result<(), BoxedError> {
         let feature = &ctx.feature;
         // Codelist dictionary creation
-        let dir_codelists = match feature.get(&Attribute::new("dirCodelists")) {
+        let dir_codelists = match feature.get("dirCodelists") {
             Some(AttributeValue::String(dir)) => dir,
             v => {
                 return Err(PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "No dirCodelists value with {:?}",
-                    v
+                    "No dirCodelists value with {v:?}"
                 ))
                 .into())
             }
@@ -526,8 +515,7 @@ impl Processor for XmlAttributeExtractor {
         if !self.codelists_map.contains_key(dir_codelists) {
             let dir = Uri::from_str(dir_codelists).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot parse uri with error = {:?}",
-                    e
+                    "Cannot parse uri with error = {e:?}"
                 ))
             })?;
             if dir.is_dir() {
@@ -549,7 +537,11 @@ impl Processor for XmlAttributeExtractor {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         let codelists = self
             .codelists_map
             .iter()
@@ -563,8 +555,7 @@ impl Processor for XmlAttributeExtractor {
         for (city_gml_path, value) in self.features_group.iter() {
             let city_gml_path = Uri::from_str(city_gml_path).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot create uri with error = {:?}",
-                    e
+                    "Cannot create uri with error = {e:?}"
                 ))
             })?;
             let mut xml_id_to_feature_and_attribute = HashMap::<String, (Uuid, Attributes)>::new();
@@ -593,14 +584,12 @@ impl Processor for XmlAttributeExtractor {
                 };
                 let document = xml::parse(xml_fragment).map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot parse xml with error = {:?}",
-                        e
+                        "Cannot parse xml with error = {e:?}"
                     ))
                 })?;
                 let context = xml::create_context(&document).map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot create context with error = {:?}",
-                        e
+                        "Cannot create context with error = {e:?}"
                     ))
                 })?;
                 let gid = context.evaluate("/*/@gml:id");
@@ -619,8 +608,7 @@ impl Processor for XmlAttributeExtractor {
                 };
                 let all_node = xml::evaluate(&document, "/*").map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot evaluate xml with error = {:?}",
-                        e
+                        "Cannot evaluate xml with error = {e:?}"
                     ))
                 })?;
                 let all_node = all_node.get_readonly_nodes_as_vec();
@@ -646,8 +634,7 @@ impl Processor for XmlAttributeExtractor {
                 )
                 .map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot walk node with error = {:?}",
-                        e
+                        "Cannot walk node with error = {e:?}"
                     ))
                 })?;
                 let Some(lod) = lod else {
@@ -673,7 +660,7 @@ impl Processor for XmlAttributeExtractor {
                     serde_json::Value::String(tag.clone()),
                 );
                 xml_id_to_feature_and_attribute.insert(xml_id.to_string(), (row_id, attr.clone()));
-                let mut result_feature = feature.clone();
+                let mut result_feature = (**feature).clone();
                 result_feature.insert(
                     Attribute::new("featureType"),
                     AttributeValue::String(tag.clone()),
@@ -750,8 +737,7 @@ impl Processor for XmlAttributeExtractor {
                 )
                 .map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot get ancestor attributes with error = {:?}",
-                        e
+                        "Cannot get ancestor attributes with error = {e:?}"
                     ))
                 })?;
                 let attr = if !ancestors.is_empty() {
@@ -1087,8 +1073,7 @@ fn ancestor_attributes(
     )
     .map_err(|e| {
         PlateauProcessorError::XmlAttributeExtractor(format!(
-            "Cannot get ancestor attributes with error = {:?}",
-            e
+            "Cannot get ancestor attributes with error = {e:?}"
         ))
     })?;
     parent.append(&mut result);
@@ -1107,14 +1092,12 @@ fn walk_node(
 ) -> super::errors::Result<(Attributes, Option<LodCount>)> {
     let ctx = xml::create_context(document).map_err(|e| {
         PlateauProcessorError::XmlAttributeExtractor(format!(
-            "Cannot create context with error = {:?}",
-            e
+            "Cannot create context with error = {e:?}"
         ))
     })?;
     let nodes = xml::find_readonly_nodes_by_xpath(&ctx, "./*", parent).map_err(|e| {
         PlateauProcessorError::XmlAttributeExtractor(format!(
-            "Cannot evaluate xml with error = {:?}",
-            e
+            "Cannot evaluate xml with error = {e:?}"
         ))
     })?;
     let mut lod_count = LodCount::new();
@@ -1128,7 +1111,7 @@ fn walk_node(
                 lod_count.plus_str(v.to_string());
             }
         } else if tag == "dem:load" {
-            let value = node.get_content();
+            let value = node.get_content().unwrap_or_default();
             let lod = value.parse::<i32>();
             if let Ok(lod) = lod {
                 lod_count.plus_i32(lod);
@@ -1137,8 +1120,7 @@ fn walk_node(
         if attr_types.contains(&tag.as_str()) {
             let generic_attribute = walk_generic_node(document, &node).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot walk generic node with error = {:?}",
-                    e
+                    "Cannot walk generic node with error = {e:?}"
                 ))
             })?;
             if result.contains_key("gen:genericAttribute") {
@@ -1167,7 +1149,7 @@ fn walk_node(
             }
             continue;
         }
-        let props = schema_def.get(format!("{}/{}", xpath, tag).as_str());
+        let props = schema_def.get(format!("{xpath}/{tag}").as_str());
         if props.is_none() {
             continue;
         }
@@ -1184,8 +1166,7 @@ fn walk_node(
         if tpe == "core:AddressPropertyType" {
             let address = get_address(document, &node).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot get address with error = {:?}",
-                    e
+                    "Cannot get address with error = {e:?}"
                 ))
             })?;
             result.set(tag, serde_json::Value::String(address));
@@ -1195,8 +1176,7 @@ fn walk_node(
             "fragment" => {
                 let fragment = xml::readonly_node_to_xml_string(document, &node).map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot convert node to xml with error = {:?}",
-                        e
+                        "Cannot convert node to xml with error = {e:?}"
                     ))
                 })?;
                 result.set(tag, serde_json::Value::String(fragment));
@@ -1209,13 +1189,12 @@ fn walk_node(
                     schema_def,
                     document,
                     &node,
-                    format!("{}/{}", xpath, tag),
+                    format!("{xpath}/{tag}"),
                     false,
                 )
                 .map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot walk node with error = {:?}",
-                        e
+                        "Cannot walk node with error = {e:?}"
                     ))
                 })?;
                 result.extend(attr);
@@ -1228,13 +1207,12 @@ fn walk_node(
                     schema_def,
                     document,
                     &node,
-                    format!("{}/{}", xpath, tag),
+                    format!("{xpath}/{tag}"),
                     false,
                 )
                 .map_err(|e| {
                     PlateauProcessorError::XmlAttributeExtractor(format!(
-                        "Cannot walk node with error = {:?}",
-                        e
+                        "Cannot walk node with error = {e:?}"
                     ))
                 })?;
                 if multi {
@@ -1242,8 +1220,7 @@ fn walk_node(
                         tag,
                         serde_json::to_value(attr.to_hash_map()).map_err(|e| {
                             PlateauProcessorError::XmlAttributeExtractor(format!(
-                                "Cannot convert to json with error = {:?}",
-                                e
+                                "Cannot convert to json with error = {e:?}"
                             ))
                         })?,
                     );
@@ -1252,8 +1229,7 @@ fn walk_node(
                         tag,
                         serde_json::to_value(attr.to_hash_map()).map_err(|e| {
                             PlateauProcessorError::XmlAttributeExtractor(format!(
-                                "Cannot convert to json with error = {:?}",
-                                e
+                                "Cannot convert to json with error = {e:?}"
                             ))
                         })?,
                     );
@@ -1263,19 +1239,15 @@ fn walk_node(
             _ => (),
         }
         // XML要素の値
-        let text = node.get_content();
+        let text = node.get_content().unwrap_or_default();
         if text.is_empty() {
             continue;
         }
-        let code_space = match node.get_attribute_node("codeSpace") {
-            Some(attr) => attr.get_content(),
-            None => "".to_string(),
-        };
-        if code_space.is_empty() {
+        let code_space = node.get_attribute("codeSpace").unwrap_or_default();
+        if !code_space.is_empty() {
             let codelist = city_gml_path.join(code_space.as_str()).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot join uri with error = {:?}",
-                    e
+                    "Cannot join uri with error = {e:?}"
                 ))
             })?;
             let codelist = codelists.get(codelist.to_string().as_str());
@@ -1314,16 +1286,16 @@ fn walk_node(
                 result.set(tag.clone(), value);
             }
         }
-        if let Some(uom) = node.get_attribute_node("uom") {
+        if let Some(uom) = node.get_attribute("uom") {
             if multi {
                 result.append(
                     format!("{}_uom", tag.clone()),
-                    serde_json::Value::String(uom.get_content()),
+                    serde_json::Value::String(uom),
                 );
             } else {
                 result.set(
                     format!("{}_uom", tag.clone()),
-                    serde_json::Value::String(uom.get_content()),
+                    serde_json::Value::String(uom),
                 );
             }
         }
@@ -1344,22 +1316,19 @@ fn walk_generic_node(
     if tag == *GENERIC_TAG_SET {
         let ctx = xml::create_context(document).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot create context with error = {:?}",
-                e
+                "Cannot create context with error = {e:?}"
             ))
         })?;
         let children = xml::find_readonly_nodes_by_xpath(&ctx, "./*", node).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot evaluate xml with error = {:?}",
-                e
+                "Cannot evaluate xml with error = {e:?}"
             ))
         })?;
         let mut attribute_set = Vec::new();
         for child in children {
             let attributes = walk_generic_node(document, &child).map_err(|e| {
                 PlateauProcessorError::XmlAttributeExtractor(format!(
-                    "Cannot walk generic node with error = {:?}",
-                    e
+                    "Cannot walk generic node with error = {e:?}"
                 ))
             })?;
             attribute_set.extend(attributes);
@@ -1380,14 +1349,12 @@ fn walk_generic_node(
     } else {
         let ctx = xml::create_context(document).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot create context with error = {:?}",
-                e
+                "Cannot create context with error = {e:?}"
             ))
         })?;
         let nodes = xml::find_readonly_nodes_by_xpath(&ctx, "./gen:value", node).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot evaluate xml with error = {:?}",
-                e
+                "Cannot evaluate xml with error = {e:?}"
             ))
         })?;
         let value = nodes
@@ -1397,15 +1364,10 @@ fn walk_generic_node(
             ))?;
         result.push(GenericAttribute {
             r#type: typ.to_string(),
-            name: node
-                .get_attribute_node("name")
-                .map(|attr| attr.get_content())
-                .unwrap_or_default(),
-            value: serde_json::Value::String(value.get_content()),
+            name: node.get_attribute("name").unwrap_or_default(),
+            value: serde_json::Value::String(value.get_content().unwrap_or_default()),
             uom: if typ == "measure" {
-                value
-                    .get_attribute_node("uom")
-                    .map(|attr| attr.get_content())
+                value.get_attribute("uom")
             } else {
                 None
             },
@@ -1417,44 +1379,41 @@ fn walk_generic_node(
 fn get_address(document: &XmlDocument, node: &XmlRoNode) -> super::errors::Result<String> {
     let ctx = xml::create_context(document).map_err(|e| {
         PlateauProcessorError::XmlAttributeExtractor(format!(
-            "Cannot create context with error = {:?}",
-            e
+            "Cannot create context with error = {e:?}"
         ))
     })?;
     let nodes =
         xml::find_readonly_nodes_by_xpath(&ctx, ".//xAL:LocalityName", node).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot evaluate xml with error = {:?}",
-                e
+                "Cannot evaluate xml with error = {e:?}"
             ))
         })?;
     let mut result = Vec::<String>::new();
     nodes.iter().for_each(|node| {
-        result.push(node.get_content());
+        if let Some(content) = node.get_content() {
+            result.push(content);
+        }
     });
     let nodes =
         xml::find_readonly_nodes_by_xpath(&ctx, ".//xAL:DependentLocality", node).map_err(|e| {
             PlateauProcessorError::XmlAttributeExtractor(format!(
-                "Cannot evaluate xml with error = {:?}",
-                e
+                "Cannot evaluate xml with error = {e:?}"
             ))
         })?;
     for node in nodes {
-        let attribute_node = node.get_attribute_node("Type");
-        match attribute_node {
-            Some(attribute_node) if attribute_node.get_content() == "district" => {
-                let nodes = xml::find_readonly_nodes_by_xpath(&ctx, "./*", &attribute_node)
-                    .map_err(|e| {
-                        PlateauProcessorError::XmlAttributeExtractor(format!(
-                            "Cannot evaluate xml with error = {:?}",
-                            e
-                        ))
-                    })?;
-                nodes.iter().for_each(|node| {
-                    result.push(node.get_content());
-                });
-            }
-            _ => (),
+        let attribute_value = node.get_attribute("Type");
+        if attribute_value.as_deref() == Some("district") {
+            let child_nodes =
+                xml::find_readonly_nodes_by_xpath(&ctx, "./*", &node).map_err(|e| {
+                    PlateauProcessorError::XmlAttributeExtractor(format!(
+                        "Cannot evaluate xml with error = {e:?}"
+                    ))
+                })?;
+            child_nodes.iter().for_each(|child| {
+                if let Some(content) = child.get_content() {
+                    result.push(content);
+                }
+            });
         }
     }
     Ok(result.join(""))

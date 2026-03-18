@@ -16,6 +16,9 @@ export default (
       customName: {
         type: "string",
         title: t("Custom Name"),
+        description: t(
+          "The custom name that is shown on the action. If not set, the official name will be used.",
+        ),
         format: "text",
         default: nodeMeta.officialName,
       },
@@ -26,18 +29,25 @@ export default (
     ...baseCustomizationSchema,
     properties: {
       ...baseCustomizationSchema.properties,
-      content: { type: "string", format: "textarea", title: t("Content") },
+      content: {
+        type: "string",
+        format: "textarea",
+        title: t("Content"),
+        description: t("The content shown on the note"),
+      },
       backgroundColor: {
         type: "string",
         format: "color",
         default: "#212121",
         title: t("Background Color"),
+        description: t("The background color shown on the note"),
       },
       textColor: {
         type: "string",
         format: "color",
         default: "#fafafa",
         title: t("Text Color"),
+        description: t("The text color shown on the note"),
       },
     },
   };
@@ -51,11 +61,13 @@ export default (
         format: "color",
         default: "#323236",
         title: t("Background Color"),
+        description: t("The background color shown on the batch action"),
       },
       textColor: {
         type: "string",
         format: "color",
         title: t("Text Color"),
+        description: t("The text color shown on the batch action"),
         default: "#fafafa",
       },
     },
@@ -74,9 +86,9 @@ export default (
       case "batch":
         resultAction = {
           ...nodeMeta,
-          name: t("Batch Node"),
+          name: t("Batch"),
           description: t(
-            "Batch nodes are for grouping multiple nodes together.",
+            "Batch actions are for grouping multiple actions together.",
           ),
           type: "batch",
           customizations: batchCustomizationSchema,
@@ -90,10 +102,26 @@ export default (
       case "note":
         resultAction = {
           ...nodeMeta,
-          name: t("Note node"),
-          description: t("Note nodes are for adding notes to the canvas."),
+          name: t("Note"),
+          description: t("Note actions are for adding notes to the canvas."),
           type: "note",
           customizations: noteCustomizationSchema,
+          inputPorts: ["input"],
+          outputPorts: ["output"],
+          categories: ["organization"],
+          builtin: true,
+        };
+        break;
+
+      case "subworkflow":
+        resultAction = {
+          ...nodeMeta,
+          name: t("Subworkflow"),
+          description: t(
+            "Subworkflow actions are for creating subworkflows and grouping those workflows together.",
+          ),
+          type: "subworkflow",
+          customizations: baseCustomizationSchema,
           inputPorts: ["input"],
           outputPorts: ["output"],
           categories: ["organization"],

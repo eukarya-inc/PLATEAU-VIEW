@@ -3,6 +3,7 @@ package usecase
 import (
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/policy"
+	"github.com/reearth/reearth/server/pkg/scene"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/account/accountdomain/user"
 	"github.com/reearth/reearthx/account/accountdomain/workspace"
@@ -12,10 +13,10 @@ import (
 
 type Operator struct {
 	AcOperator        *accountusecase.Operator
-	ReadableScenes    id.SceneIDList
-	WritableScenes    id.SceneIDList
-	MaintainingScenes id.SceneIDList
-	OwningScenes      id.SceneIDList
+	ReadableScenes    scene.IDList
+	WritableScenes    scene.IDList
+	MaintainingScenes scene.IDList
+	OwningScenes      scene.IDList
 	DefaultPolicy     *policy.ID
 }
 
@@ -70,19 +71,19 @@ func (o *Operator) IsOwningWorkspace(ws ...accountdomain.WorkspaceID) bool {
 	return o.AcOperator.IsOwningWorkspace(ws...)
 }
 
-func (o *Operator) AllReadableScenes() id.SceneIDList {
+func (o *Operator) AllReadableScenes() scene.IDList {
 	return append(o.ReadableScenes, o.AllWritableScenes()...)
 }
 
-func (o *Operator) AllWritableScenes() id.SceneIDList {
+func (o *Operator) AllWritableScenes() scene.IDList {
 	return append(o.WritableScenes, o.AllMaintainingScenes()...)
 }
 
-func (o *Operator) AllMaintainingScenes() id.SceneIDList {
+func (o *Operator) AllMaintainingScenes() scene.IDList {
 	return append(o.MaintainingScenes, o.AllOwningScenes()...)
 }
 
-func (o *Operator) AllOwningScenes() id.SceneIDList {
+func (o *Operator) AllOwningScenes() scene.IDList {
 	return o.OwningScenes
 }
 

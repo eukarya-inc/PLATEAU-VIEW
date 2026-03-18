@@ -1,8 +1,9 @@
 lint:
-	golangci-lint run --fix
+	# Temporary workaround until golangci-lint supports Go 1.24
+	./lint-wrapper.sh
 
 test:
-	go test -race -short -v ./...
+	go test -race -v ./...
 
 e2e:
 	go test -v ./e2e/...
@@ -22,12 +23,21 @@ gql:
 gen-policies:
 	go run ./cmd/policy-generator
 
-.PHONY: lint test e2e build run-app run-db gql gen-policies all gen-thrift
+swagger:
+	swag init -g cmd/reearth-flow/main.go -o internal/app/docs --parseDependency --parseInternal
+
+.PHONY: lint test e2e build run-app run-db gql gen-policies swagger all gen-thrift proto
 
 all: gen-thrift
 
 gen-thrift:
 	@echo "Generating Thrift code..."
 	@thrift -r --gen go:package_prefix=github.com/reearth/reearth-flow/api/ -out . thrift/document.thrift
+
+proto:
+	@echo "Generating gRPC code..."
+	@protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		pkg/cms/proto/schema.proto
 
 

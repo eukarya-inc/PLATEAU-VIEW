@@ -25,7 +25,7 @@ impl ProcessorFactory for FeatureTransformerFactory {
     }
 
     fn description(&self) -> &str {
-        "Transforms features by expressions"
+        "Applies transformation expressions to modify feature attributes and properties"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -54,14 +54,12 @@ impl ProcessorFactory for FeatureTransformerFactory {
         let params: FeatureTransformerParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::TransformerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::TransformerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -77,7 +75,7 @@ impl ProcessorFactory for FeatureTransformerFactory {
             let expr = &condition.expr;
             let template_ast = expr_engine
                 .compile(expr.as_ref())
-                .map_err(|e| FeatureProcessorError::TransformerFactory(format!("{:?}", e)))?;
+                .map_err(|e| FeatureProcessorError::TransformerFactory(format!("{e:?}")))?;
             transformers.push(CompiledTransform { expr: template_ast });
         }
         let process = FeatureTransformer {
@@ -94,17 +92,20 @@ struct FeatureTransformer {
     transformers: Vec<CompiledTransform>,
 }
 
+/// # FeatureTransformer Parameters
+///
+/// Configuration for applying transformation expressions to features.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct FeatureTransformerParam {
-    /// # Transformers to apply
+    /// List of transformation expressions to apply to each feature
     transformers: Vec<Transform>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Transform {
-    /// # Expression to transform the feature
+    /// Expression that modifies the feature (can access and modify attributes, geometry, etc.)
     expr: Expr,
 }
 
@@ -134,7 +135,11 @@ impl Processor for FeatureTransformer {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

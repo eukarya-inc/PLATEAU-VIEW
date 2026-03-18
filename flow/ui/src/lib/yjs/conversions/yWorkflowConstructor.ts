@@ -13,23 +13,35 @@ import type {
 import type { Edge, Node } from "@flow/types";
 
 export const yNodeConstructor = (node: Node): YNode => {
+  const position = {
+    x: node.position?.x ?? 0,
+    y: node.position?.y ?? 0,
+  };
+
+  const measured = {
+    width: node.measured?.width ?? 0,
+    height: node.measured?.height ?? 0,
+  };
+
   const yNode = toYjsMap<YNodeValue>({
     id: toYjsText(node.id),
     type: toYjsText(node.type),
     dragging: false,
-    position: toYjsMap(node.position),
-    measured: toYjsMap(node.measured),
+    position: toYjsMap(position),
+    measured: toYjsMap(measured),
     parentId: toYjsText(node.parentId),
     // Reference src/types/node.ts for the NodeData type
     data: toYjsMap({
       officialName: toYjsText(node.data.officialName),
-      customName: toYjsText(node.data.customName), // TODO: remove data.customName when subworkflow's renaming is re-implemented
       inputs: toYjsArray(node.data.inputs?.map((input) => toYjsText(input))),
       outputs: toYjsArray(
         node.data.outputs?.map((output) => toYjsText(output)),
       ),
       params: node.data.params,
       customizations: node.data.customizations,
+      isCollapsed: node.data.isCollapsed ?? false,
+      workflowPath: toYjsText(node.data.workflowPath),
+      isDisabled: node.data.isDisabled ?? false,
       // Subworkflow specific
       subworkflowId:
         node.type === "subworkflow"

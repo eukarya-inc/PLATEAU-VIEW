@@ -2,8 +2,6 @@ package nlslayer
 
 import (
 	"errors"
-
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 type FeatureCollection struct {
@@ -36,7 +34,7 @@ func (fc *FeatureCollection) AddFeature(feature Feature) {
 	fc.features = append(fc.features, feature)
 }
 
-func (fc *FeatureCollection) UpdateFeature(id id.FeatureID, geometry Geometry, properties map[string]any) (Feature, error) {
+func (fc *FeatureCollection) UpdateFeature(id FeatureID, geometry Geometry, properties map[string]any) (Feature, error) {
 	for i, f := range fc.features {
 		if f.ID() == id {
 			updatedFeature, err := NewFeature(id, f.FeatureType(), geometry)
@@ -51,7 +49,7 @@ func (fc *FeatureCollection) UpdateFeature(id id.FeatureID, geometry Geometry, p
 	return Feature{}, errors.New("feature not found")
 }
 
-func (fc *FeatureCollection) UpdateFeatureGeometry(id id.FeatureID, geometry Geometry) (Feature, error) {
+func (fc *FeatureCollection) UpdateFeatureGeometry(id FeatureID, geometry Geometry) (Feature, error) {
 	for i, f := range fc.features {
 		if f.ID() == id {
 			f.UpdateGeometry(geometry)
@@ -62,7 +60,7 @@ func (fc *FeatureCollection) UpdateFeatureGeometry(id id.FeatureID, geometry Geo
 	return Feature{}, errors.New("feature not found")
 }
 
-func (fc *FeatureCollection) UpdateFeatureProperty(id id.FeatureID, properties map[string]any) (Feature, error) {
+func (fc *FeatureCollection) UpdateFeatureProperty(id FeatureID, properties map[string]any) (Feature, error) {
 	for i, f := range fc.features {
 		if f.ID() == id {
 			f.UpdateProperties(&properties)
@@ -73,7 +71,7 @@ func (fc *FeatureCollection) UpdateFeatureProperty(id id.FeatureID, properties m
 	return Feature{}, errors.New("feature not found")
 }
 
-func (fc *FeatureCollection) RemoveFeature(id id.FeatureID) error {
+func (fc *FeatureCollection) RemoveFeature(id FeatureID) error {
 	if fc == nil {
 		return errors.New("feature collection is nil")
 	}

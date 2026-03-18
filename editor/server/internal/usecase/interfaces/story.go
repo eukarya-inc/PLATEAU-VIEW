@@ -8,6 +8,7 @@ import (
 	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/reearth/reearth/server/pkg/storytelling"
 	"github.com/reearth/reearthx/i18n"
+	"github.com/reearth/reearthx/idx"
 	"github.com/reearth/reearthx/rerror"
 )
 
@@ -34,8 +35,6 @@ type UpdateStoryInput struct {
 	PublicImage       *string
 	PublicNoIndex     *bool
 	DeletePublicImage *bool
-	EnableGa          *bool
-	TrackingID        *string
 }
 
 type MoveStoryInput struct {
@@ -152,5 +151,5 @@ type Storytelling interface {
 	RemoveBlock(context.Context, RemoveBlockParam, *usecase.Operator) (*storytelling.Story, *storytelling.Page, *id.BlockID, error)
 	MoveBlock(context.Context, MoveBlockParam, *usecase.Operator) (*storytelling.Story, *storytelling.Page, *id.BlockID, int, error)
 
-	ImportStory(context.Context, id.SceneID, *[]byte) (*storytelling.Story, error)
+	ImportStory(context.Context, idx.ID[id.Scene], map[string]interface{}, map[string]idx.ID[id.NLSLayer]) (*storytelling.Story, error)
 }

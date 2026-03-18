@@ -23,7 +23,7 @@ enum PluginExtensionType {
   BLOCK
   VISUALIZER
   INFOBOX
-  PHOTOOVERLAY
+  Cluster
   Story
   StoryPage
   StoryBlock
@@ -97,7 +97,7 @@ input UpgradePluginInput {
   toPluginId: ID!
 }
 
-extend type Query {
+extend type Query{
   plugin(id: ID!): Plugin
   plugins(id: [ID!]!): [Plugin!]!
 }

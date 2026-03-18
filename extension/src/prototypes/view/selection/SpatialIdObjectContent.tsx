@@ -101,7 +101,7 @@ export const SpatialIdObjectContent: FC<SpatialIdObjectContentProps> = ({ values
     return [
       {
         id: "spaceId",
-        name: "タイルハッシュ",
+        name: "タイルハッシュ（独自）",
         values: [feature.data.id],
       },
     ];
@@ -116,7 +116,7 @@ export const SpatialIdObjectContent: FC<SpatialIdObjectContentProps> = ({ values
     return [
       {
         id: "spaceIdZFXY",
-        name: "z/f/x/y",
+        name: "空間ID（z/f/x/y）",
         values: [zfxy],
       },
     ];

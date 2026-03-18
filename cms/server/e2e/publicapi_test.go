@@ -7,16 +7,17 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/reearth/reearth-cms/server/internal/app"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/project"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/project"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/samber/lo"
 )
@@ -334,7 +335,7 @@ func TestPublicAPI(t *testing.T) {
 		Expect().
 		Status(http.StatusOK).
 		Body().
-		IsEqual(fmt.Sprintf("id,location_lat,location_lng,test-field-1,asset,test-field-2,asset2\n%s,102,0.5,ccc,,aaa,\n", publicAPIItem6ID.String()))
+		IsEqual(fmt.Sprintf("id,location_lat,location_lng,test-field-1,asset,test-field-2,asset2\n%s,0.5,102,ccc,,aaa,\n", publicAPIItem6ID.String()))
 
 	// no geometry field
 	e.GET("/api/p/{project}/{model}.csv", publicAPIProjectAlias, publicAPIModelKey3).
@@ -511,7 +512,7 @@ func TestPublicAPI(t *testing.T) {
 		})
 }
 
-func publicAPISeeder(ctx context.Context, r *repo.Container) error {
+func publicAPISeeder(ctx context.Context, r *repo.Container, _ *gateway.Container) error {
 	uid := accountdomain.NewUserID()
 	wid := accountdomain.NewWorkspaceID()
 	p1 := project.New().ID(publicAPIProjectID).Workspace(wid).Alias(publicAPIProjectAlias).Publication(

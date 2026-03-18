@@ -57,11 +57,10 @@ graphs:
             env.get("__value").csvPath
 
       - id: f5e66920-24c0-4c70-ae16-6be1ed3b906c
-        name: FileWriter
+        name: JsonWriter
         type: action
-        action: FileWriter
+        action: JsonWriter
         with:
-          format: json
           output: |
             file::join_path(env.get("workerArtifactPath"), env.get("outputPath"))
 
@@ -95,6 +94,7 @@ graphs:
 * flow-edge-pass-through-topic
 * flow-log-stream-topic
 * flow-job-complete-topic
+* flow-worker-user-facing-log-topic
 
 ### Runtime Environment Variables
 | Name                                      | Description                                                                    | Default                      |
@@ -103,4 +103,5 @@ graphs:
 | FLOW_WORKER_LOG_STREAM_TOPIC              | Topic name of the event that occurs when the log comes into the log stream     | flow-log-stream-topic         |
 | FLOW_WORKER_JOB_COMPLETE_TOPIC            | Topic name of the event that will occur when the job is completed              | flow-job-complete-topic       |
 | FLOW_WORKER_NODE_STATUS_TOPIC             | Topic name of the event that will occur when each when Feature passes the node | flow-node-status-topic        |
+| FLOW_WORKER_USER_FACING_LOG_TOPIC         | Topic name for the user-facing log event                                       | flow-worker-user-facing-log-topic |
 | FLOW_WORKER_ENABLE_JSON_LOG               | Enable log format to JSON format                                               | false                        |

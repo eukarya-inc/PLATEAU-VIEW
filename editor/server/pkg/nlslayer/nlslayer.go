@@ -7,7 +7,7 @@ type NLSLayer interface {
 	ID() id.NLSLayerID
 	Index() *int
 	LayerType() LayerType
-	Scene() id.SceneID
+	Scene() SceneID
 	Config() *Config
 	Title() string
 	IsVisible() bool
@@ -15,8 +15,6 @@ type NLSLayer interface {
 	HasInfobox() bool
 	Infobox() *Infobox
 	SetInfobox(*Infobox)
-	PhotoOverlay() *PhotoOverlay
-	SetPhotoOverlay(*PhotoOverlay)
 	SetIndex(*int)
 	Rename(string)
 	UpdateConfig(*Config)
@@ -65,17 +63,16 @@ func ToLayerSimpleRef(l *NLSLayer) *NLSLayerSimple {
 }
 
 type layerBase struct {
-	id           id.NLSLayerID
-	index        *int
-	layerType    LayerType
-	scene        id.SceneID
-	title        string
-	visible      bool
-	infobox      *Infobox
-	photoOverlay *PhotoOverlay
-	config       *Config
-	isSketch     bool
-	sketch       *SketchInfo
+	id        id.NLSLayerID
+	index     *int
+	layerType LayerType
+	scene     SceneID
+	title     string
+	visible   bool
+	infobox   *Infobox
+	config    *Config
+	isSketch  bool
+	sketch    *SketchInfo
 }
 
 func (l *layerBase) ID() id.NLSLayerID {
@@ -103,7 +100,7 @@ func (l *layerBase) LayerType() LayerType {
 	return l.layerType
 }
 
-func (l *layerBase) Scene() id.SceneID {
+func (l *layerBase) Scene() SceneID {
 	return l.scene
 }
 
@@ -139,13 +136,6 @@ func (l *layerBase) Infobox() *Infobox {
 	return l.infobox
 }
 
-func (l *layerBase) PhotoOverlay() *PhotoOverlay {
-	if l == nil {
-		return nil
-	}
-	return l.photoOverlay
-}
-
 func (l *layerBase) SetVisible(visible bool) {
 	if l == nil {
 		return
@@ -158,13 +148,6 @@ func (l *layerBase) SetInfobox(infobox *Infobox) {
 		return
 	}
 	l.infobox = infobox
-}
-
-func (l *layerBase) SetPhotoOverlay(photoOverlay *PhotoOverlay) {
-	if l == nil {
-		return
-	}
-	l.photoOverlay = photoOverlay
 }
 
 func (l *layerBase) SetIndex(index *int) {
@@ -239,7 +222,7 @@ func (l *layerBase) Duplicate() NLSLayer {
 	}
 
 	duplicated := &layerBase{
-		id:        id.NewNLSLayerID(),
+		id:        NewID(),
 		index:     l.index,
 		layerType: l.layerType,
 		scene:     l.scene,

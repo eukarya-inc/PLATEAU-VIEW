@@ -4,27 +4,32 @@ import (
 	"context"
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
+	"github.com/reearth/reearth/server/pkg/dataset"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	opid   = id.NewPropertyID()
-	ppid   = id.NewPropertyID()
-	psid   = id.MustPropertySchemaID("hoge~0.1.0/fff")
-	psiid1 = id.PropertySchemaGroupID("x")
-	psiid2 = id.PropertySchemaGroupID("y")
-	i1id   = id.NewPropertyItemID()
-	i2id   = id.NewPropertyItemID()
-	i3id   = id.NewPropertyItemID()
-	i4id   = id.NewPropertyItemID()
-	i5id   = id.NewPropertyItemID()
+	sid    = NewSceneID()
+	ds     = NewDatasetSchemaID()
+	df     = NewDatasetFieldID()
+	d      = NewDatasetID()
+	opid   = NewID()
+	ppid   = NewID()
+	psid   = MustSchemaID("hoge~0.1.0/fff")
+	psiid1 = SchemaGroupID("x")
+	psiid2 = SchemaGroupID("y")
+	i1id   = NewItemID()
+	i2id   = NewItemID()
+	i3id   = NewItemID()
+	i4id   = NewItemID()
+	i5id   = NewItemID()
 )
 
 func TestSeal(t *testing.T) {
 	tests := []struct {
 		Name     string
 		MD       *Merged
+		DSGL     dataset.GraphLoader
 		Expected *Sealed
 		Err      error
 	}{
@@ -34,27 +39,31 @@ func TestSeal(t *testing.T) {
 		{
 			Name: "seal",
 			MD: &Merged{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Groups: []*MergedGroup{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*MergedGroup{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*MergedField{
 									{
-										ID:    id.PropertyFieldID("a"),
+										ID:    FieldID("a"),
 										Value: ValueTypeString.ValueFrom("a"),
 										Type:  ValueTypeString,
 									},
 									{
-										ID:    id.PropertyFieldID("b"),
+										ID:    FieldID("b"),
 										Value: ValueTypeString.ValueFrom("b"),
+										Links: NewLinks([]*Link{NewLink(d, ds, df)}),
 										Type:  ValueTypeString,
 									},
 								},
@@ -62,46 +71,53 @@ func TestSeal(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
-
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*MergedField{
 							{
-								ID:    id.PropertyFieldID("a"),
+								ID:    FieldID("a"),
 								Value: ValueTypeString.ValueFrom("aaa"),
 								Type:  ValueTypeString,
 							},
 							{
-								ID:    id.PropertyFieldID("b"),
+								ID:    FieldID("b"),
 								Value: ValueTypeString.ValueFrom("aaa"),
+								Links: NewLinks([]*Link{NewLink(d, ds, df)}),
 								Type:  ValueTypeString,
 							},
 						},
 					},
 				},
 			},
+			DSGL: dataset.GraphLoaderFromMap(map[DatasetID]*dataset.Dataset{
+				d: dataset.New().Scene(sid).ID(d).Schema(ds).Fields([]*dataset.Field{
+					dataset.NewField(df, dataset.ValueTypeString.ValueFrom("bbb"), ""),
+				}).MustBuild(),
+			}),
 			Expected: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
-
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
-
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
-
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -109,6 +125,7 @@ func TestSeal(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -117,15 +134,16 @@ func TestSeal(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
-
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -133,6 +151,7 @@ func TestSeal(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -148,7 +167,7 @@ func TestSeal(t *testing.T) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			res, err := Seal(context.Background(), tc.MD)
+			res, err := Seal(context.Background(), tc.MD, tc.DSGL)
 			assert.Equal(t, tc.Expected, res)
 			assert.Nil(t, err)
 		})
@@ -156,8 +175,8 @@ func TestSeal(t *testing.T) {
 }
 
 func TestSealProperty(t *testing.T) {
-	pid := id.NewPropertyID()
-	ps := id.MustPropertySchemaID("xxx~1.1.1/aa")
+	pid := NewID()
+	ps := MustSchemaID("xxx~1.1.1/aa")
 
 	tests := []struct {
 		Name     string
@@ -169,12 +188,13 @@ func TestSealProperty(t *testing.T) {
 		},
 		{
 			Name:  "seal property",
-			Input: New().ID(pid).Scene(id.NewSceneID()).Schema(ps).MustBuild(),
+			Input: New().ID(pid).Scene(NewSceneID()).Schema(ps).MustBuild(),
 			Expected: &Sealed{
-				Original: pid.Ref(),
-				Parent:   nil,
-				Schema:   ps,
-				Items:    []*SealedItem{},
+				Original:      pid.Ref(),
+				Parent:        nil,
+				Schema:        ps,
+				LinkedDataset: nil,
+				Items:         []*SealedItem{},
 			},
 		},
 	}
@@ -194,6 +214,7 @@ func TestSealedItemFrom(t *testing.T) {
 	tests := []struct {
 		Name     string
 		MG       *MergedGroup
+		DSGL     dataset.GraphLoader
 		Expected *SealedItem
 		Err      error
 	}{
@@ -203,43 +224,52 @@ func TestSealedItemFrom(t *testing.T) {
 		{
 			Name: "groups != nil",
 			MG: &MergedGroup{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
-
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*MergedGroup{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i5id,
-
+						SchemaGroup:   psiid1,
+						Original:      &i5id,
+						LinkedDataset: &d,
 						Fields: []*MergedField{
 							{
-								ID:    id.PropertyFieldID("a"),
+								ID:    FieldID("a"),
 								Value: ValueTypeString.ValueFrom("a"),
 								Type:  ValueTypeString,
 							},
 							{
-								ID:    id.PropertyFieldID("b"),
+								ID:    FieldID("b"),
 								Value: ValueTypeString.ValueFrom("b"),
+								Links: NewLinks([]*Link{NewLink(d, ds, df)}),
 								Type:  ValueTypeString,
 							},
 						},
 					},
 				},
 			},
+			DSGL: dataset.GraphLoaderFromMap(map[DatasetID]*dataset.Dataset{
+				d: dataset.New().Scene(sid).ID(d).Schema(ds).Fields([]*dataset.Field{
+					dataset.NewField(df, dataset.ValueTypeString.ValueFrom("bbb"), ""),
+				}).MustBuild(),
+			}),
 			Expected: &SealedItem{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i5id,
+						SchemaGroup:   psiid1,
+						Original:      &i5id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("a"),
 								),
 							},
@@ -247,6 +277,7 @@ func TestSealedItemFrom(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("b"),
 								),
 							},
@@ -259,43 +290,54 @@ func TestSealedItemFrom(t *testing.T) {
 		{
 			Name: "groups == nil",
 			MG: &MergedGroup{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*MergedGroup{
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*MergedField{
 							{
-								ID:    id.PropertyFieldID("a"),
+								ID:    FieldID("a"),
 								Value: ValueTypeString.ValueFrom("aaa"),
 								Type:  ValueTypeString,
 							},
 							{
-								ID:    id.PropertyFieldID("b"),
+								ID:    FieldID("b"),
 								Value: ValueTypeString.ValueFrom("aaa"),
+								Links: NewLinks([]*Link{NewLink(d, ds, df)}),
 								Type:  ValueTypeString,
 							},
 						},
 					},
 				},
 			},
+			DSGL: dataset.GraphLoaderFromMap(map[DatasetID]*dataset.Dataset{
+				d: dataset.New().Scene(sid).ID(d).Schema(ds).Fields([]*dataset.Field{
+					dataset.NewField(df, dataset.ValueTypeString.ValueFrom("bbb"), ""),
+				}).MustBuild(),
+			}),
 			Expected: &SealedItem{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*SealedItem{
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -303,6 +345,7 @@ func TestSealedItemFrom(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -318,7 +361,7 @@ func TestSealedItemFrom(t *testing.T) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			res, err := sealedItemFrom(context.Background(), tc.MG)
+			res, err := sealedItemFrom(context.Background(), tc.MG, tc.DSGL)
 			assert.Equal(t, tc.Expected, res)
 			assert.Nil(t, err)
 		})
@@ -338,23 +381,27 @@ func TestSealed_Interface(t *testing.T) {
 		{
 			Name: "get sealed interface",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -362,6 +409,7 @@ func TestSealed_Interface(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -370,15 +418,16 @@ func TestSealed_Interface(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
-
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -386,6 +435,7 @@ func TestSealed_Interface(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -423,7 +473,7 @@ func TestSealedItem_Match(t *testing.T) {
 	tests := []struct {
 		Name     string
 		SI       *SealedItem
-		Input    id.PropertyItemID
+		Input    ItemID
 		Expected bool
 	}{
 		{
@@ -432,18 +482,21 @@ func TestSealedItem_Match(t *testing.T) {
 		{
 			Name: "",
 			SI: &SealedItem{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i5id,
+						SchemaGroup:   psiid1,
+						Original:      &i5id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("a"),
 								),
 							},
@@ -451,6 +504,7 @@ func TestSealedItem_Match(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("b"),
 								),
 							},
@@ -487,23 +541,27 @@ func TestSealed_ItemBy(t *testing.T) {
 		{
 			Name: "get group",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -511,6 +569,7 @@ func TestSealed_ItemBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -519,14 +578,16 @@ func TestSealed_ItemBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("b"),
 								),
 							},
@@ -534,6 +595,7 @@ func TestSealed_ItemBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -541,20 +603,23 @@ func TestSealed_ItemBy(t *testing.T) {
 					},
 				},
 			},
-			Input: NewPointer(psiid1.Ref(), i1id.Ref(), id.PropertyFieldID("a").Ref()),
+			Input: NewPointer(psiid1.Ref(), i1id.Ref(), FieldID("a").Ref()),
 			Expected: &SealedItem{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i5id,
+						SchemaGroup:   psiid1,
+						Original:      &i5id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("a"),
 								),
 							},
@@ -562,6 +627,7 @@ func TestSealed_ItemBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("b"),
 								),
 							},
@@ -573,23 +639,27 @@ func TestSealed_ItemBy(t *testing.T) {
 		{
 			Name: "get item",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -597,6 +667,7 @@ func TestSealed_ItemBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -605,14 +676,16 @@ func TestSealed_ItemBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -620,6 +693,7 @@ func TestSealed_ItemBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -627,20 +701,23 @@ func TestSealed_ItemBy(t *testing.T) {
 					},
 				},
 			},
-			Input: NewPointer(nil, i1id.Ref(), id.PropertyFieldID("a").Ref()),
+			Input: NewPointer(nil, i1id.Ref(), FieldID("a").Ref()),
 			Expected: &SealedItem{
-				SchemaGroup: psiid1,
-				Original:    &i1id,
-				Parent:      &i2id,
+				SchemaGroup:   psiid1,
+				Original:      &i1id,
+				Parent:        &i2id,
+				LinkedDataset: &d,
 				Groups: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i5id,
+						SchemaGroup:   psiid1,
+						Original:      &i5id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("a"),
 								),
 							},
@@ -648,6 +725,7 @@ func TestSealed_ItemBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("b"),
 								),
 							},
@@ -659,23 +737,27 @@ func TestSealed_ItemBy(t *testing.T) {
 		{
 			Name: "nil ptr sg",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -683,6 +765,7 @@ func TestSealed_ItemBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -691,14 +774,16 @@ func TestSealed_ItemBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -706,6 +791,7 @@ func TestSealed_ItemBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -713,7 +799,7 @@ func TestSealed_ItemBy(t *testing.T) {
 					},
 				},
 			},
-			Input:    NewPointer(nil, nil, id.PropertyFieldID("a").Ref()),
+			Input:    NewPointer(nil, nil, FieldID("a").Ref()),
 			Expected: nil,
 		},
 	}
@@ -742,23 +828,27 @@ func TestSealed_FieldBy(t *testing.T) {
 		{
 			Name: "get group",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -766,6 +856,7 @@ func TestSealed_FieldBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -774,14 +865,16 @@ func TestSealed_FieldBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -789,6 +882,7 @@ func TestSealed_FieldBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -796,11 +890,12 @@ func TestSealed_FieldBy(t *testing.T) {
 					},
 				},
 			},
-			Input: NewPointer(psiid1.Ref(), i1id.Ref(), id.PropertyFieldID("a").Ref()),
+			Input: NewPointer(psiid1.Ref(), i1id.Ref(), FieldID("a").Ref()),
 			Expected: &SealedField{
 				ID: "a",
 				Val: NewValueAndDatasetValue(
 					ValueTypeString,
+					nil,
 					ValueTypeString.ValueFrom("aaa"),
 				),
 			},
@@ -808,23 +903,27 @@ func TestSealed_FieldBy(t *testing.T) {
 		{
 			Name: "get item",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("a"),
 										),
 									},
@@ -832,6 +931,7 @@ func TestSealed_FieldBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("b"),
 											ValueTypeString.ValueFrom("bbb"),
 										),
 									},
@@ -840,14 +940,16 @@ func TestSealed_FieldBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -855,6 +957,7 @@ func TestSealed_FieldBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -862,11 +965,12 @@ func TestSealed_FieldBy(t *testing.T) {
 					},
 				},
 			},
-			Input: NewPointer(nil, i3id.Ref(), id.PropertyFieldID("a").Ref()),
+			Input: NewPointer(nil, i3id.Ref(), FieldID("a").Ref()),
 			Expected: &SealedField{
 				ID: "a",
 				Val: NewValueAndDatasetValue(
 					ValueTypeString,
+					nil,
 					ValueTypeString.ValueFrom("aaa"),
 				),
 			},
@@ -874,23 +978,27 @@ func TestSealed_FieldBy(t *testing.T) {
 		{
 			Name: "nil ptr sg",
 			S: &Sealed{
-				Original: opid.Ref(),
-				Parent:   ppid.Ref(),
-				Schema:   psid,
+				Original:      opid.Ref(),
+				Parent:        ppid.Ref(),
+				Schema:        psid,
+				LinkedDataset: &d,
 				Items: []*SealedItem{
 					{
-						SchemaGroup: psiid1,
-						Original:    &i1id,
-						Parent:      &i2id,
+						SchemaGroup:   psiid1,
+						Original:      &i1id,
+						Parent:        &i2id,
+						LinkedDataset: &d,
 						Groups: []*SealedItem{
 							{
-								SchemaGroup: psiid1,
-								Original:    &i5id,
+								SchemaGroup:   psiid1,
+								Original:      &i5id,
+								LinkedDataset: &d,
 								Fields: []*SealedField{
 									{
 										ID: "a",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											nil,
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -898,6 +1006,7 @@ func TestSealed_FieldBy(t *testing.T) {
 										ID: "b",
 										Val: NewValueAndDatasetValue(
 											ValueTypeString,
+											dataset.ValueTypeString.ValueFrom("bbb"),
 											ValueTypeString.ValueFrom("b"),
 										),
 									},
@@ -906,14 +1015,16 @@ func TestSealed_FieldBy(t *testing.T) {
 						},
 					},
 					{
-						SchemaGroup: psiid2,
-						Original:    &i3id,
-						Parent:      &i4id,
+						SchemaGroup:   psiid2,
+						Original:      &i3id,
+						Parent:        &i4id,
+						LinkedDataset: &d,
 						Fields: []*SealedField{
 							{
 								ID: "a",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									nil,
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -921,6 +1032,7 @@ func TestSealed_FieldBy(t *testing.T) {
 								ID: "b",
 								Val: NewValueAndDatasetValue(
 									ValueTypeString,
+									dataset.ValueTypeString.ValueFrom("bbb"),
 									ValueTypeString.ValueFrom("aaa"),
 								),
 							},
@@ -928,11 +1040,12 @@ func TestSealed_FieldBy(t *testing.T) {
 					},
 				},
 			},
-			Input: NewPointer(nil, nil, id.PropertyFieldID("a").Ref()),
+			Input: NewPointer(nil, nil, FieldID("a").Ref()),
 			Expected: &SealedField{
 				ID: "a",
 				Val: NewValueAndDatasetValue(
 					ValueTypeString,
+					nil,
 					ValueTypeString.ValueFrom("aaa"),
 				),
 			},

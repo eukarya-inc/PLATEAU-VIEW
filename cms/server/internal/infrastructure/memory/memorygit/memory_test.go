@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/util"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"

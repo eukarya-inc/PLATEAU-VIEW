@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,19 +11,19 @@ func TestPlugin_Extension(t *testing.T) {
 	tests := []struct {
 		name     string
 		plugin   *Plugin
-		key      id.PluginExtensionID
+		key      ExtensionID
 		expected *Extension
 	}{
 		{
 			name:     "exiting extension",
 			key:      "yyy",
-			plugin:   New().ID(id.MustPluginID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").MustBuild(), NewExtension().ID("yyy").MustBuild()}).MustBuild(),
+			plugin:   New().ID(MustID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").MustBuild(), NewExtension().ID("yyy").MustBuild()}).MustBuild(),
 			expected: NewExtension().ID("yyy").MustBuild(),
 		},
 		{
 			name:     "not exiting extension",
 			key:      "zzz",
-			plugin:   New().ID(id.MustPluginID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").MustBuild(), NewExtension().ID("yyy").MustBuild()}).MustBuild(),
+			plugin:   New().ID(MustID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").MustBuild(), NewExtension().ID("yyy").MustBuild()}).MustBuild(),
 			expected: nil,
 		},
 		{
@@ -45,29 +44,29 @@ func TestPlugin_Extension(t *testing.T) {
 }
 
 func TestPlugin_PropertySchemas(t *testing.T) {
-	ps1 := id.MustPropertySchemaID("hoge~0.1.0/a")
-	ps2 := id.MustPropertySchemaID("hoge~0.1.0/b")
-	ps3 := id.MustPropertySchemaID("hoge~0.1.0/c")
+	ps1 := MustPropertySchemaID("hoge~0.1.0/a")
+	ps2 := MustPropertySchemaID("hoge~0.1.0/b")
+	ps3 := MustPropertySchemaID("hoge~0.1.0/c")
 
 	tests := []struct {
 		name     string
 		plugin   *Plugin
-		expected id.PropertySchemaIDList
+		expected PropertySchemaIDList
 	}{
 		{
 			name:     "normal",
-			plugin:   New().ID(id.MustPluginID("aaa~1.1.1")).Schema(&ps1).Extensions([]*Extension{NewExtension().ID("xxx").Schema(ps2).MustBuild(), NewExtension().ID("yyy").Schema(ps3).MustBuild()}).MustBuild(),
-			expected: id.PropertySchemaIDList{ps1, ps2, ps3},
+			plugin:   New().ID(MustID("aaa~1.1.1")).Schema(&ps1).Extensions([]*Extension{NewExtension().ID("xxx").Schema(ps2).MustBuild(), NewExtension().ID("yyy").Schema(ps3).MustBuild()}).MustBuild(),
+			expected: PropertySchemaIDList{ps1, ps2, ps3},
 		},
 		{
 			name:     "no plugin property schema",
-			plugin:   New().ID(id.MustPluginID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").Schema(ps2).MustBuild(), NewExtension().ID("yyy").Schema(ps3).MustBuild()}).MustBuild(),
-			expected: id.PropertySchemaIDList{ps2, ps3},
+			plugin:   New().ID(MustID("aaa~1.1.1")).Extensions([]*Extension{NewExtension().ID("xxx").Schema(ps2).MustBuild(), NewExtension().ID("yyy").Schema(ps3).MustBuild()}).MustBuild(),
+			expected: PropertySchemaIDList{ps2, ps3},
 		},
 		{
 			name:     "nil",
 			plugin:   nil,
-			expected: id.PropertySchemaIDList(nil),
+			expected: PropertySchemaIDList(nil),
 		},
 	}
 
@@ -81,12 +80,12 @@ func TestPlugin_PropertySchemas(t *testing.T) {
 }
 
 func TestPlugin_Author(t *testing.T) {
-	p := New().ID(id.MustPluginID("aaa~1.1.1")).Author("xx").MustBuild()
+	p := New().ID(MustID("aaa~1.1.1")).Author("xx").MustBuild()
 	assert.Equal(t, "xx", p.Author())
 }
 
 func TestPlugin_ID(t *testing.T) {
-	assert.Equal(t, New().ID(id.MustPluginID("xxx~1.1.1")).MustBuild().ID(), id.MustPluginID("xxx~1.1.1"))
+	assert.Equal(t, New().ID(MustID("xxx~1.1.1")).MustBuild().ID(), MustID("xxx~1.1.1"))
 }
 
 func TestPlugin_Clone(t *testing.T) {
@@ -97,22 +96,22 @@ func TestPlugin_Clone(t *testing.T) {
 		{
 			name: "ok",
 			target: &Plugin{
-				id:   id.MustPluginID("hoge~0.1.0"),
+				id:   MustID("hoge~0.1.0"),
 				name: i18n.StringFrom("hoge"),
-				extensions: map[id.PluginExtensionID]*Extension{
-					id.PluginExtensionID("foo"): {
-						id:            id.PluginExtensionID("foo"),
+				extensions: map[ExtensionID]*Extension{
+					ExtensionID("foo"): {
+						id:            ExtensionID("foo"),
 						extensionType: ExtensionTypeBlock,
-						schema:        id.MustPropertySchemaID("hoge~0.1.0/foo"),
+						schema:        MustPropertySchemaID("hoge~0.1.0/foo"),
 					},
-					id.PluginExtensionID("bar"): {
-						id:            id.PluginExtensionID("bar"),
+					ExtensionID("bar"): {
+						id:            ExtensionID("bar"),
 						extensionType: ExtensionTypePrimitive,
-						schema:        id.MustPropertySchemaID("hoge~0.1.0/bar"),
+						schema:        MustPropertySchemaID("hoge~0.1.0/bar"),
 					},
 				},
-				extensionOrder: []id.PluginExtensionID{"foo", "bar"},
-				schema:         id.MustPropertySchemaID("hoge~0.1.0/fff").Ref(),
+				extensionOrder: []ExtensionID{"foo", "bar"},
+				schema:         MustPropertySchemaID("hoge~0.1.0/fff").Ref(),
 			},
 		},
 		{

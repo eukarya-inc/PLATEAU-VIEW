@@ -3,11 +3,12 @@ package cmsintflow
 import (
 	"encoding/json"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/cmsintegration/cmsintegrationcommon"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 )
 
 type FlowRequest struct {
 	TriggerID       string
+	BaseURL         string // Optional: overrides client's base URL if set
 	NotificationURL string
 	AuthToken       string
 	CityGMLURL      string

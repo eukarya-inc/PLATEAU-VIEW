@@ -24,7 +24,7 @@ impl ProcessorFactory for RhaiCallerFactory {
     }
 
     fn description(&self) -> &str {
-        "Calls Rhai script"
+        "Executes Rhai script expressions to conditionally process and transform features"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -53,14 +53,12 @@ impl ProcessorFactory for RhaiCallerFactory {
         let params: RhaiCallerParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::RhaiCallerFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::RhaiCallerFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -73,10 +71,10 @@ impl ProcessorFactory for RhaiCallerFactory {
         let expr_engine = Arc::clone(&ctx.expr_engine);
         let is_target_ast = expr_engine
             .compile(params.is_target.into_inner().as_str())
-            .map_err(|e| FeatureProcessorError::RhaiCallerFactory(format!("{:?}", e)))?;
+            .map_err(|e| FeatureProcessorError::RhaiCallerFactory(format!("{e:?}")))?;
         let process_ast = expr_engine
             .compile(params.process.into_inner().as_str())
-            .map_err(|e| FeatureProcessorError::RhaiCallerFactory(format!("{:?}", e)))?;
+            .map_err(|e| FeatureProcessorError::RhaiCallerFactory(format!("{e:?}")))?;
         let process = RhaiCaller {
             global_params: with,
             is_target: is_target_ast,
@@ -93,12 +91,15 @@ struct RhaiCaller {
     process: rhai::AST,
 }
 
+/// # RhaiCaller Parameters
+///
+/// Configuration for executing Rhai scripts on features with conditional processing.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct RhaiCallerParam {
-    /// # Rhai script to determine if the feature is the target
+    /// Rhai script expression to determine if the feature should be processed (returns boolean)
     is_target: Expr,
-    /// # Rhai script to process the feature
+    /// Rhai script expression to process and transform the feature when target condition is met
     process: Expr,
 }
 
@@ -113,7 +114,7 @@ impl Processor for RhaiCaller {
         let scope = feature.new_scope(expr_engine.clone(), &self.global_params);
         let is_target = scope.eval_ast::<bool>(&self.is_target);
         if let Err(e) = is_target {
-            return Err(FeatureProcessorError::RhaiCaller(format!("{:?}", e)).into());
+            return Err(FeatureProcessorError::RhaiCaller(format!("{e:?}")).into());
         }
         if !is_target.unwrap() {
             fw.send(ctx.new_with_feature_and_port(feature.clone(), DEFAULT_PORT.clone()));
@@ -123,11 +124,11 @@ impl Processor for RhaiCaller {
         if let Ok(new_value) = new_value {
             if new_value.is::<rhai::Map>() {
                 if let Ok(AttributeValue::Map(new_value)) = new_value.try_into() {
-                    let mut feature = feature.clone();
-                    feature.attributes = new_value
+                    let attrs = new_value
                         .iter()
                         .map(|(k, v)| (Attribute::new(k.clone()), v.clone()))
                         .collect();
+                    let feature = feature.clone().into_with_attributes(attrs);
                     fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                     return Ok(());
                 }
@@ -135,12 +136,13 @@ impl Processor for RhaiCaller {
                 let array_values = new_value.clone().into_array().unwrap();
                 for new_value in array_values {
                     if let Ok(AttributeValue::Map(new_value)) = new_value.try_into() {
-                        let mut feature = feature.clone();
-                        feature.refresh_id();
-                        feature.attributes = new_value
+                        let attrs = new_value
                             .iter()
                             .map(|(k, v)| (Attribute::new(k.clone()), v.clone()))
                             .collect();
+                        let mut feature = feature.clone();
+                        feature.refresh_id();
+                        feature.attributes = Arc::new(attrs);
                         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                     }
                 }
@@ -151,7 +153,11 @@ impl Processor for RhaiCaller {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

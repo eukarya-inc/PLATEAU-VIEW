@@ -4,6 +4,7 @@ use reearth_flow_geometry::algorithm::centroid::Centroid;
 use reearth_flow_geometry::algorithm::normal_3d::compute_normal_3d_from_coords;
 use reearth_flow_geometry::algorithm::rotate::query::RotateQuery3D;
 use reearth_flow_geometry::algorithm::rotate::rotate_3d::Rotate3D;
+use reearth_flow_geometry::types::csg::CSGChild;
 use reearth_flow_geometry::types::geometry::Geometry3D;
 use reearth_flow_geometry::types::line_string::LineString3D;
 use reearth_flow_geometry::types::point::Point3D;
@@ -82,13 +83,13 @@ impl Processor for ThreeDimensionPlanarityRotator {
                     match rotated_geometry {
                         RotatedGeometry::Success(rotated_geometry) => {
                             let mut feature = feature.clone();
-                            feature.geometry.value =
+                            feature.geometry_mut().value =
                                 GeometryValue::FlowGeometry3D(rotated_geometry);
                             fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
                         }
                         RotatedGeometry::Failure(geometry) => {
                             let mut feature = feature.clone();
-                            feature.geometry.value = GeometryValue::FlowGeometry3D(geometry);
+                            feature.geometry_mut().value = GeometryValue::FlowGeometry3D(geometry);
                             fw.send(ctx.new_with_feature_and_port(feature, REJECTED_PORT.clone()));
                         }
                     }
@@ -101,7 +102,11 @@ impl Processor for ThreeDimensionPlanarityRotator {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -132,6 +137,7 @@ fn rotate_geometry(geometry: &Geometry3D<f64>) -> Vec<RotatedGeometry> {
         Geometry3D::Polygon(_) => vec![RotatedGeometry::from_original(geometry.clone())],
         Geometry3D::Rect(_) => vec![RotatedGeometry::from_original(geometry.clone())],
         Geometry3D::Triangle(_) => vec![RotatedGeometry::from_original(geometry.clone())],
+        Geometry3D::TriangularMesh(_) => vec![RotatedGeometry::from_original(geometry.clone())],
         Geometry3D::Solid(solid) => solid
             .all_faces()
             .iter()
@@ -159,6 +165,18 @@ fn rotate_geometry(geometry: &Geometry3D<f64>) -> Vec<RotatedGeometry> {
             .iter()
             .flat_map(rotate_geometry)
             .collect(),
+        Geometry3D::CSG(csg) => {
+            let mut left = match csg.left() {
+                CSGChild::CSG(csg) => rotate_geometry(&Geometry3D::CSG(csg.clone())),
+                CSGChild::Solid(solid) => rotate_geometry(&Geometry3D::Solid(solid.clone())),
+            };
+            let mut right = match csg.right() {
+                CSGChild::CSG(csg) => rotate_geometry(&Geometry3D::CSG(csg.clone())),
+                CSGChild::Solid(solid) => rotate_geometry(&Geometry3D::Solid(solid.clone())),
+            };
+            left.append(&mut right);
+            left
+        }
     }
 }
 
@@ -169,7 +187,6 @@ fn rotate_single_geometry(geometry: &Geometry3D<f64>) -> Option<Geometry3D<f64>>
         Geometry3D::Line(line) => vec![line.start, line.end],
         Geometry3D::LineString(line_string) => line_string.coords().cloned().collect(),
         Geometry3D::Polygon(polygon) => polygon.exterior().coords().cloned().collect(),
-        Geometry3D::Rect(rect) => rect.to_polygon().exterior().coords().cloned().collect(),
         Geometry3D::Triangle(triangle) => triangle
             .to_polygon()
             .exterior()
@@ -177,11 +194,7 @@ fn rotate_single_geometry(geometry: &Geometry3D<f64>) -> Option<Geometry3D<f64>>
             .cloned()
             .collect(),
         // other geometries has multiple surfaces
-        Geometry3D::Solid(_) => return None,
-        Geometry3D::MultiPoint(_) => return None,
-        Geometry3D::MultiPolygon(_) => return None,
-        Geometry3D::MultiLineString(_) => return None,
-        Geometry3D::GeometryCollection(_) => return None,
+        _ => return None,
     };
 
     let surface_points = surface_coords

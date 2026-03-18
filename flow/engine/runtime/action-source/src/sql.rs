@@ -24,7 +24,7 @@ impl SourceFactory for SqlReaderFactory {
     }
 
     fn description(&self) -> &str {
-        "Reads features from SQL"
+        "Read Features from SQL Database"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -48,15 +48,11 @@ impl SourceFactory for SqlReaderFactory {
     ) -> Result<Box<dyn Source>, BoxedError> {
         let param: SqlReaderParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
-                SourceError::SqlReaderFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
-                ))
+                SourceError::SqlReaderFactory(format!("Failed to serialize `with` parameter: {e}"))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 SourceError::SqlReaderFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -70,11 +66,16 @@ impl SourceFactory for SqlReaderFactory {
     }
 }
 
+/// # SQL Reader Parameters
+/// Configure the SQL query and database connection for reading features from a database
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SqlReaderParam {
+    /// # SQL Query
+    /// SQL query expression to execute for retrieving data
     pub(super) sql: Expr,
-    /// Database URL (e.g. `sqlite:///tests/sqlite/sqlite.db`, `mysql://user:password@localhost:3306/db`, `postgresql://user:password@localhost:5432/db`)
+    /// # Database URL
+    /// Database connection URL (e.g. `sqlite:///tests/sqlite/sqlite.db`, `mysql://user:password@localhost:3306/db`, `postgresql://user:password@localhost:5432/db`)
     pub(super) database_url: Expr,
 }
 
@@ -105,19 +106,20 @@ impl Source for SqlReader {
         let database_url = scope
             .eval::<String>(self.param.database_url.to_string().as_str())
             .map_err(|e| {
-                crate::errors::SourceError::SqlReader(format!("Failed to evaluate: {}", e))
+                crate::errors::SourceError::SqlReader(format!("Failed to evaluate: {e}"))
             })?;
         let sql = scope
             .eval::<String>(self.param.sql.to_string().as_str())
             .map_err(|e| {
-                crate::errors::SourceError::SqlReader(format!("Failed to evaluate: {}", e))
+                crate::errors::SourceError::SqlReader(format!("Failed to evaluate: {e}"))
             })?;
         let adapter = SqlAdapter::new(database_url, 10).await.map_err(|e| {
-            crate::errors::SourceError::SqlReader(format!("Failed to create adapter: {}", e))
+            crate::errors::SourceError::SqlReader(format!("Failed to create adapter: {e}"))
         })?;
-        let result = adapter.fetch_many(sql.as_str()).await.map_err(|e| {
-            crate::errors::SourceError::SqlReader(format!("Failed to fetch: {}", e))
-        })?;
+        let result = adapter
+            .fetch_many(sql.as_str())
+            .await
+            .map_err(|e| crate::errors::SourceError::SqlReader(format!("Failed to fetch: {e}")))?;
         let features = result
             .into_iter()
             .map(|row| row.try_into())

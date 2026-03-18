@@ -25,7 +25,7 @@ impl SourceFactory for FeatureCreatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Creates features from expressions"
+        "Generate Custom Features Using Scripts"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -50,14 +50,12 @@ impl SourceFactory for FeatureCreatorFactory {
         let processor: FeatureCreator = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 SourceError::FeatureCreatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 SourceError::FeatureCreatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -70,9 +68,13 @@ impl SourceFactory for FeatureCreatorFactory {
     }
 }
 
+/// # FeatureCreator Parameters
+/// Configure how to generate custom features using script expressions
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureCreator {
+    /// # Script Expression
+    /// Write a script expression that returns a map (single feature) or array of maps (multiple features). Each map represents feature attributes as key-value pairs.
     creator: Expr,
 }
 
@@ -98,7 +100,7 @@ impl Source for FeatureCreator {
         let new_value = scope
             .eval::<Dynamic>(self.creator.to_string().as_str())
             .map_err(|e| {
-                crate::errors::SourceError::FeatureCreator(format!("Failed to evaluate: {}", e))
+                crate::errors::SourceError::FeatureCreator(format!("Failed to evaluate: {e}"))
             })?;
         if new_value.is::<rhai::Map>() {
             if let Ok(AttributeValue::Map(new_value)) = new_value.try_into() {
@@ -113,7 +115,7 @@ impl Source for FeatureCreator {
                         IngestionMessage::OperationEvent { feature },
                     ))
                     .await
-                    .map_err(|e| crate::errors::SourceError::FeatureCreator(format!("{:?}", e)))?;
+                    .map_err(|e| crate::errors::SourceError::FeatureCreator(format!("{e:?}")))?;
             } else {
                 return Err(
                     SourceError::FeatureCreator("Failed to convert to map".to_string()).into(),
@@ -121,7 +123,7 @@ impl Source for FeatureCreator {
             }
         } else if new_value.is::<rhai::Array>() {
             let array_values = new_value.clone().into_array().map_err(|e| {
-                crate::errors::SourceError::FeatureCreator(format!("Failed to convert: {}", e))
+                crate::errors::SourceError::FeatureCreator(format!("Failed to convert: {e}"))
             })?;
             for new_value in array_values {
                 if let Ok(AttributeValue::Map(new_value)) = new_value.try_into() {
@@ -137,7 +139,7 @@ impl Source for FeatureCreator {
                         ))
                         .await
                         .map_err(|e| {
-                            crate::errors::SourceError::FeatureCreator(format!("{:?}", e))
+                            crate::errors::SourceError::FeatureCreator(format!("{e:?}"))
                         })?;
                 }
             }

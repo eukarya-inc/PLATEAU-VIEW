@@ -25,7 +25,7 @@ impl ProcessorFactory for AttributeMapperFactory {
     }
 
     fn description(&self) -> &str {
-        "Maps attributes"
+        "Transform Feature Attributes Using Expressions and Mappings"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -54,14 +54,12 @@ impl ProcessorFactory for AttributeMapperFactory {
         let params: AttributeMapperParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::MapperFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::MapperFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -77,7 +75,7 @@ impl ProcessorFactory for AttributeMapperFactory {
                 Some(
                     expr_engine
                         .compile(expr.as_ref())
-                        .map_err(|e| AttributeProcessorError::MapperFactory(format!("{:?}", e)))?,
+                        .map_err(|e| AttributeProcessorError::MapperFactory(format!("{e:?}")))?,
                 )
             } else {
                 None
@@ -86,7 +84,7 @@ impl ProcessorFactory for AttributeMapperFactory {
                 Some(
                     expr_engine
                         .compile(multiple_expr.as_ref())
-                        .map_err(|e| AttributeProcessorError::MapperFactory(format!("{:?}", e)))?,
+                        .map_err(|e| AttributeProcessorError::MapperFactory(format!("{e:?}")))?,
                 )
             } else {
                 None
@@ -109,10 +107,12 @@ impl ProcessorFactory for AttributeMapperFactory {
     }
 }
 
+/// # AttributeMapper Parameters
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeMapperParam {
-    /// # Mappers
+    /// # Attribute Mappers
+    /// List of mapping rules to transform attributes using expressions or value copying
     mappers: Vec<Mapper>,
 }
 
@@ -228,7 +228,11 @@ impl Processor for AttributeMapper {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

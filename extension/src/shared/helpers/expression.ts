@@ -6,7 +6,7 @@ export const string = (v: string) => {
 };
 
 export const color = (v: string, alpha: number) => {
-  return `color("${v}", ${alpha})`;
+  return v === "transparent" ? `"${v}"` : `color("${v}", ${alpha})`;
 };
 
 export const number = (v: number) => {

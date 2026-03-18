@@ -1,8 +1,0 @@
-{
-  "go.testEnvFile": "${workspaceFolder}/.env",
-  "go.lintTool": "golangci-lint",
-  "go.lintFlags": [
-    "--config=${workspaceFolder}/.golangci.yml"
-  ],
-  "go.useLanguageServer": true
-}

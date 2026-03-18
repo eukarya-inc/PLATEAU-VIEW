@@ -1,0 +1,71 @@
+query GetCmsProjectByIdOrAlias($projectIdOrAlias: ID!) {
+  cmsProject(projectIdOrAlias: $projectIdOrAlias) {
+    ...CmsProject
+  }
+}
+
+query GetCmsProjects(
+  $workspaceIds: [ID!]!
+  $keyword: String
+  $publicOnly: Boolean
+  $page: Int
+  $pageSize: Int
+) {
+  cmsProjects(
+    workspaceIds: $workspaceIds
+    keyword: $keyword
+    publicOnly: $publicOnly
+    page: $page
+    pageSize: $pageSize
+  ) {
+    ...CmsProject
+  }
+}
+
+query GetCmsModels($projectId: ID!, $page: Int, $pageSize: Int) {
+  cmsModels(projectId: $projectId, page: $page, pageSize: $pageSize) {
+    models {
+      ...CmsModel
+    }
+    totalCount
+  }
+}
+
+query GetCmsItems(
+  $projectId: ID!
+  $modelId: ID!
+  $keyword: String
+  $page: Int
+  $pageSize: Int
+) {
+  cmsItems(
+    projectId: $projectId
+    modelId: $modelId
+    keyword: $keyword
+    page: $page
+    pageSize: $pageSize
+  ) {
+    items {
+      ...CmsItem
+    }
+    totalCount
+  }
+}
+
+query GetCmsAsset($assetId: ID!) {
+  cmsAsset(assetId: $assetId) {
+    ...CmsAsset
+  }
+}
+
+query GetCmsModelExportUrl(
+  $projectId: ID!
+  $modelId: ID!
+  $exportType: CMSExportType!
+) {
+  cmsModelExportUrl(
+    projectId: $projectId
+    modelId: $modelId
+    exportType: $exportType
+  )
+}

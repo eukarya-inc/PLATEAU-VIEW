@@ -3,12 +3,12 @@ package item
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 
-	"github.com/reearth/reearth-cms/server/pkg/model"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/model"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
@@ -135,10 +135,14 @@ func (i *Item) UpdateFields(fields []*Field) {
 			if g == nil || f == nil {
 				return false
 			}
-			if g.group == nil || f.group == nil {
-				return g.FieldID() == f.FieldID()
+			if g.FieldID() != f.FieldID() {
+				return false
 			}
-			return g.FieldID() == f.FieldID() && *g.group == *f.group
+			// both must have the same group: both nil or both equal
+			if g.group == nil && f.group == nil {
+				return true
+			}
+			return g.group != nil && f.group != nil && *g.group == *f.group
 		})
 
 		if !found {

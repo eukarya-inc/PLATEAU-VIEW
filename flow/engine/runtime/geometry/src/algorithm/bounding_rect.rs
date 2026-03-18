@@ -4,6 +4,7 @@ use crate::{
         geometry_collection::GeometryCollection, line::Line, line_string::LineString,
         multi_line_string::MultiLineString, multi_point::MultiPoint, multi_polygon::MultiPolygon,
         point::Point, polygon::Polygon, rect::Rect, solid::Solid, triangle::Triangle,
+        triangular_mesh::TriangularMesh,
     },
     utils::{get_bounding_rect, line_string_bounding_rect},
 };
@@ -123,14 +124,20 @@ where
     type Output = Option<Rect<T, Z>>;
 
     fn bounding_rect(&self) -> Self::Output {
-        let mut coords = self
-            .top
-            .iter()
-            .flat_map(|line| line.0.iter().cloned())
-            .collect::<Vec<_>>();
-        coords.extend(self.sides.iter().flat_map(|line| line.0.iter().cloned()));
-        coords.extend(self.bottom.iter().flat_map(|line| line.0.iter().cloned()));
+        let coords = self.get_all_vertex_coordinates();
         get_bounding_rect(coords)
+    }
+}
+
+impl<T, Z> BoundingRect<T, Z> for TriangularMesh<T, Z>
+where
+    T: CoordNum,
+    Z: CoordNum,
+{
+    type Output = Option<Rect<T, Z>>;
+
+    fn bounding_rect(&self) -> Self::Output {
+        get_bounding_rect(self.get_vertices().iter().copied())
     }
 }
 

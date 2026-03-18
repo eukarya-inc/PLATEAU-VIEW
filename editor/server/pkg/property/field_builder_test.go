@@ -3,7 +3,6 @@ package property
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,10 +13,20 @@ func TestFieldBuilder_Value(t *testing.T) {
 	assert.Equal(t, v, b.Value())
 }
 
+func TestFieldBuilder_Link(t *testing.T) {
+	p := NewSchemaField().ID("A").Type(ValueTypeString).MustBuild()
+	l := NewLink(NewDatasetID(), NewDatasetSchemaID(), NewDatasetFieldID())
+	ls := NewLinks([]*Link{l})
+	b := FieldFrom(p).Links(ls).Build()
+	assert.Equal(t, ls, b.Links())
+}
+
 func TestFieldBuilder_Build(t *testing.T) {
+	l := NewLink(NewDatasetID(), NewDatasetSchemaID(), NewDatasetFieldID())
 
 	type args struct {
-		Field id.PropertyFieldID
+		Links *Links
+		Field FieldID
 		Value *OptionalValue
 	}
 
@@ -33,10 +42,12 @@ func TestFieldBuilder_Build(t *testing.T) {
 			Name: "success",
 			Args: args{
 				Field: "A",
+				Links: NewLinks([]*Link{l}),
 				Value: OptionalValueFrom(ValueTypeString.ValueFrom("vvv")),
 			},
 			Expected: &Field{
 				field: "A",
+				links: NewLinks([]*Link{l}),
 				v:     OptionalValueFrom(ValueTypeString.ValueFrom("vvv")),
 			},
 		},
@@ -48,6 +59,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			t.Parallel()
 			res := NewField(tt.Args.Field).
 				Value(tt.Args.Value).
+				Links(tt.Args.Links).
 				Build()
 			assert.Equal(t, tt.Expected, res)
 		})
@@ -55,9 +67,11 @@ func TestFieldBuilder_Build(t *testing.T) {
 }
 
 func TestFieldBuilder_MustBuild(t *testing.T) {
+	l := NewLink(NewDatasetID(), NewDatasetSchemaID(), NewDatasetFieldID())
 
 	type args struct {
-		Field id.PropertyFieldID
+		Links *Links
+		Field FieldID
 		Value *OptionalValue
 	}
 
@@ -73,10 +87,12 @@ func TestFieldBuilder_MustBuild(t *testing.T) {
 			Name: "success",
 			Args: args{
 				Field: "A",
+				Links: NewLinks([]*Link{l}),
 				Value: OptionalValueFrom(ValueTypeString.ValueFrom("vvv")),
 			},
 			Expected: &Field{
 				field: "A",
+				links: NewLinks([]*Link{l}),
 				v:     OptionalValueFrom(ValueTypeString.ValueFrom("vvv")),
 			},
 		},
@@ -90,6 +106,7 @@ func TestFieldBuilder_MustBuild(t *testing.T) {
 			build := func() *Field {
 				return NewField(tt.Args.Field).
 					Value(tt.Args.Value).
+					Links(tt.Args.Links).
 					MustBuild()
 			}
 

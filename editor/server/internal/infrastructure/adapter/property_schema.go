@@ -89,10 +89,3 @@ func (r *propertySchema) RemoveAll(ctx context.Context, p []id.PropertySchemaID)
 	}
 	return r.writer.RemoveAll(ctx, p)
 }
-
-func (r *propertySchema) RemoveByScene(ctx context.Context, sceneID id.SceneID) error {
-	if r.writer == nil {
-		return rerror.ErrInternalByWithContext(ctx, errors.New("writer is not set"))
-	}
-	return r.writer.RemoveByScene(ctx, sceneID)
-}

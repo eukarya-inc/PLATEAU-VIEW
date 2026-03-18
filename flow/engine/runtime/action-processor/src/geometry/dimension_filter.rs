@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
-use reearth_flow_geometry::types::traits::Elevation;
 use reearth_flow_runtime::{
     errors::BoxedError,
     event::EventHub,
@@ -24,7 +23,7 @@ impl ProcessorFactory for DimensionFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Filters the dimension of features"
+        "Filter Features by Geometry Dimension"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -111,7 +110,11 @@ impl Processor for DimensionFilter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

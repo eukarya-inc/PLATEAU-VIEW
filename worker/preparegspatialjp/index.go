@@ -26,7 +26,7 @@ type IndexItem struct {
 	Children []*IndexItem
 }
 
-func PrepareIndex(ctx context.Context, cw *CMSWrapper, seed *IndexSeed, featureTypes []string) (err error) {
+func PrepareIndex(ctx context.Context, cw *CMSWrapper, seed *IndexSeed, featureTypes []string, featureTypeNames map[string]string) (err error) {
 	defer func() {
 		if err == nil {
 			return
@@ -35,7 +35,7 @@ func PrepareIndex(ctx context.Context, cw *CMSWrapper, seed *IndexSeed, featureT
 		cw.Comment(ctx, err.Error())
 	}()
 
-	index, err := GenerateIndex(ctx, seed, featureTypes)
+	index, err := GenerateIndex(ctx, seed, featureTypes, featureTypeNames)
 	if err != nil {
 		return fmt.Errorf("目録の生成に失敗しました: %w", err)
 	}
@@ -51,7 +51,7 @@ func PrepareIndex(ctx context.Context, cw *CMSWrapper, seed *IndexSeed, featureT
 	return nil
 }
 
-func GenerateIndex(ctx context.Context, seed *IndexSeed, featureTypes []string) (string, error) {
+func GenerateIndex(ctx context.Context, seed *IndexSeed, featureTypes []string, featureTypeNames map[string]string) (string, error) {
 	citygmlFS, citygmlSize, citygmlFSCloser, err := openZip(seed.CityGMLZipPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open citygml zip: %w", err)
@@ -80,13 +80,13 @@ func GenerateIndex(ctx context.Context, seed *IndexSeed, featureTypes []string) 
 	}()
 
 	citygmlName := filepath.Base(seed.CityGMLZipPath)
-	citygml, err := generateCityGMLIndexItem(seed, citygmlName, citygmlSize, citygmlFS)
+	citygml, err := generateCityGMLIndexItem(seed, citygmlName, citygmlSize, citygmlFS, featureTypeNames)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate citygml index items: %w", err)
 	}
 
 	plateauName := filepath.Base(seed.PlateuaZipPath)
-	plateau, err := generatePlateauIndexItem(seed, plateauName, plateauSize, plateauFS, featureTypes)
+	plateau, err := generatePlateauIndexItem(seed, plateauName, plateauSize, plateauFS, featureTypes, featureTypeNames)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate plateau index items: %w", err)
 	}

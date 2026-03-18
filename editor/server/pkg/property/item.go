@@ -3,17 +3,22 @@ package property
 import (
 	"context"
 
-	"github.com/reearth/reearth/server/pkg/id"
+	"github.com/reearth/reearth/server/pkg/dataset"
 )
 
 type Item interface {
-	ID() id.PropertyItemID
-	IDRef() *id.PropertyItemID
-	SchemaGroup() id.PropertySchemaGroupID
-	SchemaGroupRef() *id.PropertySchemaGroupID
+	ID() ItemID
+	IDRef() *ItemID
+	SchemaGroup() SchemaGroupID
+	SchemaGroupRef() *SchemaGroupID
+	HasLinkedField() bool
+	Datasets() []DatasetID
+	FieldsByLinkedDataset(DatasetSchemaID, DatasetID) []*Field
+	IsDatasetLinked(DatasetSchemaID, DatasetID) bool
 	IsEmpty() bool
 	Prune() bool
-	MigrateSchema(context.Context, *Schema)
+	MigrateSchema(context.Context, *Schema, dataset.Loader)
+	MigrateDataset(DatasetMigrationParam)
 	ValidateSchema(*SchemaGroup) error
 	Fields(*Pointer) []*Field
 	RemoveFields(*Pointer) bool
@@ -23,8 +28,8 @@ type Item interface {
 }
 
 type itemBase struct {
-	ID          id.PropertyItemID
-	SchemaGroup id.PropertySchemaGroupID
+	ID          ItemID
+	SchemaGroup SchemaGroupID
 }
 
 func ToGroup(i Item) *Group {

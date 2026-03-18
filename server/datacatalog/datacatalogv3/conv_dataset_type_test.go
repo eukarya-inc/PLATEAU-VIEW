@@ -3,7 +3,7 @@ package datacatalogv3
 import (
 	"testing"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,22 +19,22 @@ func TestFeatureTypes_ToDatasetTypes(t *testing.T) {
 			ft: FeatureTypes{
 				Plateau: []FeatureType{
 					{
-						Code:         "code",
-						Name:         "name",
+						Code:         "bldg",
+						Name:         "建築物",
 						Flood:        true,
 						Order:        1,
 						MinSpecMajor: 1,
 					},
 					{
-						Code:         "code2",
-						Name:         "name2",
+						Code:         "tran",
+						Name:         "交通",
 						MinSpecMajor: 2,
 					},
 				},
 				Generic: []FeatureType{
 					{
-						Code:  "code3",
-						Name:  "name3",
+						Code:  "usecase",
+						Name:  "ユースケース",
 						Order: 2,
 					},
 				},
@@ -55,9 +55,9 @@ func TestFeatureTypes_ToDatasetTypes(t *testing.T) {
 				plateauapi.DatasetTypeCategoryPlateau: []plateauapi.DatasetType{
 					&plateauapi.PlateauDatasetType{
 						Category:      plateauapi.DatasetTypeCategoryPlateau,
-						ID:            "dt_code_1",
-						Name:          "name",
-						Code:          "code",
+						ID:            "dt_bldg_1",
+						Name:          "建築物",
+						Code:          "bldg",
 						Flood:         true,
 						PlateauSpecID: "id",
 						Year:          2021,
@@ -65,9 +65,9 @@ func TestFeatureTypes_ToDatasetTypes(t *testing.T) {
 					},
 					&plateauapi.PlateauDatasetType{
 						Category:      plateauapi.DatasetTypeCategoryPlateau,
-						ID:            "dt_code_2",
-						Name:          "name",
-						Code:          "code",
+						ID:            "dt_bldg_2",
+						Name:          "建築物",
+						Code:          "bldg",
 						Flood:         true,
 						PlateauSpecID: "id2",
 						Year:          2023,
@@ -75,9 +75,9 @@ func TestFeatureTypes_ToDatasetTypes(t *testing.T) {
 					},
 					&plateauapi.PlateauDatasetType{
 						Category:      plateauapi.DatasetTypeCategoryPlateau,
-						ID:            "dt_code2_2",
-						Name:          "name2",
-						Code:          "code2",
+						ID:            "dt_tran_2",
+						Name:          "交通",
+						Code:          "tran",
 						Flood:         false,
 						PlateauSpecID: "id2",
 						Year:          2023,
@@ -88,18 +88,69 @@ func TestFeatureTypes_ToDatasetTypes(t *testing.T) {
 				plateauapi.DatasetTypeCategoryGeneric: []plateauapi.DatasetType{
 					&plateauapi.GenericDatasetType{
 						Category: plateauapi.DatasetTypeCategoryGeneric,
-						ID:       "dt_code3",
-						Name:     "name3",
-						Code:     "code3",
+						ID:       "dt_usecase",
+						Name:     "ユースケース",
+						Code:     "usecase",
 						Order:    2,
 					},
 				},
 			},
 		},
+		{
+			name: "derived types are skipped",
+			ft: FeatureTypes{
+				Plateau: []FeatureType{
+					{
+						Code:         "bldg",
+						Name:         "建築物",
+						MinSpecMajor: 1,
+					},
+					{
+						Code:         "bldg2", // derived type should be skipped
+						Name:         "建築物2",
+						MinSpecMajor: 1,
+					},
+					{
+						Code:         "tran",
+						Name:         "交通",
+						MinSpecMajor: 1,
+					},
+				},
+			},
+			specs: []plateauapi.PlateauSpec{
+				{
+					ID:           "id",
+					MajorVersion: 1,
+					Year:         2021,
+				},
+			},
+			want: plateauapi.DatasetTypes{
+				plateauapi.DatasetTypeCategoryPlateau: []plateauapi.DatasetType{
+					&plateauapi.PlateauDatasetType{
+						Category:      plateauapi.DatasetTypeCategoryPlateau,
+						ID:            "dt_bldg_1",
+						Name:          "建築物",
+						Code:          "bldg",
+						PlateauSpecID: "id",
+						Year:          2021,
+					},
+					// bldg2 is not included (derived type)
+					&plateauapi.PlateauDatasetType{
+						Category:      plateauapi.DatasetTypeCategoryPlateau,
+						ID:            "dt_tran_1",
+						Name:          "交通",
+						Code:          "tran",
+						PlateauSpecID: "id",
+						Year:          2021,
+					},
+				},
+				plateauapi.DatasetTypeCategoryRelated: []plateauapi.DatasetType{},
+				plateauapi.DatasetTypeCategoryGeneric: []plateauapi.DatasetType{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.ft.ToDatasetTypes(tt.specs)
 			assert.Equal(t, tt.want, got)

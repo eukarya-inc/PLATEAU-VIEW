@@ -1,6 +1,5 @@
 import { Tabs } from "@reearth/beta/lib/reearth-ui";
 import { Area, Panel, Window } from "@reearth/beta/ui/layout";
-import { useT } from "@reearth/services/i18n";
 import { FC } from "react";
 
 import useHooks from "./hooks";
@@ -15,8 +14,6 @@ const PluginPlayground: FC = () => {
     ExtensionSettingsPanel
   } = useHooks();
 
-  const t = useT();
-
   return (
     <Window>
       <Area extend asWrapper>
@@ -29,13 +26,13 @@ const PluginPlayground: FC = () => {
             initialHeight={100}
             storageId="plugin-playground-bottom-area"
           >
-            <Panel noPadding alwaysOpen extend title={t("Layers")}>
+            <Panel noPadding alwaysOpen extend title="Layers">
               <LayersPanel />
             </Panel>
-            <Panel noPadding alwaysOpen extend title={t("Settings")}>
+            <Panel noPadding alwaysOpen extend title="Settings">
               <SettingsPanel />
             </Panel>
-            <Panel noPadding alwaysOpen extend title={t("Extension Settings")}>
+            <Panel noPadding alwaysOpen extend title="Extension Settings">
               <ExtensionSettingsPanel />
             </Panel>
           </Area>

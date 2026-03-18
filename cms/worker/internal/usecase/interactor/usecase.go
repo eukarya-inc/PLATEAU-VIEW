@@ -1,8 +1,8 @@
 package interactor
 
 import (
-	"github.com/reearth/reearth-cms/worker/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/worker/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/worker/internal/usecase/repo"
 )
 
 type Usecase struct {

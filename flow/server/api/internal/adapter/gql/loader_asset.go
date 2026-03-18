@@ -3,12 +3,12 @@ package gql
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqldataloader"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/asset"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/util"
 )
 
@@ -34,13 +34,13 @@ func (c *AssetLoader) Fetch(ctx context.Context, ids []gqlmodel.ID) ([]*gqlmodel
 	return util.Map(res, gqlmodel.ToAsset), nil
 }
 
-func (c *AssetLoader) FindByWorkspace(ctx context.Context, wsID gqlmodel.ID, keyword *string, sort *asset.SortType, pagination *gqlmodel.PageBasedPagination) (*gqlmodel.AssetConnection, error) {
-	tid, err := gqlmodel.ToID[accountdomain.Workspace](wsID)
+func (c *AssetLoader) FindByWorkspace(ctx context.Context, wID gqlmodel.ID, keyword *string, sort *asset.SortType, pagination *gqlmodel.PageBasedPagination) (*gqlmodel.AssetConnection, error) {
+	wid, err := gqlmodel.ToID[accountsid.Workspace](wID)
 	if err != nil {
 		return nil, err
 	}
 
-	assets, pi, err := c.usecase.FindByWorkspace(ctx, tid, keyword, sort, gqlmodel.ToPageBasedPagination(*pagination))
+	assets, pi, err := c.usecase.FindByWorkspace(ctx, wid, keyword, sort, gqlmodel.ToPageBasedPagination(*pagination))
 	if err != nil {
 		return nil, err
 	}

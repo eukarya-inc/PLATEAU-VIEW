@@ -7,8 +7,8 @@ import (
 )
 
 type NodeManager struct {
-	mu          sync.RWMutex
 	subscribers map[string][]chan *graph.NodeExecution
+	mu          sync.RWMutex
 }
 
 func NewNodeManager() *NodeManager {
@@ -54,6 +54,8 @@ func (m *NodeManager) Notify(key string, edges []*graph.NodeExecution) {
 			select {
 			case ch <- e:
 			default:
+				// Log dropped message or implement retry logic
+				// For now, we'll still drop but with larger buffer this should be rare
 			}
 		}
 	}

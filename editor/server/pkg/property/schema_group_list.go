@@ -1,7 +1,5 @@
 package property
 
-import "github.com/reearth/reearth/server/pkg/id"
-
 type SchemaGroupList struct {
 	groups []*SchemaGroup
 }
@@ -55,7 +53,7 @@ func (p *SchemaGroupList) GroupAndFields() []SchemaGroupAndField {
 	return fields
 }
 
-func (p *SchemaGroupList) Field(id id.PropertyFieldID) *SchemaField {
+func (p *SchemaGroupList) Field(id FieldID) *SchemaField {
 	if p == nil {
 		return nil
 	}
@@ -68,7 +66,7 @@ func (p *SchemaGroupList) Field(id id.PropertyFieldID) *SchemaField {
 	return nil
 }
 
-func (p *SchemaGroupList) Group(id id.PropertySchemaGroupID) *SchemaGroup {
+func (p *SchemaGroupList) Group(id SchemaGroupID) *SchemaGroup {
 	if p == nil {
 		return nil
 	}
@@ -81,7 +79,7 @@ func (p *SchemaGroupList) Group(id id.PropertySchemaGroupID) *SchemaGroup {
 	return nil
 }
 
-func (p *SchemaGroupList) GroupByField(id id.PropertyFieldID) *SchemaGroup {
+func (p *SchemaGroupList) GroupByField(id FieldID) *SchemaGroup {
 	if p == nil {
 		return nil
 	}
@@ -95,7 +93,7 @@ func (p *SchemaGroupList) GroupByField(id id.PropertyFieldID) *SchemaGroup {
 	return nil
 }
 
-func (p *SchemaGroupList) GroupAndField(f id.PropertyFieldID) *SchemaGroupAndField {
+func (p *SchemaGroupList) GroupAndField(f FieldID) *SchemaGroupAndField {
 	if p == nil {
 		return nil
 	}
@@ -107,13 +105,13 @@ func (p *SchemaGroupList) GroupAndField(f id.PropertyFieldID) *SchemaGroupAndFie
 	return nil
 }
 
-func (s *SchemaGroupList) duplicatedGroups() []id.PropertySchemaGroupID {
+func (s *SchemaGroupList) duplicatedGroups() []SchemaGroupID {
 	if s == nil {
 		return nil
 	}
 
-	var duplicated []id.PropertySchemaGroupID
-	ids := map[id.PropertySchemaGroupID]struct{}{}
+	var duplicated []SchemaGroupID
+	ids := map[SchemaGroupID]struct{}{}
 	for _, f := range s.Groups() {
 		i := f.ID()
 		if _, ok := ids[i]; ok {

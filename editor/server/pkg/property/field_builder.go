@@ -1,16 +1,12 @@
 package property
 
-import (
-	"fmt"
-
-	"github.com/reearth/reearth/server/pkg/id"
-)
+import "fmt"
 
 type FieldBuilder struct {
 	p *Field
 }
 
-func NewField(field id.PropertyFieldID) *FieldBuilder {
+func NewField(field FieldID) *FieldBuilder {
 	return &FieldBuilder{
 		p: &Field{
 			field: field,
@@ -45,7 +41,7 @@ func (b *FieldBuilder) MustBuild() *Field {
 	return f
 }
 
-func (b *FieldBuilder) Field(field id.PropertyFieldID) *FieldBuilder {
+func (b *FieldBuilder) Field(field FieldID) *FieldBuilder {
 	b.p.field = field
 	return b
 }
@@ -59,5 +55,10 @@ func (b *FieldBuilder) Type(t ValueType) *FieldBuilder {
 	if b.p.v.Type() != t {
 		b.p.v = NewOptionalValue(t, nil)
 	}
+	return b
+}
+
+func (b *FieldBuilder) Links(l *Links) *FieldBuilder {
+	b.p.links = l.Clone()
 	return b
 }

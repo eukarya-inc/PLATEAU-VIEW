@@ -3,9 +3,8 @@ package integrationapi
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/event"
-	"github.com/reearth/reearth-cms/server/pkg/operator"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/event"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/operator"
 )
 
 type Event struct {
@@ -38,16 +37,16 @@ type ProjectIdAlias struct {
 	Alias string `json:"alias"`
 }
 
-func NewEvent(e *event.Event[any], v string, urlResolver asset.URLResolver) (Event, error) {
-	return NewEventWith(e, nil, v, urlResolver)
+func NewEvent(e *event.Event[any], v string) (Event, error) {
+	return NewEventWith(e, nil, v)
 }
 
-func NewEventWith(e *event.Event[any], override any, v string, urlResolver asset.URLResolver) (Event, error) {
+func NewEventWith(e *event.Event[any], override any, v string) (Event, error) {
 	if override == nil {
 		override = e.Object()
 	}
 
-	d, err := New(override, v, urlResolver)
+	d, err := New(override, v)
 	if err != nil {
 		return Event{}, err
 	}

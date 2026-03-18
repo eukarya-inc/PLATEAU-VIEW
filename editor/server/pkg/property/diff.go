@@ -1,10 +1,8 @@
 package property
 
-import "github.com/reearth/reearth/server/pkg/id"
-
 type SchemaDiff struct {
-	From        id.PropertySchemaID
-	To          id.PropertySchemaID
+	From        SchemaID
+	To          SchemaID
 	Deleted     []SchemaDiffDeleted
 	Moved       []SchemaDiffMoved
 	TypeChanged []SchemaDiffTypeChanged
@@ -110,7 +108,7 @@ func (d *SchemaDiff) IsIDChanged() bool {
 
 type SchemaDiffList []SchemaDiff
 
-func (l SchemaDiffList) FindByFrom(from id.PropertySchemaID) *SchemaDiff {
+func (l SchemaDiffList) FindByFrom(from SchemaID) *SchemaDiff {
 	for _, d := range l {
 		if d.From.Equal(from) {
 			return &d
@@ -119,12 +117,12 @@ func (l SchemaDiffList) FindByFrom(from id.PropertySchemaID) *SchemaDiff {
 	return nil
 }
 
-func (l SchemaDiffList) FromSchemas() []id.PropertySchemaID {
+func (l SchemaDiffList) FromSchemas() []SchemaID {
 	if len(l) == 0 {
 		return nil
 	}
 
-	res := make([]id.PropertySchemaID, 0, len(l))
+	res := make([]SchemaID, 0, len(l))
 	for _, d := range l {
 		s := d.From
 		found := false

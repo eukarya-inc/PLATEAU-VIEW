@@ -1,5 +1,11 @@
 import type { ApiResponse } from "./api";
 
+export enum JobOrderBy {
+  CompletedAt = "completedAt",
+  StartedAt = "startedAt",
+  Status = "status",
+}
+
 export type NodeStatus =
   | "pending"
   | "starting"
@@ -32,7 +38,7 @@ export type Job = {
   startedAt: string;
   completedAt: string;
   outputURLs?: string[];
-  logsURL?: string;
+  userFacingLogsURL?: string;
 };
 
 export type CancelJob = {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/workspacesettings"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/workspacesettings"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/mongox/mongotest"
@@ -51,7 +51,7 @@ func TestWorkspaceSettingsRepo_FindByIDs(t *testing.T) {
 	got, err := r.FindByIDs(ctx, ids)
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
-	
+
 	ids2 := accountdomain.WorkspaceIDList{}
 	got2, err2 := r.FindByIDs(ctx, ids2)
 	assert.NoError(t, err2)
@@ -75,7 +75,7 @@ func TestWorkspaceSettingsRepo_Remove(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = r.FindByID(ctx, wid1)
 	assert.ErrorIs(t, err, rerror.ErrNotFound)
-	
+
 	err = r.Save(ctx, w2.Clone())
 	assert.ErrorIs(t, err, repo.ErrOperationDenied)
 	err = r.Remove(ctx, wid2)

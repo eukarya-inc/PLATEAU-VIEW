@@ -3,6 +3,7 @@ type User implements Node {
   host: String
   id: ID!
   name: String!
+  metadata: UserMetadata!
 }
 
 type Me {
@@ -13,7 +14,22 @@ type Me {
   myWorkspace: Workspace
   myWorkspaceId: ID!
   name: String!
+  # Kept for backward compatibility.
   workspaces: [Workspace!]!
+}
+
+enum Theme {
+  DEFAULT
+  LIGHT
+  DARK
+}
+
+type UserMetadata {
+  description: String
+  website: String
+  photoURL: String
+  theme: Theme!
+  lang: Lang!
 }
 
 # InputType
@@ -49,7 +65,6 @@ type UpdateMePayload {
 
 type SignupPayload {
   user: User!
-  workspace: Workspace!
 }
 
 type DeleteMePayload {

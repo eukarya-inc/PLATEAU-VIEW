@@ -1,4 +1,0 @@
-web:
-  - web/**/*
-server:
-  - server/**/*

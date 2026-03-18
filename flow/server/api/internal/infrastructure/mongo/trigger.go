@@ -3,12 +3,12 @@ package mongo
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/infrastructure/mongo/mongodoc"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/trigger"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/rerror"
 	"go.mongodb.org/mongo-driver/bson"
@@ -59,13 +59,20 @@ func (r *Trigger) FindByIDs(ctx context.Context, ids id.TriggerIDList) ([]*trigg
 	return filterTriggers(ids, res), nil
 }
 
-func (r *Trigger) FindByWorkspace(ctx context.Context, id accountdomain.WorkspaceID, pagination *interfaces.PaginationParam) ([]*trigger.Trigger, *interfaces.PageBasedInfo, error) {
+func (r *Trigger) FindByWorkspace(ctx context.Context, id accountsid.WorkspaceID, pagination *interfaces.PaginationParam, keyword *string) ([]*trigger.Trigger, *interfaces.PageBasedInfo, error) {
 	if !r.f.CanRead(id) {
 		return nil, interfaces.NewPageBasedInfo(0, 1, 1), nil
 	}
 
 	c := mongodoc.NewTriggerConsumer(r.f.Readable)
 	filter := bson.M{"workspaceid": id.String()}
+
+	if keyword != nil && *keyword != "" {
+		filter["$or"] = []bson.M{
+			{"description": bson.M{"$regex": *keyword, "$options": "i"}},
+			{"id": bson.M{"$regex": *keyword, "$options": "i"}},
+		}
+	}
 
 	if pagination != nil && pagination.Page != nil {
 		skip := int64((pagination.Page.Page - 1) * pagination.Page.PageSize)
@@ -114,6 +121,11 @@ func (r *Trigger) FindByWorkspace(ctx context.Context, id accountdomain.Workspac
 	return c.Result, interfaces.NewPageBasedInfo(total, 1, len(c.Result)), nil
 }
 
+func (r *Trigger) FindByDeployment(ctx context.Context, id id.DeploymentID) ([]*trigger.Trigger, error) {
+	filter := bson.M{"deploymentid": id.String()}
+	return r.find(ctx, filter)
+}
+
 func (r *Trigger) Save(ctx context.Context, trigger *trigger.Trigger) error {
 	if !r.f.CanWrite(trigger.Workspace()) {
 		return repo.ErrOperationDenied
@@ -123,7 +135,16 @@ func (r *Trigger) Save(ctx context.Context, trigger *trigger.Trigger) error {
 }
 
 func (r *Trigger) Remove(ctx context.Context, id id.TriggerID) error {
-	return r.client.RemoveOne(ctx, bson.M{"id": id.String()})
+	return r.client.RemoveOne(ctx, r.writeFilter(bson.M{
+		"id": id.String(),
+	}))
+}
+
+func (r *Trigger) writeFilter(filter any) any {
+	if r.f.Writable == nil {
+		return filter
+	}
+	return mongox.And(filter, "workspaceid", bson.M{"$in": r.f.Writable.Strings()})
 }
 
 func (r *Trigger) find(ctx context.Context, filter interface{}) ([]*trigger.Trigger, error) {
@@ -135,7 +156,7 @@ func (r *Trigger) find(ctx context.Context, filter interface{}) ([]*trigger.Trig
 }
 
 func (r *Trigger) findOne(ctx context.Context, filter any, filterByWorkspaces bool) (*trigger.Trigger, error) {
-	var f []accountdomain.WorkspaceID
+	var f []accountsid.WorkspaceID
 	if filterByWorkspaces {
 		f = r.f.Readable
 	}

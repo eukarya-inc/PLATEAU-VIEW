@@ -1,15 +1,21 @@
 package nlslayer
 
-import "github.com/reearth/reearth/server/pkg/id"
-
 type Feature struct {
-	id          id.FeatureID
+	id          FeatureID
 	featureType string
 	geometry    Geometry
 	properties  *map[string]any
 }
 
-func NewFeature(id id.FeatureID, featureType string, geometry Geometry) (*Feature, error) {
+func NewFeatureWithNewId(featureType string, geometry Geometry) (*Feature, error) {
+	return &Feature{
+		id:          NewFeatureID(),
+		featureType: featureType,
+		geometry:    geometry,
+	}, nil
+}
+
+func NewFeature(id FeatureID, featureType string, geometry Geometry) (*Feature, error) {
 	return &Feature{
 		id:          id,
 		featureType: featureType,
@@ -17,9 +23,9 @@ func NewFeature(id id.FeatureID, featureType string, geometry Geometry) (*Featur
 	}, nil
 }
 
-func (f *Feature) ID() id.FeatureID {
+func (f *Feature) ID() FeatureID {
 	if f == nil {
-		return id.FeatureID{}
+		return FeatureID{}
 	}
 	return f.id
 }

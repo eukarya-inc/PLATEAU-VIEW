@@ -27,7 +27,7 @@ impl ProcessorFactory for ClosedCurveFilterFactory {
     }
 
     fn description(&self) -> &str {
-        "Checks if curves form closed loops"
+        "Filter LineString Features by Closed/Open Status"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -93,7 +93,11 @@ impl Processor for ClosedCurveFilter {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

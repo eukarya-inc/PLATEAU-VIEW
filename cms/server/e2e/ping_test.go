@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
 )
 
 func TestPingAPI(t *testing.T) {

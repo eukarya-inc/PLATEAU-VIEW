@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 use once_cell::sync::Lazy;
 use reearth_flow_geometry::{
     algorithm::{GeoFloat, GeoNum},
-    types::geometry::Geometry as FlowGeometry,
+    types::{coordnum::CoordNum, geometry::Geometry as FlowGeometry},
     validation::*,
 };
 use reearth_flow_runtime::{
@@ -14,7 +14,7 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::GeometryValue;
+use reearth_flow_types::{geometry::CityGmlGeometry, GeometryValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,7 +34,7 @@ impl ProcessorFactory for GeometryValidatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Validates the geometry of a feature"
+        "Validate Feature Geometry Quality"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -66,14 +66,12 @@ impl ProcessorFactory for GeometryValidatorFactory {
         let processor: GeometryValidator = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::GeometryValidatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::GeometryValidatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -90,10 +88,16 @@ impl ProcessorFactory for GeometryValidatorFactory {
 pub enum ValidationType {
     #[serde(rename = "duplicatePoints")]
     DuplicatePoints,
+    #[serde(rename = "duplicateConsecutivePoints")]
+    DuplicateConsecutivePoints(f64),
+    /// Corrupt geometry check with optional tolerance for interior/exterior ring intersection.
     #[serde(rename = "corruptGeometry")]
-    CorruptGeometry,
+    CorruptGeometry(Option<f64>),
+    /// Self-intersection check with optional tolerance.
+    /// If tolerance is None or 0.0, exact intersection check is performed.
+    /// If tolerance > 0.0, intersections within tolerance distance are ignored.
     #[serde(rename = "selfIntersection")]
-    SelfIntersection,
+    SelfIntersection(Option<f64>),
 }
 
 impl From<ValidationType> for reearth_flow_geometry::validation::ValidationType {
@@ -102,11 +106,16 @@ impl From<ValidationType> for reearth_flow_geometry::validation::ValidationType 
             ValidationType::DuplicatePoints => {
                 reearth_flow_geometry::validation::ValidationType::DuplicatePoints
             }
-            ValidationType::CorruptGeometry => {
-                reearth_flow_geometry::validation::ValidationType::CorruptGeometry
+            ValidationType::DuplicateConsecutivePoints(tolerance) => {
+                reearth_flow_geometry::validation::ValidationType::DuplicateConsecutivePoints(
+                    tolerance,
+                )
             }
-            ValidationType::SelfIntersection => {
-                reearth_flow_geometry::validation::ValidationType::SelfIntersection
+            ValidationType::CorruptGeometry(tolerance) => {
+                reearth_flow_geometry::validation::ValidationType::CorruptGeometry(tolerance)
+            }
+            ValidationType::SelfIntersection(tolerance) => {
+                reearth_flow_geometry::validation::ValidationType::SelfIntersection(tolerance)
             }
         }
     }
@@ -145,9 +154,13 @@ impl From<ValidationProblemReport> for ValidationResult {
     }
 }
 
+/// # Geometry Validator Parameters
+/// Configure which validation checks to perform on feature geometries
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GeometryValidator {
+    /// # Validation Types
+    /// List of validation checks to perform on the geometry (duplicate points, corrupt geometry, self-intersection)
     validation_types: Vec<ValidationType>,
 }
 
@@ -178,40 +191,17 @@ impl Processor for GeometryValidator {
                 self.process_flow_geometry(&ctx, fw, geometry)?;
             }
             GeometryValue::CityGmlGeometry(gml_geometry) => {
-                let result = gml_geometry
-                    .gml_geometries
-                    .iter()
-                    .flat_map(|feature| {
-                        feature.polygons.iter().map(|polygon| {
-                            let mut result = Vec::new();
-                            for validation_type in &self.validation_types {
-                                if let Some(report) =
-                                    polygon.validate(validation_type.clone().into())
-                                {
-                                    result.push(ValidationResult::from(report));
-                                }
-                            }
-                            result
-                        })
-                    })
-                    .flatten()
-                    .collect::<Vec<ValidationResult>>();
-                if result.is_empty() {
-                    fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
-                } else {
-                    let mut feature = feature.clone();
-                    feature.insert(
-                        "validationResult",
-                        serde_json::to_value(ValidationResult::merge(result))?.into(),
-                    );
-                    fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
-                }
+                self.process_citygml_geometry(&ctx, fw, gml_geometry)?;
             }
         }
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 
@@ -221,9 +211,44 @@ impl Processor for GeometryValidator {
 }
 
 impl GeometryValidator {
+    fn process_citygml_geometry(
+        &self,
+        ctx: &ExecutorContext,
+        fw: &ProcessorChannelForwarder,
+        gml_geometry: &CityGmlGeometry,
+    ) -> Result<(), BoxedError> {
+        let feature = &ctx.feature;
+        let result = gml_geometry
+            .gml_geometries
+            .iter()
+            .flat_map(|gml_feature| {
+                gml_feature.polygons.iter().map(|polygon| {
+                    let mut result = Vec::new();
+                    for validation_type in &self.validation_types {
+                        if let Some(report) = polygon.validate(validation_type.clone().into()) {
+                            result.push(ValidationResult::from(report));
+                        }
+                    }
+                    result
+                })
+            })
+            .flatten()
+            .collect::<Vec<ValidationResult>>();
+
+        if result.is_empty() {
+            fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
+        } else {
+            let merged = ValidationResult::merge(result);
+            let mut feature = feature.clone();
+            feature.insert("validationResult", serde_json::to_value(merged)?.into());
+            fw.send(ctx.new_with_feature_and_port(feature, FAILED_PORT.clone()));
+        }
+        Ok(())
+    }
+
     fn process_flow_geometry<
-        T: GeoNum + approx::AbsDiffEq<Epsilon = f64> + FromPrimitive + GeoFloat,
-        Z: GeoNum + approx::AbsDiffEq<Epsilon = f64> + FromPrimitive + GeoFloat,
+        T: GeoNum + approx::AbsDiffEq<Epsilon = f64> + FromPrimitive + GeoFloat + From<Z>,
+        Z: CoordNum + GeoNum + approx::AbsDiffEq<Epsilon = f64> + FromPrimitive + GeoFloat,
     >(
         &self,
         ctx: &ExecutorContext,
@@ -232,11 +257,13 @@ impl GeometryValidator {
     ) -> Result<(), BoxedError> {
         let feature = &ctx.feature;
         let mut result = Vec::new();
+
         for validation_type in &self.validation_types {
             if let Some(report) = geometry.validate(validation_type.clone().into()) {
                 result.push(ValidationResult::from(report));
             }
         }
+
         if result.is_empty() {
             fw.send(ctx.new_with_feature_and_port(feature.clone(), SUCCESS_PORT.clone()));
         } else {

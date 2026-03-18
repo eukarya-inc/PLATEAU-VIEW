@@ -3,13 +3,16 @@ package mongodoc
 import (
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/project"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"golang.org/x/exp/slices"
 )
 
 type ProjectDocument struct {
+	PublishedAt time.Time
+	UpdatedAt   time.Time
+
 	// Core Identity
 	ID        string
 	Alias     string
@@ -20,32 +23,31 @@ type ProjectDocument struct {
 	// Authentication
 	BasicAuthPassword string
 	BasicAuthUsername string
-	IsBasicAuthActive bool
 
 	// Content
 	Description string
 	ImageURL    string
 
-	// Metadata
-	Archived    bool
-	PublishedAt time.Time
-	UpdatedAt   time.Time
-
 	// Public Visibility Configuration
 	PublicDescription string
 	PublicImage       string
-	PublicNoIndex     bool
 	PublicTitle       string
 	SharedToken       string
 
+	TrackingID        string
+	IsBasicAuthActive bool
+
+	// Metadata
+	Archived      bool
+	PublicNoIndex bool
+
 	// Analytics
-	EnableGA   bool
-	TrackingID string
+	EnableGA bool
 }
 
 type ProjectConsumer = Consumer[*ProjectDocument, *project.Project]
 
-func NewProjectConsumer(workspaces []accountdomain.WorkspaceID) *ProjectConsumer {
+func NewProjectConsumer(workspaces []accountsid.WorkspaceID) *ProjectConsumer {
 	return NewConsumer[*ProjectDocument](func(a *project.Project) bool {
 		return workspaces == nil || slices.Contains(workspaces, a.Workspace())
 	})
@@ -80,7 +82,7 @@ func (d *ProjectDocument) Model() (*project.Project, error) {
 		return nil, err
 	}
 
-	tid, err := accountdomain.WorkspaceIDFrom(d.Workspace)
+	tid, err := accountsid.WorkspaceIDFrom(d.Workspace)
 	if err != nil {
 		return nil, err
 	}

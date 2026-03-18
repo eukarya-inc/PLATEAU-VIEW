@@ -21,11 +21,9 @@ pub(crate) static BUILTIN_ACTION_FACTORIES: Lazy<HashMap<String, NodeKind>> = La
     let sink = SINK_MAPPINGS.clone();
     let source = SOURCE_MAPPINGS.clone();
     let processor = PROCESSOR_MAPPINGS.clone();
-    let wasm = reearth_flow_action_wasm_processor::mapping::ACTION_FACTORY_MAPPINGS.clone();
     common.extend(sink);
     common.extend(source);
     common.extend(processor);
-    common.extend(wasm);
     common
 });
 
@@ -44,23 +42,26 @@ pub(crate) fn execute(test_id: &str, fixture_files: Vec<&str>) -> Result<TempDir
         .resolve(&Uri::for_test("ram:///fixture/"))
         .unwrap();
     for fixture in fixture_files {
-        let file = Fixtures::get(format!("{}/{}", test_id, fixture).as_str())
+        let file = Fixtures::get(format!("{test_id}/{fixture}").as_str())
             .unwrap()
             .data
             .to_vec();
         storage
             .put_sync(
-                PathBuf::from(format!("/fixture/testdata/{}/{}", test_id, fixture)).as_path(),
+                PathBuf::from(format!("/fixture/testdata/{test_id}/{fixture}")).as_path(),
                 bytes::Bytes::from(file),
             )
             .unwrap();
     }
-    let workflow_file = WorkflowFiles::get(format!("{}.yaml", test_id).as_str()).unwrap();
+    let workflow_file = WorkflowFiles::get(format!("{test_id}.yaml").as_str()).unwrap();
     let workflow = std::str::from_utf8(workflow_file.data.as_ref()).unwrap();
     let binding = tempdir().unwrap();
     let folder_path = binding.path();
     std::fs::create_dir_all(folder_path).unwrap();
-    let state = Arc::new(State::new(&Uri::for_test("ram:///state/"), &storage_resolver).unwrap());
+    let ingress_state =
+        Arc::new(State::new(&Uri::for_test("ram:///ingress/"), &storage_resolver).unwrap());
+    let feature_state =
+        Arc::new(State::new(&Uri::for_test("ram:///state/"), &storage_resolver).unwrap());
     let logger_factory = Arc::new(LoggerFactory::new(
         reearth_flow_action_log::ActionLogger::root(
             reearth_flow_action_log::Discard,
@@ -69,15 +70,42 @@ pub(crate) fn execute(test_id: &str, fixture_files: Vec<&str>) -> Result<TempDir
         Uri::for_test("ram:///log/").path(),
     ));
     let mut workflow = Workflow::try_from(workflow).expect("failed to parse workflow");
+    let folder_str = folder_path.to_str().unwrap();
     workflow
-        .merge_with(HashMap::from([(
-            "outputFilePath".to_string(),
-            folder_path
-                .join("result.json")
-                .to_str()
-                .unwrap()
-                .to_string(),
-        )]))
+        .merge_with(HashMap::from([
+            (
+                "outputFilePath".to_string(),
+                format!(
+                    "file://{}",
+                    folder_path.join("result.json").to_str().unwrap()
+                ),
+            ),
+            ("outputDir".to_string(), folder_str.to_string()),
+            (
+                "joinedOutputPath".to_string(),
+                format!(
+                    "file://{}",
+                    folder_path.join("joined.json").to_str().unwrap()
+                ),
+            ),
+            (
+                "unjoinedRequestorOutputPath".to_string(),
+                format!(
+                    "file://{}",
+                    folder_path
+                        .join("unjoined_requestor.json")
+                        .to_str()
+                        .unwrap()
+                ),
+            ),
+            (
+                "unjoinedSupplierOutputPath".to_string(),
+                format!(
+                    "file://{}",
+                    folder_path.join("unjoined_supplier.json").to_str().unwrap()
+                ),
+            ),
+        ]))
         .unwrap();
     Runner::run(
         uuid::Uuid::new_v4(),
@@ -85,7 +113,9 @@ pub(crate) fn execute(test_id: &str, fixture_files: Vec<&str>) -> Result<TempDir
         BUILTIN_ACTION_FACTORIES.clone(),
         logger_factory,
         storage_resolver,
-        state,
+        ingress_state,
+        feature_state,
+        None,
     )
     .unwrap();
     Ok(binding)
@@ -94,7 +124,7 @@ pub(crate) fn execute(test_id: &str, fixture_files: Vec<&str>) -> Result<TempDir
 pub(crate) fn execute_with_test_assert(test_id: &str, assert_file: &str) {
     let tempdir = execute(test_id, vec![]).unwrap();
     let storage_resolver = Arc::new(StorageResolver::new());
-    let file = Fixtures::get(format!("{}/{}", test_id, assert_file).as_str())
+    let file = Fixtures::get(format!("{test_id}/{assert_file}").as_str())
         .unwrap()
         .data
         .to_vec();

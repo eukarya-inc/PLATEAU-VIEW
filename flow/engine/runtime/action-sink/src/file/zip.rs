@@ -55,14 +55,12 @@ impl SinkFactory for ZipFileWriterFactory {
         let params: ZipFileWriterParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 SinkError::ZipFileWriterFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 SinkError::ZipFileWriterFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -86,6 +84,9 @@ struct ZipFileWriter {
     buffer: Vec<Uri>,
 }
 
+/// # ZipFileWriter Parameters
+///
+/// Configuration for creating ZIP archive files from features.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct ZipFileWriterParam {
@@ -100,7 +101,7 @@ impl Sink for ZipFileWriter {
 
     fn process(&mut self, ctx: ExecutorContext) -> Result<(), BoxedError> {
         let feature = &ctx.feature;
-        let Some(AttributeValue::String(file_path)) = feature.get(&"filePath") else {
+        let Some(AttributeValue::String(file_path)) = feature.get("filePath") else {
             return Ok(());
         };
         let file_path = Uri::from_str(file_path.as_str())?;
@@ -120,7 +121,7 @@ impl Sink for ZipFileWriter {
             .unwrap_or_else(|_| output.as_ref().to_string());
         let output = Uri::from_str(path.as_str())?;
         let temp_dir_path = dir::project_temp_dir(uuid::Uuid::new_v4().to_string().as_str())?;
-        dir::move_files(&temp_dir_path, &self.buffer)?;
+        dir::move_files_with_structure(&temp_dir_path, &self.buffer)?;
         let buffer = Vec::new();
         let mut cursor = Cursor::new(buffer);
         let writer = BufWriter::new(&mut cursor);
@@ -128,8 +129,7 @@ impl Sink for ZipFileWriter {
             .map_err(|e| crate::errors::SinkError::ZipFileWriter(e.to_string()))?;
         let storage = storage_resolver.resolve(&output).map_err(|e| {
             crate::errors::SinkError::ZipFileWriter(format!(
-                "Failed to resolve storage for {}: {}",
-                output, e
+                "Failed to resolve storage for {output}: {e}"
             ))
         })?;
         storage.put_sync(

@@ -9,13 +9,14 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/reearth/reearth-flow/api/internal/adapter"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interactor"
 	"github.com/reearth/reearthx/appx"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
-	"github.com/samber/lo"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+
+	_ "github.com/reearth/reearth-flow/api/internal/app/docs" // swagger docs
 )
 
 func initEcho(ctx context.Context, cfg *ServerConfig) *echo.Echo {
@@ -57,7 +58,13 @@ func initEcho(ctx context.Context, cfg *ServerConfig) *echo.Echo {
 	authConfig := cfg.Config.JWTProviders()
 
 	log.Infof("auth: config: %#v", authConfig)
-	authMiddleware := echo.WrapMiddleware(lo.Must(appx.AuthMiddleware(authConfig, adapter.ContextAuthInfo, true)))
+	skipOps := map[string]struct{}{
+		"Signup": {},
+	}
+	authMiddleware := newAuthMiddlewares(&authMiddlewaresParam{
+		Cfg:     cfg,
+		SkipOps: skipOps,
+	})
 
 	// enable pprof
 	if e.Debug {
@@ -76,31 +83,32 @@ func initEcho(ctx context.Context, cfg *ServerConfig) *echo.Echo {
 			playground.Handler("reearth-flow", "/api/graphql"),
 		))
 		log.Infofc(ctx, "gql: GraphQL Playground is available")
+
+		// Swagger UI
+		e.GET("/swagger/*", echoSwagger.WrapHandler)
+		log.Infofc(ctx, "swagger: Swagger UI is available at /swagger/index.html")
 	}
 
-	e.Use(UsecaseMiddleware(cfg.Repos, cfg.Gateways, cfg.AccountRepos, cfg.AccountGateways, cfg.PermissionChecker, interactor.ContainerConfig{
-		SignupSecret:        cfg.Config.SignupSecret,
-		AuthSrvUIDomain:     cfg.Config.Host_Web,
-		Host:                cfg.Config.Host,
-		SharedPath:          cfg.Config.SharedPath,
-		SkipPermissionCheck: cfg.Config.SkipPermissionCheck,
+	sharedJob := interactor.NewJob(cfg.Repos, cfg.Gateways, cfg.PermissionChecker)
+	e.Use(UsecaseMiddleware(cfg.Repos, cfg.Gateways, cfg.PermissionChecker, cfg.AccountGQLClient, sharedJob, interactor.ContainerConfig{
+		SignupSecret:             cfg.Config.SignupSecret,
+		AuthSrvUIDomain:          cfg.Config.Host_Web,
+		Host:                     cfg.Config.Host,
+		SharedPath:               cfg.Config.SharedPath,
+		WebsocketThriftServerURL: cfg.Config.WebsocketThriftServerURL,
+		SkipPermissionCheck:      cfg.Config.SkipPermissionCheck,
 	}))
-
-	// auth srv
-	authServer(ctx, e, &cfg.Config.AuthSrv, cfg.Repos)
 
 	// apis
 	api := e.Group("/api")
 	api.GET("/ping", Ping(), privateCache)
+	api.GET("/health", cfg.HealthChecker.Handler(), privateCache)
 
 	// authenticated routes
 	apiPrivate := api.Group("", privateCache)
-	apiPrivate.Use(authMiddleware, attachOpMiddleware(cfg))
-	apiPrivate.POST("/graphql", GraphqlAPI(cfg.Config.GraphQL, gqldev, origins))
+	apiPrivate.Use(authMiddleware...)
 	apiPrivate.POST("/signup", Signup())
-
 	apiPrivate.Any("/graphql", GraphqlAPI(cfg.Config.GraphQL, gqldev, origins))
-	apiPrivate.POST("/signup", Signup())
 
 	if !cfg.Config.AuthSrv.Disabled {
 		apiPrivate.POST("/signup/verify", StartSignupVerify())
@@ -113,6 +121,7 @@ func initEcho(ctx context.Context, cfg *ServerConfig) *echo.Echo {
 	SetupActionRoutes(e)
 
 	SetupTriggerRoutes(e)
+	SetupJobRoutes(e)
 
 	serveFiles(e, cfg.Gateways.File)
 

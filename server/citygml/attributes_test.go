@@ -23,7 +23,7 @@ var expected = []map[string]any{
 	{
 		"bldg:measuredHeight":     14.3,
 		"bldg:measuredHeight_uom": "m",
-		"feature_type":            "bldg:Building",
+		"_type":                   "bldg:Building",
 		"gen:genericAttribute": []any{
 			map[string]any{
 				"name":  "風致地区",
@@ -32,6 +32,23 @@ var expected = []map[string]any{
 			},
 		},
 		"gml:id": "bldg_53e2a9a9-d512-408f-8250-eae30b7523d6",
+		"_bbox": map[string]any{
+			"min": map[string]any{
+				"lng": 138.34934122825845,
+				"lat": 34.90269767870549,
+				"alt": 41.50933,
+			},
+			"max": map[string]any{
+				"lng": 138.34950922380963,
+				"lat": 34.90286222767453,
+				"alt": 54.99001,
+			},
+			"center": map[string]any{
+				"lng": 138.34942522603404,
+				"lat": 34.90277995319001,
+				"alt": 48.249669999999995,
+			},
+		},
 		"uro:buildingDataQualityAttribute": []any{map[string]any{
 			"uro:srcScale_code":       []any{"1"},
 			"uro:lod1HeightType_code": "2",
@@ -55,7 +72,11 @@ var expected = []map[string]any{
 func TestAttributes(t *testing.T) {
 	citygml, err := os.Open("testdata/" + testdata)
 	require.NoError(t, err)
-	defer citygml.Close()
+	defer func() {
+		if err := citygml.Close(); err != nil {
+			t.Logf("failed to close citygml: %v", err)
+		}
+	}()
 
 	attrs, err := Attributes(citygml, ids, nil)
 	require.NoError(t, err)
@@ -93,7 +114,7 @@ func TestAttributesHandlerCodeOnly(t *testing.T) {
 	assert.NoError(t, attributeHandler("")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json; charset=UTF-8", rec.Header().Get(echo.HeaderContentType))
+	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))
 
 	var j []map[string]any
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &j))
@@ -140,7 +161,7 @@ func TestAttributesHandler(t *testing.T) {
 	assert.NoError(t, attributeHandler("")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json; charset=UTF-8", rec.Header().Get(echo.HeaderContentType))
+	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))
 
 	var j []map[string]any
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &j))
@@ -149,7 +170,7 @@ func TestAttributesHandler(t *testing.T) {
 		{
 			"bldg:measuredHeight":     14.3,
 			"bldg:measuredHeight_uom": "m",
-			"feature_type":            "bldg:Building",
+			"_type":                   "bldg:Building",
 			"gen:genericAttribute": []any{
 				map[string]any{
 					"name":  "風致地区",
@@ -158,6 +179,23 @@ func TestAttributesHandler(t *testing.T) {
 				},
 			},
 			"gml:id": "bldg_53e2a9a9-d512-408f-8250-eae30b7523d6",
+			"_bbox": map[string]any{
+				"min": map[string]any{
+					"lng": 138.34934122825845,
+					"lat": 34.90269767870549,
+					"alt": 41.50933,
+				},
+				"max": map[string]any{
+					"lng": 138.34950922380963,
+					"lat": 34.90286222767453,
+					"alt": 54.99001,
+				},
+				"center": map[string]any{
+					"lng": 138.34942522603404,
+					"lat": 34.90277995319001,
+					"alt": 48.249669999999995,
+				},
+			},
 			"uro:buildingDataQualityAttribute": []any{map[string]any{
 				"uro:srcScale":            []any{"地図情報レベル2500"},
 				"uro:srcScale_code":       []any{"1"},

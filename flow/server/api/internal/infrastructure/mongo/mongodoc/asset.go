@@ -3,25 +3,34 @@ package mongodoc
 import (
 	"time"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/pkg/asset"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"golang.org/x/exp/slices"
 )
 
 type AssetDocument struct {
-	ID          string
-	CreatedAt   time.Time
-	Workspace   string
-	Name        string
-	Size        int64
-	URL         string
-	ContentType string
+	CreatedAt               time.Time
+	Project                 *string // Made optional for workspace-based assets
+	User                    *string
+	Integration             *string
+	Thread                  *string
+	ArchiveExtractionStatus *string
+	ID                      string
+	Workspace               string
+	FileName                string
+	Name                    string
+	URL                     string
+	ContentType             string
+	UUID                    string
+	Size                    uint64
+	FlatFiles               bool
+	Public                  bool
 }
 
 type AssetConsumer = Consumer[*AssetDocument, *asset.Asset]
 
-func NewAssetConsumer(workspaces []accountdomain.WorkspaceID) *AssetConsumer {
+func NewAssetConsumer(workspaces []accountsid.WorkspaceID) *AssetConsumer {
 	return NewConsumer[*AssetDocument, *asset.Asset](func(a *asset.Asset) bool {
 		return workspaces == nil || slices.Contains(workspaces, a.Workspace())
 	})
@@ -29,15 +38,47 @@ func NewAssetConsumer(workspaces []accountdomain.WorkspaceID) *AssetConsumer {
 
 func NewAsset(asset *asset.Asset) (*AssetDocument, string) {
 	aid := asset.ID().String()
-	return &AssetDocument{
+	doc := &AssetDocument{
 		ID:          aid,
-		CreatedAt:   asset.CreatedAt(),
 		Workspace:   asset.Workspace().String(),
+		CreatedAt:   asset.CreatedAt(),
+		FileName:    asset.FileName(),
 		Name:        asset.Name(),
 		Size:        asset.Size(),
 		URL:         asset.URL(),
 		ContentType: asset.ContentType(),
-	}, aid
+		UUID:        asset.UUID(),
+		FlatFiles:   asset.FlatFiles(),
+		Public:      asset.Public(),
+	}
+
+	// Only set project if it's not empty
+	if pid := asset.Project(); !pid.IsNil() {
+		pidStr := pid.String()
+		doc.Project = &pidStr
+	}
+
+	if u := asset.User(); u != nil {
+		uid := u.String()
+		doc.User = &uid
+	}
+
+	if i := asset.Integration(); i != nil {
+		iid := i.String()
+		doc.Integration = &iid
+	}
+
+	if t := asset.Thread(); t != nil {
+		tid := t.String()
+		doc.Thread = &tid
+	}
+
+	if s := asset.ArchiveExtractionStatus(); s != nil {
+		ss := s.String()
+		doc.ArchiveExtractionStatus = &ss
+	}
+
+	return doc, aid
 }
 
 func (d *AssetDocument) Model() (*asset.Asset, error) {
@@ -45,18 +86,61 @@ func (d *AssetDocument) Model() (*asset.Asset, error) {
 	if err != nil {
 		return nil, err
 	}
-	tid, err := accountdomain.WorkspaceIDFrom(d.Workspace)
+	wid, err := accountsid.WorkspaceIDFrom(d.Workspace)
 	if err != nil {
 		return nil, err
 	}
 
-	return asset.New().
+	b := asset.New().
 		ID(aid).
+		Workspace(wid).
 		CreatedAt(d.CreatedAt).
-		Workspace(tid).
+		FileName(d.FileName).
 		Name(d.Name).
 		Size(d.Size).
 		URL(d.URL).
 		ContentType(d.ContentType).
-		Build()
+		UUID(d.UUID).
+		FlatFiles(d.FlatFiles).
+		Public(d.Public)
+
+	// Only set project if it exists
+	if d.Project != nil {
+		pid, err := id.ProjectIDFrom(*d.Project)
+		if err != nil {
+			return nil, err
+		}
+		b = b.Project(pid)
+	}
+
+	if d.User != nil {
+		uid, err := accountsid.UserIDFrom(*d.User)
+		if err != nil {
+			return nil, err
+		}
+		b = b.CreatedByUser(uid)
+	} else if d.Integration != nil {
+		iid, err := id.IntegrationIDFrom(*d.Integration)
+		if err != nil {
+			return nil, err
+		}
+		b = b.CreatedByIntegration(&iid)
+	}
+
+	if d.Thread != nil {
+		tid, err := id.ThreadIDFrom(*d.Thread)
+		if err != nil {
+			return nil, err
+		}
+		b = b.Thread(&tid)
+	}
+
+	if d.ArchiveExtractionStatus != nil {
+		s, ok := asset.ArchiveExtractionStatusFrom(*d.ArchiveExtractionStatus)
+		if ok {
+			b = b.ArchiveExtractionStatus(s)
+		}
+	}
+
+	return b.Build()
 }

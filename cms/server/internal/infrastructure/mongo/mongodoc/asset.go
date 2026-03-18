@@ -3,8 +3,8 @@ package mongodoc
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/asset"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/asset"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/samber/lo"
@@ -24,6 +24,7 @@ type AssetDocument struct {
 	Thread                  *string
 	ArchiveExtractionStatus string
 	FlatFiles               bool
+	Public                  bool
 }
 
 type AssetAndFileDocument struct {
@@ -82,6 +83,7 @@ func NewAsset(a *asset.Asset) (*AssetDocument, string) {
 		Thread:                  a.Thread().StringRef(),
 		ArchiveExtractionStatus: archiveExtractionStatus,
 		FlatFiles:               a.FlatFiles(),
+		Public:                  a.Public(),
 	}, aid
 }
 
@@ -105,7 +107,8 @@ func (d *AssetDocument) Model() (*asset.Asset, error) {
 		UUID(d.UUID).
 		Thread(id.ThreadIDFromRef(d.Thread)).
 		ArchiveExtractionStatus(asset.ArchiveExtractionStatusFromRef(lo.ToPtr(d.ArchiveExtractionStatus))).
-		FlatFiles(d.FlatFiles)
+		FlatFiles(d.FlatFiles).
+		Public(d.Public)
 
 	if d.User != nil {
 		uid, err := accountdomain.UserIDFrom(*d.User)

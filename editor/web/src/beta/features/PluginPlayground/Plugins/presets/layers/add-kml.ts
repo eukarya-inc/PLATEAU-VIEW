@@ -68,7 +68,6 @@ const layerKmlUrl = {
 };
 
 // Add the encoded KML layer to Re:Earth
-// Documentation on Layers "add" event: https://visualizer.developer.reearth.io/plugin-api/layers/#add
 reearth.layers.add(layerKmlEncoded);
 
 // Add the KML layer from the URL to Re:Earth
@@ -77,5 +76,6 @@ reearth.layers.add(layerKmlUrl);`
 
 export const addKml: PluginType = {
   id: "add-kml",
-  files: [yamlFile, widgetFile]
+  title: "Add KML",
+  files: [widgetFile, yamlFile]
 };

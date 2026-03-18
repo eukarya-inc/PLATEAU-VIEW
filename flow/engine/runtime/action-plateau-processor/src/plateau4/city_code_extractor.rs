@@ -24,7 +24,7 @@ impl ProcessorFactory for CityCodeExtractorFactory {
     }
 
     fn description(&self) -> &str {
-        "Extracts Codelist"
+        "Extracts city code information from PLATEAU4 codelists for local public authorities"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -53,14 +53,12 @@ impl ProcessorFactory for CityCodeExtractorFactory {
         let params: CityCodeExtractorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 PlateauProcessorError::CityCodeExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 PlateauProcessorError::CityCodeExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -77,10 +75,15 @@ impl ProcessorFactory for CityCodeExtractorFactory {
     }
 }
 
+/// # CityCodeExtractor Parameters
+///
+/// Configuration for extracting PLATEAU4 city code information from codelists.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CityCodeExtractorParam {
+    /// Attribute containing the city code to look up in codelists
     city_code_attribute: Attribute,
+    /// Attribute containing the path to the PLATEAU codelists directory
     codelists_path_attribute: Attribute,
 }
 
@@ -100,9 +103,10 @@ impl Processor for CityCodeExtractor {
         let AttributeValue::String(city_code) = feature
             .attributes
             .get(&self.city_code_attribute)
-            .ok_or(PlateauProcessorError::CityCodeExtractor(
-                "cityCode attribute empty".to_string(),
-            ))
+            .ok_or(PlateauProcessorError::CityCodeExtractor(format!(
+                "cityCode attribute empty: {}",
+                self.city_code_attribute
+            )))
             .cloned()?
         else {
             return Err(PlateauProcessorError::CityCodeExtractor(
@@ -141,7 +145,11 @@ impl Processor for CityCodeExtractor {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

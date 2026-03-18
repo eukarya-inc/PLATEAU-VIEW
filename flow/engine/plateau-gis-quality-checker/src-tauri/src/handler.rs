@@ -38,25 +38,28 @@ pub(crate) async fn run_flow(
     workflow_id: String,
     params: HashMap<String, String>,
 ) -> Result<(), crate::errors::Error> {
-    let bytes = WorkflowAsset::get(format!("{}.yml", workflow_id).as_str()).ok_or(
-        crate::errors::Error::invalid_workflow_id(format!("Workflow not found: {}", workflow_id)),
+    let bytes = WorkflowAsset::get(format!("{workflow_id}.yml").as_str()).ok_or(
+        crate::errors::Error::invalid_workflow_id(format!("Workflow not found: {workflow_id}")),
     )?;
     let json = String::from_utf8(bytes.data.iter().cloned().collect())
         .map_err(crate::errors::Error::io)?;
     let mut workflow = Workflow::try_from(json.as_str()).map_err(|e| {
-        crate::errors::Error::ExecuteFailed(format!("failed to parse workflow with {:?}", e))
+        crate::errors::Error::ExecuteFailed(format!("failed to parse workflow with {e:?}"))
     })?;
     workflow.merge_with(params).map_err(|e| {
-        crate::errors::Error::ExecuteFailed(format!("failed to merge params with {:?}", e))
+        crate::errors::Error::ExecuteFailed(format!("failed to merge params with {e:?}"))
     })?;
     let storage_resolver = Arc::new(resolve::StorageResolver::new());
     let job_id = uuid::Uuid::new_v4();
     let action_log_uri = setup_job_directory("plateau-gis-quality-checker", "action-log", job_id)
         .map_err(crate::errors::Error::setup)?;
-    let state_uri = setup_job_directory("plateau-gis-quality-checker", "feature-store", job_id)
-        .map_err(crate::errors::Error::setup)?;
-    let state =
-        Arc::new(State::new(&state_uri, &storage_resolver).map_err(crate::errors::Error::setup)?);
+    let feature_state_uri =
+        setup_job_directory("plateau-gis-quality-checker", "feature-store", job_id)
+            .map_err(crate::errors::Error::setup)?;
+    let feature_state = Arc::new(
+        State::new(&feature_state_uri, &storage_resolver).map_err(crate::errors::Error::setup)?,
+    );
+    let ingress_state = Arc::clone(&feature_state);
 
     let logger_factory = Arc::new(LoggerFactory::new(
         create_root_logger(action_log_uri.path()),
@@ -68,7 +71,9 @@ pub(crate) async fn run_flow(
         ALL_ACTION_FACTORIES.clone(),
         logger_factory,
         storage_resolver,
-        state,
+        ingress_state,
+        feature_state,
+        None,
     )
     .await
     .map_err(crate::errors::Error::execute_failed)

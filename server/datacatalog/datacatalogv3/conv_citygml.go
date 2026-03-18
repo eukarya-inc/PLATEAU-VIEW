@@ -3,7 +3,7 @@ package datacatalogv3
 import (
 	"slices"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 )
 
 func toCityGMLs(all *AllData, regYear int) (map[plateauapi.ID]*plateauapi.CityGMLDataset, []string) {
@@ -26,18 +26,24 @@ func toCityGMLs(all *AllData, regYear int) (map[plateauapi.ID]*plateauapi.CityGM
 		}
 
 		prefCode := plateauapi.AreaCode(city.CityCode).PrefectureCode()
+		gspatialjpURL := geospatialjpURL(city.CityCode, city.CityName, city.YearInt())
+		var gspatialjpURLPtr *string
+		if gspatialjpURL != "" {
+			gspatialjpURLPtr = &gspatialjpURL
+		}
 		d := &plateauapi.CityGMLDataset{
-			ID:                 plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(city.CityCode)),
-			URL:                data.CityGML,
-			Year:               city.YearInt(),
-			RegistrationYear:   regYear,
-			PrefectureCode:     plateauapi.AreaCode(prefCode),
-			PrefectureID:       plateauapi.NewID(prefCode, plateauapi.TypePrefecture),
-			CityID:             plateauapi.NewID(city.CityCode, plateauapi.TypeCity),
-			CityCode:           plateauapi.AreaCode(city.CityCode),
-			FeatureTypes:       all.FeatureTypesOf(city.ID),
-			PlateauSpecMinorID: plateauapi.PlateauSpecIDFrom(city.Spec),
-			MetadataZipUrls:    city.MetadataZipURLs(),
+			ID:                   plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(city.CityCode)),
+			URL:                  data.CityGML,
+			GspatialjpDatasetURL: gspatialjpURLPtr,
+			Year:                 city.YearInt(),
+			RegistrationYear:     regYear,
+			PrefectureCode:       plateauapi.AreaCode(prefCode),
+			PrefectureID:         plateauapi.NewID(prefCode, plateauapi.TypePrefecture),
+			CityID:               plateauapi.NewID(city.CityCode, plateauapi.TypeCity),
+			CityCode:             plateauapi.AreaCode(city.CityCode),
+			FeatureTypes:         all.FeatureTypesOf(city.ID),
+			PlateauSpecMinorID:   plateauapi.PlateauSpecIDFrom(city.Spec),
+			MetadataZipUrls:      city.MetadataZipURLs(),
 			Admin: adminFrom(Admin{
 				ItemID:      city.ID,
 				Stage:       city.SDKStage(),

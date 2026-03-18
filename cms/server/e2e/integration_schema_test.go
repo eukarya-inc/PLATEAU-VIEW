@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
-	"github.com/reearth/reearth-cms/server/internal/app"
-	"github.com/reearth/reearth-cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/app"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
 )
 
 // GET /projects/{projectIdOrAlias}/schemata

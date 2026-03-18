@@ -124,3 +124,22 @@ func (r *Repos) getNow() time.Time {
 	}
 	return time.Now()
 }
+
+// SetRepo directly sets a repo for a project without going through the updater.
+// This is useful for loading cached data.
+func (r *Repos) SetRepo(project string, repo Repo, warnings []string) {
+	r.locks.Lock(project)
+	defer r.locks.Unlock(project)
+
+	repoWrapper := r.repos[project]
+	if repoWrapper == nil {
+		repoWrapper = NewRepoWrapper(repo, nil)
+		repoWrapper.SetName(project)
+		r.repos[project] = repoWrapper
+	} else {
+		repoWrapper.SetRepo(repo)
+	}
+
+	r.warnings[project] = warnings
+	r.updatedAt[project] = r.getNow()
+}

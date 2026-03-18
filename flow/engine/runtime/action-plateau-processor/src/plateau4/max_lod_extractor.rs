@@ -50,14 +50,12 @@ impl ProcessorFactory for MaxLodExtractorFactory {
         let params: MaxLodExtractorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 PlateauProcessorError::MaxLodExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 PlateauProcessorError::MaxLodExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -75,6 +73,9 @@ impl ProcessorFactory for MaxLodExtractorFactory {
     }
 }
 
+/// # MaxLodExtractor Parameters
+///
+/// Configuration for extracting maximum LOD (Level of Detail) information from PLATEAU4 CityGML files.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MaxLodExtractorParam {
@@ -144,7 +145,11 @@ impl Processor for MaxLodExtractor {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         self.flush_buffer(ctx.as_context(), fw);
         Ok(())
     }
@@ -159,7 +164,7 @@ impl MaxLodExtractor {
         self.buffer.iter().for_each(|(_, buffer)| {
             if let Some(feature) = buffer.features.first() {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
+                feature.attributes_mut().insert(
                     self.max_lod_attribute.clone(),
                     AttributeValue::Number(serde_json::Number::from(buffer.max_lod)),
                 );

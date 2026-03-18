@@ -9,7 +9,7 @@ use reearth_flow_runtime::{
     forwarder::ProcessorChannelForwarder,
     node::{Port, Processor, ProcessorFactory, DEFAULT_PORT},
 };
-use reearth_flow_types::{Attribute, AttributeValue, Expr, Feature};
+use reearth_flow_types::{Attribute, AttributeValue, Attributes, Expr, Feature};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,7 +25,7 @@ impl ProcessorFactory for AttributeAggregatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Aggregates features by attributes"
+        "Group and Aggregate Features by Attributes"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -54,14 +54,12 @@ impl ProcessorFactory for AttributeAggregatorFactory {
         let params: AttributeAggregatorParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 AttributeProcessorError::AggregatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 AttributeProcessorError::AggregatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -77,7 +75,7 @@ impl ProcessorFactory for AttributeAggregatorFactory {
             if let Some(expr) = &aggregte_attribute.attribute_value {
                 let template_ast = expr_engine
                     .compile(expr.as_ref())
-                    .map_err(|e| AttributeProcessorError::AggregatorFactory(format!("{:?}", e)))?;
+                    .map_err(|e| AttributeProcessorError::AggregatorFactory(format!("{e:?}")))?;
                 aggregate_attributes.push(CompliledAggregateAttribute {
                     attribute_value: Some(template_ast),
                     new_attribute: aggregte_attribute.new_attribute.clone(),
@@ -95,8 +93,7 @@ impl ProcessorFactory for AttributeAggregatorFactory {
         let calculation = if let Some(expr) = params.calculation {
             let ast = expr_engine.compile(expr.as_ref()).map_err(|e| {
                 AttributeProcessorError::AggregatorFactory(format!(
-                    "Failed to compile calculation: {}",
-                    e
+                    "Failed to compile calculation: {e}"
                 ))
             })?;
             Some(ast)
@@ -128,6 +125,8 @@ struct AttributeAggregator {
     buffer: HashMap<AttributeValue, i64>, // string is tab
 }
 
+/// # AttributeAggregator Parameters
+/// Configure how features are grouped and aggregated based on attribute values
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AttributeAggregatorParam {
@@ -162,17 +161,26 @@ struct CompliledAggregateAttribute {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-/// # Method to use for aggregation
 enum Method {
+    /// # Maximum Value
+    /// Find the maximum value in the group
     #[serde(rename = "max")]
     Max,
+    /// # Minimum Value
+    /// Find the minimum value in the group
     #[serde(rename = "min")]
     Min,
+    /// # Count Items
+    /// Count the number of features in the group
     #[serde(rename = "count")]
     Count,
 }
 
 impl Processor for AttributeAggregator {
+    fn is_accumulating(&self) -> bool {
+        false
+    }
+
     fn num_threads(&self) -> usize {
         2
     }
@@ -190,10 +198,7 @@ impl Processor for AttributeAggregator {
         for aggregate_attribute in &self.aggregate_attributes {
             if let Some(attribute) = &aggregate_attribute.attribute {
                 let result = feature.get(attribute).ok_or_else(|| {
-                    AttributeProcessorError::Aggregator(format!(
-                        "Attribute not found: {}",
-                        attribute
-                    ))
+                    AttributeProcessorError::Aggregator(format!("Attribute not found: {attribute}"))
                 })?;
                 aggregates.push(result.clone());
                 continue;
@@ -201,8 +206,7 @@ impl Processor for AttributeAggregator {
             if let Some(ast) = &aggregate_attribute.attribute_value {
                 let result = scope.eval_ast::<rhai::Dynamic>(ast).map_err(|e| {
                     AttributeProcessorError::Aggregator(format!(
-                        "Failed to evaluate aggregation: {}",
-                        e
+                        "Failed to evaluate aggregation: {e}"
                     ))
                 })?;
                 aggregates.push(dynamic_to_value(&result).into());
@@ -212,10 +216,7 @@ impl Processor for AttributeAggregator {
             value
         } else if let Some(calculation) = &self.calculation {
             scope.eval_ast::<i64>(calculation).map_err(|e| {
-                AttributeProcessorError::Aggregator(format!(
-                    "Failed to evaluate calculation: {}",
-                    e
-                ))
+                AttributeProcessorError::Aggregator(format!("Failed to evaluate calculation: {e}"))
             })?
         } else {
             return Err(
@@ -244,7 +245,11 @@ impl Processor for AttributeAggregator {
         Ok(())
     }
 
-    fn finish(&self, ctx: NodeContext, fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        ctx: NodeContext,
+        fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         self.flush_buffer(ctx.as_context(), fw);
         Ok(())
     }
@@ -257,18 +262,18 @@ impl Processor for AttributeAggregator {
 impl AttributeAggregator {
     pub(crate) fn flush_buffer(&self, ctx: Context, fw: &ProcessorChannelForwarder) {
         self.buffer.par_iter().for_each(|(key, value)| {
-            let mut feature = Feature::new();
+            let mut feature = Feature::new_with_attributes(Attributes::new());
             let AttributeValue::Array(aggregates) = key else {
                 return;
             };
             for (i, aggregate_attribute) in self.aggregate_attributes.iter().enumerate() {
-                feature.attributes.insert(
-                    aggregate_attribute.new_attribute.clone(),
+                feature.insert(
+                    &aggregate_attribute.new_attribute,
                     aggregates.get(i).cloned().unwrap_or(AttributeValue::Null),
                 );
             }
-            feature.attributes.insert(
-                self.calculation_attribute.clone(),
+            feature.insert(
+                &self.calculation_attribute,
                 AttributeValue::Number(serde_json::Number::from(*value)),
             );
             fw.send(ExecutorContext::new_with_context_feature_and_port(

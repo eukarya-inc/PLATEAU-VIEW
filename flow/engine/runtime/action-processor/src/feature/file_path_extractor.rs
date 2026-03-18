@@ -29,7 +29,7 @@ impl ProcessorFactory for FeatureFilePathExtractorFactory {
     }
 
     fn description(&self) -> &str {
-        "Extracts features by file path"
+        "Extract File Paths from Dataset to Features"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -58,14 +58,12 @@ impl ProcessorFactory for FeatureFilePathExtractorFactory {
         let param: FeatureFilePathExtractorParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 FeatureProcessorError::FilePathExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 FeatureProcessorError::FilePathExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -79,8 +77,7 @@ impl ProcessorFactory for FeatureFilePathExtractorFactory {
             .compile(param.source_dataset.as_ref())
             .map_err(|e| {
                 FeatureProcessorError::FilePathExtractorFactory(format!(
-                    "Failed to compile `source_dataset` expression: {}",
-                    e
+                    "Failed to compile `source_dataset` expression: {e}"
                 ))
             })?;
         let process = FeatureFilePathExtractor {
@@ -95,14 +92,19 @@ impl ProcessorFactory for FeatureFilePathExtractorFactory {
     }
 }
 
+/// # Feature File Path Extractor Parameters
+/// Configure how to extract file paths from datasets and optionally extract archives
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct FeatureFilePathExtractorParam {
-    /// # Source dataset
+    /// # Source Dataset
+    /// Expression to get the source dataset path or URL
     source_dataset: Expr,
-    /// # Extract archive
+    /// # Extract Archive
+    /// Whether to extract archive files found in the dataset
     extract_archive: bool,
-    /// # Destination prefix
+    /// # Destination Prefix
+    /// Optional prefix to add to extracted file paths
     dest_prefix: Option<String>,
 }
 
@@ -133,16 +135,14 @@ impl Processor for FeatureFilePathExtractor {
             .eval_ast::<String>(&self.params.source_dataset)
             .map_err(|e| {
                 FeatureProcessorError::FilePathExtractor(format!(
-                    "Failed to evaluate `source_dataset` expression: {}",
-                    e
+                    "Failed to evaluate `source_dataset` expression: {e}"
                 ))
             })?;
         let source_dataset = Uri::from_str(source_dataset.as_str())
             .map_err(|_| FeatureProcessorError::FilePathExtractor("Invalid path".to_string()))?;
         let storage = ctx.storage_resolver.resolve(&source_dataset).map_err(|e| {
             FeatureProcessorError::FilePathExtractor(format!(
-                "Failed to resolve `source_dataset` path: {}",
-                e
+                "Failed to resolve `source_dataset` path: {e}"
             ))
         })?;
 
@@ -152,8 +152,7 @@ impl Processor for FeatureFilePathExtractor {
                 root_output_path = root_output_path.join(prefix.as_str());
                 fs::create_dir_all(&root_output_path).map_err(|e| {
                     FeatureProcessorError::FilePathExtractor(format!(
-                        "Failed to create directory: {}",
-                        e
+                        "Failed to create directory: {e}"
                     ))
                 })?;
             }
@@ -162,8 +161,7 @@ impl Processor for FeatureFilePathExtractor {
             )?)
             .map_err(|e| {
                 FeatureProcessorError::FilePathExtractor(format!(
-                    "Failed to convert `root_output_path` to URI: {}",
-                    e
+                    "Failed to convert `root_output_path` to URI: {e}"
                 ))
             })?;
             let features = extract_archive(
@@ -171,11 +169,11 @@ impl Processor for FeatureFilePathExtractor {
                 &root_output_path,
                 ctx.storage_resolver.clone(),
             )
-            .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{:?}", e)))?
+            .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{e:?}")))?
             .into_iter()
             .map(|entry| {
                 let attribute_value = AttributeValue::try_from(entry)
-                    .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{:?}", e)))?;
+                    .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{e:?}")))?;
                 Ok(Feature::from(attribute_value))
             })
             .collect::<super::errors::Result<Vec<_>>>()?;
@@ -192,25 +190,40 @@ impl Processor for FeatureFilePathExtractor {
         } else if source_dataset.is_dir() {
             let entries = storage
                 .list_sync(Some(source_dataset.path().as_path()), true)
-                .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{:?}", e)))?;
+                .map_err(|e| FeatureProcessorError::FilePathExtractor(format!("{e:?}")))?;
             for entry in entries {
                 let attribute_value =
                     AttributeValue::try_from(FilePath::try_from(entry).unwrap_or_default())?;
-                fw.send(ctx.new_with_feature_and_port(
-                    Feature::from(attribute_value),
-                    DEFAULT_PORT.clone(),
-                ));
+                let mut feature = Feature::from(attribute_value);
+                feature.extend(
+                    base_attributes
+                        .iter()
+                        .filter(|(k, _)| !feature.contains_key(k))
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect::<HashMap<_, _>>(),
+                );
+                fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
             }
         } else {
             let attribute_value = AttributeValue::try_from(FilePath::try_from(source_dataset)?)?;
-            fw.send(
-                ctx.new_with_feature_and_port(Feature::from(attribute_value), DEFAULT_PORT.clone()),
+            let mut feature = Feature::from(attribute_value);
+            feature.extend(
+                base_attributes
+                    .iter()
+                    .filter(|(k, _)| !feature.contains_key(k))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<HashMap<_, _>>(),
             );
+            fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         }
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

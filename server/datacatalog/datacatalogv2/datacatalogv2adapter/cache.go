@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"golang.org/x/exp/slices"
 )
 

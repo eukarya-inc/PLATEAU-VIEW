@@ -3,11 +3,11 @@ package gql
 import (
 	"context"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqldataloader"
 	"github.com/reearth/reearth-flow/api/internal/adapter/gql/gqlmodel"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/util"
 )
 
@@ -38,14 +38,14 @@ func (c *TriggerLoader) Fetch(ctx context.Context, ids []gqlmodel.ID) ([]*gqlmod
 	return triggers, nil
 }
 
-func (c *TriggerLoader) FindByWorkspacePage(ctx context.Context, wsID gqlmodel.ID, pagination gqlmodel.PageBasedPagination) (*gqlmodel.TriggerConnection, error) {
-	tid, err := gqlmodel.ToID[accountdomain.Workspace](wsID)
+func (c *TriggerLoader) FindByWorkspacePage(ctx context.Context, wsID gqlmodel.ID, keyword *string, pagination gqlmodel.PageBasedPagination) (*gqlmodel.TriggerConnection, error) {
+	tid, err := gqlmodel.ToID[accountsid.Workspace](wsID)
 	if err != nil {
 		return nil, err
 	}
 
 	paginationParam := gqlmodel.ToPageBasedPagination(pagination)
-	res, pi, err := c.usecase.FindByWorkspace(ctx, tid, paginationParam)
+	res, pi, err := c.usecase.FindByWorkspace(ctx, tid, paginationParam, keyword)
 	if err != nil {
 		return nil, err
 	}

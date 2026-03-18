@@ -1,3 +1,4 @@
+import { IMAGE_TYPES } from "@reearth/beta/features/AssetsManager/constants";
 import {
   Button,
   Modal,
@@ -6,6 +7,7 @@ import {
   TextInput,
   Typography
 } from "@reearth/beta/lib/reearth-ui";
+import { AssetField } from "@reearth/beta/ui/fields";
 import { useT } from "@reearth/services/i18n";
 import { styled } from "@reearth/services/theme";
 import { FC, useCallback, useState } from "react";
@@ -16,7 +18,7 @@ type ProjectCreatorModalProps = {
   visible: boolean;
   onClose?: () => void;
   onProjectCreate: (
-    data: Pick<Project, "name" | "description">
+    data: Pick<Project, "name" | "description" | "imageUrl">
   ) => void;
 };
 
@@ -28,12 +30,15 @@ const ProjectCreatorModal: FC<ProjectCreatorModalProps> = ({
   const t = useT();
   const [projectName, setProjectName] = useState("");
   const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const handleOnChange = useCallback((field: string, newValue: string) => {
     if (field === "projectName") {
       setProjectName(newValue);
     } else if (field === "description") {
       setDescription(newValue);
+    } else if (field === "asset") {
+      setImageUrl(newValue);
     }
   }, []);
 
@@ -41,10 +46,11 @@ const ProjectCreatorModal: FC<ProjectCreatorModalProps> = ({
     const data = {
       name: projectName,
       description,
+      imageUrl
     };
     onProjectCreate(data);
     onClose?.();
-  }, [description, onClose, onProjectCreate, projectName]);
+  }, [description, imageUrl, onClose, onProjectCreate, projectName]);
 
   return (
     <Modal visible={visible} size="small">
@@ -87,6 +93,13 @@ const ProjectCreatorModal: FC<ProjectCreatorModalProps> = ({
                 onChange={(value) => handleOnChange("description", value)}
               />
             </FormInputWrapper>
+            <AssetField
+              title={t("Cover Image")}
+              inputMethod="asset"
+              assetsTypes={IMAGE_TYPES}
+              value={imageUrl}
+              onChange={(value) => handleOnChange("asset", value || "")}
+            />
           </Form>
         </ContentWrapper>
       </ModalPanel>

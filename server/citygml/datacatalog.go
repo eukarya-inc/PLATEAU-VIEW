@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
 )
 
 type dataCatalogAPI struct {
@@ -38,7 +38,9 @@ func (a *dataCatalogAPI) FetchCityGMLFiles(ctx context.Context, cond string) (*d
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil

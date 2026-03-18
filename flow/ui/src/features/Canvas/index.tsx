@@ -3,127 +3,148 @@ import {
   Background,
   BackgroundVariant,
   SelectionMode,
-  ProOptions,
   SnapGrid,
   XYPosition,
   NodeChange,
   EdgeChange,
+  OnConnectStart,
 } from "@xyflow/react";
-import { MouseEvent, memo } from "react";
+import { MouseEvent, memo, useMemo } from "react";
+import type { Doc } from "yjs";
 
 import {
   isValidConnection,
   CustomConnectionLine,
-  edgeTypes,
+  createFullEdgeTypes,
+  simpleEdgeTypes,
   connectionLineStyle,
   nodeTypes,
 } from "@flow/lib/reactFlow";
-import type { ActionNodeType, Edge, Node } from "@flow/types";
+import type { ActionNodeType, AwarenessUser, Edge, Node } from "@flow/types";
 
+import { CanvasContextMenu } from "./components";
+import Awareness from "./components/Awareness";
 import useHooks, { defaultEdgeOptions } from "./hooks";
 
 import "@xyflow/react/dist/style.css";
-import { NodeContextMenu, SelectionContextMenu } from "./components";
 
-const gridSize = 25;
+const gridSize = 16.5;
 
 const snapGrid: SnapGrid = [gridSize, gridSize];
 
-const proOptions: ProOptions = { hideAttribution: true };
-
 type Props = {
+  readonly?: boolean;
   nodes: Node[];
   edges: Edge[];
-  selectedEdgeIds?: string[];
-  canvasLock: boolean;
+  yDoc?: Doc | null;
+  users?: Record<string, AwarenessUser>;
+  currentWorkflowId?: string;
+  isMainWorkflow: boolean;
   onWorkflowAdd?: (position?: XYPosition) => void;
+  onWorkflowOpen?: (workflowId: string) => void;
+  onWorkflowAddFromSelection?: (nodes: Node[], edges: Edge[]) => Promise<void>;
   onNodesAdd?: (newNode: Node[]) => void;
   onNodesChange?: (changes: NodeChange<Node>[]) => void;
-  onNodeDoubleClick?: (
-    e: MouseEvent | undefined,
-    nodeId: string,
-    subworkflowId?: string,
+  onBeforeDelete?: (args: { nodes: Node[] }) => Promise<boolean>;
+  onNodeSettings?: (e: MouseEvent | undefined, nodeId: string) => void;
+  onNodePickerOpen?: (
+    position: XYPosition,
+    nodeType?: ActionNodeType,
+    isMainWorkflow?: boolean,
   ) => void;
-  onNodeHover?: (e: MouseEvent, node?: Node) => void;
-  onNodePickerOpen?: (position: XYPosition, nodeType?: ActionNodeType) => void;
+  onNodesDisable?: (ns?: Node[] | undefined) => void;
   onEdgesAdd?: (newEdges: Edge[]) => void;
   onEdgesChange?: (changes: EdgeChange[]) => void;
-  onEdgeHover?: (e: MouseEvent, edge?: Edge) => void;
+  onCopy?: (node?: Node) => void;
+  onCut?: (isCutByShortCut?: boolean, node?: Node) => void;
+  onPaste?: () => void;
+  onPaneClick?: (e: MouseEvent) => void;
+  onDebugRunStartFromSelectedNode?: (
+    node?: Node,
+    nodes?: Node[],
+  ) => Promise<void>;
+  onConnectStart?: OnConnectStart;
+  onConnectEnd?: () => void;
+  onPointerDown?: (e: MouseEvent) => void;
 };
 
 const Canvas: React.FC<Props> = ({
-  canvasLock,
+  readonly,
   nodes,
   edges,
-  selectedEdgeIds,
+  users,
+  currentWorkflowId,
+  isMainWorkflow,
   onWorkflowAdd,
+  onWorkflowOpen,
+  onWorkflowAddFromSelection,
   onNodesAdd,
   onNodesChange,
-  onNodeDoubleClick,
-  onNodeHover,
-  onEdgeHover,
+  onBeforeDelete,
+  onNodeSettings,
   onEdgesAdd,
   onEdgesChange,
   onNodePickerOpen,
+  onCopy,
+  onCut,
+  onPaste,
+  onNodesDisable,
+  onPaneClick,
+  onDebugRunStartFromSelectedNode,
+  onConnectStart,
+  onConnectEnd,
+  onPointerDown,
 }) => {
   const {
-    handleNodesChange,
-    handleNodesDelete,
-    handleNodeDragStop,
+    handleNodesDeleteCleanup,
     handleNodeDragOver,
+    handleNodeDragStop,
     handleNodeDrop,
-    handleNodeDoubleClick,
-    handleEdgesChange,
+    handleNodeSettings,
     handleConnect,
     handleReconnect,
     handleNodeContextMenu,
     handleSelectionContextMenu,
+    handlePaneContextMenu,
     handleCloseContextmenu,
     contextMenu,
     paneRef,
   } = useHooks({
     nodes,
     edges,
+    isMainWorkflow,
     onWorkflowAdd,
     onNodesAdd,
     onNodesChange,
-    onNodeDoubleClick,
+    onNodeSettings,
     onEdgesAdd,
     onEdgesChange,
     onNodePickerOpen,
+    onCopy,
+    onCut,
+    onPaste,
+    onNodesDisable,
   });
+
+  // Create edge types with currentWorkflowId injected
+  const fullEdgeTypes = useMemo(
+    () => createFullEdgeTypes(currentWorkflowId),
+    [currentWorkflowId],
+  );
 
   return (
     <ReactFlow
-      // minZoom={0.7}
-      // maxZoom={1}
-      // defaultViewport={{ zoom: 0.8, x: 200, y: 200 }}
-      // translateExtent={[
-      //   [-1000, -1000],
-      //   [1000, 1000],
-      // ]}
-      // onInit={setReactFlowInstance}
-      // selectNodesOnDrag={false}
-      // fitViewOptions={{ padding: 0.5 }}
-      // fitView
+      onPointerDown={onPointerDown}
       ref={paneRef}
-      // Locking props START
-      nodesDraggable={!canvasLock}
-      nodesConnectable={!canvasLock}
-      nodesFocusable={!canvasLock}
-      edgesFocusable={!canvasLock}
-      // elementsSelectable={!canvasLock}
-      autoPanOnConnect={!canvasLock}
-      autoPanOnNodeDrag={!canvasLock}
-      // panOnDrag={!canvasLock}
-      selectionOnDrag={!canvasLock}
-      // panOnScroll={!canvasLock}
-      // zoomOnScroll={!canvasLock}
-      // zoomOnPinch={!canvasLock}
-      // zoomOnDoubleClick={!canvasLock}
-      connectOnClick={!canvasLock}
-      // Locking props END
-
+      // Readonly props START
+      nodesConnectable={!readonly}
+      nodesFocusable={!readonly}
+      elementsSelectable={!readonly}
+      reconnectRadius={!readonly ? 10 : 0}
+      // Readonly props END
+      zIndexMode="manual" // Prevent xyflow from auto-elevating nodes and edges within Batch nodes, which would break the intended layering of Batch containers > edges > action nodes.
+      minZoom={0.2}
+      proOptions={{ hideAttribution: true }}
       nodeDragThreshold={2}
       snapToGrid
       snapGrid={snapGrid}
@@ -131,53 +152,58 @@ const Canvas: React.FC<Props> = ({
       nodes={nodes}
       nodeTypes={nodeTypes}
       edges={edges}
-      edgeTypes={edgeTypes}
+      edgeTypes={readonly ? simpleEdgeTypes : fullEdgeTypes}
       defaultEdgeOptions={defaultEdgeOptions}
       connectionLineComponent={CustomConnectionLine}
       connectionLineStyle={connectionLineStyle}
       isValidConnection={isValidConnection}
-      onNodesChange={handleNodesChange}
-      onEdgesChange={handleEdgesChange}
-      onNodeDoubleClick={handleNodeDoubleClick}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onNodeDoubleClick={handleNodeSettings}
       onNodeDragStart={handleCloseContextmenu}
       onNodeDragStop={handleNodeDragStop}
-      onNodesDelete={handleNodesDelete}
-      onNodeMouseEnter={onNodeHover}
-      onNodeMouseLeave={onNodeHover}
+      onNodesDelete={handleNodesDeleteCleanup}
       onNodeContextMenu={handleNodeContextMenu}
       onSelectionContextMenu={handleSelectionContextMenu}
+      onPaneContextMenu={handlePaneContextMenu}
       onMoveStart={handleCloseContextmenu}
       onDrop={handleNodeDrop}
       onDragOver={handleNodeDragOver}
-      onEdgeMouseEnter={onEdgeHover}
-      onEdgeMouseLeave={onEdgeHover}
       onConnect={handleConnect}
       onReconnect={handleReconnect}
-      proOptions={proOptions}>
+      onConnectStart={onConnectStart}
+      onConnectEnd={onConnectEnd}
+      onBeforeDelete={onBeforeDelete}
+      onPaneClick={onPaneClick}>
       <Background
-        className="bg-background"
-        variant={BackgroundVariant["Lines"]}
+        className="bg-background dark:bg-background"
+        variant={BackgroundVariant["Dots"]}
         gap={gridSize}
-        color="rgba(63, 63, 70, 0.3)"
+        color="rgba(63, 63, 70, 1)"
       />
-
-      {contextMenu?.type === "node" && (
-        <NodeContextMenu
-          node={contextMenu.data}
-          contextMenu={contextMenu}
-          onNodesChange={handleNodesChange}
-          onSecondaryNodeAction={onNodeDoubleClick}
-          onClose={handleCloseContextmenu}
-        />
+      {!readonly && users && currentWorkflowId && (
+        <Awareness users={users} currentWorkflowId={currentWorkflowId} />
       )}
-      {contextMenu?.type === "selection" && (
-        <SelectionContextMenu
-          nodes={contextMenu.data}
-          selectedEdgeIds={selectedEdgeIds}
+      {contextMenu && (
+        <CanvasContextMenu
+          data={contextMenu.data}
+          edges={edges}
+          allNodes={nodes}
+          isMainWorkflow={isMainWorkflow}
           contextMenu={contextMenu}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
+          onBeforeDelete={onBeforeDelete}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onWorkflowOpen={onWorkflowOpen}
+          onWorkflowAddFromSelection={onWorkflowAddFromSelection}
+          onNodeSettings={onNodeSettings}
+          onNodesDeleteCleanup={handleNodesDeleteCleanup}
+          onCopy={onCopy}
+          onCut={onCut}
+          onPaste={onPaste}
           onClose={handleCloseContextmenu}
+          onNodesDisable={onNodesDisable}
+          onDebugRunStartFromSelectedNode={onDebugRunStartFromSelectedNode}
         />
       )}
     </ReactFlow>

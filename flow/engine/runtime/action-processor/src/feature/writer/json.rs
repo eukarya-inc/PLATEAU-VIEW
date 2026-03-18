@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use super::FeatureProcessorError;
 
+/// # JsonWriter Parameters
+///
+/// Configuration for writing features in JSON format with optional custom conversion.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct JsonWriterParam {
@@ -38,9 +41,8 @@ pub(super) fn write_json(
                     serde_json::Value::Object(
                         feature
                             .attributes
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.into_inner().to_string(), v.into()))
+                            .iter()
+                            .map(|(k, v)| (k.clone().into_inner().to_string(), v.clone().into()))
                             .collect::<serde_json::Map<_, _>>(),
                     )
                 })
@@ -48,7 +50,7 @@ pub(super) fn write_json(
         );
         scope.set("__features", value);
         let convert = scope.eval_ast::<Dynamic>(converter).map_err(|e| {
-            FeatureProcessorError::FeatureWriter(format!("Failed to evaluate converter: {:?}", e))
+            FeatureProcessorError::FeatureWriter(format!("Failed to evaluate converter: {e:?}"))
         })?;
         dynamic_to_value(&convert)
     } else {
@@ -57,9 +59,8 @@ pub(super) fn write_json(
             .map(|f| {
                 serde_json::Value::Object(
                     f.attributes
-                        .clone()
-                        .into_iter()
-                        .map(|(k, v)| (k.into_inner().to_string(), v.into()))
+                        .iter()
+                        .map(|(k, v)| (k.clone().into_inner().to_string(), v.clone().into()))
                         .collect::<serde_json::Map<_, _>>(),
                 )
             })
@@ -68,9 +69,9 @@ pub(super) fn write_json(
     };
     let storage = storage_resolver
         .resolve(output)
-        .map_err(|e| FeatureProcessorError::FeatureWriter(format!("{:?}", e)))?;
+        .map_err(|e| FeatureProcessorError::FeatureWriter(format!("{e:?}")))?;
     storage
         .put_sync(output.path().as_path(), Bytes::from(json_value.to_string()))
-        .map_err(|e| FeatureProcessorError::FeatureWriter(format!("{:?}", e)))?;
+        .map_err(|e| FeatureProcessorError::FeatureWriter(format!("{e:?}")))?;
     Ok(())
 }

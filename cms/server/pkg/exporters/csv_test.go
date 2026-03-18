@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -93,7 +93,7 @@ func TestRowFromItem(t *testing.T) {
 		MustBuild()
 	row3, ok3 := RowFromItem(i3, []*schema.Field{sf3, sf4})
 	assert.True(t, ok3)
-	assert.Equal(t, []string{i1.ID().String(), "139.28179282584915", "36.58570985749664", "30", "true"}, row3)
+	assert.Equal(t, []string{i1.ID().String(), "36.58570985749664", "139.28179282584915", "30", "true"}, row3)
 }
 
 func TestExtractFirstPointField(t *testing.T) {

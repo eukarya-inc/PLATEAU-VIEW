@@ -10,8 +10,8 @@ import (
 )
 
 type Page struct {
-	id              id.PageID
-	property        id.PropertyID
+	id              PageID
+	property        PropertyID
 	title           string
 	swipeable       bool
 	layers          id.NLSLayerIDList
@@ -33,7 +33,7 @@ type Page struct {
 // 	return &Page
 // }
 
-func (p *Page) Id() id.PageID {
+func (p *Page) Id() PageID {
 	return p.id
 }
 
@@ -86,11 +86,11 @@ func (p *Page) RemoveSwipeableLayer(layer id.NLSLayerID) {
 	p.swipeableLayers = p.swipeableLayers.Delete(layer)
 }
 
-func (p *Page) Property() id.PropertyID {
+func (p *Page) Property() PropertyID {
 	return p.property
 }
 
-func (p *Page) PropertyRef() *id.PropertyID {
+func (p *Page) PropertyRef() *PropertyID {
 	if p == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (p *Page) Blocks() BlockList {
 	return append(BlockList{}, p.blocks...)
 }
 
-func (p *Page) Block(block id.BlockID) *Block {
+func (p *Page) Block(block BlockID) *Block {
 	if p == nil {
 		return nil
 	}
@@ -124,7 +124,7 @@ func (p *Page) BlockAt(index int) *Block {
 	return p.blocks[index]
 }
 
-func (p *Page) BlocksByPlugin(pid id.PluginID, eid *id.PluginExtensionID) BlockList {
+func (p *Page) BlocksByPlugin(pid PluginID, eid *PluginExtensionID) BlockList {
 	if p == nil {
 		return nil
 	}
@@ -137,7 +137,7 @@ func (p *Page) BlocksByPlugin(pid id.PluginID, eid *id.PluginExtensionID) BlockL
 	return blocks
 }
 
-func (p *Page) HasBlock(id id.BlockID) bool {
+func (p *Page) HasBlock(id BlockID) bool {
 	if p == nil {
 		return false
 	}
@@ -168,7 +168,7 @@ func (p *Page) AddBlock(block *Block, index int) {
 	p.blocks = append(p.blocks[:index], append(BlockList{block}, p.blocks[index:]...)...)
 }
 
-func (p *Page) MoveBlock(block id.BlockID, toIndex int) {
+func (p *Page) MoveBlock(block BlockID, toIndex int) {
 	for fromIndex, b := range p.blocks {
 		if b.ID() == block {
 			p.MoveBlockAt(fromIndex, toIndex)
@@ -194,7 +194,7 @@ func (p *Page) MoveBlockAt(fromIndex int, toIndex int) {
 	p.blocks = append(newSlice, p.blocks[toIndex:]...)
 }
 
-func (p *Page) RemoveBlock(block id.BlockID) {
+func (p *Page) RemoveBlock(block BlockID) {
 	for index, b := range p.blocks {
 		if b.ID() == block {
 			p.RemoveBlockAt(index)
@@ -203,12 +203,12 @@ func (p *Page) RemoveBlock(block id.BlockID) {
 	}
 }
 
-func (p *Page) RemoveBlocksByPlugin(pid id.PluginID, eid *id.PluginExtensionID) []id.PropertyID {
+func (p *Page) RemoveBlocksByPlugin(pid PluginID, eid *PluginExtensionID) []PropertyID {
 	if p == nil {
 		return nil
 	}
 
-	var properties []id.PropertyID
+	var properties []PropertyID
 	for j := 0; j < len(p.blocks); j++ {
 		if p.blocks[j].plugin.Equal(pid) && (eid == nil || p.blocks[j].Extension() == *eid) {
 			properties = append(properties, p.blocks[j].Property())
@@ -302,7 +302,7 @@ func (p *Page) Duplicate() *Page {
 		return nil
 	}
 	page := p.Clone()
-	page.id = id.NewPageID()
+	page.id = NewPageID()
 	page.title = fmt.Sprintf("%s (copy)", page.title)
 	return page
 }

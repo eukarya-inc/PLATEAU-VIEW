@@ -3,9 +3,8 @@ package property
 import (
 	"context"
 	"errors"
-	"sort"
 
-	"github.com/reearth/reearth/server/pkg/id"
+	"github.com/reearth/reearth/server/pkg/dataset"
 )
 
 // Group represents a group of property
@@ -17,26 +16,76 @@ type Group struct {
 // Group implements Item interface
 var _ Item = &Group{}
 
-func (g *Group) ID() id.PropertyItemID {
+func (g *Group) ID() ItemID {
 	return g.itemBase.ID
 }
 
-func (g *Group) IDRef() *id.PropertyItemID {
+func (g *Group) IDRef() *ItemID {
 	if g == nil {
 		return nil
 	}
 	return g.itemBase.ID.Ref()
 }
 
-func (g *Group) SchemaGroup() id.PropertySchemaGroupID {
+func (g *Group) SchemaGroup() SchemaGroupID {
 	return g.itemBase.SchemaGroup
 }
 
-func (g *Group) SchemaGroupRef() *id.PropertySchemaGroupID {
+func (g *Group) SchemaGroupRef() *SchemaGroupID {
 	if g == nil {
 		return nil
 	}
 	return g.itemBase.SchemaGroup.Ref()
+}
+
+func (g *Group) HasLinkedField() bool {
+	if g == nil {
+		return false
+	}
+	for _, f := range g.fields {
+		if f.Links().IsLinked() {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Group) Datasets() []DatasetID {
+	if g == nil {
+		return nil
+	}
+	res := []DatasetID{}
+
+	for _, f := range g.fields {
+		res = append(res, f.Datasets()...)
+	}
+
+	return res
+}
+
+func (g *Group) FieldsByLinkedDataset(s DatasetSchemaID, i DatasetID) []*Field {
+	if g == nil {
+		return nil
+	}
+	res := []*Field{}
+	for _, f := range g.fields {
+		if f.Links().HasSchemaAndDataset(s, i) {
+			res = append(res, f)
+		}
+	}
+	return res
+}
+
+func (g *Group) IsDatasetLinked(s DatasetSchemaID, i DatasetID) bool {
+	if g == nil {
+		return false
+	}
+	for _, f := range g.fields {
+		if f.IsDatasetLinked(s, i) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Group) IsEmpty() bool {
@@ -65,13 +114,13 @@ func (g *Group) Prune() (res bool) {
 }
 
 // TODO: group migration
-func (g *Group) MigrateSchema(ctx context.Context, newSchema *Schema) {
-	if g == nil {
+func (g *Group) MigrateSchema(ctx context.Context, newSchema *Schema, dl dataset.Loader) {
+	if g == nil || dl == nil {
 		return
 	}
 
 	for _, f := range g.fields {
-		if !f.MigrateSchema(ctx, newSchema) {
+		if !f.MigrateSchema(ctx, newSchema, dl) {
 			g.RemoveField(f.Field())
 		}
 	}
@@ -79,7 +128,7 @@ func (g *Group) MigrateSchema(ctx context.Context, newSchema *Schema) {
 	g.Prune()
 }
 
-func (g *Group) GetOrCreateField(ps *Schema, fid id.PropertyFieldID) (*Field, bool) {
+func (g *Group) GetOrCreateField(ps *Schema, fid FieldID) (*Field, bool) {
 	if g == nil || ps == nil {
 		return nil, false
 	}
@@ -119,7 +168,7 @@ func (g *Group) AddFields(fields ...*Field) {
 	}
 }
 
-func (g *Group) RemoveField(fid id.PropertyFieldID) (res bool) {
+func (g *Group) RemoveField(fid FieldID) (res bool) {
 	if g == nil {
 		return false
 	}
@@ -132,11 +181,11 @@ func (g *Group) RemoveField(fid id.PropertyFieldID) (res bool) {
 	return false
 }
 
-func (g *Group) FieldIDs() []id.PropertyFieldID {
+func (g *Group) FieldIDs() []FieldID {
 	if g == nil {
 		return nil
 	}
-	fields := make([]id.PropertyFieldID, 0, len(g.fields))
+	fields := make([]FieldID, 0, len(g.fields))
 	for _, f := range g.fields {
 		fields = append(fields, f.Field())
 	}
@@ -144,7 +193,7 @@ func (g *Group) FieldIDs() []id.PropertyFieldID {
 }
 
 // Field returns a field whose id is specified
-func (g *Group) Field(fid id.PropertyFieldID) *Field {
+func (g *Group) Field(fid FieldID) *Field {
 	if g == nil {
 		return nil
 	}
@@ -154,6 +203,15 @@ func (g *Group) Field(fid id.PropertyFieldID) *Field {
 		}
 	}
 	return nil
+}
+
+func (g *Group) MigrateDataset(q DatasetMigrationParam) {
+	if g == nil {
+		return
+	}
+	for _, f := range g.fields {
+		f.MigrateDataset(q)
+	}
 }
 
 func (g *Group) RepresentativeField(schema *Schema) *Field {
@@ -220,11 +278,8 @@ func (g *Group) Fields(p *Pointer) []*Field {
 		}
 		return nil
 	}
-	sortedPs := append(g.fields[:0:0], g.fields...)
-	sort.Slice(sortedPs, func(i, j int) bool {
-		return sortedPs[i].field.String() < sortedPs[j].field.String()
-	})
-	return sortedPs
+
+	return append(g.fields[:0:0], g.fields...)
 }
 
 func (g *Group) RemoveFields(ptr *Pointer) (res bool) {

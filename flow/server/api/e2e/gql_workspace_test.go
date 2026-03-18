@@ -1,29 +1,64 @@
 package e2e
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 
+	usermockrepo "github.com/reearth/reearth-accounts/server/pkg/gqlclient/user/mockrepo"
+	"github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace"
+	workspacemockrepo "github.com/reearth/reearth-accounts/server/pkg/gqlclient/workspace/mockrepo"
+	accountsuser "github.com/reearth/reearth-accounts/server/pkg/user"
+	accountsworkspace "github.com/reearth/reearth-accounts/server/pkg/workspace"
 	"github.com/reearth/reearth-flow/api/internal/app/config"
-	"github.com/reearth/reearthx/account/accountdomain"
-	"github.com/reearth/reearthx/account/accountdomain/workspace"
-	"github.com/reearth/reearthx/rerror"
+	"github.com/reearth/reearth-flow/api/internal/testutil/factory"
+	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestCreateWorkspace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+	w := factory.NewWorkspace(func(b *accountsworkspace.Builder) {
+		b.Name("test")
+	})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().
+			CreateWorkspace(gomock.Any(), workspace.CreateWorkspaceInput{
+				Alias: "test",
+				Name:  "test",
+			}).
+			Return(w, nil),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
 	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
-	query := `mutation { createWorkspace(input: {name: "test"}){ workspace{ id name } }}`
+	}, true, true, mock)
+	query := `mutation CreateWorkspace { createWorkspace(input: {name: "test"}){ workspace{ id name } }}`
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "CreateWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -32,23 +67,47 @@ func TestCreateWorkspace(t *testing.T) {
 	o := e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 	o.Value("data").Object().Value("createWorkspace").Object().Value("workspace").Object().Value("name").String().IsEqual("test")
 }
 
 func TestDeleteWorkspace(t *testing.T) {
-	e, r := StartGQLServer(t, &config.Config{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	wid := accountsworkspace.NewID()
+	wid2 := accountsworkspace.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().DeleteWorkspace(gomock.Any(), wid.String()).Return(nil),
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().DeleteWorkspace(gomock.Any(), wid2.String()).Return(interfaces.ErrOperationDenied),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
+	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
-	_, err := r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	query := fmt.Sprintf(`mutation { deleteWorkspace(input: {workspaceId: "%s"}){ workspaceId }}`, wId1)
+	}, true, true, mock)
+	query := fmt.Sprintf(`mutation DeleteWorkspace { deleteWorkspace(input: {workspaceId: "%s"}){ workspaceId }}`, wid)
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "DeleteWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	assert.Nil(t, err)
@@ -56,16 +115,14 @@ func TestDeleteWorkspace(t *testing.T) {
 	o := e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
-	o.Value("data").Object().Value("deleteWorkspace").Object().Value("workspaceId").String().IsEqual(wId1.String())
+	o.Value("data").Object().Value("deleteWorkspace").Object().Value("workspaceId").String().IsEqual(wid.String())
 
-	_, err = r.Workspace.FindByID(context.Background(), wId1)
-	assert.Equal(t, rerror.ErrNotFound, err)
-
-	query = fmt.Sprintf(`mutation { deleteWorkspace(input: {workspaceId: "%s"}){ workspaceId }}`, accountdomain.NewWorkspaceID())
+	query = fmt.Sprintf(`mutation DeleteWorkspace { deleteWorkspace(input: {workspaceId: "%s"}){ workspaceId }}`, wid2)
 	request = GraphQLRequest{
-		Query: query,
+		OperationName: "DeleteWorkspace",
+		Query:         query,
 	}
 	jsonData, err = json.Marshal(request)
 	assert.Nil(t, err)
@@ -73,27 +130,58 @@ func TestDeleteWorkspace(t *testing.T) {
 	o = e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 
 	o.Value("errors").Array().Value(0).Object().Value("message").IsEqual("input: deleteWorkspace operation denied")
 }
 
 func TestUpdateWorkspace(t *testing.T) {
-	e, r := StartGQLServer(t, &config.Config{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	wid := accountsworkspace.NewID()
+	wid2 := accountsworkspace.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+	w := factory.NewWorkspace(func(b *accountsworkspace.Builder) {
+		b.Name("updated")
+	})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().UpdateWorkspace(gomock.Any(), workspace.UpdateWorkspaceInput{
+			WorkspaceID: wid.String(),
+			Name:        "updated",
+		}).Return(w, nil),
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().UpdateWorkspace(gomock.Any(), workspace.UpdateWorkspaceInput{
+			WorkspaceID: wid2.String(),
+			Name:        "updated",
+		}).Return(nil, errors.New("not found")),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
+	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
+	}, true, true, mock)
 
-	w, err := r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	assert.Equal(t, "e2e", w.Name())
-
-	query := fmt.Sprintf(`mutation { updateWorkspace(input: {workspaceId: "%s",name: "%s"}){ workspace{ id name } }}`, wId1, "updated")
+	query := fmt.Sprintf(`mutation UpdateWorkspace { updateWorkspace(input: {workspaceId: "%s",name: "%s"}){ workspace{ id name } }}`, wid, "updated")
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "UpdateWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -102,17 +190,14 @@ func TestUpdateWorkspace(t *testing.T) {
 	o := e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 	o.Value("data").Object().Value("updateWorkspace").Object().Value("workspace").Object().Value("name").String().IsEqual("updated")
 
-	w, err = r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	assert.Equal(t, "updated", w.Name())
-
-	query = fmt.Sprintf(`mutation { updateWorkspace(input: {workspaceId: "%s",name: "%s"}){ workspace{ id name } }}`, accountdomain.NewWorkspaceID(), "updated")
+	query = fmt.Sprintf(`mutation UpdateWorkspace { updateWorkspace(input: {workspaceId: "%s",name: "%s"}){ workspace{ id name } }}`, wid2, "updated")
 	request = GraphQLRequest{
-		Query: query,
+		OperationName: "UpdateWorkspace",
+		Query:         query,
 	}
 	jsonData, err = json.Marshal(request)
 	if err != nil {
@@ -121,26 +206,49 @@ func TestUpdateWorkspace(t *testing.T) {
 	o = e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 	o.Value("errors").Array().Value(0).Object().Value("message").IsEqual("input: updateWorkspace not found")
 }
 
 func TestAddMemberToWorkspace(t *testing.T) {
-	e, r := StartGQLServer(t, &config.Config{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	wid := accountsworkspace.NewID()
+	uid := accountsuser.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+	w := factory.NewWorkspace(func(b *accountsworkspace.Builder) {})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().AddUsersToWorkspace(gomock.Any(), gomock.Any()).Return(w, nil),
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().AddUsersToWorkspace(gomock.Any(), gomock.Any()).Return(nil, errors.New("user already joined")),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
+	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
+	}, true, true, mock)
 
-	w, err := r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	assert.False(t, w.Members().HasUser(uId2))
-
-	query := fmt.Sprintf(`mutation { addMemberToWorkspace(input: {workspaceId: "%s", userId: "%s", role: READER}){ workspace{ id } }}`, wId1, uId2)
+	query := fmt.Sprintf(`mutation AddMemberToWorkspace { addMemberToWorkspace(input: {workspaceId: "%s", userId: "%s", role: reader}){ workspace{ id } }}`, wid, uid)
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "AddMemberToWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -149,17 +257,13 @@ func TestAddMemberToWorkspace(t *testing.T) {
 	e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK)
 
-	w, err = r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	assert.True(t, w.Members().HasUser(uId2))
-	assert.Equal(t, w.Members().User(uId2).Role, workspace.RoleReader)
-
-	query = fmt.Sprintf(`mutation { addMemberToWorkspace(input: {workspaceId: "%s", userId: "%s", role: READER}){ workspace{ id } }}`, wId1, uId2)
+	query = fmt.Sprintf(`mutation AddMemberToWorkspace { addMemberToWorkspace(input: {workspaceId: "%s", userId: "%s", role: reader}){ workspace{ id } }}`, wid, uid)
 	request = GraphQLRequest{
-		Query: query,
+		OperationName: "AddMemberToWorkspace",
+		Query:         query,
 	}
 	jsonData, err = json.Marshal(request)
 	if err != nil {
@@ -168,26 +272,49 @@ func TestAddMemberToWorkspace(t *testing.T) {
 	e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object().
 		Value("errors").Array().Value(0).Object().Value("message").IsEqual("input: addMemberToWorkspace user already joined")
 }
 
 func TestRemoveMemberFromWorkspace(t *testing.T) {
-	e, r := StartGQLServer(t, &config.Config{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	wid := accountsworkspace.NewID()
+	uid := accountsuser.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+	w := factory.NewWorkspace(func(b *accountsworkspace.Builder) {})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().RemoveUserFromWorkspace(gomock.Any(), gomock.Any(), gomock.Any()).Return(w, nil),
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().RemoveUserFromWorkspace(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("target user does not exist in the workspace")),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
+	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
+	}, true, true, mock)
 
-	w, err := r.Workspace.FindByID(context.Background(), wId2)
-	assert.Nil(t, err)
-	assert.True(t, w.Members().HasUser(uId3))
-
-	query := fmt.Sprintf(`mutation { removeMemberFromWorkspace(input: {workspaceId: "%s", userId: "%s"}){ workspace{ id } }}`, wId2, uId3)
+	query := fmt.Sprintf(`mutation RemoveMemberFromWorkspace { removeMemberFromWorkspace(input: {workspaceId: "%s", userId: "%s"}){ workspace{ id } }}`, wid, uid)
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "RemoveMemberFromWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -196,35 +323,57 @@ func TestRemoveMemberFromWorkspace(t *testing.T) {
 	e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK)
-
-	w, err = r.Workspace.FindByID(context.Background(), wId1)
-	assert.Nil(t, err)
-	assert.False(t, w.Members().HasUser(uId3))
 
 	o := e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 	o.Value("errors").Array().Value(0).Object().Value("message").IsEqual("input: removeMemberFromWorkspace target user does not exist in the workspace")
 }
 
 func TestUpdateMemberOfWorkspace(t *testing.T) {
-	e, r := StartGQLServer(t, &config.Config{
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	operatorID := accountsuser.NewID()
+	wid := accountsworkspace.NewID()
+	wid2 := accountsworkspace.NewID()
+	uid := accountsuser.NewID()
+	uid2 := accountsuser.NewID()
+	operator := factory.NewUser(func(b *accountsuser.Builder) {
+		b.ID(operatorID)
+		b.Name("operator")
+		b.Email("operator@e2e.com")
+	})
+	w := factory.NewWorkspace(func(b *accountsworkspace.Builder) {})
+
+	mockUserRepo := usermockrepo.NewMockRepo(ctrl)
+	mockWorkspaceRepo := workspacemockrepo.NewMockWorkspaceRepo(ctrl)
+	gomock.InOrder(
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().UpdateUserOfWorkspace(gomock.Any(), gomock.Any()).Return(w, nil),
+		mockUserRepo.EXPECT().FindMe(gomock.Any()).Return(operator, nil),
+		mockWorkspaceRepo.EXPECT().UpdateUserOfWorkspace(gomock.Any(), gomock.Any()).Return(nil, errors.New("operation denied")),
+	)
+	mock := &TestMocks{
+		UserRepo:      mockUserRepo,
+		WorkspaceRepo: mockWorkspaceRepo,
+	}
+
+	e, _ := StartGQLServer(t, &config.Config{
 		Origins: []string{"https://example.com"},
 		AuthSrv: config.AuthSrvConfig{
 			Disabled: true,
 		},
-	}, true, baseSeederUser, true)
+	}, true, true, mock)
 
-	w, err := r.Workspace.FindByID(context.Background(), wId2)
-	assert.Nil(t, err)
-	assert.Equal(t, w.Members().User(uId3).Role, workspace.RoleReader)
-	query := fmt.Sprintf(`mutation { updateMemberOfWorkspace(input: {workspaceId: "%s", userId: "%s", role: WRITER}){ workspace{ id } }}`, wId2, uId3)
+	query := fmt.Sprintf(`mutation UpdateMemberOfWorkspace { updateMemberOfWorkspace(input: {workspaceId: "%s", userId: "%s", role: writer}){ workspace{ id } }}`, wid, uid)
 	request := GraphQLRequest{
-		Query: query,
+		OperationName: "UpdateMemberOfWorkspace",
+		Query:         query,
 	}
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -233,16 +382,13 @@ func TestUpdateMemberOfWorkspace(t *testing.T) {
 	e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK)
 
-	w, err = r.Workspace.FindByID(context.Background(), wId2)
-	assert.Nil(t, err)
-	assert.Equal(t, w.Members().User(uId3).Role, workspace.RoleWriter)
-
-	query = fmt.Sprintf(`mutation { updateMemberOfWorkspace(input: {workspaceId: "%s", userId: "%s", role: WRITER}){ workspace{ id } }}`, accountdomain.NewWorkspaceID(), uId3)
+	query = fmt.Sprintf(`mutation UpdateMemberOfWorkspace { updateMemberOfWorkspace(input: {workspaceId: "%s", userId: "%s", role: writer}){ workspace{ id } }}`, wid2, uid2)
 	request = GraphQLRequest{
-		Query: query,
+		OperationName: "UpdateMemberOfWorkspace",
+		Query:         query,
 	}
 	jsonData, err = json.Marshal(request)
 	if err != nil {
@@ -251,7 +397,7 @@ func TestUpdateMemberOfWorkspace(t *testing.T) {
 	o := e.POST("/api/graphql").
 		WithHeader("authorization", "Bearer test").
 		WithHeader("Content-Type", "application/json").
-		WithHeader("X-Reearth-Debug-User", uId1.String()).
+		WithHeader("X-Reearth-Debug-User", operatorID.String()).
 		WithBytes(jsonData).Expect().Status(http.StatusOK).JSON().Object()
 	o.Value("errors").Array().Value(0).Object().Value("message").IsEqual("input: updateMemberOfWorkspace operation denied")
 }

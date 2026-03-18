@@ -3,17 +3,17 @@ package interactor
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
-	"net/http"
+	"net/url"
 	"path"
+	"strings"
 
 	"github.com/reearth/orb"
 	"github.com/reearth/orb/geojson"
+	"github.com/reearth/reearth/server/internal/adapter"
 	"github.com/reearth/reearth/server/internal/usecase"
 	"github.com/reearth/reearth/server/internal/usecase/gateway"
 	"github.com/reearth/reearth/server/internal/usecase/interfaces"
@@ -23,30 +23,13 @@ import (
 	"github.com/reearth/reearth/server/pkg/nlslayer"
 	"github.com/reearth/reearth/server/pkg/plugin"
 	"github.com/reearth/reearth/server/pkg/property"
+	"github.com/reearth/reearth/server/pkg/scene"
 	"github.com/reearth/reearth/server/pkg/scene/builder"
 	"github.com/reearth/reearthx/account/accountusecase/accountrepo"
+	"github.com/reearth/reearthx/idx"
+	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"
-)
-
-var (
-	ErrParentLayerNotFound                  error = errors.New("parent layer not found")
-	ErrPluginNotFound                       error = errors.New("plugin not found")
-	ErrExtensionNotFound                    error = errors.New("extension not found")
-	ErrInfoboxNotFound                      error = errors.New("infobox not found")
-	ErrInfoboxAlreadyExists                 error = errors.New("infobox already exists")
-	ErrPhotoOverlayNotFound                 error = errors.New("photoOverlay not found")
-	ErrPhotoOverlayAlreadyExists            error = errors.New("photoOverlay already exists")
-	ErrCannotAddLayerToLinkedLayerGroup     error = errors.New("cannot add layer to linked layer group")
-	ErrCannotRemoveLayerToLinkedLayerGroup  error = errors.New("cannot remove layer to linked layer group")
-	ErrLinkedLayerItemCannotBeMoved         error = errors.New("linked layer item cannot be moved")
-	ErrLayerCannotBeMovedToLinkedLayerGroup error = errors.New("layer cannot be moved to linked layer group")
-	ErrCannotMoveLayerToOtherScene          error = errors.New("layer cannot layer to other scene")
-	ErrExtensionTypeMustBePrimitive         error = errors.New("extension type must be primitive")
-	ErrExtensionTypeMustBeBlock             error = errors.New("extension type must be block")
-	ErrInvalidExtensionType                 error = errors.New("invalid extension type")
-	ErrSketchNotFound                       error = errors.New("sketch not found")
-	ErrFeatureCollectionNotFound            error = errors.New("featureCollection not found")
 )
 
 type NLSLayer struct {
@@ -62,8 +45,6 @@ type NLSLayer struct {
 	file          gateway.File
 	workspaceRepo accountrepo.Workspace
 	transaction   usecasex.Transaction
-
-	propertySchemaRepo repo.PropertySchema
 }
 
 func NewNLSLayer(r *repo.Container, gr *gateway.Container) interfaces.NLSLayer {
@@ -79,8 +60,6 @@ func NewNLSLayer(r *repo.Container, gr *gateway.Container) interfaces.NLSLayer {
 		file:            gr.File,
 		workspaceRepo:   r.Workspace,
 		transaction:     r.Transaction,
-
-		propertySchemaRepo: r.PropertySchema,
 	}
 }
 
@@ -167,28 +146,10 @@ func (i *NLSLayer) AddLayerSimple(ctx context.Context, inp interfaces.AddNLSLaye
 		}
 	}
 
-	// geojson validate
 	if data, ok := (*inp.Config)["data"].(map[string]interface{}); ok {
 		if type_, ok := data["type"].(string); ok && type_ == "geojson" {
 			if url, ok := data["url"].(string); ok {
-				maxDownloadSize := 10 * 1024 * 1024 // 10MB
-				buf, err := downloadToBuffer(url, int64(maxDownloadSize))
-				if err != nil {
-					// If the download fails, it will be downloaded directly from the Asset repository.
-					if err := i.validateGeoJsonOfAssets(ctx, path.Base(url)); err != nil {
-						return nil, err
-					}
-				} else {
-					if err := validateGeoJSONFeatureCollection(buf.Bytes()); err != nil {
-						return nil, err
-					}
-				}
-			} else if value, ok := data["value"].(map[string]interface{}); ok {
-				geojsonData, err := json.Marshal(value)
-				if err != nil {
-					return nil, err
-				}
-				if err := validateGeoJSONFeatureCollection(geojsonData); err != nil {
+				if err := i.validateGeoJsonOfAssets(ctx, path.Base(url)); err != nil {
 					return nil, err
 				}
 			}
@@ -276,6 +237,12 @@ func (i *NLSLayer) Remove(ctx context.Context, lid id.NLSLayerID, operator *usec
 		if l.Scene() != parentLayer.Scene() {
 			return lid, nil, errors.New("invalid layer")
 		}
+	}
+
+	if parentLayer != nil {
+		return lid, nil, interfaces.ErrCannotRemoveLayerToLinkedLayerGroup
+	}
+	if parentLayer != nil {
 		parentLayer.Children().RemoveLayer(lid)
 		err = i.nlslayerRepo.Save(ctx, parentLayer)
 		if err != nil {
@@ -385,7 +352,7 @@ func (i *NLSLayer) CreateNLSInfobox(ctx context.Context, lid id.NLSLayerID, oper
 
 	infobox := l.Infobox()
 	if infobox != nil {
-		return nil, ErrInfoboxAlreadyExists
+		return nil, interfaces.ErrInfoboxAlreadyExists
 	}
 
 	schema := builtin.GetPropertySchema(builtin.PropertySchemaIDBetaInfobox)
@@ -395,63 +362,6 @@ func (i *NLSLayer) CreateNLSInfobox(ctx context.Context, lid id.NLSLayerID, oper
 	}
 	infobox = nlslayer.NewInfobox(nil, property.ID())
 	l.SetInfobox(infobox)
-
-	err = i.propertyRepo.Save(ctx, property)
-	if err != nil {
-		return nil, err
-	}
-	err = i.nlslayerRepo.Save(ctx, l)
-	if err != nil {
-		return nil, err
-	}
-
-	err = updateProjectUpdatedAtByScene(ctx, l.Scene(), i.projectRepo, i.sceneRepo)
-	if err != nil {
-		return nil, err
-	}
-
-	tx.Commit()
-	return l, nil
-}
-
-func (i *NLSLayer) CreateNLSPhotoOverlay(ctx context.Context, lid id.NLSLayerID, operator *usecase.Operator) (_ nlslayer.NLSLayer, err error) {
-	tx, err := i.transaction.Begin(ctx)
-	if err != nil {
-		return
-	}
-
-	ctx = tx.Context()
-	defer func() {
-		if err2 := tx.End(ctx); err == nil && err2 != nil {
-			err = err2
-		}
-	}()
-
-	l, err := i.nlslayerRepo.FindByID(ctx, lid)
-	if err != nil {
-		return nil, err
-	}
-	if err := i.CanWriteScene(l.Scene(), operator); err != nil {
-		return nil, err
-	}
-
-	// check scene lock
-	if err := i.CheckSceneLock(ctx, l.Scene()); err != nil {
-		return nil, err
-	}
-
-	photooverlay := l.PhotoOverlay()
-	if photooverlay != nil {
-		return nil, ErrPhotoOverlayAlreadyExists
-	}
-
-	schema := builtin.GetPropertySchema(builtin.PropertySchemaIDPhotoOverlay)
-	property, err := property.New().NewID().Schema(schema.ID()).Scene(l.Scene()).Build()
-	if err != nil {
-		return nil, err
-	}
-	photooverlay = nlslayer.NewPhotoOverlay(property.ID())
-	l.SetPhotoOverlay(photooverlay)
 
 	err = i.propertyRepo.Save(ctx, property)
 	if err != nil {
@@ -500,7 +410,7 @@ func (i *NLSLayer) RemoveNLSInfobox(ctx context.Context, layerID id.NLSLayerID, 
 
 	infobox := layer.Infobox()
 	if infobox == nil {
-		return nil, ErrInfoboxNotFound
+		return nil, interfaces.ErrInfoboxNotFound
 	}
 
 	layer.SetInfobox(nil)
@@ -524,74 +434,15 @@ func (i *NLSLayer) RemoveNLSInfobox(ctx context.Context, layerID id.NLSLayerID, 
 	return layer, nil
 }
 
-func (i *NLSLayer) RemoveNLSPhotoOverlay(ctx context.Context, layerID id.NLSLayerID, operator *usecase.Operator) (_ nlslayer.NLSLayer, err error) {
-
-	tx, err := i.transaction.Begin(ctx)
-	if err != nil {
-		return
-	}
-
-	ctx = tx.Context()
-	defer func() {
-		if err2 := tx.End(ctx); err == nil && err2 != nil {
-			err = err2
-		}
-	}()
-
-	layer, err := i.nlslayerRepo.FindByID(ctx, layerID)
-	if err != nil {
-		return nil, err
-	}
-	if err := i.CanWriteScene(layer.Scene(), operator); err != nil {
-		return nil, err
-	}
-
-	// check scene lock
-	if err := i.CheckSceneLock(ctx, layer.Scene()); err != nil {
-		return nil, err
-	}
-
-	photooverlay := layer.PhotoOverlay()
-	if photooverlay == nil {
-		return nil, ErrPhotoOverlayNotFound
-	}
-
-	layer.SetPhotoOverlay(nil)
-
-	err = i.propertyRepo.Remove(ctx, photooverlay.Property())
-	if err != nil {
-		return nil, err
-	}
-
-	err = i.nlslayerRepo.Save(ctx, layer)
-	if err != nil {
-		return nil, err
-	}
-
-	err = updateProjectUpdatedAtByScene(ctx, layer.Scene(), i.projectRepo, i.sceneRepo)
-	if err != nil {
-		return nil, err
-	}
-
-	tx.Commit()
-	return layer, nil
-}
-
-func (i *NLSLayer) getPlugin(ctx context.Context, p *id.PluginID, e *id.PluginExtensionID, filter *repo.SceneFilter) (*plugin.Plugin, *plugin.Extension, error) {
+func (i *NLSLayer) getPlugin(ctx context.Context, sid id.SceneID, p *id.PluginID, e *id.PluginExtensionID) (*plugin.Plugin, *plugin.Extension, error) {
 	if p == nil {
 		return nil, nil, nil
 	}
-	var plugin *plugin.Plugin
-	var err error
 
-	if filter == nil {
-		plugin, err = i.pluginRepo.FindByID(ctx, *p)
-	} else {
-		plugin, err = i.pluginRepo.Filtered(*filter).FindByID(ctx, *p)
-	}
+	plugin, err := i.pluginRepo.FindByID(ctx, *p)
 	if err != nil {
 		if errors.Is(err, rerror.ErrNotFound) {
-			return nil, nil, ErrPluginNotFound
+			return nil, nil, interfaces.ErrPluginNotFound
 		}
 		return nil, nil, err
 	}
@@ -602,47 +453,10 @@ func (i *NLSLayer) getPlugin(ctx context.Context, p *id.PluginID, e *id.PluginEx
 
 	extension := plugin.Extension(*e)
 	if extension == nil {
-		return nil, nil, ErrExtensionNotFound
+		return nil, nil, interfaces.ErrExtensionNotFound
 	}
 
 	return plugin, extension, nil
-}
-
-func (i *NLSLayer) getInfoboxBlockPlugin(ctx context.Context, pid string, eid string, filter *repo.SceneFilter) (*id.PluginID, *id.PluginExtensionID, *plugin.Extension, error) {
-
-	pluginID, err := id.PluginIDFrom(pid)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	extensionID := id.PluginExtensionID(eid)
-	_, extension, err := i.getPlugin(ctx, &pluginID, &extensionID, filter)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if extension.Type() != plugin.ExtensionTypeInfoboxBlock {
-		return nil, nil, nil, ErrExtensionTypeMustBeBlock
-	}
-
-	return &pluginID, &extensionID, extension, nil
-}
-
-func (i *NLSLayer) addNewProperty(ctx context.Context, schemaID id.PropertySchemaID, sceneID id.SceneID, filter *repo.SceneFilter) (*property.Property, error) {
-	prop, err := property.New().NewID().Schema(schemaID).Scene(sceneID).Build()
-	if err != nil {
-		return nil, err
-	}
-	if filter == nil {
-		if err = i.propertyRepo.Save(ctx, prop); err != nil {
-			return nil, err
-		}
-	} else {
-		if err = i.propertyRepo.Filtered(*filter).Save(ctx, prop); err != nil {
-			return nil, err
-		}
-	}
-	return prop, nil
 }
 
 func (i *NLSLayer) AddNLSInfoboxBlock(ctx context.Context, inp interfaces.AddNLSInfoboxBlockParam, operator *usecase.Operator) (_ *nlslayer.InfoboxBlock, _ nlslayer.NLSLayer, err error) {
@@ -673,15 +487,17 @@ func (i *NLSLayer) AddNLSInfoboxBlock(ctx context.Context, inp interfaces.AddNLS
 
 	infobox := l.Infobox()
 	if infobox == nil {
-		return nil, nil, ErrInfoboxNotFound
+		return nil, nil, interfaces.ErrInfoboxNotFound
 	}
 
-	_, _, extension, err := i.getInfoboxBlockPlugin(ctx, inp.PluginID.String(), inp.ExtensionID.String(), nil)
+	_, extension, err := i.getPlugin(ctx, l.Scene(), &inp.PluginID, &inp.ExtensionID)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	property, err := i.addNewProperty(ctx, extension.Schema(), l.Scene(), nil)
+	if extension.Type() != plugin.ExtensionTypeInfoboxBlock {
+		return nil, nil, interfaces.ErrExtensionTypeMustBeBlock
+	}
+	property, err := property.New().NewID().Schema(extension.Schema()).Scene(l.Scene()).Build()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -701,6 +517,11 @@ func (i *NLSLayer) AddNLSInfoboxBlock(ctx context.Context, inp interfaces.AddNLS
 		index = *inp.Index
 	}
 	infobox.Add(block, index)
+
+	err = i.propertyRepo.Save(ctx, property)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	err = i.nlslayerRepo.Save(ctx, l)
 	if err != nil {
@@ -744,7 +565,7 @@ func (i *NLSLayer) MoveNLSInfoboxBlock(ctx context.Context, inp interfaces.MoveN
 
 	infobox := layer.Infobox()
 	if infobox == nil {
-		return inp.InfoboxBlockID, nil, -1, ErrInfoboxNotFound
+		return inp.InfoboxBlockID, nil, -1, interfaces.ErrInfoboxNotFound
 	}
 
 	infobox.Move(inp.InfoboxBlockID, inp.Index)
@@ -791,7 +612,7 @@ func (i *NLSLayer) RemoveNLSInfoboxBlock(ctx context.Context, inp interfaces.Rem
 
 	infobox := layer.Infobox()
 	if infobox == nil {
-		return inp.InfoboxBlockID, nil, ErrInfoboxNotFound
+		return inp.InfoboxBlockID, nil, interfaces.ErrInfoboxNotFound
 	}
 
 	infobox.Remove(inp.InfoboxBlockID)
@@ -917,7 +738,7 @@ func (i *NLSLayer) ChangeCustomPropertyTitle(ctx context.Context, inp interfaces
 	}
 
 	if layer.Sketch() == nil || layer.Sketch().FeatureCollection() == nil {
-		return nil, ErrSketchNotFound
+		return nil, interfaces.ErrSketchNotFound
 	}
 	if err := i.CanWriteScene(layer.Scene(), operator); err != nil {
 		return nil, interfaces.ErrOperationDenied
@@ -983,7 +804,7 @@ func (i *NLSLayer) RemoveCustomProperty(ctx context.Context, inp interfaces.AddO
 		return nil, err
 	}
 	if layer.Sketch() == nil || layer.Sketch().FeatureCollection() == nil {
-		return nil, ErrSketchNotFound
+		return nil, interfaces.ErrSketchNotFound
 	}
 
 	// Check if removedTitle exists
@@ -1048,8 +869,7 @@ func (i *NLSLayer) AddGeoJSONFeature(ctx context.Context, inp interfaces.AddNLSL
 		return nlslayer.Feature{}, err
 	}
 
-	feature, err := nlslayer.NewFeature(
-		id.NewFeatureID(),
+	feature, err := nlslayer.NewFeatureWithNewId(
 		inp.Type,
 		geometry,
 	)
@@ -1190,36 +1010,56 @@ func (i *NLSLayer) DeleteGeoJSONFeature(ctx context.Context, inp interfaces.Dele
 	return inp.FeatureID, nil
 }
 
-func (i *NLSLayer) ImportNLSLayers(ctx context.Context, sceneID id.SceneID, data *[]byte) (nlslayer.NLSLayerList, error) {
-
-	sceneJSON, err := builder.ParseSceneJSONByByte(data)
+func (i *NLSLayer) ImportNLSLayers(ctx context.Context, sceneID idx.ID[id.Scene], sceneData map[string]interface{}) (nlslayer.NLSLayerList, map[string]idx.ID[id.NLSLayer], error) {
+	sceneJSON, err := builder.ParseSceneJSON(ctx, sceneData)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if sceneJSON.NLSLayers == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	filter := Filter(sceneID)
+	readableFilter := repo.SceneFilter{Readable: scene.IDList{sceneID}}
+	writableFilter := repo.SceneFilter{Writable: scene.IDList{sceneID}}
 
-	nlayerIDs := id.NLSLayerIDList{}
+	nlayerIDs := idx.List[id.NLSLayer]{}
+	replaceNLSLayerIDs := make(map[string]idx.ID[id.NLSLayer])
 	for _, nlsLayerJSON := range sceneJSON.NLSLayers {
-
-		for k, v := range nlsLayerJSON.Children {
-			fmt.Println("Unsupported nlsLayerJSON.Children ", k, v)
-		}
-
 		newNLSLayerID := id.NewNLSLayerID()
 		nlayerIDs = append(nlayerIDs, newNLSLayerID)
+		replaceNLSLayerIDs[nlsLayerJSON.ID] = newNLSLayerID
 
-		// Replace new layer id
-		*data = bytes.Replace(*data, []byte(nlsLayerJSON.ID), []byte(newNLSLayerID.String()), -1)
+		if nlsLayerJSON.Config != nil {
+			config := *nlsLayerJSON.Config
+			if data, ok := config["data"].(map[string]interface{}); ok {
+				if u, ok := data["url"].(string); ok {
+					urlVal, err := url.Parse(u)
+					if err != nil {
+						log.Infofc(ctx, "invalid url: %v\n", err.Error())
+						return nil, nil, err
+					}
+					if urlVal.Host == "localhost:8080" || strings.HasSuffix(urlVal.Host, ".reearth.dev") || strings.HasSuffix(urlVal.Host, ".reearth.io") {
+						currentHost := adapter.CurrentHost(ctx)
+						currentHost = strings.TrimPrefix(currentHost, "https://")
+						currentHost = strings.TrimPrefix(currentHost, "http://")
+						urlVal.Host = currentHost
+						if currentHost == "localhost:8080" {
+							urlVal.Scheme = "http"
+						} else {
+							urlVal.Scheme = "https"
+						}
+						data["url"] = urlVal.String()
+					}
+				}
+			}
+
+		}
 
 		nlBuilder := nlslayer.New().
-			ID(newNLSLayerID).Simple().
+			ID(newNLSLayerID).
+			Simple().
 			Scene(sceneID).
-			Index(nlsLayerJSON.Index).
 			Title(nlsLayerJSON.Title).
 			LayerType(nlslayer.LayerType(nlsLayerJSON.LayerType)).
 			Config((*nlslayer.Config)(nlsLayerJSON.Config)).
@@ -1228,160 +1068,98 @@ func (i *NLSLayer) ImportNLSLayers(ctx context.Context, sceneID id.SceneID, data
 
 		// Infobox --------
 		if nlsLayerJSON.Infobox != nil {
-
-			nlsInfoboxJSON := nlsLayerJSON.Infobox
-			betaInfoboxSchema := builtin.GetPropertySchema(builtin.PropertySchemaIDBetaInfobox)
-			propI, err := i.addNewProperty(ctx, betaInfoboxSchema.ID(), sceneID, &filter)
+			schema := builtin.GetPropertySchema(builtin.PropertySchemaIDBetaInfobox)
+			prop, err := property.New().NewID().Schema(schema.ID()).Scene(sceneID).Build()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			builder.PropertyUpdate(ctx, propI, i.propertyRepo, i.propertySchemaRepo, nlsInfoboxJSON.Property)
-
-			infobox := nlslayer.NewInfobox(nil, propI.ID())
-			nlBuilder.Infobox(infobox)
+			prop, err = builder.AddItemFromPropertyJSON(ctx, prop, schema, nlsLayerJSON.Infobox.Property)
+			if err != nil {
+				return nil, nil, err
+			}
+			// Save property
+			if err = i.propertyRepo.Filtered(writableFilter).Save(ctx, prop); err != nil {
+				return nil, nil, err
+			}
 
 			blocks := make([]*nlslayer.InfoboxBlock, 0)
-			for _, nlsInfoboxBlockJSON := range nlsLayerJSON.Infobox.Blocks {
-
-				pluginId, extensionId, extension, err := i.getInfoboxBlockPlugin(ctx, nlsInfoboxBlockJSON.PluginId, nlsInfoboxBlockJSON.ExtensionId, &filter)
-				if err != nil {
-					return nil, err
+			if nlsLayerJSON.Infobox != nil {
+				for _, b := range nlsLayerJSON.Infobox.Blocks {
+					schemaB := builtin.GetPropertySchema(builtin.PropertySchemaIDBetaInfobox)
+					propB, err := property.New().NewID().Schema(schemaB.ID()).Scene(sceneID).Build()
+					if err != nil {
+						return nil, nil, err
+					}
+					propB, err = builder.AddItemFromPropertyJSON(ctx, propB, schemaB, b.Property)
+					if err != nil {
+						return nil, nil, err
+					}
+					// Save property
+					if err = i.propertyRepo.Filtered(writableFilter).Save(ctx, propB); err != nil {
+						return nil, nil, err
+					}
+					extensionID := id.PluginExtensionID(b.ExtensionId)
+					pluginID, _ := id.PluginIDFrom(b.PluginId)
+					ibf, err := nlslayer.NewInfoboxBlock().
+						NewID().
+						Plugin(pluginID).
+						Extension(extensionID).
+						Property(propB.ID()).
+						Build()
+					if err != nil {
+						return nil, nil, err
+					}
+					blocks = append(blocks, ibf)
 				}
-
-				propB, err := i.addNewProperty(ctx, extension.Schema(), sceneID, &filter)
-				if err != nil {
-					return nil, err
-				}
-				builder.PropertyUpdate(ctx, propB, i.propertyRepo, i.propertySchemaRepo, nlsInfoboxBlockJSON.Property)
-				for k, v := range nlsInfoboxBlockJSON.Plugins {
-					fmt.Println("Unsupported nlsInfoboxBlockJSON.Plugins ", k, v)
-				}
-
-				block, err := nlslayer.NewInfoboxBlock().
-					NewID().
-					Plugin(*pluginId).
-					Extension(*extensionId).
-					Property(propB.ID()).
-					Build()
-				if err != nil {
-					return nil, err
-				}
-
-				blocks = append(blocks, block)
 			}
-
-			nlBuilder = nlBuilder.Infobox(nlslayer.NewInfobox(blocks, propI.ID()))
-		}
-
-		// PhotoOverlay --------
-		if nlsLayerJSON.PhotoOverlay != nil {
-
-			nlsPhotoOverlayJSON := nlsLayerJSON.PhotoOverlay
-			betaPhotoOverlaySchema := builtin.GetPropertySchema(builtin.PropertySchemaIDPhotoOverlay)
-			propI, err := i.addNewProperty(ctx, betaPhotoOverlaySchema.ID(), sceneID, &filter)
-			if err != nil {
-				return nil, err
-			}
-			builder.PropertyUpdate(ctx, propI, i.propertyRepo, i.propertySchemaRepo, nlsPhotoOverlayJSON.Property)
-
-			photooverlay := nlslayer.NewPhotoOverlay(propI.ID())
-			nlBuilder.PhotoOverlay(photooverlay)
-
-			nlBuilder = nlBuilder.PhotoOverlay(nlslayer.NewPhotoOverlay(propI.ID()))
+			nlBuilder = nlBuilder.Infobox(nlslayer.NewInfobox(blocks, prop.ID()))
 		}
 
 		// SketchInfo --------
 		if nlsLayerJSON.SketchInfo != nil {
-			sketchInfoJSON := nlsLayerJSON.SketchInfo
-
-			featureCollectionJSON := sketchInfoJSON.FeatureCollection
-
-			features := make([]nlslayer.Feature, 0)
-			for _, featureJSON := range featureCollectionJSON.Features {
-
+			i := nlsLayerJSON.SketchInfo
+			feature := make([]nlslayer.Feature, 0)
+			for _, v := range i.FeatureCollection.Features {
 				var geometry nlslayer.Geometry
-				for _, g := range featureJSON.Geometry {
+				for _, g := range v.Geometry {
 					if geometryMap, ok := g.(map[string]any); ok {
 						geometry, err = nlslayer.NewGeometryFromMap(geometryMap)
 						if err != nil {
-							return nil, err
+							return nil, nil, err
 						}
 					}
 				}
-
-				feature, err := nlslayer.NewFeature(
-					id.NewFeatureID(),
-					featureJSON.Type,
-					geometry,
-				)
+				f, err := nlslayer.NewFeatureWithNewId(v.Type, geometry)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
-
-				feature.UpdateProperties(featureJSON.Properties)
-				features = append(features, *feature)
+				feature = append(feature, *f)
 			}
-
 			featureCollection := nlslayer.NewFeatureCollection(
-				featureCollectionJSON.Type,
-				features,
+				i.FeatureCollection.Type,
+				feature,
 			)
-
 			sketchInfo := nlslayer.NewSketchInfo(
-				sketchInfoJSON.PropertySchema,
+				i.PropertySchema,
 				featureCollection,
 			)
-
 			nlBuilder = nlBuilder.Sketch(sketchInfo)
 		}
 
 		nlayer, err := nlBuilder.Build()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		if err := i.nlslayerRepo.Filtered(filter).Save(ctx, nlayer); err != nil {
-			return nil, err
+		if err := i.nlslayerRepo.Filtered(writableFilter).Save(ctx, nlayer); err != nil {
+			return nil, nil, err
 		}
-
 	}
 
-	results, err := i.nlslayerRepo.Filtered(filter).FindByIDs(ctx, nlayerIDs)
+	nlayer, err := i.nlslayerRepo.Filtered(readableFilter).FindByIDs(ctx, nlayerIDs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return results, nil
-}
-
-func downloadToBuffer(url string, maxDownloadSize int64) (*bytes.Buffer, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err2 := resp.Body.Close(); err2 != nil && err == nil {
-			err = err2
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download file, status code: %d", resp.StatusCode)
-	}
-	if resp.ContentLength > maxDownloadSize {
-		return nil, fmt.Errorf("file too large: %d bytes", resp.ContentLength)
-	}
-	reader := io.LimitReader(resp.Body, maxDownloadSize)
-
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, reader)
-	if err != nil {
-		return nil, err
-	}
-
-	return &buf, nil
+	return nlayer, replaceNLSLayerIDs, nil
 }
 
 func (i *NLSLayer) validateGeoJsonOfAssets(ctx context.Context, assetFileName string) error {
@@ -1418,17 +1196,17 @@ func validateGeoJSONFeatureCollection(data []byte) error {
 		}
 	} else {
 		fc, err := geojson.UnmarshalFeatureCollection(data)
-		if fc == nil || err != nil {
-			validationErrors = append(validationErrors, errors.New("Invalid GeoJSON data"))
-		} else {
-			if fc.BBox != nil && !fc.BBox.Valid() {
-				validationErrors = append(validationErrors, fmt.Errorf("Invalid BBox: %w", err))
-			}
+		if fc.BBox != nil && !fc.BBox.Valid() {
+			validationErrors = append(validationErrors, fmt.Errorf("Invalid BBox: %w", err))
+		}
+		if err == nil {
 			for _, feature := range fc.Features {
 				if errs := validateGeoJSONFeature(feature); len(errs) > 0 {
 					validationErrors = append(validationErrors, errs...)
 				}
 			}
+		} else {
+			validationErrors = append(validationErrors, errors.New("Invalid GeoJSON data"))
 		}
 	}
 

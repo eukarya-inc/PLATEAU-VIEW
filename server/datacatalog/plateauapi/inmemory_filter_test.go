@@ -16,6 +16,29 @@ func TestFilterDataset(t *testing.T) {
 		}, nil))
 	})
 
+	t.Run("search tokens case insensitive", func(t *testing.T) {
+		// uppercase search token matches lowercase name
+		assert.True(t, filterDataset(PlateauDataset{
+			Name: "tokyo building",
+		}, DatasetsInput{
+			SearchTokens: []string{"TOKYO"},
+		}, nil))
+
+		// lowercase search token matches uppercase name
+		assert.True(t, filterDataset(PlateauDataset{
+			Name: "TOKYO BUILDING",
+		}, DatasetsInput{
+			SearchTokens: []string{"tokyo"},
+		}, nil))
+
+		// mixed case
+		assert.True(t, filterDataset(PlateauDataset{
+			Name: "Tokyo Building",
+		}, DatasetsInput{
+			SearchTokens: []string{"tOkYo"},
+		}, nil))
+	})
+
 	t.Run("default stage", func(t *testing.T) {
 		assert.False(t, filterDataset(RelatedDataset{
 			TypeCode: "emergency_route",
@@ -115,6 +138,22 @@ func TestFilterArea(t *testing.T) {
 				SearchTokens: []string{"Kanagawa"},
 			},
 			expected: false,
+		},
+		{
+			name: "Prefecture with case insensitive search tokens",
+			area: Prefecture{Name: "Tokyo"},
+			input: AreasInput{
+				SearchTokens: []string{"TOKYO"},
+			},
+			expected: true,
+		},
+		{
+			name: "Prefecture with lowercase search tokens",
+			area: Prefecture{Name: "TOKYO"},
+			input: AreasInput{
+				SearchTokens: []string{"tokyo"},
+			},
+			expected: true,
 		},
 		{
 			name: "City with search tokens and matching parent code",

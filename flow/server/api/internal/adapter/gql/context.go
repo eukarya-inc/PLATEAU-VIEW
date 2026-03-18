@@ -3,11 +3,9 @@ package gql
 import (
 	"context"
 
+	accountsuser "github.com/reearth/reearth-accounts/server/pkg/user"
 	"github.com/reearth/reearth-flow/api/internal/adapter"
-	"github.com/reearth/reearth-flow/api/internal/usecase"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
-	"github.com/reearth/reearthx/account/accountdomain/user"
-	"github.com/reearth/reearthx/account/accountusecase"
 )
 
 type ContextKey string
@@ -28,19 +26,8 @@ func AttachUsecases(ctx context.Context, u *interfaces.Container, enableDataLoad
 	return ctx
 }
 
-func getUser(ctx context.Context) *user.User {
+func getUser(ctx context.Context) *accountsuser.User {
 	return adapter.User(ctx)
-}
-
-func getOperator(ctx context.Context) *usecase.Operator {
-	return adapter.Operator(ctx)
-}
-
-func getAcOperator(ctx context.Context) *accountusecase.Operator {
-	if op := getOperator(ctx); op != nil {
-		return op.AcOperator
-	}
-	return nil
 }
 
 func usecases(ctx context.Context) *interfaces.Container {

@@ -24,7 +24,7 @@ impl ProcessorFactory for ExtruderFactory {
     }
 
     fn description(&self) -> &str {
-        "Extrudes a polygon by a distance"
+        "Extrude 2D Polygons into 3D Solids"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -53,14 +53,12 @@ impl ProcessorFactory for ExtruderFactory {
         let params: ExtruderParam = if let Some(with) = with.clone() {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::ExtruderFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::ExtruderFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -74,7 +72,7 @@ impl ProcessorFactory for ExtruderFactory {
         let expr = &params.distance;
         let template_ast = expr_engine
             .compile(expr.as_ref())
-            .map_err(|e| GeometryProcessorError::ExtruderFactory(format!("{:?}", e)))?;
+            .map_err(|e| GeometryProcessorError::ExtruderFactory(format!("{e:?}")))?;
         let process = Extruder {
             global_params: with,
             distance: template_ast,
@@ -89,9 +87,13 @@ pub struct Extruder {
     distance: rhai::AST,
 }
 
+/// # Extruder Parameters
+/// Configure how to extrude 2D polygons into 3D solid geometries
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtruderParam {
+    /// # Distance
+    /// The vertical distance (height) to extrude the polygon. Can be a constant value or an expression
     distance: Expr,
 }
 
@@ -118,8 +120,8 @@ impl Processor for Extruder {
         if geometry.is_empty() {
             return Err(GeometryProcessorError::Extruder("Missing geometry".to_string()).into());
         };
-        let geometry = geometry.clone();
-        let GeometryValue::FlowGeometry3D(flow_geometry) = &geometry.value else {
+        let geom_inner = (**geometry).clone();
+        let GeometryValue::FlowGeometry3D(flow_geometry) = &geom_inner.value else {
             return Err(GeometryProcessorError::Extruder("Invalid geometry".to_string()).into());
         };
         let FlowGeometry3D::Polygon(polygon) = flow_geometry else {
@@ -128,15 +130,19 @@ impl Processor for Extruder {
         let solid = polygon.extrude(height);
         let geometry = Geometry {
             value: GeometryValue::FlowGeometry3D(FlowGeometry3D::Solid(solid)),
-            ..geometry
+            ..geom_inner
         };
         let mut feature = feature.clone();
-        feature.geometry = geometry;
+        feature.geometry = Arc::new(geometry);
         fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

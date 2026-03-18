@@ -3,7 +3,6 @@ package property
 import (
 	"testing"
 
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,7 +53,7 @@ func TestSchemaGroupList_Field(t *testing.T) {
 	tests := []struct {
 		name   string
 		target *SchemaGroupList
-		input  id.PropertyFieldID
+		input  FieldID
 		want   *SchemaField
 	}{
 		{
@@ -69,7 +68,7 @@ func TestSchemaGroupList_Field(t *testing.T) {
 		{
 			name:   "not found",
 			target: testSchemaGroupList1,
-			input:  id.PropertyFieldID("zz"),
+			input:  FieldID("zz"),
 		},
 	}
 
@@ -86,7 +85,7 @@ func TestSchemaGroupList_Group(t *testing.T) {
 	tests := []struct {
 		name   string
 		target *SchemaGroupList
-		input  id.PropertySchemaGroupID
+		input  SchemaGroupID
 		want   *SchemaGroup
 	}{
 		{
@@ -104,7 +103,7 @@ func TestSchemaGroupList_Group(t *testing.T) {
 		{
 			name:   "not found",
 			target: testSchemaGroupList1,
-			input:  id.PropertySchemaGroupID("zz"),
+			input:  SchemaGroupID("zz"),
 			want:   nil,
 		},
 	}
@@ -122,7 +121,7 @@ func TestSchemaGroupList_GroupByField(t *testing.T) {
 	tests := []struct {
 		name   string
 		target *SchemaGroupList
-		input  id.PropertyFieldID
+		input  FieldID
 		want   *SchemaGroup
 	}{
 		{
@@ -140,7 +139,7 @@ func TestSchemaGroupList_GroupByField(t *testing.T) {
 		{
 			name:   "not found",
 			target: testSchemaGroupList1,
-			input:  id.PropertyFieldID("zz"),
+			input:  FieldID("zz"),
 			want:   nil,
 		},
 	}
@@ -199,7 +198,7 @@ func TestSchemaGroupList_GroupAndFields(t *testing.T) {
 
 func TestSchemaGroupList_GroupAndField(t *testing.T) {
 	type args struct {
-		f id.PropertyFieldID
+		f FieldID
 	}
 	tests := []struct {
 		name   string

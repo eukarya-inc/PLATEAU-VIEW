@@ -2,6 +2,28 @@ use std::sync::{Arc, RwLock};
 
 use crate::{engine::Engine, error::Error, ShareLock, Value, Vars};
 
+/// Inner environment exposed to Rhai scripts as "env".
+/// This is separate from `Scope` to avoid a cyclic reference.
+#[derive(Debug, Clone)]
+pub(crate) struct ScopeEnv {
+    engine: Arc<Engine>,
+    vars: ShareLock<Vars>,
+}
+
+impl ScopeEnv {
+    pub fn get(&self, name: &str) -> Option<Value> {
+        let vars = self.vars.read().unwrap();
+        vars.get(name).cloned().or_else(|| self.engine.get(name))
+    }
+
+    pub fn set(&self, name: &str, value: Value) {
+        let mut vars = self.vars.write().unwrap();
+        vars.entry(name.to_string())
+            .and_modify(|i| *i = value.clone())
+            .or_insert(value);
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct Scope {
     engine: Arc<Engine>,
@@ -11,19 +33,22 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(engine: &Engine) -> Self {
-        let scope = rhai::Scope::new();
+        let engine = Arc::new(engine.clone());
+        let vars = Arc::new(RwLock::new(Vars::new()));
 
-        let scope = Self {
-            engine: Arc::new(engine.clone()),
-            scope: Arc::new(RwLock::new(scope)),
-            vars: Arc::new(RwLock::new(Vars::new())),
+        let env = ScopeEnv {
+            engine: Arc::clone(&engine),
+            vars: Arc::clone(&vars),
         };
-        scope
-            .scope
-            .write()
-            .unwrap()
-            .set_or_push("env", scope.clone());
-        scope
+
+        let mut rhai_scope = rhai::Scope::new();
+        rhai_scope.set_or_push("env", env);
+
+        Self {
+            engine,
+            scope: Arc::new(RwLock::new(rhai_scope)),
+            vars,
+        }
     }
 
     pub fn vars(&self) -> Vars {
@@ -47,17 +72,28 @@ impl Scope {
     pub fn eval<T: rhai::Variant + Clone>(&self, expr: &str) -> crate::Result<T> {
         match self.engine.eval_scope::<T>(expr, self) {
             Ok(ret) => Ok(ret),
-            Err(err) => Err(Error::ExprInternalRuntime(format!("{err} in {expr}"))),
+            Err(err) => {
+                if matches!(&err, Error::ExprInternalRuntime(_)) {
+                    Err(err)
+                } else {
+                    Err(Error::ExprInternalRuntime(format!("{err} in {expr}")))
+                }
+            }
         }
     }
 
     pub fn eval_ast<T: rhai::Variant + Clone>(&self, ast: &rhai::AST) -> crate::Result<T> {
         match self.engine.eval_scope_ast::<T>(ast, self) {
             Ok(ret) => Ok(ret),
-            Err(err) => Err(Error::ExprInternalRuntime(format!(
-                "ast = {:?}, err = {}",
-                ast, err
-            ))),
+            Err(err) => {
+                if matches!(&err, Error::ExprInternalRuntime(_)) {
+                    Err(err)
+                } else {
+                    Err(Error::ExprInternalRuntime(format!(
+                        "ast = {ast:?}, err = {err}"
+                    )))
+                }
+            }
         }
     }
 
@@ -67,10 +103,6 @@ impl Scope {
     }
 
     pub fn set(&self, name: &str, value: Value) {
-        if self.engine.vars().contains_key(name) {
-            return self.engine.set(name, value);
-        }
-
         let mut vars = self.vars.write().unwrap();
         vars.entry(name.to_string())
             .and_modify(|i| *i = value.clone())
@@ -78,10 +110,6 @@ impl Scope {
     }
 
     pub fn remove(&self, name: &str) {
-        if self.engine.vars().contains_key(name) {
-            return self.engine.remove(name);
-        }
-
         let mut vars = self.vars.write().unwrap();
         vars.remove(name);
     }

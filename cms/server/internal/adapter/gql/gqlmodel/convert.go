@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/reearth/reearth-cms/server/pkg/file"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/file"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/samber/lo"
 )

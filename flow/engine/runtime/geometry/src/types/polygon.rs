@@ -1,6 +1,5 @@
-use std::hash::{Hash, Hasher};
-
 use approx::{AbsDiffEq, RelativeEq};
+use core::f64;
 use flatgeom::{
     LineString2 as NLineString2, LineString3 as NLineString3, Polygon2 as NPolygon2,
     Polygon3 as NPolygon3,
@@ -10,10 +9,16 @@ use nalgebra::{Point2 as NaPoint2, Point3 as NaPoint3};
 use num_traits::Zero;
 use nusamai_projection::vshift::Jgd2011ToWgs84;
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 
 use crate::algorithm::contains::Contains;
 use crate::algorithm::coords_iter::CoordsIter;
 use crate::algorithm::line_intersection::{line_intersection, LineIntersection};
+use crate::algorithm::utils::{
+    denormalize_vertices, normalize_vertices, normalize_vertices_2d,
+    normalize_vertices_2d_with_params, normalize_vertices_with_params, NormalizationResult2D,
+    NormalizationResult3D,
+};
 use crate::algorithm::GeoFloat;
 
 use super::conversion::geojson::create_polygon_type;
@@ -110,12 +115,6 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
         self.interiors.push(new_interior);
     }
 
-    pub fn exteriors_push(&mut self, new_exterior: impl Into<LineString<T, Z>>) {
-        let mut new_exterior = new_exterior.into();
-        new_exterior.close();
-        self.exterior = new_exterior;
-    }
-
     pub fn area(&self) -> f64 {
         let mut area = 0.0;
         area += self.exterior().ring_area();
@@ -123,11 +122,6 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
             area -= interior.ring_area();
         }
         area
-    }
-
-    pub fn add_ring(&mut self, linestring: LineString<T, Z>) {
-        self.exteriors_push(linestring.clone());
-        self.interiors_push(linestring.clone());
     }
 
     /// Extrudes the polygon along the Z-axis by a specified distance.
@@ -150,7 +144,12 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
             &self.interiors,
             &top_interiors,
         );
-        Solid::new(bottom_faces, top_faces, side_faces)
+        let all_faces = bottom_faces
+            .into_iter()
+            .chain(top_faces)
+            .chain(side_faces)
+            .collect();
+        Solid::new_with_faces(all_faces)
     }
 
     pub fn validate_rings_length(&self) -> Validation {
@@ -158,14 +157,13 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
 
         let exterior = self.exterior();
         if exterior.coords().count() < 3 {
-            let error_message =
-                format!("Exterior Ring {:?} must contain 3 or more coords", exterior);
+            let error_message = format!("Exterior Ring {exterior:?} must contain 3 or more coords");
             errors.push(error_message);
         }
         for interior in self.interiors() {
             if interior.coords().count() < 3 {
                 let error_message =
-                    format!("Interior Ring {:?} must contain 3 or more coords", interior);
+                    format!("Interior Ring {interior:?} must contain 3 or more coords");
                 errors.push(error_message);
             }
         }
@@ -179,12 +177,12 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
         let mut errors: Vec<String> = vec![];
         let exterior = self.exterior();
         if !exterior.is_closed() {
-            let error_message = format!("Exterior ring {:?} is not closed", exterior);
+            let error_message = format!("Exterior ring {exterior:?} is not closed");
             errors.push(error_message);
         }
         for interior in self.interiors() {
             if !interior.is_closed() {
-                let error_message = format!("Interior ring {:?} is not closed", interior);
+                let error_message = format!("Interior ring {interior:?} is not closed");
                 errors.push(error_message);
             }
         }
@@ -198,12 +196,12 @@ impl<T: CoordNum, Z: CoordNum> Polygon<T, Z> {
         let mut errors: Vec<String> = vec![];
         let exterior = self.exterior();
         if !exterior.is_closed() {
-            let error_message = format!("Exterior ring {:?} is not closed", exterior);
+            let error_message = format!("Exterior ring {exterior:?} is not closed");
             errors.push(error_message);
         }
         for interior in self.interiors() {
             if !interior.is_closed() {
-                let error_message = format!("Interior ring {:?} is not closed", interior);
+                let error_message = format!("Interior ring {interior:?} is not closed");
                 errors.push(error_message);
             }
         }
@@ -267,6 +265,20 @@ impl Polygon3D<f64> {
             interior.transform_offset(x, y, z);
         }
     }
+
+    /// Transforms the X/Y coordinates of all points using the provided function.
+    /// The Z coordinate is passed through unchanged.
+    /// Returns an error if any transformation fails.
+    pub fn transform_horizontal<F, E>(&mut self, transform_fn: F) -> Result<(), E>
+    where
+        F: Fn(f64, f64) -> Result<(f64, f64), E>,
+    {
+        self.exterior.transform_horizontal(&transform_fn)?;
+        for interior in &mut self.interiors {
+            interior.transform_horizontal(&transform_fn)?;
+        }
+        Ok(())
+    }
 }
 
 pub fn validate_self_intersection<T: GeoFloat, Z: GeoFloat>(polygon: &Polygon<T, Z>) -> Validation {
@@ -284,13 +296,13 @@ pub fn validate_self_intersection<T: GeoFloat, Z: GeoFloat>(polygon: &Polygon<T,
             if let Some(intersection) = line_intersection(*line, *line2) {
                 let intersection_message = match intersection {
                     LineIntersection::Collinear { intersection } => {
-                        Some(format!("Found collinear at {:?}", intersection))
+                        Some(format!("Found collinear at {intersection:?}"))
                     }
 
                     LineIntersection::SinglePoint {
                         intersection,
                         is_proper: true,
-                    } => Some(format!("Found self intersection at {:?}", intersection)),
+                    } => Some(format!("Found self intersection at {intersection:?}")),
                     _ => None,
                 };
                 if let Some(error_message) = intersection_message {
@@ -320,8 +332,7 @@ pub fn validate_interiors_are_not_within<T: GeoFloat, Z: GeoFloat>(
             let polygon2 = Polygon::<T, Z>::new(interior2.clone(), vec![]);
             if polygon.contains(&polygon2) {
                 let error_message = format!(
-                    "Interior ring {:?} is contains another interior ring {:?}",
-                    interior, interior2
+                    "Interior ring {interior:?} is contains another interior ring {interior2:?}"
                 );
                 errors.push(error_message);
             }
@@ -696,5 +707,57 @@ impl<T: CoordNum> From<GeoPolygon<T>> for Polygon2D<T> {
             .map(|interior| interior.clone().into())
             .collect();
         Polygon2D::new(exterior, interiors)
+    }
+}
+
+impl<T: CoordFloat> Polygon2D<T> {
+    pub fn normalize_vertices_2d(&mut self) -> NormalizationResult2D<T> {
+        let norm = normalize_vertices_2d(&mut self.exterior.0);
+        for interior in &mut self.interiors {
+            normalize_vertices_2d_with_params(&mut interior.0, norm);
+        }
+        norm
+    }
+
+    pub fn denormalize_vertices_2d(&mut self, norm: NormalizationResult2D<T>) {
+        self.exterior.denormalize_vertices_2d(norm);
+        for interior in &mut self.interiors {
+            interior.denormalize_vertices_2d(norm);
+        }
+    }
+}
+
+impl<T: CoordFloat> Polygon3D<T> {
+    pub fn normalize_vertices_3d(&mut self) -> NormalizationResult3D<T> {
+        let norm = normalize_vertices(&mut self.exterior.0);
+        for interior in &mut self.interiors {
+            normalize_vertices_with_params(&mut interior.0, norm);
+        }
+        norm
+    }
+
+    pub fn denormalize_vertices_3d(&mut self, norm: NormalizationResult3D<T>) {
+        denormalize_vertices(&mut self.exterior.0, norm);
+        for interior in &mut self.interiors {
+            denormalize_vertices(&mut interior.0, norm);
+        }
+    }
+}
+
+impl<T: CoordFloat + From<Z>, Z: CoordFloat> Polygon<T, Z> {
+    pub fn get_vertices(&self) -> Vec<&Coordinate<T, Z>> {
+        let mut vertices = self.exterior.get_vertices();
+        for interior in &self.interiors {
+            vertices.extend(interior.get_vertices());
+        }
+        vertices
+    }
+
+    pub fn get_vertices_mut(&mut self) -> Vec<&mut Coordinate<T, Z>> {
+        let mut vertices = self.exterior.get_vertices_mut();
+        for interior in &mut self.interiors {
+            vertices.extend(interior.get_vertices_mut());
+        }
+        vertices
     }
 }

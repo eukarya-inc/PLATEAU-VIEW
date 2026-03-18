@@ -7,17 +7,17 @@ import (
 	"io"
 	"time"
 
-	"github.com/reearth/reearth-cms/server/internal/usecase"
-	"github.com/reearth/reearth-cms/server/internal/usecase/gateway"
-	"github.com/reearth/reearth-cms/server/internal/usecase/interfaces"
-	"github.com/reearth/reearth-cms/server/internal/usecase/repo"
-	"github.com/reearth/reearth-cms/server/pkg/event"
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/request"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
-	"github.com/reearth/reearth-cms/server/pkg/value"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/gateway"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/interfaces"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/internal/usecase/repo"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/event"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/request"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/rerror"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/reearth/reearthx/util"
@@ -216,10 +216,8 @@ func (i Item) Create(ctx context.Context, param interfaces.CreateItemParam, oper
 			return nil, err
 		}
 
-		isMetadata := false
-		if m.Metadata() != nil && param.SchemaID == *m.Metadata() {
-			isMetadata = true
-		}
+		isMetadata := m.Metadata() != nil && param.SchemaID == *m.Metadata()
+
 		fields = append(fields, groupFields...)
 		ib := item.New().
 			NewID().
@@ -900,7 +898,7 @@ func (i Item) ItemsAsGeoJSON(ctx context.Context, schemaPackage *schema.Package,
 		// fromPagination
 		paginationOffset := fromPagination(page, perPage)
 
-		items, _, err := i.repos.Item.FindBySchema(ctx, schemaPackage.Schema().ID(), nil, nil, paginationOffset)
+		items, pi, err := i.repos.Item.FindBySchema(ctx, schemaPackage.Schema().ID(), nil, nil, paginationOffset)
 		if err != nil {
 			return interfaces.ExportItemsToGeoJSONResponse{}, err
 		}
@@ -912,6 +910,7 @@ func (i Item) ItemsAsGeoJSON(ctx context.Context, schemaPackage *schema.Package,
 
 		return interfaces.ExportItemsToGeoJSONResponse{
 			FeatureCollections: featureCollections,
+			PageInfo:           pi,
 		}, nil
 	})
 }

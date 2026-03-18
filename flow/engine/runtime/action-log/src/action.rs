@@ -21,8 +21,8 @@ pub(crate) fn action_logger(root_path: PathBuf, action: &str) -> Logger {
     if *ACTION_LOG_DISABLE {
         NullLoggerBuilder.build().unwrap()
     } else {
-        let mut builder = FileLoggerBuilder::new(root_path.join(format!("{}.log", action)));
-        builder.level(Severity::Info);
+        let mut builder = FileLoggerBuilder::new(root_path.join(format!("{action}.log")));
+        builder.level(Severity::Trace);
         builder
             .build_with_custom_format(|decorator| Ok(Json::new(decorator)))
             .unwrap()

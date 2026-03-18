@@ -3,9 +3,9 @@ package gqlmodel
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/id"
-	"github.com/reearth/reearth-cms/server/pkg/request"
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/request"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
@@ -33,7 +33,7 @@ func TestToRequest(t *testing.T) {
 	assert.Equal(t, &Request{
 		ID: IDFrom(req.ID()),
 		Items: []*RequestItem{{
-			ItemID: IDFrom(itm.Item()),
+			ItemID:  IDFrom(itm.Item()),
 			Version: lo.ToPtr(ver),
 		}},
 		Title:       "foo",

@@ -10,6 +10,10 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[features]
+default = []
+memory-stats = ["reearth-flow-common/memory-stats"]
+
 [dependencies]
 reearth-flow-action-log.workspace = true
 reearth-flow-common.workspace = true
@@ -29,13 +33,16 @@ async-trait.workspace = true
 bytes.workspace = true
 calamine.workspace = true
 chrono.workspace = true
+fastxml.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
 num-traits.workspace = true
 nutype.workspace = true
+object_store.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true
 petgraph.workspace = true
+proj.workspace = true
 quick-xml.workspace = true
 rayon.workspace = true
 regex.workspace = true
@@ -43,6 +50,7 @@ rhai.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+spade.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -51,3 +59,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 bytes.workspace = true
+tempfile.workspace = true

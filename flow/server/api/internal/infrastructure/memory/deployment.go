@@ -3,20 +3,21 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/interfaces"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
 	"github.com/reearth/reearth-flow/api/pkg/deployment"
 	"github.com/reearth/reearth-flow/api/pkg/id"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/rerror"
 )
 
 type Deployment struct {
-	lock sync.Mutex
 	data map[id.DeploymentID]*deployment.Deployment
 	f    repo.WorkspaceFilter
+	lock sync.Mutex
 }
 
 func NewDeployment() *Deployment {
@@ -32,7 +33,7 @@ func (r *Deployment) Filtered(f repo.WorkspaceFilter) repo.Deployment {
 	}
 }
 
-func (r *Deployment) FindByWorkspace(_ context.Context, wid accountdomain.WorkspaceID, p *interfaces.PaginationParam) ([]*deployment.Deployment, *interfaces.PageBasedInfo, error) {
+func (r *Deployment) FindByWorkspace(_ context.Context, wid accountsid.WorkspaceID, p *interfaces.PaginationParam, keyword *string) ([]*deployment.Deployment, *interfaces.PageBasedInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -42,9 +43,18 @@ func (r *Deployment) FindByWorkspace(_ context.Context, wid accountdomain.Worksp
 
 	result := []*deployment.Deployment{}
 	for _, d := range r.data {
-		if d.Workspace() == wid {
-			result = append(result, d)
+		if d.Workspace() != wid {
+			continue
 		}
+
+		if keyword != nil && *keyword != "" {
+			desc := strings.ToLower(d.Description())
+			if !strings.Contains(desc, strings.ToLower(*keyword)) && !strings.Contains(strings.ToLower(d.ID().String()), strings.ToLower(*keyword)) {
+				continue
+			}
+		}
+
+		result = append(result, d)
 	}
 
 	total := int64(len(result))
@@ -153,7 +163,7 @@ func (r *Deployment) FindByIDs(ctx context.Context, ids id.DeploymentIDList) ([]
 	return result, nil
 }
 
-func (r *Deployment) FindByVersion(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID, version string) (*deployment.Deployment, error) {
+func (r *Deployment) FindByVersion(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID, version string) (*deployment.Deployment, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -176,7 +186,7 @@ func (r *Deployment) FindByVersion(ctx context.Context, wsID accountdomain.Works
 	return nil, rerror.ErrNotFound
 }
 
-func (r *Deployment) FindHead(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID) (*deployment.Deployment, error) {
+func (r *Deployment) FindHead(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID) (*deployment.Deployment, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -199,7 +209,7 @@ func (r *Deployment) FindHead(ctx context.Context, wsID accountdomain.WorkspaceI
 	return nil, rerror.ErrNotFound
 }
 
-func (r *Deployment) FindVersions(ctx context.Context, wsID accountdomain.WorkspaceID, projectID *id.ProjectID) ([]*deployment.Deployment, error) {
+func (r *Deployment) FindVersions(ctx context.Context, wsID accountsid.WorkspaceID, projectID *id.ProjectID) ([]*deployment.Deployment, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

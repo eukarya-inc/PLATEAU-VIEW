@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/reearth/reearth/server/pkg/i18n"
-	"github.com/reearth/reearth/server/pkg/id"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,15 +13,15 @@ var (
 )
 
 func TestSchemaGroup(t *testing.T) {
-	scid := id.PropertySchemaGroupID("aa")
+	scid := SchemaGroupID("aa")
 	sf := NewSchemaField().ID("aa").Type(ValueTypeString).MustBuild()
 
 	tests := []struct {
 		Name     string
 		G        *SchemaGroup
 		Expected struct {
-			GIDRef        *id.PropertySchemaGroupID
-			GID           id.PropertySchemaGroupID
+			GIDRef        *SchemaGroupID
+			GID           SchemaGroupID
 			Fields        []*SchemaField
 			Title         i18n.String
 			Collection    i18n.String
@@ -37,8 +36,8 @@ func TestSchemaGroup(t *testing.T) {
 			Name: "success",
 			G:    NewSchemaGroup().ID(scid).Fields([]*SchemaField{sf}).MustBuild(),
 			Expected: struct {
-				GIDRef        *id.PropertySchemaGroupID
-				GID           id.PropertySchemaGroupID
+				GIDRef        *SchemaGroupID
+				GID           SchemaGroupID
 				Fields        []*SchemaField
 				Title         i18n.String
 				Collection    i18n.String
@@ -71,14 +70,14 @@ func TestSchemaGroup(t *testing.T) {
 }
 
 func TestSchemaGroup_Field(t *testing.T) {
-	scid := id.PropertySchemaGroupID("aa")
+	scid := SchemaGroupID("aa")
 	sf := NewSchemaField().ID("aa").Type(ValueTypeString).MustBuild()
 
 	tests := []struct {
 		Name     string
 		G        *SchemaGroup
 		PTR      *Pointer
-		Input    id.PropertyFieldID
+		Input    FieldID
 		Expected *SchemaField
 	}{
 		{
@@ -94,8 +93,8 @@ func TestSchemaGroup_Field(t *testing.T) {
 		{
 			Name:  "not found",
 			G:     NewSchemaGroup().ID(scid).Fields([]*SchemaField{sf}).MustBuild(),
-			PTR:   NewPointer(nil, nil, id.PropertyFieldID("zz").Ref()),
-			Input: id.PropertyFieldID("zz"),
+			PTR:   NewPointer(nil, nil, FieldID("zz").Ref()),
+			Input: FieldID("zz"),
 		},
 	}
 
@@ -111,7 +110,7 @@ func TestSchemaGroup_Field(t *testing.T) {
 }
 
 func TestSchemaGroup_SetTitle(t *testing.T) {
-	sg := NewSchemaGroup().ID(id.PropertySchemaGroupID("aa")).Fields([]*SchemaField{sf}).MustBuild()
+	sg := NewSchemaGroup().ID(SchemaGroupID("aa")).Fields([]*SchemaField{sf}).MustBuild()
 	sg.SetTitle(i18n.StringFrom("ttt"))
 	assert.Equal(t, i18n.StringFrom("ttt"), sg.Title())
 }

@@ -6,8 +6,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/plateauapi"
-	"github.com/eukarya-inc/reearth-plateauview/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 )
 
 func getPlateauSpecs(ctx context.Context, pcms plateaucms.SpecStore, maxYear int) ([]plateauapi.PlateauSpecSimple, error) {
@@ -91,9 +91,10 @@ func getFeatureTypes(ctx context.Context, pcms plateaucms.FeatureTypeStore) (ft 
 			Code: r.Code,
 			Name: r.Name,
 		}
-		if r.Category == plateaucms.DatasetCategoryRelated {
+		switch r.Category {
+		case plateaucms.DatasetCategoryRelated:
 			ft.Related = append(ft.Related, f)
-		} else if r.Category == plateaucms.DatasetCategoryGeneric {
+		case plateaucms.DatasetCategoryGeneric:
 			ft.Generic = append(ft.Generic, f)
 		}
 	}

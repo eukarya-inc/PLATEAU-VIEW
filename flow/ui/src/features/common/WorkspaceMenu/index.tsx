@@ -1,4 +1,4 @@
-import { CaretDown, Plus } from "@phosphor-icons/react";
+import { CaretDownIcon, PlusIcon } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -45,12 +45,19 @@ const WorkspaceMenu: React.FC = () => {
         open={openDropdown}
         onOpenChange={(o) => setOpenDropdown(o)}>
         <DropdownMenuTrigger
-          className={`mx-2 flex items-center justify-between gap-2 overflow-auto rounded-md p-3 ${openDropdown ? "bg-background" : undefined} hover:bg-primary`}>
-          <p className="line-clamp-2 text-sm font-extralight">
-            {currentWorkspace?.name}
-          </p>
-          <div className="shrink-0">
-            <CaretDown size="12px" weight="thin" />
+          className={`group flex gap-2 overflow-auto rounded-md p-2 ${openDropdown ? "bg-background" : undefined} hover:bg-primary`}>
+          <div className="relative flex w-full gap-1">
+            <div className="flex w-full flex-col gap-1">
+              <p className="self-start text-xs font-light dark:font-thin">
+                {t("Current workspace:")}
+              </p>
+              <p className="line-clamp-2 w-full px-4 text-start text-sm font-light italic dark:font-extralight">
+                {currentWorkspace?.name}
+              </p>
+            </div>
+            <div className="absolute right-1 bottom-1/2 flex shrink-0 translate-1/2 items-center justify-center opacity-0 group-hover:opacity-100">
+              <CaretDownIcon size="12px" weight="thin" />
+            </div>
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -66,7 +73,7 @@ const WorkspaceMenu: React.FC = () => {
                   key={personalWorkspace.id}
                   className={`rounded-md px-3 py-1 text-sm ${currentWorkspace?.id === personalWorkspace.id ? "bg-accent" : ""}`}
                   onClick={() => handleWorkspaceChange(personalWorkspace)}>
-                  <p className="w-full truncate font-extralight">
+                  <p className="w-full truncate font-light dark:font-extralight">
                     {personalWorkspace.name}
                   </p>
                 </DropdownMenuItem>
@@ -80,7 +87,7 @@ const WorkspaceMenu: React.FC = () => {
                     key={workspace.id}
                     className={`mx-1 rounded-md px-2 py-[2px] text-sm ${currentWorkspace?.id === workspace.id ? "bg-accent" : ""}`}
                     onClick={() => handleWorkspaceChange(workspace)}>
-                    <p className="w-full truncate font-extralight">
+                    <p className="w-full truncate font-light dark:font-extralight">
                       {workspace.name}
                     </p>
                   </DropdownMenuItem>
@@ -95,7 +102,7 @@ const WorkspaceMenu: React.FC = () => {
               setOpenWorkspaceAddDialog(true);
               setOpenDropdown(false);
             }}>
-            <Plus weight="thin" />
+            <PlusIcon weight="thin" />
             <p className="text-xs dark:font-light">{t("New Workspace")}</p>
           </div>
         </DropdownMenuContent>

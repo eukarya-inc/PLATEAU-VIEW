@@ -1,5 +1,7 @@
 export * from "./ActionItem";
+export * from "./Alert";
 export * from "./Avatar";
+export * from "./Badge";
 export * from "./buttons";
 export * from "./Card";
 export * from "./Carousel";
@@ -31,3 +33,7 @@ export * from "./SchemaForm";
 export * from "./BasicBoiler";
 export * from "./visualizations";
 export * from "./Pagination";
+export * from "./Popover";
+export * from "./Switch";
+export * from "./errors";
+export * from "./workflowVariables";

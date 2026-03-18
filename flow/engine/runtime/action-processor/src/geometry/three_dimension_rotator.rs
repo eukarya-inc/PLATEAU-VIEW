@@ -27,7 +27,7 @@ impl ProcessorFactory for ThreeDimensionRotatorFactory {
     }
 
     fn description(&self) -> &str {
-        "Replaces a three Dimension box with a polygon."
+        "Rotate 3D Geometry Around Arbitrary Axis"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -56,14 +56,12 @@ impl ProcessorFactory for ThreeDimensionRotatorFactory {
         let params: ThreeDimensionRotatorParam = if let Some(with) = with.clone() {
             let value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::ThreeDimensionRotatorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::ThreeDimensionRotatorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -75,33 +73,25 @@ impl ProcessorFactory for ThreeDimensionRotatorFactory {
         let expr_engine = Arc::clone(&ctx.expr_engine);
         let angle_degree = expr_engine
             .compile(params.angle_degree.as_ref())
-            .map_err(|e| {
-                GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-            })?;
-        let origin_x = expr_engine.compile(params.origin_x.as_ref()).map_err(|e| {
-            GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-        })?;
-        let origin_y = expr_engine.compile(params.origin_y.as_ref()).map_err(|e| {
-            GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-        })?;
-        let origin_z = expr_engine.compile(params.origin_z.as_ref()).map_err(|e| {
-            GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-        })?;
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
+        let origin_x = expr_engine
+            .compile(params.origin_x.as_ref())
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
+        let origin_y = expr_engine
+            .compile(params.origin_y.as_ref())
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
+        let origin_z = expr_engine
+            .compile(params.origin_z.as_ref())
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
         let direction_x = expr_engine
             .compile(params.direction_x.as_ref())
-            .map_err(|e| {
-                GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-            })?;
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
         let direction_y = expr_engine
             .compile(params.direction_y.as_ref())
-            .map_err(|e| {
-                GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-            })?;
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
         let direction_z = expr_engine
             .compile(params.direction_z.as_ref())
-            .map_err(|e| {
-                GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{:?}", e))
-            })?;
+            .map_err(|e| GeometryProcessorError::ThreeDimensionRotatorFactory(format!("{e:?}")))?;
         Ok(Box::new(ThreeDimensionRotator {
             global_params: with,
             angle_degree,
@@ -115,15 +105,31 @@ impl ProcessorFactory for ThreeDimensionRotatorFactory {
     }
 }
 
+/// # 3D Rotator Parameters
+/// Configure the 3D rotation parameters including axis, origin point, and angle
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreeDimensionRotatorParam {
+    /// # Angle in Degrees
+    /// Rotation angle in degrees around the specified axis
     angle_degree: Expr,
+    /// # Origin X
+    /// X coordinate of the rotation origin point
     origin_x: Expr,
+    /// # Origin Y
+    /// Y coordinate of the rotation origin point
     origin_y: Expr,
+    /// # Origin Z
+    /// Z coordinate of the rotation origin point
     origin_z: Expr,
+    /// # Direction X
+    /// X component of the rotation axis direction vector
     direction_x: Expr,
+    /// # Direction Y
+    /// Y component of the rotation axis direction vector
     direction_y: Expr,
+    /// # Direction Z
+    /// Z component of the rotation axis direction vector
     direction_z: Expr,
 }
 
@@ -165,9 +171,9 @@ impl Processor for ThreeDimensionRotator {
                         rotate_query,
                         Some(Point3D::new_(origin_x, origin_y, origin_z)),
                     );
-                    let mut geometry = geometry.clone();
-                    geometry.value = GeometryValue::FlowGeometry3D(rotate);
-                    Some(geometry)
+                    let mut geom = (**geometry).clone();
+                    geom.value = GeometryValue::FlowGeometry3D(rotate);
+                    Some(geom)
                 } else {
                     None
                 }
@@ -177,7 +183,7 @@ impl Processor for ThreeDimensionRotator {
 
         if let Some(geometry) = geometry {
             let mut feature = ctx.feature.clone();
-            feature.geometry = geometry;
+            feature.geometry = Arc::new(geometry);
             fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
         } else {
             fw.send(ctx.new_with_feature_and_port(ctx.feature.clone(), REJECTED_PORT.clone()));
@@ -185,7 +191,11 @@ impl Processor for ThreeDimensionRotator {
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

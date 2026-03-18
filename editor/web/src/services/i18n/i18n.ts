@@ -16,12 +16,6 @@ const resources = {
 
 export const availableLanguages = Object.keys(resources);
 
-// src/services/i18n/config.ts
-export const SUPPORTED_LANGUAGES = {
-  en: { label: "English", value: "en" },
-  ja: { label: "日本語", value: "ja" }
-} as const;
-
 i18n.use(LanguageDetector).use(initReactI18next).init({
   resources,
   fallbackLng: "en",

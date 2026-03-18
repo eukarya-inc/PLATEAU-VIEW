@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogv2/datacatalogutil"
 	"github.com/eukarya-inc/jpareacode"
-	"github.com/eukarya-inc/reearth-plateauview/server/datacatalog/datacatalogv2/datacatalogutil"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
 	"github.com/spkg/bom"

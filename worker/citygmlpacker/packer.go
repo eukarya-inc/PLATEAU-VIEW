@@ -57,7 +57,7 @@ func (p *Packer) Pack(ctx context.Context, host string, urls []string) error {
 	urls = sortURLs(urls)
 
 	zw := zip.NewWriter(p.w)
-	defer zw.Close()
+	defer func() { _ = zw.Close() }()
 
 	pctx := &packerContext{
 		zw:       zw,

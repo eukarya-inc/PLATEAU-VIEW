@@ -5,14 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	accountsid "github.com/reearth/reearth-accounts/server/pkg/id"
 	"github.com/reearth/reearth-flow/api/internal/usecase/repo"
-	"github.com/reearth/reearthx/account/accountdomain"
 	"github.com/reearth/reearthx/usecasex"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestUc(t *testing.T) {
-	workspaces := accountdomain.WorkspaceIDList{accountdomain.NewWorkspaceID(), accountdomain.NewWorkspaceID(), accountdomain.NewWorkspaceID()}
+	workspaces := accountsid.WorkspaceIDList{accountsid.NewWorkspaceID(), accountsid.NewWorkspaceID(), accountsid.NewWorkspaceID()}
 	assert.Equal(t, &uc{}, Usecase())
 	assert.Equal(t, &uc{readableWorkspaces: workspaces}, (&uc{}).WithReadableWorkspaces(workspaces...))
 	assert.Equal(t, &uc{writableWorkspaces: workspaces}, (&uc{}).WithWritableWorkspaces(workspaces...))

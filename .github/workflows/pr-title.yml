@@ -25,6 +25,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ignoreLabels: meta
           scopes: |
+            editor
             plugin
             server
             terrafom
@@ -41,6 +42,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - name: changed files for plugin
         id: plugin
@@ -48,9 +51,10 @@ jobs:
         with:
           files: |
             plugin/**
+        continue-on-error: true
   pr_scope_check:
     needs: contains_plugin_changes
-    if: ${{ !failure() && needs.contains_plugin_changes.outputs.plugin == 'true' }}
+    if: ${{ !cancelled() && needs.contains_plugin_changes.outputs.plugin == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check PR Scope and Keywords

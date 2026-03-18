@@ -33,7 +33,7 @@ impl ProcessorFactory for OrientationExtractorFactory {
     }
 
     fn description(&self) -> &str {
-        "Extracts the orientation of a geometry from a feature and adds it as an attribute."
+        "Extract Polygon Orientation to Attribute"
     }
 
     fn parameter_schema(&self) -> Option<schemars::schema::RootSchema> {
@@ -61,14 +61,12 @@ impl ProcessorFactory for OrientationExtractorFactory {
         let params: OrientationExtractorParam = if let Some(with) = with {
             let value: Value = serde_json::to_value(with).map_err(|e| {
                 GeometryProcessorError::OrientationExtractorFactory(format!(
-                    "Failed to serialize `with` parameter: {}",
-                    e
+                    "Failed to serialize `with` parameter: {e}"
                 ))
             })?;
             serde_json::from_value(value).map_err(|e| {
                 GeometryProcessorError::OrientationExtractorFactory(format!(
-                    "Failed to deserialize `with` parameter: {}",
-                    e
+                    "Failed to deserialize `with` parameter: {e}"
                 ))
             })?
         } else {
@@ -83,9 +81,13 @@ impl ProcessorFactory for OrientationExtractorFactory {
     }
 }
 
+/// # Orientation Extractor Parameters
+/// Configure where to store the extracted polygon orientation information
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrientationExtractorParam {
+    /// # Output Attribute
+    /// Name of the attribute where the orientation (clockwise/counter_clockwise) will be stored
     output_attribute: Attribute,
 }
 
@@ -108,7 +110,7 @@ impl Processor for OrientationExtractor {
         let geometry = &feature.geometry;
         if geometry.is_empty() {
             let mut feature = feature.clone();
-            feature.attributes.insert(
+            feature.attributes_mut().insert(
                 self.output_attribute.clone(),
                 AttributeValue::String(NO_ORIENTATION.to_string()),
             );
@@ -118,7 +120,7 @@ impl Processor for OrientationExtractor {
         match &geometry.value {
             GeometryValue::None => {
                 let mut feature = feature.clone();
-                feature.attributes.insert(
+                feature.attributes_mut().insert(
                     self.output_attribute.clone(),
                     AttributeValue::String(NO_ORIENTATION.to_string()),
                 );
@@ -133,7 +135,7 @@ impl Processor for OrientationExtractor {
                         .map(|ring| ring.winding_order())
                         .collect::<Vec<_>>();
                     let result = detect_orientation_by_ring_winding_orders(ring_winding_orders);
-                    feature.attributes.insert(
+                    feature.attributes_mut().insert(
                         self.output_attribute.clone(),
                         AttributeValue::String(result.to_string()),
                     );
@@ -152,7 +154,7 @@ impl Processor for OrientationExtractor {
                         })
                         .collect::<Vec<_>>();
                     let result = detect_orientation_by_ring_winding_orders(ring_winding_orders);
-                    feature.attributes.insert(
+                    feature.attributes_mut().insert(
                         self.output_attribute.clone(),
                         AttributeValue::String(result.to_string()),
                     );
@@ -169,7 +171,7 @@ impl Processor for OrientationExtractor {
                         .map(|ring| ring.winding_order())
                         .collect::<Vec<_>>();
                     let result = detect_orientation_by_ring_winding_orders(ring_winding_orders);
-                    feature.attributes.insert(
+                    feature.attributes_mut().insert(
                         self.output_attribute.clone(),
                         AttributeValue::String(result.to_string()),
                     );
@@ -188,7 +190,7 @@ impl Processor for OrientationExtractor {
                         })
                         .collect::<Vec<_>>();
                     let result = detect_orientation_by_ring_winding_orders(ring_winding_orders);
-                    feature.attributes.insert(
+                    feature.attributes_mut().insert(
                         self.output_attribute.clone(),
                         AttributeValue::String(result.to_string()),
                     );
@@ -196,12 +198,41 @@ impl Processor for OrientationExtractor {
                 }
                 _ => fw.send(ctx.new_with_feature_and_port(feature.clone(), DEFAULT_PORT.clone())),
             },
-            GeometryValue::CityGmlGeometry(_) => unimplemented!(),
+            GeometryValue::CityGmlGeometry(city_gml) => {
+                let mut feature = feature.clone();
+                let mut ring_winding_orders = Vec::new();
+
+                // Check all polygons in the CityGML geometry
+                for gml_geo in &city_gml.gml_geometries {
+                    for polygon in &gml_geo.polygons {
+                        // Get the exterior ring (first ring)
+                        if let Some(exterior) = polygon.rings().first() {
+                            ring_winding_orders.push(exterior.winding_order());
+                        }
+
+                        // Also check interior rings (holes)
+                        for interior in polygon.rings().iter().skip(1) {
+                            ring_winding_orders.push(interior.winding_order());
+                        }
+                    }
+                }
+
+                let result = detect_orientation_by_ring_winding_orders(ring_winding_orders);
+                feature.attributes_mut().insert(
+                    self.output_attribute.clone(),
+                    AttributeValue::String(result.to_string()),
+                );
+                fw.send(ctx.new_with_feature_and_port(feature, DEFAULT_PORT.clone()));
+            }
         }
         Ok(())
     }
 
-    fn finish(&self, _ctx: NodeContext, _fw: &ProcessorChannelForwarder) -> Result<(), BoxedError> {
+    fn finish(
+        &mut self,
+        _ctx: NodeContext,
+        _fw: &ProcessorChannelForwarder,
+    ) -> Result<(), BoxedError> {
         Ok(())
     }
 

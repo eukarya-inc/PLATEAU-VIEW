@@ -2,8 +2,6 @@ package scene
 
 import (
 	"errors"
-
-	"github.com/reearth/reearth/server/pkg/id"
 )
 
 var (
@@ -55,14 +53,7 @@ func (w *Widgets) Alignment() *WidgetAlignSystem {
 	return w.align
 }
 
-func (w *Widgets) SetAlignment(align *WidgetAlignSystem) {
-	if w == nil {
-		return
-	}
-	w.align = align
-}
-
-func (w *Widgets) Widget(wid id.WidgetID) *Widget {
+func (w *Widgets) Widget(wid WidgetID) *Widget {
 	if w == nil {
 		return nil
 	}
@@ -74,7 +65,7 @@ func (w *Widgets) Widget(wid id.WidgetID) *Widget {
 	return nil
 }
 
-func (w *Widgets) Has(wid id.WidgetID) bool {
+func (w *Widgets) Has(wid WidgetID) bool {
 	if w == nil {
 		return false
 	}
@@ -93,7 +84,7 @@ func (w *Widgets) Add(sw *Widget) {
 	w.widgets = append(w.widgets, sw)
 }
 
-func (w *Widgets) Remove(wid id.WidgetID) {
+func (w *Widgets) Remove(wid WidgetID) {
 	if w == nil {
 		return
 	}
@@ -105,7 +96,7 @@ func (w *Widgets) Remove(wid id.WidgetID) {
 	}
 }
 
-func (w *Widgets) RemoveAllByPlugin(p id.PluginID, e *id.PluginExtensionID) (res []id.PropertyID) {
+func (w *Widgets) RemoveAllByPlugin(p PluginID, e *PluginExtensionID) (res []PropertyID) {
 	if w == nil {
 		return nil
 	}
@@ -121,7 +112,7 @@ func (w *Widgets) RemoveAllByPlugin(p id.PluginID, e *id.PluginExtensionID) (res
 	return res
 }
 
-func (w *Widgets) UpgradePlugin(oldp, newp id.PluginID) {
+func (w *Widgets) UpgradePlugin(oldp, newp PluginID) {
 	if w == nil || w.widgets == nil || oldp.Equal(newp) || oldp.IsNil() || newp.IsNil() {
 		return
 	}
@@ -132,11 +123,11 @@ func (w *Widgets) UpgradePlugin(oldp, newp id.PluginID) {
 	}
 }
 
-func (w *Widgets) Properties() []id.PropertyID {
+func (w *Widgets) Properties() []PropertyID {
 	if w == nil {
 		return nil
 	}
-	res := make([]id.PropertyID, 0, len(w.widgets))
+	res := make([]PropertyID, 0, len(w.widgets))
 	for _, ww := range w.widgets {
 		res = append(res, ww.property)
 	}

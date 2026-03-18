@@ -8,8 +8,8 @@ import (
 )
 
 func TestSchemaDiffFrom(t *testing.T) {
-	ps1 := id.MustPropertySchemaID("x~1.0.0/a")
-	ps2 := id.MustPropertySchemaID("x~1.0.0/b")
+	ps1 := MustSchemaID("x~1.0.0/a")
+	ps2 := MustSchemaID("x~1.0.0/b")
 
 	type args struct {
 		old *Schema
@@ -143,7 +143,7 @@ func TestSchemaDiffFrom(t *testing.T) {
 }
 
 func TestSchemaDiffFromProperty(t *testing.T) {
-	ps := id.MustPropertySchemaID("x~1.0.0/a")
+	ps := MustSchemaID("x~1.0.0/a")
 
 	type args struct {
 		old *Property
@@ -235,7 +235,8 @@ func TestSchemaDiffFromProperty(t *testing.T) {
 }
 
 func TestSchemaDiff_Migrate(t *testing.T) {
-	newSchemaID := id.MustPropertySchemaID("x~1.0.0/ax")
+	itemID := NewItemID()
+	newSchemaID := MustSchemaID("x~1.0.0/ax")
 
 	tests := []struct {
 		name         string
@@ -316,6 +317,13 @@ func TestSchemaDiff_Migrate(t *testing.T) {
 						fields: []*Field{}, // deleted
 					},
 					testGroupList1,
+					&Group{
+						itemBase: itemBase{
+							ID:          itemID,
+							SchemaGroup: "x",
+						},
+						fields: []*Field{testField1},
+					},
 				},
 			},
 		},
@@ -348,6 +356,15 @@ func TestSchemaDiff_Migrate(t *testing.T) {
 						fields: []*Field{}, // deleted
 					},
 					testGroupList1,
+					&Group{
+						itemBase: itemBase{
+							ID:          itemID,
+							SchemaGroup: "x",
+						},
+						fields: []*Field{
+							{field: testField1.Field(), v: NewOptionalValue(ValueTypeNumber, nil)},
+						},
+					},
 				},
 			},
 		},
@@ -484,35 +501,12 @@ func TestSchemaDiff_Migrate(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			// t.Parallel() // Cannot run tests in parallel due to mocking id.NewPropertyItemID
+			// t.Parallel() // Cannot run tests in parallel due to mocking NewItemID
 			if only && !tt.only {
 				t.SkipNow()
 			}
-			// defer mockNewItemID(itemID)()
+			defer mockNewItemID(itemID)()
 			assert.Equal(t, tt.want, tt.target.Migrate(tt.args))
-
-			if tt.name == "moved" {
-				tt.wantProperty.AddItem(&Group{
-					itemBase: itemBase{
-						ID:          tt.args.items[2].ID(),
-						SchemaGroup: "x",
-					},
-					fields: []*Field{testField1},
-				})
-			}
-
-			if tt.name == "moved and type changed" {
-				tt.wantProperty.AddItem(&Group{
-					itemBase: itemBase{
-						ID:          tt.args.items[2].ID(),
-						SchemaGroup: "x",
-					},
-					fields: []*Field{
-						{field: testField1.Field(), v: NewOptionalValue(ValueTypeNumber, nil)},
-					},
-				})
-			}
-
 			assert.Equal(t, tt.wantProperty, tt.args)
 		})
 	}
@@ -606,8 +600,8 @@ func TestSchemaDiff_IsIDChanged(t *testing.T) {
 }
 
 func TestSchemaDiffList_FindByFrom(t *testing.T) {
-	p1 := id.MustPropertySchemaID("a~1.0.0/a")
-	p2 := id.MustPropertySchemaID("a~1.0.0/b")
+	p1 := MustSchemaID("a~1.0.0/a")
+	p2 := MustSchemaID("a~1.0.0/b")
 
 	assert.Equal(t, &SchemaDiff{From: p1}, SchemaDiffList{{From: p1}}.FindByFrom(p1))
 	assert.Nil(t, SchemaDiffList{}.FindByFrom(p2))
@@ -616,10 +610,10 @@ func TestSchemaDiffList_FindByFrom(t *testing.T) {
 }
 
 func TestSchemaDiffList_FromSchemas(t *testing.T) {
-	p1 := id.MustPropertySchemaID("a~1.0.0/a")
-	p2 := id.MustPropertySchemaID("a~1.0.0/b")
+	p1 := MustSchemaID("a~1.0.0/a")
+	p2 := MustSchemaID("a~1.0.0/b")
 
-	assert.Equal(t, []id.PropertySchemaID{p1, p2}, SchemaDiffList{{From: p1}, {From: p2}, {From: p2}}.FromSchemas())
+	assert.Equal(t, []SchemaID{p1, p2}, SchemaDiffList{{From: p1}, {From: p2}, {From: p2}}.FromSchemas())
 	assert.Nil(t, SchemaDiffList{}.FromSchemas())
 	assert.Nil(t, SchemaDiffList(nil).FromSchemas())
 }

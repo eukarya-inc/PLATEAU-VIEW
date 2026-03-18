@@ -3,8 +3,8 @@ package integrationapi
 import (
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/operator"
-	"github.com/reearth/reearth-cms/server/pkg/thread"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/operator"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/thread"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )

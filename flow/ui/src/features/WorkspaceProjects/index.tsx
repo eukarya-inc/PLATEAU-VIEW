@@ -1,4 +1,8 @@
-import { ArrowSquareIn, CaretDown, Plus } from "@phosphor-icons/react";
+import {
+  ArrowSquareInIcon,
+  CaretDownIcon,
+  PlusIcon,
+} from "@phosphor-icons/react";
 
 import {
   Button,
@@ -8,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   FlowLogo,
+  Input,
   LoadingSkeleton,
   Pagination,
   Select,
@@ -21,7 +26,7 @@ import {
   ALLOWED_PROJECT_IMPORT_EXTENSIONS,
   ALLOWED_WORKFLOW_FILE_EXTENSIONS,
 } from "@flow/global-constants";
-import { useProjectImport, useWorkflowImport } from "@flow/hooks";
+import { useWorkflowImport } from "@flow/hooks";
 import { useT } from "@flow/lib/i18n";
 
 import {
@@ -29,9 +34,11 @@ import {
   ProjectCard,
   ProjectDeletionDialog,
   ProjectEditDialog,
+  WorkflowImportVariablesMappingDialog,
 } from "./components";
 import { ProjectDuplicateDialog } from "./components/ProjectDuplicateDialog";
 import useHooks from "./hooks";
+import useProjectImportFromFile from "./useProjectImportFromFile";
 
 const ProjectsManager: React.FC = () => {
   const t = useT();
@@ -49,8 +56,11 @@ const ProjectsManager: React.FC = () => {
     totalPages,
     isFetching,
     isDuplicating,
-    currentOrder,
-    orderDirections,
+    currentSortValue,
+    searchTerm,
+    sortOptions,
+    isDebouncingSearch,
+    setSearchTerm,
     setOpenProjectAddDialog,
     setEditProject,
     setDuplicateProject,
@@ -61,15 +71,15 @@ const ProjectsManager: React.FC = () => {
     handleDeleteProject,
     handleUpdateValue,
     handleUpdateProject,
-    handleOrderChange,
+    handleSortChange,
   } = useHooks();
 
   const {
-    fileInputRef: fileInputRefProject,
     isProjectImporting,
+    fileInputRefProject,
     handleProjectImportClick,
     handleProjectFileUpload,
-  } = useProjectImport();
+  } = useProjectImportFromFile();
 
   const {
     fileInputRef: fileInputRefWorkflow,
@@ -78,27 +88,33 @@ const ProjectsManager: React.FC = () => {
     // setIsWorkflowImporting,
     handleWorkflowImportClick,
     handleWorkflowFileUpload,
+    showVariableMapping,
+    pendingWorkflowData,
+    handleVariableMappingConfirm,
+    handleVariableMappingCancel,
   } = useWorkflowImport();
 
   return (
     <div className="flex h-full flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-4 overflow-scroll px-6 pb-2 pt-4">
+      <div className="flex flex-1 flex-col gap-4 overflow-scroll pt-4 pr-3 pb-2 pl-2">
         <div className="flex h-[50px] items-center justify-between gap-2 border-b pb-4">
-          <p className="text-lg dark:font-extralight">{t("Projects")}</p>
+          <p className="text-lg font-light dark:font-extralight">
+            {t("Projects")}
+          </p>
           <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 rounded-md p-2 hover:bg-primary">
-                <ArrowSquareIn weight="thin" />
-                <p className="line-clamp-2 text-xs font-extralight">
+                <ArrowSquareInIcon weight="thin" />
+                <p className="line-clamp-2 text-xs dark:font-extralight">
                   {t("Import")}
                 </p>
                 <div className="shrink-0">
-                  <CaretDown size="12px" weight="thin" />
+                  <CaretDownIcon size="12px" weight="thin" />
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={handleProjectImportClick}>
+                  <DropdownMenuItem onClick={handleProjectImportClick} disabled>
                     <p className="text-sm">
                       {t("Project ")}
                       <span className="font-thin">(flow.zip)</span>
@@ -117,28 +133,37 @@ const ProjectsManager: React.FC = () => {
               className="flex gap-2"
               variant="default"
               onClick={() => setOpenProjectAddDialog(true)}>
-              <Plus weight="thin" />
+              <PlusIcon weight="thin" />
               <p className="text-xs dark:font-light">{t("New Project")}</p>
             </Button>
           </div>
         </div>
-        {currentOrder && (
-          <Select
-            value={currentOrder || "DESC"}
-            onValueChange={handleOrderChange}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue placeholder={orderDirections.ASC} />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(orderDirections).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {isFetching || isProjectImporting || isDuplicating ? (
+        <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder={t("Search") + "..."}
+              value={searchTerm ?? ""}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-[36px] max-w-sm"
+            />
+            <Select value={currentSortValue} onValueChange={handleSortChange}>
+              <SelectTrigger className="h-[36px] w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {isDebouncingSearch ||
+        isFetching ||
+        isProjectImporting ||
+        isDuplicating ? (
           <LoadingSkeleton />
         ) : projects && projects.length > 0 ? (
           <div
@@ -209,6 +234,16 @@ const ProjectsManager: React.FC = () => {
         setProjectToBeDeleted={setProjectToBeDeleted}
         onDeleteProject={handleDeleteProject}
       />
+      {pendingWorkflowData && (
+        <WorkflowImportVariablesMappingDialog
+          isOpen={showVariableMapping}
+          onOpenChange={(open) => !open && handleVariableMappingCancel()}
+          variables={pendingWorkflowData.variables}
+          workflowName={pendingWorkflowData.workflowName}
+          onConfirm={handleVariableMappingConfirm}
+          onCancel={handleVariableMappingCancel}
+        />
+      )}
     </div>
   );
 };

@@ -1,36 +1,34 @@
-mod op;
-use op::*;
-mod assembly;
-use assembly::*;
-mod spec;
-use spec::*;
+mod ioverlap_bridge;
+
+use i_overlay::i_float::float::number::FloatNumber;
+use ioverlap_bridge::*;
 
 use crate::types::{
     multi_line_string::MultiLineString2D, multi_polygon::MultiPolygon2D, polygon::Polygon2D,
 };
 
-use super::{coords_iter::CoordsIter, GeoFloat, GeoNum};
+use super::{GeoFloat, GeoNum};
 
-pub trait BooleanOps: Sized {
+pub trait BooleanOps<Rhs = Self>: Sized {
     type Scalar: GeoNum;
 
-    fn boolean_op(&self, other: &Self, op: OpType) -> MultiPolygon2D<Self::Scalar>;
-    fn intersection(&self, other: &Self) -> MultiPolygon2D<Self::Scalar> {
+    fn boolean_op(&self, other: &Rhs, op: OpType) -> MultiPolygon2D<Self::Scalar>;
+    fn intersection(&self, other: &Rhs) -> MultiPolygon2D<Self::Scalar> {
         self.boolean_op(other, OpType::Intersection)
     }
-    fn union(&self, other: &Self) -> MultiPolygon2D<Self::Scalar> {
+    fn union(&self, other: &Rhs) -> MultiPolygon2D<Self::Scalar> {
         self.boolean_op(other, OpType::Union)
     }
-    fn xor(&self, other: &Self) -> MultiPolygon2D<Self::Scalar> {
+    fn xor(&self, other: &Rhs) -> MultiPolygon2D<Self::Scalar> {
         self.boolean_op(other, OpType::Xor)
     }
-    fn difference(&self, other: &Self) -> MultiPolygon2D<Self::Scalar> {
+    fn difference(&self, other: &Rhs) -> MultiPolygon2D<Self::Scalar> {
         self.boolean_op(other, OpType::Difference)
     }
 
     /// Clip a 1-D geometry with self.
     ///
-    /// Returns the portion of `ls` that lies within `self` (known as the set-theoeretic
+    /// Returns the portion of `ls` that lies within `self` (known as the set-theoretic
     /// intersection) if `invert` is false, and the difference (`ls - self`) otherwise.
     fn clip(
         &self,
@@ -47,15 +45,11 @@ pub enum OpType {
     Xor,
 }
 
-impl<T: GeoFloat> BooleanOps for Polygon2D<T> {
+impl<T: GeoFloat + FloatNumber> BooleanOps for Polygon2D<T> {
     type Scalar = T;
 
     fn boolean_op(&self, other: &Self, op: OpType) -> MultiPolygon2D<Self::Scalar> {
-        let spec = BoolOp::from(op);
-        let mut bop = Proc::new(spec, self.coords_count() + other.coords_count());
-        bop.add_polygon(self, 0);
-        bop.add_polygon(other, 1);
-        bop.sweep()
+        boolean_op_polygon(self, other, op)
     }
 
     fn clip(
@@ -63,24 +57,15 @@ impl<T: GeoFloat> BooleanOps for Polygon2D<T> {
         ls: &MultiLineString2D<Self::Scalar>,
         invert: bool,
     ) -> MultiLineString2D<Self::Scalar> {
-        let spec = ClipOp::new(invert);
-        let mut bop = Proc::new(spec, self.coords_count() + ls.coords_count());
-        bop.add_polygon(self, 0);
-        ls.0.iter().enumerate().for_each(|(idx, l)| {
-            bop.add_line_string(l, idx + 1);
-        });
-        bop.sweep()
+        clip_polygon(self, ls, invert)
     }
 }
-impl<T: GeoFloat> BooleanOps for MultiPolygon2D<T> {
+
+impl<T: GeoFloat + FloatNumber> BooleanOps for MultiPolygon2D<T> {
     type Scalar = T;
 
     fn boolean_op(&self, other: &Self, op: OpType) -> MultiPolygon2D<Self::Scalar> {
-        let spec = BoolOp::from(op);
-        let mut bop = Proc::new(spec, self.coords_count() + other.coords_count());
-        bop.add_multi_polygon(self, 0);
-        bop.add_multi_polygon(other, 1);
-        bop.sweep()
+        boolean_op_multi_polygon(self, other, op)
     }
 
     fn clip(
@@ -88,12 +73,107 @@ impl<T: GeoFloat> BooleanOps for MultiPolygon2D<T> {
         ls: &MultiLineString2D<Self::Scalar>,
         invert: bool,
     ) -> MultiLineString2D<Self::Scalar> {
-        let spec = ClipOp::new(invert);
-        let mut bop = Proc::new(spec, self.coords_count() + ls.coords_count());
-        bop.add_multi_polygon(self, 0);
-        ls.0.iter().enumerate().for_each(|(idx, l)| {
-            bop.add_line_string(l, idx + 1);
-        });
-        bop.sweep()
+        clip_multi_polygon(self, ls, invert)
+    }
+}
+
+// Cross-type implementations: Polygon2D <-> MultiPolygon2D
+// Note: clip() is intentionally not implemented for cross-type operations
+// to avoid ambiguity, as clip() doesn't depend on Rhs.
+impl<T: GeoFloat + FloatNumber> BooleanOps<MultiPolygon2D<T>> for Polygon2D<T> {
+    type Scalar = T;
+
+    fn boolean_op(&self, other: &MultiPolygon2D<T>, op: OpType) -> MultiPolygon2D<Self::Scalar> {
+        boolean_op_polygon_multi_polygon(self, other, op)
+    }
+
+    fn clip(
+        &self,
+        _ls: &MultiLineString2D<Self::Scalar>,
+        _invert: bool,
+    ) -> MultiLineString2D<Self::Scalar> {
+        unimplemented!("clip() is only available on same-type BooleanOps implementations")
+    }
+}
+
+impl<T: GeoFloat + FloatNumber> BooleanOps<Polygon2D<T>> for MultiPolygon2D<T> {
+    type Scalar = T;
+
+    fn boolean_op(&self, other: &Polygon2D<T>, op: OpType) -> MultiPolygon2D<Self::Scalar> {
+        boolean_op_multi_polygon_polygon(self, other, op)
+    }
+
+    fn clip(
+        &self,
+        _ls: &MultiLineString2D<Self::Scalar>,
+        _invert: bool,
+    ) -> MultiLineString2D<Self::Scalar> {
+        unimplemented!("clip() is only available on same-type BooleanOps implementations")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{coordinate::Coordinate2D, line_string::LineString2D};
+
+    #[test]
+    fn test_polygon_boolean_ops_two_squares() {
+        let poly1 = MultiPolygon2D::new(vec![Polygon2D::new(
+            LineString2D::new(vec![
+                Coordinate2D::new_(0.0, 0.0),
+                Coordinate2D::new_(2.0, 0.0),
+                Coordinate2D::new_(2.0, 2.0),
+                Coordinate2D::new_(0.0, 2.0),
+                Coordinate2D::new_(0.0, 0.0),
+            ]),
+            vec![],
+        )]);
+        let poly2 = MultiPolygon2D::new(vec![Polygon2D::new(
+            LineString2D::new(vec![
+                Coordinate2D::new_(1.0, 1.0),
+                Coordinate2D::new_(3.0, 1.0),
+                Coordinate2D::new_(3.0, 3.0),
+                Coordinate2D::new_(1.0, 3.0),
+                Coordinate2D::new_(1.0, 1.0),
+            ]),
+            vec![],
+        )]);
+        let intersection = poly1.intersection(&poly2);
+        assert_eq!(intersection.0.len(), 1);
+        assert_eq!(intersection.0[0].exterior().0.len(), 5);
+
+        let diff = poly1.difference(&poly2);
+        assert_eq!(diff.0.len(), 1);
+        assert_eq!(diff.0[0].exterior().0.len(), 7);
+    }
+
+    #[test]
+    fn test_polygon_boolean_ops_two_triangles() {
+        let poly1 = MultiPolygon2D::new(vec![Polygon2D::new(
+            LineString2D::new(vec![
+                Coordinate2D::new_(0.0, 0.0),
+                Coordinate2D::new_(2.0, 0.0),
+                Coordinate2D::new_(1.0, 2.0),
+                Coordinate2D::new_(0.0, 0.0),
+            ]),
+            vec![],
+        )]);
+        let poly2 = MultiPolygon2D::new(vec![Polygon2D::new(
+            LineString2D::new(vec![
+                Coordinate2D::new_(0.0, 0.0),
+                Coordinate2D::new_(2.0, 0.0),
+                Coordinate2D::new_(1.0, 1.0),
+                Coordinate2D::new_(0.0, 0.0),
+            ]),
+            vec![],
+        )]);
+        let intersection = poly1.intersection(&poly2);
+        assert_eq!(intersection.0.len(), 1);
+        assert_eq!(intersection.0[0].exterior().0.len(), 4);
+
+        let diff = poly1.difference(&poly2);
+        assert_eq!(diff.0.len(), 1);
+        assert_eq!(diff.0[0].exterior().0.len(), 5);
     }
 }

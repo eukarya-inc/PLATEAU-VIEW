@@ -1,10 +1,10 @@
 import {
-  CornersIn,
-  CornersOut,
-  FrameCorners,
-  MagnifyingGlassMinus,
-  MagnifyingGlassPlus,
+  CornersInIcon,
+  CornersOutIcon,
+  FrameCornersIcon,
+  MinusIcon,
 } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { useReactFlow } from "@xyflow/react";
 import { memo } from "react";
 
@@ -20,15 +20,15 @@ const CanvasActionBar = () => {
   const { isFullscreen, handleFullscreenToggle } = useFullscreen();
 
   return (
-    <div className="pointer-events-auto rounded-md border bg-secondary">
+    <div className="pointer-events-auto rounded-md p-1">
       <div className="flex rounded-md">
-        <div className="flex flex-1 flex-col justify-end align-middle">
+        <div className="flex flex-1 flex-col justify-end gap-1 align-middle">
           <IconButton
             className="rounded-[4px]"
             tooltipText={t("Zoom in")}
             tooltipPosition="left"
             tooltipOffset={tooltipOffset}
-            icon={<MagnifyingGlassPlus weight="thin" />}
+            icon={<PlusIcon size={18} weight="light" />}
             onClick={() => zoomIn({ duration: 400 })}
           />
           <IconButton
@@ -36,15 +36,15 @@ const CanvasActionBar = () => {
             tooltipText={t("Zoom out")}
             tooltipOffset={tooltipOffset}
             tooltipPosition="left"
-            icon={<MagnifyingGlassMinus weight="thin" />}
+            icon={<MinusIcon size={18} weight="light" />}
             onClick={() => zoomOut({ duration: 400 })}
           />
           <IconButton
             className="rounded-[4px]"
-            tooltipText={t("All nodes in viewport")}
+            tooltipText={t("All actions in viewport")}
             tooltipOffset={tooltipOffset}
             tooltipPosition="left"
-            icon={<FrameCorners weight="thin" />}
+            icon={<FrameCornersIcon weight="thin" size={18} />}
             onClick={() => fitView({ duration: 400, padding: 0.5 })}
           />
           <IconButton
@@ -56,27 +56,14 @@ const CanvasActionBar = () => {
             tooltipPosition="left"
             icon={
               isFullscreen ? (
-                <CornersIn weight="thin" />
+                <CornersInIcon weight="thin" size={18} />
               ) : (
-                <CornersOut weight="thin" />
+                <CornersOutIcon weight="thin" size={18} />
               )
             }
             onClick={handleFullscreenToggle}
           />
-          {/* <div className="border-l  mx-3" /> */}
         </div>
-        {/* <div className="flex align-middle">
-          <IconButton
-            tooltipText={t("Publish workflow")}
-            tooltipOffset={tooltipOffset}
-            icon={<Link2Icon />}
-          />
-          <IconButton
-            tooltipText={t("Download workflow")}
-            tooltipOffset={tooltipOffset}
-            icon={<DownloadIcon />}
-          />
-        </div> */}
       </div>
     </div>
   );

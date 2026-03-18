@@ -3,7 +3,7 @@ package mongogit
 import (
 	"time"
 
-	"github.com/reearth/reearth-cms/server/pkg/version"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/version"
 	"github.com/reearth/reearthx/mongox"
 	"github.com/reearth/reearthx/util"
 	"go.mongodb.org/mongo-driver/bson"

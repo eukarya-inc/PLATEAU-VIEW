@@ -26,7 +26,10 @@ const simplifyAnyOf = (
     // If only one type remains, replace `anyOf` with that schema
     if (filteredSchemas.length === 1) {
       if (isJSONSchema(filteredSchemas[0])) {
+        const originalTitle = newSchema.title;
         newSchema = { ...filteredSchemas[0] };
+        // Preserve the title if missing from the new schema
+        if (!newSchema.title && originalTitle) newSchema.title = originalTitle;
       }
     } else {
       newSchema.anyOf = filteredSchemas;
@@ -62,6 +65,84 @@ const simplifyAnyOf = (
   return newSchema;
 };
 
+const consolidateOneOfToEnum = (
+  schema: JSONSchema7Definition,
+): JSONSchema7Definition => {
+  if (!isJSONSchema(schema)) return schema;
+  const newSchema: JSONSchema7 = { ...schema };
+
+  const extractOneOfValues = (
+    arr: JSONSchema7[],
+  ): { values: any[]; titles: (string | undefined)[] } | null => {
+    const values: any[] = [];
+    const titles: (string | undefined)[] = [];
+    for (const sub of arr) {
+      let v: any | undefined;
+      if ("const" in sub && typeof sub.const !== "undefined") v = sub.const;
+      else if (Array.isArray(sub.enum) && sub.enum.length === 1)
+        v = sub.enum[0];
+      else return null;
+      values.push(v);
+      titles.push(sub.title);
+    }
+    return { values, titles };
+  };
+
+  if (newSchema.oneOf && newSchema.oneOf.every(isJSONSchema)) {
+    const oneOfValues = extractOneOfValues(newSchema.oneOf as JSONSchema7[]);
+    if (oneOfValues) {
+      // Ensure the parent looks like a string/number/etc. based on first value
+      if (typeof oneOfValues.values[0] === "string") {
+        newSchema.type = "string";
+      } else if (typeof oneOfValues.values[0] === "number") {
+        newSchema.type = "number";
+      }
+
+      const hasTitles = oneOfValues.titles.some((t) => t !== undefined);
+      if (hasTitles) {
+        // Normalize to oneOf with const+title format so RJSF renders labeled select options
+        newSchema.oneOf = oneOfValues.values.map((val, i) => ({
+          const: val,
+          title: oneOfValues.titles[i] || String(val),
+        }));
+      } else {
+        // No titles available, fall back to plain enum
+        delete newSchema.oneOf;
+        (newSchema as JSONSchema7 & { enum: any[] }).enum = oneOfValues.values;
+      }
+    }
+  }
+
+  // Recursively handle nested schemas
+  if (newSchema.properties) {
+    newSchema.properties = Object.fromEntries(
+      Object.entries(newSchema.properties).map(([key, value]) => [
+        key,
+        consolidateOneOfToEnum(value),
+      ]),
+    );
+  }
+
+  if (newSchema.items) {
+    if (Array.isArray(newSchema.items)) {
+      newSchema.items = newSchema.items.map(consolidateOneOfToEnum);
+    } else {
+      newSchema.items = consolidateOneOfToEnum(newSchema.items);
+    }
+  }
+
+  if (newSchema.definitions) {
+    newSchema.definitions = Object.fromEntries(
+      Object.entries(newSchema.definitions).map(([k, v]) => [
+        k,
+        consolidateOneOfToEnum(v),
+      ]),
+    );
+  }
+
+  return newSchema;
+};
+
 // Nested `anyOf` inside `oneOf` needs to be simplified as `oneOf` will override `anyOf`
 const simplifyAnyOfInsideOneOf = (
   schema: JSONSchema7Definition,
@@ -88,7 +169,58 @@ const simplifyAnyOfInsideOneOf = (
   return newSchema;
 };
 
-export const patchAnyOfType = (schema: JSONSchema7Definition): RJSFSchema => {
+// Function to simplify `allOf` with single `$ref` - common pattern from schemars with default values
+const simplifyAllOf = (
+  schema: JSONSchema7Definition,
+  definitions?: Record<string, JSONSchema7Definition>,
+): JSONSchema7Definition => {
+  if (!isJSONSchema(schema)) return schema;
+
+  let newSchema: JSONSchema7 = { ...schema };
+
+  // Handle allOf with single $ref (common pattern from Rust schemars with defaults)
+  if (newSchema.allOf && newSchema.allOf.length === 1) {
+    const subSchema = newSchema.allOf[0];
+    if (isJSONSchema(subSchema) && subSchema.$ref) {
+      // Extract the reference key from "#/definitions/EnumName"
+      const refKey = subSchema.$ref.split("/").pop();
+      if (refKey && definitions?.[refKey]) {
+        const resolvedSchema = definitions[refKey];
+        if (isJSONSchema(resolvedSchema)) {
+          // Merge the referenced schema with the current schema, preserving properties like 'default'
+          const { allOf, ...schemaWithoutAllOf } = newSchema;
+          newSchema = { ...resolvedSchema, ...schemaWithoutAllOf };
+        }
+      }
+    }
+  }
+
+  // Recursively handle nested schemas
+  if (newSchema.properties) {
+    newSchema.properties = Object.fromEntries(
+      Object.entries(newSchema.properties).map(([key, value]) => [
+        key,
+        simplifyAllOf(value, definitions),
+      ]),
+    );
+  }
+
+  if (newSchema.items) {
+    if (Array.isArray(newSchema.items)) {
+      newSchema.items = newSchema.items.map((item) =>
+        simplifyAllOf(item, definitions),
+      );
+    } else {
+      newSchema.items = simplifyAllOf(newSchema.items, definitions);
+    }
+  }
+
+  return newSchema;
+};
+
+export const patchAnyOfAndOneOfType = (
+  schema: JSONSchema7Definition,
+): RJSFSchema => {
   if (!isJSONSchema(schema)) {
     return { type: "boolean", default: schema };
   }
@@ -99,6 +231,11 @@ export const patchAnyOfType = (schema: JSONSchema7Definition): RJSFSchema => {
   newSchema = simplifyAnyOf(newSchema) as JSONSchema7;
   // Ensure `oneOf` does not interfere with `anyOf` simplification
   newSchema = simplifyAnyOfInsideOneOf(newSchema) as JSONSchema7;
+  // Simplify `allOf` with single `$ref` (handles Rust schemars enum defaults)
+  newSchema = simplifyAllOf(newSchema, newSchema.definitions) as JSONSchema7;
+
+  // Apply consolidateOneOfToEnum to the root schema and all nested properties
+  newSchema = consolidateOneOfToEnum(newSchema) as JSONSchema7;
 
   return newSchema;
 };

@@ -1,10 +1,10 @@
 package schema
 
 import (
-	"github.com/reearth/reearth-cms/server/pkg/id"
 	"testing"
 
-	"github.com/reearth/reearth-cms/server/pkg/value"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/id"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/value"
 	"github.com/stretchr/testify/assert"
 )
 

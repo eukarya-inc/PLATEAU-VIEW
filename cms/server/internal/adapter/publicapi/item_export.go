@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/reearth/reearth-cms/server/pkg/exporters"
-	"github.com/reearth/reearth-cms/server/pkg/item"
-	"github.com/reearth/reearth-cms/server/pkg/schema"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/exporters"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/item"
+	"github.com/eukarya-inc/PLATEAU-VIEW-3.0/cms/server/pkg/schema"
 	"github.com/reearth/reearthx/log"
 	"github.com/samber/lo"
 )

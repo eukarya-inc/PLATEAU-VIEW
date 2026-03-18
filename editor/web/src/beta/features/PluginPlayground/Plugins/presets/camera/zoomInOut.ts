@@ -87,15 +87,12 @@ ${PRESET_PLUGIN_COMMON_STYLE}
 // ================================
 
 // Listen for messages from the UI and update zoom level
-// Documentation on Extension "on" event: https://visualizer.developer.reearth.io/plugin-api/extension/#message-1
 reearth.extension.on("message", (msg) => {
   const { action } = msg;
   if (action === "zoomIn") {
     // Increasing the value increases the change to zoom
-    // Documentation on Camera "zoomIn" method: https://visualizer.developer.reearth.io/plugin-api/camera/#zoomin
     reearth.camera.zoomIn(2);   
   } else if (action === "zoomOut") {
-  // Documentation on Camera "zoomOut" method: https://visualizer.developer.reearth.io/plugin-api/camera/#zoomout 
     reearth.camera.zoomOut(2);
   }
 });`
@@ -103,5 +100,6 @@ reearth.extension.on("message", (msg) => {
 
 export const zoomInOut: PluginType = {
   id: "zoom-in-out",
-  files: [yamlFile, widgetFile]
+  title: "Zoom In and Out",
+  files: [widgetFile, yamlFile]
 };

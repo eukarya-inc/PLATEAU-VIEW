@@ -4,10 +4,10 @@ use thiserror::Error;
 pub enum SinkError {
     #[error("Build factory error: {0}")]
     BuildFactory(String),
-    #[error("File Writer error: {0}")]
-    FileWriter(String),
-    #[error("Xml Writer error: {0}")]
-    XmlWriter(String),
+    #[error("Csv Writer error: {0}")]
+    CsvWriter(String),
+    #[error("Csv Writer Factory error: {0}")]
+    CsvWriterFactory(String),
     #[error("Cesium3DTiles Writer Factory error: {0}")]
     Cesium3DTilesWriterFactory(String),
     #[error("Cesium3DTiles Writer error: {0}")]
@@ -34,19 +34,55 @@ pub enum SinkError {
     ShapefileWriter(String),
     #[error("Shapefile I/O error: {0}")]
     ShapefileWriterIo(#[from] std::io::Error),
+    #[error("Obj Writer Factory error: {0}")]
+    ObjWriterFactory(String),
+    #[error("Obj Writer error: {0}")]
+    ObjWriter(String),
+    #[error("Xml Writer Factory error: {0}")]
+    XmlWriterFactory(String),
+    #[error("Xml Writer error: {0}")]
+    XmlWriter(String),
     #[error("ZipFile Writer Factory error: {0}")]
     ZipFileWriterFactory(String),
     #[error("ZipFile Writer error: {0}")]
     ZipFileWriter(String),
+    #[error("Excel Writer Factory error: {0}")]
+    ExcelWriterFactory(String),
+    #[error("Excel Writer error: {0}")]
+    ExcelWriter(String),
+    #[error("Json Writer Factory error: {0}")]
+    JsonWriterFactory(String),
+    #[error("Json Writer error: {0}")]
+    JsonWriter(String),
+    #[error("GeoPackage Writer Factory error: {0}")]
+    GeoPackageWriterFactory(String),
+    #[error("GeoPackage Writer error: {0}")]
+    GeoPackageWriter(String),
+    #[error("CityGML Writer Factory error: {0}")]
+    CityGmlWriterFactory(String),
+    #[error("CityGML Writer error: {0}")]
+    CityGmlWriter(String),
+    #[error("Atlas Builder error: {0}")]
+    AtlasBuilder(String),
+    #[error("Geometry export error: {0}")]
+    GeometryExport(#[from] GeometryExportError),
+}
+
+#[derive(Error, Debug)]
+pub enum GeometryExportError {
+    #[error("Cannot export empty geometry")]
+    EmptyGeometry,
+    #[error("Cannot export non-point geometry to coordinate columns")]
+    NonPointGeometry,
+    #[error("GeometryCollection export is not yet supported")]
+    UnsupportedGeometryCollection,
+    #[error("Geometry type export to WKT is not yet supported: {0}")]
+    UnsupportedGeometryType(String),
 }
 
 impl SinkError {
-    pub fn file_writer<T: ToString>(message: T) -> Self {
-        Self::FileWriter(message.to_string())
-    }
-
     pub fn geojson_writer<T: ToString>(message: T) -> Self {
-        Self::FileWriter(message.to_string())
+        Self::GeoJsonWriter(message.to_string())
     }
 
     pub fn cesium3dtiles_writer<T: ToString>(message: T) -> Self {
@@ -59,6 +95,26 @@ impl SinkError {
 
     pub fn czml_writer<T: ToString>(message: T) -> Self {
         Self::CzmlWriter(message.to_string())
+    }
+
+    pub fn obj_writer<T: ToString>(message: T) -> Self {
+        Self::ObjWriter(message.to_string())
+    }
+
+    pub fn excel_writer<T: ToString>(message: T) -> Self {
+        Self::ExcelWriter(message.to_string())
+    }
+
+    pub fn geopackage_writer<T: ToString>(message: T) -> Self {
+        Self::GeoPackageWriter(message.to_string())
+    }
+
+    pub fn citygml_writer<T: ToString>(message: T) -> Self {
+        Self::CityGmlWriter(message.to_string())
+    }
+
+    pub fn atlas_builder<T: ToString>(message: T) -> Self {
+        Self::AtlasBuilder(message.to_string())
     }
 }
 
