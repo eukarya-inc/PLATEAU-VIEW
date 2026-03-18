@@ -2,7 +2,7 @@
 
 ![thumbnail](./docs/image.webp)
 
-PLATEAU VIEW t.0 は以下のシステムにより構成されます。
+PLATEAU VIEW 5.0 は以下のシステムにより構成されます。
 
 - **PLATEAU CMS**: ビューワーに掲載する各種データの管理・配信を行う。
 - **PLATEAU Editor**: ビューワーの作成・公開を行う Web アプリケーション。
