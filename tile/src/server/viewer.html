@@ -211,9 +211,10 @@
             </div>
         </div>
     </div>
+    <script id="sources-data" type="application/json">{{SOURCES_JSON}}</script>
 
     <script>
-        const sources = {{SOURCES_JSON}};
+        const sources = JSON.parse(document.getElementById('sources-data').textContent);
         const sourceSelect = document.getElementById('source');
         const formatSelect = document.getElementById('format');
         const copyUrlBtn = document.getElementById('copyUrl');

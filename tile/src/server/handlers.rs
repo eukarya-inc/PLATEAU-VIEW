@@ -38,8 +38,10 @@ const VIEWER_HTML: &str = include_str!("viewer.html");
 pub async fn viewer(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let sources = state.list_sources().await;
     let sources_json = serde_json::to_string(&sources).unwrap_or_else(|_| "[]".to_string());
+    // Escape </script> to prevent breaking out of the JSON script block
+    let sources_json_safe = sources_json.replace("</", "<\\/");
 
-    Html(VIEWER_HTML.replace("{{SOURCES_JSON}}", &sources_json))
+    Html(VIEWER_HTML.replace("{{SOURCES_JSON}}", &sources_json_safe))
 }
 
 /// Generate tile bytes from source (used in single-flight closure).
@@ -78,6 +80,14 @@ pub async fn get_tile(
     let fmt = format.extension();
     tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "Tile request received");
 
+    // Get source first to ensure it exists before ETag checks
+    let source = match state.get_source(&name).await {
+        Some(s) => s,
+        None => {
+            return (StatusCode::NOT_FOUND, "Source not found").into_response();
+        }
+    };
+
     // Get ETag keys for layers that cover this tile
     let etag_keys = state
         .get_source_etag_keys(&name, z, x, y)
@@ -91,14 +101,6 @@ pub async fn get_tile(
         tracing::debug!(source = %name, z = z, x = x, y = y, format = fmt, "ETag match, returning 304");
         return not_modified_response(&etag, state.cache_control.as_deref());
     }
-
-    // Get source (needed for generation)
-    let source = match state.get_source(&name).await {
-        Some(s) => s,
-        None => {
-            return (StatusCode::NOT_FOUND, "Source not found").into_response();
-        }
-    };
 
     // Cache key includes format for format-specific caching
     let cache_key = format!("{name}/{fmt}/{z}/{x}/{y}.{fmt}");

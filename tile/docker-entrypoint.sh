@@ -20,7 +20,7 @@ trap cleanup SIGTERM SIGINT
 
 # Start Xvfb (X Virtual Frame Buffer) for headless rendering
 echo "Starting Xvfb on display ${DISPLAY}..."
-Xvfb ${DISPLAY} -screen 0 1280x1024x24 -ac +extension GLX +render -noreset -nolisten tcp &
+Xvfb "${DISPLAY}" -screen 0 1280x1024x24 -ac +extension GLX +render -noreset -nolisten tcp &
 XVFB_PID=$!
 
 # Wait for Xvfb to be ready

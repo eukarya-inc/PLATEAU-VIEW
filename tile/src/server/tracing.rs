@@ -127,7 +127,6 @@ pub(crate) struct HttpRequestLoggingService<S> {
 fn inject_trace_headers<B>(
     response: &mut http::Response<B>,
     trace_context: Option<&CloudTraceContext>,
-    project_id: Option<&str>,
 ) {
     let Some(ctx) = trace_context else {
         return;
@@ -160,17 +159,6 @@ fn inject_trace_headers<B>(
             .headers_mut()
             .insert("x-cloud-trace-context", value);
     }
-
-    // Add trace URL header for debugging (if project ID is available)
-    if let Some(project_id) = project_id {
-        let trace_url = format!(
-            "https://console.cloud.google.com/traces/list?project={}&tid={}",
-            project_id, trace_id
-        );
-        if let Ok(value) = HeaderValue::from_str(&trace_url) {
-            response.headers_mut().insert("x-trace-url", value);
-        }
-    }
 }
 
 impl<S, B, ResBody> Service<Request<B>> for HttpRequestLoggingService<S>
@@ -202,11 +190,6 @@ where
 
         let start = std::time::Instant::now();
 
-        // Get GCP project ID for trace URL (optional)
-        let project_id = std::env::var("GOOGLE_CLOUD_PROJECT")
-            .or_else(|_| std::env::var("GCP_PROJECT"))
-            .ok();
-
         Box::pin(async move {
             let response = inner.call(request).await;
 
@@ -219,7 +202,7 @@ where
                     let status = res.status().as_u16();
 
                     // Inject trace headers into response
-                    inject_trace_headers(&mut res, trace_context.as_ref(), project_id.as_deref());
+                    inject_trace_headers(&mut res, trace_context.as_ref());
 
                     tracing::info!(
                         http_request.request_method = %method,
@@ -261,7 +244,9 @@ fn extract_trace_context(headers: &http::HeaderMap) -> Option<CloudTraceContext>
     if let Some(value) = headers.get("traceparent").and_then(|v| v.to_str().ok()) {
         let parts: Vec<&str> = value.split('-').collect();
         if parts.len() >= 4 {
-            let sampled = parts[3].ends_with('1');
+            let sampled = u8::from_str_radix(parts[3], 16)
+                .map(|flags| (flags & 1) == 1)
+                .unwrap_or(false);
             return Some(CloudTraceContext {
                 trace_id: parts[1].to_string(),
                 span_id: Some(parts[2].to_string()),
