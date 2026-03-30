@@ -3,9 +3,7 @@ package openapi
 import (
 	_ "embed"
 	"encoding/json"
-	"net/http"
 
-	"github.com/go-openapi/runtime/middleware"
 	"github.com/labstack/echo/v4"
 	"gopkg.in/yaml.v3"
 )
@@ -13,6 +11,19 @@ import (
 //go:embed openapi.yml
 var y []byte
 var j []byte
+
+const docsHTML = `<!doctype html>
+<html>
+<head>
+  <title>PLATEAU API Reference</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <script id="api-reference" data-url="/openapi.yml"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>`
 
 func init() {
 	var t any
@@ -33,17 +44,8 @@ func Handler(g *echo.Group) error {
 			return c.Blob(200, "application/x-yaml", y)
 		})
 
-		docs := echo.WrapMiddleware(func(h http.Handler) http.Handler {
-			return middleware.SwaggerUI(middleware.SwaggerUIOpts{
-				Path:    "/docs",
-				SpecURL: "/openapi.yml",
-			}, h)
-		})(func(c echo.Context) error {
-			return echo.ErrNotFound
-		})
-
-		g.GET("/docs/*", func(c echo.Context) error {
-			return docs(c)
+		g.GET("/docs", func(c echo.Context) error {
+			return c.HTML(200, docsHTML)
 		})
 	}
 
