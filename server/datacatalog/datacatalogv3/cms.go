@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
@@ -82,31 +83,38 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	all.PlateauSpecs = specs
 	all.FeatureTypes = featureTypes
 
+	var warnMu sync.Mutex
+	addWarning := func(msg string) {
+		warnMu.Lock()
+		all.Warnings = append(all.Warnings, msg)
+		warnMu.Unlock()
+	}
+
 	cityItemsChan := lo.Async2(func() ([]*CityItem, error) {
-		return c.GetCityItems(ctx, c.project, featureTypes.Plateau)
+		return c.GetCityItems(ctx, c.project, featureTypes.Plateau, addWarning)
 	})
 
 	relatedItemsChan := lo.Async2(func() ([]*RelatedItem, error) {
-		return c.GetRelatedItems(ctx, c.project, featureTypes.Related)
+		return c.GetRelatedItems(ctx, c.project, featureTypes.Related, addWarning)
 	})
 
 	genericItemsChan := lo.Async2(func() ([]*GenericItem, error) {
-		return c.GetGenericItems(ctx, c.project)
+		return c.GetGenericItems(ctx, c.project, addWarning)
 	})
 
 	sampleItemsChan := lo.Async2(func() ([]*PlateauFeatureItem, error) {
-		return c.GetSampleItems(ctx, c.project)
+		return c.GetSampleItems(ctx, c.project, addWarning)
 	})
 
 	geospatialjpDataItemsChan := lo.Async2(func() ([]*GeospatialjpDataItem, error) {
-		return c.GetGeospatialjpDataItems(ctx, c.project)
+		return c.GetGeospatialjpDataItems(ctx, c.project, addWarning)
 	})
 
 	// Only fetch flow items if Flow is enabled in metadata
 	var flowItemsChan <-chan lo.Tuple2[[]*PlateauFeatureItem, error]
 	if cmsinfo.FlowEnabled {
 		flowItemsChan = lo.Async2(func() ([]*PlateauFeatureItem, error) {
-			return c.GetFlowItems(ctx, c.project)
+			return c.GetFlowItems(ctx, c.project, addWarning)
 		})
 	}
 
@@ -144,7 +152,7 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 		featureCode := featureCode
 
 		featureItemsChan := lo.Async3(func() (string, []*PlateauFeatureItem, error) {
-			res, err := c.GetPlateauItems(ctx, c.project, featureCode)
+			res, err := c.GetPlateauItems(ctx, c.project, featureCode, addWarning)
 			return featureCode, res, err
 		})
 		featureItemsChans = append(featureItemsChans, featureItemsChan)
@@ -183,8 +191,8 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	// Flow items - group by feature type, skip items without City, CityGML, or Data
 	if flowItemsChan != nil {
 		if res := <-flowItemsChan; res.B != nil {
-			// Flow model is optional, so we just log the error
-			log.Warnfc(ctx, "datacatalogv3: failed to get flow items: %v", res.B)
+			// Flow model is optional
+			addWarning(fmt.Sprintf("failed to get flow items: %v", res.B))
 		} else {
 			all.Flow = make(map[string][]*PlateauFeatureItem)
 			for _, item := range res.A {
@@ -220,9 +228,9 @@ func (c *CMS) GetAll(ctx context.Context, host string) (*AllData, error) {
 	return &all, nil
 }
 
-func (c *CMS) GetCityItems(ctx context.Context, project string, featureTypes []FeatureType) ([]*CityItem, error) {
+func (c *CMS) GetCityItems(ctx context.Context, project string, featureTypes []FeatureType, addWarning func(string)) ([]*CityItem, error) {
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+cityModel,
+		c.cms, ctx, project, modelPrefix+cityModel, addWarning,
 		func(i cms.Item) *CityItem {
 			return CityItemFrom(&i, featureTypes)
 		},
@@ -238,7 +246,7 @@ func (c *CMS) GetCityItems(ctx context.Context, project string, featureTypes []F
 	return items, err
 }
 
-func (c *CMS) GetPlateauItems(ctx context.Context, project, feature string) ([]*PlateauFeatureItem, error) {
+func (c *CMS) GetPlateauItems(ctx context.Context, project, feature string, addWarning func(string)) ([]*PlateauFeatureItem, error) {
 	cacheKey := fmt.Sprintf("plateau_%s_%s", project, feature)
 	if c.cache {
 		if items, err := loadCache[[]*PlateauFeatureItem](
@@ -251,7 +259,7 @@ func (c *CMS) GetPlateauItems(ctx context.Context, project, feature string) ([]*
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+feature,
+		c.cms, ctx, project, modelPrefix+feature, addWarning,
 		func(i cms.Item) *PlateauFeatureItem {
 			return PlateauFeatureItemFrom(&i, feature)
 		},
@@ -266,7 +274,7 @@ func (c *CMS) GetPlateauItems(ctx context.Context, project, feature string) ([]*
 	return items, err
 }
 
-func (c *CMS) GetRelatedItems(ctx context.Context, project string, featureTypes []FeatureType) ([]*RelatedItem, error) {
+func (c *CMS) GetRelatedItems(ctx context.Context, project string, featureTypes []FeatureType, addWarning func(string)) ([]*RelatedItem, error) {
 	cacheKey := fmt.Sprintf(
 		"related_%s_%s",
 		project,
@@ -289,7 +297,7 @@ func (c *CMS) GetRelatedItems(ctx context.Context, project string, featureTypes 
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+relatedModel,
+		c.cms, ctx, project, modelPrefix+relatedModel, addWarning,
 		func(i cms.Item) *RelatedItem {
 			return RelatedItemFrom(&i, featureTypes)
 		},
@@ -304,7 +312,7 @@ func (c *CMS) GetRelatedItems(ctx context.Context, project string, featureTypes 
 	return items, err
 }
 
-func (c *CMS) GetGenericItems(ctx context.Context, project string) ([]*GenericItem, error) {
+func (c *CMS) GetGenericItems(ctx context.Context, project string, addWarning func(string)) ([]*GenericItem, error) {
 	cacheKey := fmt.Sprintf("generic_%s", project)
 	if c.cache {
 		if items, err := loadCache[[]*GenericItem](
@@ -317,7 +325,7 @@ func (c *CMS) GetGenericItems(ctx context.Context, project string) ([]*GenericIt
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+genericModel,
+		c.cms, ctx, project, modelPrefix+genericModel, addWarning,
 		func(i cms.Item) *GenericItem {
 			return GenericItemFrom(&i)
 		},
@@ -342,7 +350,7 @@ func (c *CMS) GetGenericItems(ctx context.Context, project string) ([]*GenericIt
 	return items, err
 }
 
-func (c *CMS) GetSampleItems(ctx context.Context, project string) ([]*PlateauFeatureItem, error) {
+func (c *CMS) GetSampleItems(ctx context.Context, project string, addWarning func(string)) ([]*PlateauFeatureItem, error) {
 	cacheKey := fmt.Sprintf("sample_%s", project)
 	if c.cache {
 		if items, err := loadCache[[]*PlateauFeatureItem](
@@ -355,7 +363,7 @@ func (c *CMS) GetSampleItems(ctx context.Context, project string) ([]*PlateauFea
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+sampleModel,
+		c.cms, ctx, project, modelPrefix+sampleModel, addWarning,
 		func(i cms.Item) *PlateauFeatureItem {
 			return PlateauFeatureItemFrom(&i, "")
 		},
@@ -370,7 +378,7 @@ func (c *CMS) GetSampleItems(ctx context.Context, project string) ([]*PlateauFea
 	return items, err
 }
 
-func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string) ([]*GeospatialjpDataItem, error) {
+func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string, addWarning func(string)) ([]*GeospatialjpDataItem, error) {
 	cacheKey := fmt.Sprintf("geospatialjp_%s", project)
 	if c.cache {
 		if items, err := loadCache[[]*GeospatialjpDataItem](
@@ -383,7 +391,7 @@ func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string) ([]*
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+geospatialjpDataModel,
+		c.cms, ctx, project, modelPrefix+geospatialjpDataModel, addWarning,
 		func(i cms.Item) *GeospatialjpDataItem {
 			return GeospatialjpDataItemFrom(&i)
 		},
@@ -398,7 +406,7 @@ func (c *CMS) GetGeospatialjpDataItems(ctx context.Context, project string) ([]*
 	return items, err
 }
 
-func (c *CMS) GetFlowItems(ctx context.Context, project string) ([]*PlateauFeatureItem, error) {
+func (c *CMS) GetFlowItems(ctx context.Context, project string, addWarning func(string)) ([]*PlateauFeatureItem, error) {
 	cacheKey := fmt.Sprintf("flow_%s", project)
 	if c.cache {
 		if items, err := loadCache[[]*PlateauFeatureItem](
@@ -411,7 +419,7 @@ func (c *CMS) GetFlowItems(ctx context.Context, project string) ([]*PlateauFeatu
 	}
 
 	items, err := getItemsAndConv(
-		c.cms, ctx, project, modelPrefix+flowModel,
+		c.cms, ctx, project, modelPrefix+flowModel, addWarning,
 		func(i cms.Item) *PlateauFeatureItem {
 			return PlateauFeatureItemFrom(&i, "")
 		},
@@ -475,10 +483,12 @@ func (c *CMS) GetFeatureTypes(ctx context.Context) (FeatureTypes, error) {
 	return getFeatureTypes(ctx, c.pcms)
 }
 
-func getItemsAndConv[T any](cms cms.Interface, ctx context.Context, project, model string, conv func(cms.Item) *T) ([]*T, error) {
+func getItemsAndConv[T any](cms cms.Interface, ctx context.Context, project, model string, addWarning func(string), conv func(cms.Item) *T) ([]*T, error) {
 	items, err := cms.GetItemsByKeyInParallel(ctx, project, model, true, 100)
 	if err != nil && model != modelPrefix+sampleModel { // sample is optional
-		log.Warnfc(ctx, "datacatalogv3: failed to get items (%s/%s): %v", project, model, err)
+		if addWarning != nil {
+			addWarning(fmt.Sprintf("failed to get items (%s/%s): %v", project, model, err))
+		}
 	}
 	if items == nil {
 		return nil, nil

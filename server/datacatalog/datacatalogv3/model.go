@@ -21,6 +21,7 @@ type AllData struct {
 	FlowEnabled           bool                             // whether Flow datasets should be included in the catalog
 	GeospatialjpDataItems []*GeospatialjpDataItem
 	CMSInfo               CMSInfo
+	Warnings              []string
 }
 
 func (d *AllData) FindPlateauFeatureItemByCityID(ft, cityID string) *PlateauFeatureItem {

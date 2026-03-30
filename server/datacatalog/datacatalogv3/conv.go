@@ -105,6 +105,8 @@ func (all *AllData) Into() (res *plateauapi.InMemoryRepoContext, warning []strin
 		return
 	}
 
+	warning = append(warning, all.Warnings...)
+
 	res = &plateauapi.InMemoryRepoContext{
 		Name:     all.Name,
 		Areas:    plateauapi.Areas{},
