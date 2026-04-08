@@ -5,7 +5,7 @@ import { usePlateauApiUrl } from "../states/environmentVariables";
 
 export interface GeocodingResponse {
   address: string;
-  areas: Area<true>[];
+  areas?: Area<true>[];
 }
 
 export function useGeocodingLazy(): [
