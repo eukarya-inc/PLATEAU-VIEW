@@ -27,7 +27,13 @@ import {
 import { InspectorHeader, Space } from "../../../prototypes/ui-components";
 import { BUILDING_LAYER } from "../../../prototypes/view-layers";
 import { useOptionalAtomValue, useOptionalPrimitiveAtom } from "../../hooks";
-import { PlateauTilesetProperties, TileFeatureIndex, makePropertyName } from "../../plateau";
+import {
+  PlateauTilesetProperties,
+  TileFeatureIndex,
+  attributesKey,
+  makePropertyName,
+  retrieveAttributes,
+} from "../../plateau";
 import { BUILDING_FEATURE_TYPE } from "../../plateau/constants";
 import { lookAtTileFeature } from "../../reearth/utils";
 import {
@@ -219,7 +225,13 @@ export const BuildingSearchPanel: FC<Props> = ({
   const allFeatures = useMemo(
     () =>
       initialized.current
-        ? window.reearth?.layers?.findFeaturesByIds?.(layerId ?? "", featureIds ?? [])
+        ? window.reearth?.layers?.findFeaturesByIds?.(layerId ?? "", featureIds ?? [])?.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              [attributesKey]: retrieveAttributes(f.properties),
+            },
+          }))
         : [],
     [layerId, featureIds, initialized.current], // eslint-disable-line react-hooks/exhaustive-deps
   );
