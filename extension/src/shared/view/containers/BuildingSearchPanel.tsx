@@ -250,6 +250,14 @@ export const BuildingSearchPanel: FC<Props> = ({
 
     prevAllFeaturesLengthRef.current = allFeatures.length;
 
+    const convertedFeatures = allFeatures.map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        [attributesKey]: retrieveAttributes(f.properties),
+      },
+    }));
+
     setGroups(
       INCLUDE_PROPERTY_NAMES.map(value => {
         const name = typeof value === "string" ? value : value[0];
@@ -261,12 +269,8 @@ export const BuildingSearchPanel: FC<Props> = ({
             makePropertyName(`${BUILDING_FEATURE_TYPE}_${name}`, name, plateauSpecMajorVersion) ??
             name,
           options: uniqBy(
-            allFeatures.reduce((res, f) => {
-              const properties = {
-                ...f.properties,
-                [attributesKey]: retrieveAttributes(f.properties),
-              };
-              const propertyValue = get(properties, accessor ?? value);
+            convertedFeatures.reduce((res, f) => {
+              const propertyValue = get(f.properties, accessor ?? value);
               if (!propertyValue) return res;
               res.push({ label: propertyValue, value: propertyValue, accessor: accessor ?? name });
               return res;
