@@ -225,7 +225,13 @@ export const BuildingSearchPanel: FC<Props> = ({
   const allFeatures = useMemo(
     () =>
       initialized.current
-        ? window.reearth?.layers?.findFeaturesByIds?.(layerId ?? "", featureIds ?? [])
+        ? window.reearth?.layers?.findFeaturesByIds?.(layerId ?? "", featureIds ?? [])?.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              [attributesKey]: retrieveAttributes(f.properties),
+            },
+          }))
         : [],
     [layerId, featureIds, initialized.current], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -250,14 +256,6 @@ export const BuildingSearchPanel: FC<Props> = ({
 
     prevAllFeaturesLengthRef.current = allFeatures.length;
 
-    const convertedFeatures = allFeatures.map(f => ({
-      ...f,
-      properties: {
-        ...f.properties,
-        [attributesKey]: retrieveAttributes(f.properties),
-      },
-    }));
-
     setGroups(
       INCLUDE_PROPERTY_NAMES.map(value => {
         const name = typeof value === "string" ? value : value[0];
@@ -269,7 +267,7 @@ export const BuildingSearchPanel: FC<Props> = ({
             makePropertyName(`${BUILDING_FEATURE_TYPE}_${name}`, name, plateauSpecMajorVersion) ??
             name,
           options: uniqBy(
-            convertedFeatures.reduce((res, f) => {
+            allFeatures.reduce((res, f) => {
               const propertyValue = get(f.properties, accessor ?? value);
               if (!propertyValue) return res;
               res.push({ label: propertyValue, value: propertyValue, accessor: accessor ?? name });
