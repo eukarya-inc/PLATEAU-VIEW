@@ -11,7 +11,7 @@ import { RootLayerForDataset } from "../../view-layers";
 import { getAttributeLabel, getRootFields } from "./attributes";
 import type { AttributeValue } from "./loadAttributes";
 
-const attributesKey = "attributes";
+export const attributesKey = "attributes";
 export const ancestorsKey = "ancestors";
 
 export const retrieveAttributes = (properties: unknown): Record<string, any> | undefined => {
