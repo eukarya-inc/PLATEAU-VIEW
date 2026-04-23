@@ -175,6 +175,25 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		adminContext(c, true, admin, admin && isAlpha(c))
 		ctx = c.Request().Context() // do not forget to update context
 
+		// Expand ward codes to include their parent city codes. CityGML data for
+		// designated cities (e.g. Sapporo 01100) is registered at the city level,
+		// while the govpolygon quadtree only returns ward codes (01101, 01102, ...).
+		if len(bounds) > 0 {
+			expanded := make([]string, 0, len(cityIDs)*2)
+			for _, cid := range cityIDs {
+				expanded = append(expanded, cid)
+				area, err := merged.Area(ctx, plateauapi.AreaCode(cid))
+				if err != nil {
+					log.Warnfc(ctx, "datacatalog: failed to resolve area %s: %v", cid, err)
+					continue
+				}
+				if w, ok := area.(*plateauapi.Ward); ok && w != nil && w.CityCode != "" {
+					expanded = append(expanded, string(w.CityCode))
+				}
+			}
+			cityIDs = lo.Uniq(expanded)
+		}
+
 		// Pre-fetch DatasetTypes once to share across all cities
 		datasetTypes, err := merged.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
 			Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
