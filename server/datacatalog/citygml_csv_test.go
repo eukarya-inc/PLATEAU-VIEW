@@ -331,6 +331,22 @@ func TestCsvToCityGMLFilesResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "strip backslash prefix in code and file columns",
+			data: [][]string{
+				{"https://example.com", `dem\523805491`, "dem", "3", `dem\523805491_dem_6697_op.gml`, "301314954", "1", "0", "0", "0", "1", "0"},
+				{"https://example.com", `bldg\52380559`, "bldg", "1", `bldg\52380559_bldg_6697_op.gml`, "257204", "34", "34", "34", "0", "0", "0"},
+			},
+			gmlURLs: nil,
+			want: CityGMLFiles{
+				"bldg": {
+					{MeshCode: "52380559", MaxLOD: 1, URL: "https://example/udx/bldg/52380559_bldg_6697_op.gml", FileSize: int64Ptr(257204), Features: intPtr(34), LOD0: intPtr(34), LOD1: intPtr(34), LOD2: intPtr(0), LOD3: intPtr(0), LOD4: intPtr(0)},
+				},
+				"dem": {
+					{MeshCode: "523805491", MaxLOD: 3, URL: "https://example/udx/dem/523805491_dem_6697_op.gml", FileSize: int64Ptr(301314954), Features: intPtr(1), LOD0: intPtr(0), LOD1: intPtr(0), LOD2: intPtr(0), LOD3: intPtr(1), LOD4: intPtr(0)},
+				},
+			},
+		},
+		{
 			name: "handle zero and negative lod counts",
 			data: [][]string{
 				{"https://example.com", "53394547", "bldg", "2", "path/to/file.gml", "1024", "100", "0", "-1", "10", "0", "0"},

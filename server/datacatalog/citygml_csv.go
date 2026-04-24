@@ -34,8 +34,6 @@ func fetchCSVs(ctx context.Context, urls, citygmlBaseURLs []string) (records [][
 	errg.SetLimit(10)
 
 	for i, url := range urls {
-		i := i
-		url := url
 		base := citygmlBaseURLs[i]
 		errg.Go(func() error {
 			data, err := fetchCSV(ctx, url, base)
@@ -123,7 +121,19 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 			continue
 		}
 
-		if !isNumeric(rune(record[1][0])) {
+		// Strip Windows-style backslash directory prefix that may leak into
+		// `code` and `file` columns when a lodstat CSV is generated from a ZIP
+		// whose entries use backslash separators.
+		if i := strings.LastIndex(record[1], `\`); i >= 0 {
+			record[1] = record[1][i+1:]
+		}
+		if len(record) > 4 {
+			if i := strings.LastIndex(record[4], `\`); i >= 0 {
+				record[4] = record[4][i+1:]
+			}
+		}
+
+		if record[1] == "" || !isNumeric(rune(record[1][0])) {
 			continue // skip header
 		}
 

@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/worker/workerutil"
 	cms "github.com/reearth/reearth-cms-api/go"
 )
 
@@ -105,12 +106,16 @@ func run(ctx context.Context, cmsClient *cms.CMS, cfg Config) error {
 		}
 		for _, f := range rz.File {
 			cTotal += f.CompressedSize64
-			if strings.HasSuffix(f.Name, ".gml") {
+			normalized := workerutil.NormalizeZipFilePath(f.Name)
+			if normalized == "" {
+				continue
+			}
+			if strings.HasSuffix(normalized, ".gml") {
 				ucGMLSize += f.UncompressedSize64
 				cGMLSize += f.CompressedSize64
 				gml++
 
-				name := path.Base(f.Name)
+				name := path.Base(normalized)
 				mesh, feature, err := parseCityModelFileEntryName(name)
 				if err != nil {
 					return fmt.Errorf("parse name: %w", err)
