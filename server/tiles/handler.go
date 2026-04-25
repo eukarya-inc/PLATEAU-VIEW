@@ -160,6 +160,19 @@ func initTiles(ctx context.Context, pcms *plateaucms.CMS) (Tiles, error) {
 	}
 
 	tiles := Tiles{}
+
+	// Tiles from the CMS system project. Loaded first so that per-area
+	// project entries below can override on name clashes.
+	if sysPrj := pcms.SystemProject(); sysPrj != "" {
+		sysTiles, err := getTiles(ctx, pcms.MainCMS(), sysPrj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get tiles from system project %s: %w", sysPrj, err)
+		}
+		for k, v := range sysTiles {
+			tiles[k] = v
+		}
+	}
+
 	for _, m := range ml {
 		prj := m.DataCatalogProjectAlias
 		if prj == "" {

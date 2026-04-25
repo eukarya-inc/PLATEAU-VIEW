@@ -83,6 +83,17 @@ func New(c Config) (*CMS, error) {
 	}, nil
 }
 
+// MainCMS returns the CMS client authenticated with the main token, used to
+// access the system project.
+func (h *CMS) MainCMS() cms.Interface {
+	return h.cmsMain
+}
+
+// SystemProject returns the alias of the CMS system project.
+func (h *CMS) SystemProject() string {
+	return h.cmsSysProject
+}
+
 func (h *CMS) Clone() *CMS {
 	return &CMS{
 		cmsbase:       h.cmsbase,
