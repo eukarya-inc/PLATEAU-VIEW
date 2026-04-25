@@ -16,6 +16,28 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Smart ETag**: Per-tile ETag calculation based on covering layers with If-None-Match support for 304 responses
 - **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
 - **Multi-Format Output**: Support for PNG, WebP, and AVIF image formats
+- **Terrain**: Cesium quantized-mesh-1.0 and Terrarium raster tiles, generated from a Mapterhorn DEM and a selectable `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). Heights are **ellipsoidal** (orthometric + geoid). Tiles fully outside the geoid coverage respond 404.
+
+## Terrain
+
+The server generates Cesium quantized-mesh-1.0 (`/terrain/`) and Terrarium raster tiles (`/terrarium/`) on the fly from a DEM source plus a geoid model. The output is in **ellipsoidal heights**, ready to drop into Cesium without a vertical-datum mismatch against 3D Tiles or geocoded data.
+
+### Why Mapterhorn for the DEM
+
+[Mapterhorn](https://www.mapterhorn.com) is our default DEM upstream because of how it's packaged and licensed:
+
+- **Single source, global coverage with high-resolution Japan.** Mapterhorn merges many open national DEMs into one consistent set. For Japan it builds on **国土地理院 (GSI)** elevation data, so we get the local resolution we need without stitching multiple providers ourselves.
+- **Distributed as PMTiles.** Every region is a single `.pmtiles` archive, and `pmtiles extract --bbox=...` downloads only the bytes inside a bounding box. That makes a Japan-only, production-ready mirror a single command — see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
+- **Friendly licensing.** Code is BSD-3, terrain data is CC-BY-4.0 / OGL / CC0 family. The full attribution list is at [mapterhorn.com/attribution](https://www.mapterhorn.com/attribution); we credit Mapterhorn and 国土地理院 in the layer.json automatically.
+- **Modern format.** 512 px Terrarium-encoded WebP — smaller transfers and a strict drop-in replacement for the deprecated AWS Elevation Tiles.
+
+In production the recommended setup is to mirror Mapterhorn's Japan slice into your own R2 / GCS bucket and point the tile server at it; this avoids hitting `tiles.mapterhorn.com` for every request and keeps you in control of cache invalidation.
+
+### Why a separate geoid model
+
+Mapterhorn (and most public DEM tile services) encode **orthometric** heights — height above the geoid, i.e. roughly mean sea level. Cesium's globe is the WGS84 ellipsoid, so feeding orthometric heights directly causes a 30–40 m vertical offset over Japan, which makes 3D Tiles buildings float or sink. We resolve this by adding a **geoid height** at every grid point, using the [`japan-geoid`](https://crates.io/crates/japan-geoid) crate (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). The model is selectable per-request via `?geoid=...`, with each model living in a separate cache key so switching is instant and partial-purge-free.
+
+Tiles whose bounds lie **entirely outside** the selected geoid's coverage respond `404`. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
 
 ## Quick Start
 
@@ -42,7 +64,7 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CONFIG_URL` | Yes | - | URL to the configuration JSON file |
+| `CONFIG_URL` | No | - | URL to the configuration JSON file. Omit to run with terrain-only defaults; required only to enable `/tiles/...` sources |
 | `PORT` | No | `8080` | HTTP server port |
 | `CACHE_SIZE_MB` | No | `512` | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret token for `/reload` endpoint (if set, requires `Authorization: Bearer <token>`) |
@@ -50,7 +72,41 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | `PRELOAD_MODE` | No | `sync` | COG metadata preload mode: `sync` (blocking), `background` (non-blocking), or `lazy` (on first request) |
 | `TILE_CACHE_URL` | No | - | Persistent tile cache URL (see below) |
 | `CACHE_CONTROL` | No | `public, max-age=3600, must-revalidate` | Cache-Control header value for tile responses |
+| `NO_CACHE` | No | - | If truthy (`1`/`true`/`yes`/`on`), disables all caching: memory cache → 0, persistent cache → off, `Cache-Control` → `no-store, must-revalidate`. Handy during local terrain iteration |
 | `RUST_LOG` | No | `info` | Log level (trace, debug, info, warn, error) |
+
+### Terrain Variables
+
+The terrain endpoint's base DEM and output settings are operational concerns and live in env vars (the config JSON only describes `/tiles/...` overlay sources).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DEM_URL` | No | Mapterhorn public endpoint | DEM source URL. If it ends with `.pmtiles`, the server reads it as a PMTiles archive. Schemes: `https://` (any HTTPS host), `gs://bucket/key` (Google Cloud Storage, supports private via ADC / `GOOGLE_APPLICATION_CREDENTIALS`), `s3://bucket/key` (AWS S3 / S3-compatible), `r2://bucket/key` (Cloudflare R2 — set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), `file:///path/to.pmtiles`. Anything else is treated as a Mapterhorn-style `{z}/{x}/{y}` template |
+| `DEM_VERSION` | No | `v1` | Internal version key, mixed into cache keys. Bump for an explicit cache break |
+| `DEM_MAX_ZOOM` | No | `15` | Upstream DEM max zoom (clamps `/terrain/` requests above this) |
+| `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
+| `TERRAIN_TILE_SIZE` | No | `512` | Output Terrarium raster tile size |
+| `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Default geoid model when `?geoid=` is not specified. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`, `none` |
+| `TERRAIN_MAX_ZOOM` | No | `15` | Max zoom advertised in `/terrain/layer.json` |
+| `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
+
+```bash
+# Self-hosted PMTiles on a public R2 bucket (HTTPS)
+DEM_URL=https://pub-xxxx.r2.dev/japan-dem-v1.pmtiles cargo run
+
+# Private GCS bucket (uses application-default credentials)
+DEM_URL=gs://my-private-bucket/japan-dem-v1.pmtiles cargo run
+
+# Private R2 bucket (S3-compatible)
+R2_ACCOUNT_ID=xxxx R2_ACCESS_KEY_ID=xxxx R2_SECRET_ACCESS_KEY=xxxx \
+  DEM_URL=r2://my-bucket/japan-dem-v1.pmtiles cargo run
+
+# Local file
+DEM_URL=file:///abs/path/to/japan-dem-v1.pmtiles cargo run
+
+# Default Mapterhorn upstream — fine for development
+cargo run
+```
 
 ### Persistent Cache Configuration
 
@@ -98,8 +154,15 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 |--------|------|-------------|
 | GET | `/tiles/:name/tilejson.json` | Get TileJSON metadata for a source |
 | GET | `/tiles/:name/:z/:x/:y.{format}` | Get a tile (format: `png`, `webp`, `avif`) |
+| GET | `/terrain/layer.json` | Cesium quantized-mesh-1.0 layer.json. Query: `?geoid=gsigeo2011\|jpgeo2024\|jpgeo2024-hrefconv\|none` |
+| GET | `/terrain/:z/:x/:y.terrain` | Quantized-mesh-1.0 tile (gzipped, octvertexnormals). Same `?geoid=` query |
+| GET | `/terrarium/tilejson.json` | TileJSON for the Terrarium raster output. Query: `?geoid=...&format=png\|webp\|avif` |
+| GET | `/terrarium/:z/:x/:y.{format}` | Terrarium raster of **ellipsoidal** heights (orthometric DEM + geoid offset) |
+| GET | `/terrain-viewer` | Embedded Cesium preview of the terrain output |
 | GET | `/health` | Health check |
 | POST | `/reload` | Reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set) |
+
+> See [Terrain](#terrain) above for what these endpoints output and how the geoid query parameter works. To self-host the DEM, see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
 
 ### Supported Image Formats
 

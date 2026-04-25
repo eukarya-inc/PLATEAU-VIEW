@@ -12,6 +12,7 @@ use tokio::sync::oneshot;
 use tile::cache::CacheMode;
 use tile::config::ConfigManager;
 use tile::server::{AppState, create_router};
+use tile::terrain::TerrainSettings;
 
 /// A test server instance.
 pub struct TestServer {
@@ -59,6 +60,7 @@ impl TestServer {
                 CacheMode::default(),
                 None,
                 None, // object_cache_control
+                TerrainSettings::from_env(),
             )
             .await,
         );
@@ -143,6 +145,7 @@ impl TestServer {
                 CacheMode::default(),
                 None,
                 None, // object_cache_control
+                TerrainSettings::from_env(),
             )
             .await,
         );
@@ -222,6 +225,7 @@ impl TestServer {
                 CacheMode::default(),
                 Some(cache_control.to_string()),
                 None, // object_cache_control
+                TerrainSettings::from_env(),
             )
             .await,
         );

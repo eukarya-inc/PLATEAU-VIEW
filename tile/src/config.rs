@@ -16,7 +16,11 @@ pub enum ConfigError {
     InvalidUrl(String),
 }
 
-/// Root configuration structure
+/// Root configuration structure.
+///
+/// The config JSON only describes overlay sources served under `/tiles/...`.
+/// The terrain base DEM and related settings are configured via environment
+/// variables — see [`crate::terrain::TerrainSettings`].
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// Global version string for ETag calculation (optional)
@@ -247,6 +251,30 @@ impl ConfigManager {
         })
     }
 
+    /// Create a `ConfigManager` with no external config. Used when `CONFIG_URL`
+    /// is not set — the terrain endpoint still works with built-in defaults,
+    /// and `/tiles/...` sources are simply empty.
+    pub fn empty() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("reqwest client");
+        Self {
+            config: Arc::new(RwLock::new(Config {
+                version: None,
+                sources: HashMap::new(),
+                cache: None,
+            })),
+            config_url: String::new(),
+            client,
+        }
+    }
+
+    /// Reload is a no-op if no config URL is configured.
+    pub fn has_url(&self) -> bool {
+        !self.config_url.is_empty()
+    }
+
     async fn fetch_config(client: &reqwest::Client, url: &str) -> Result<Config, ConfigError> {
         let text = if let Some(path) = url.strip_prefix("file://") {
             // Read from local file
@@ -277,8 +305,12 @@ impl ConfigManager {
         serde_json::from_str(&text).map_err(|e| ConfigError::ParseError(e.to_string()))
     }
 
-    /// Reload configuration from URL
+    /// Reload configuration from URL. No-op when running without a CONFIG_URL.
     pub async fn reload(&self) -> Result<(), ConfigError> {
+        if !self.has_url() {
+            tracing::info!("Reload requested but no CONFIG_URL is set; nothing to do");
+            return Ok(());
+        }
         let new_config = Self::fetch_config(&self.client, &self.config_url).await?;
         let mut config = self.config.write().await;
         *config = new_config;

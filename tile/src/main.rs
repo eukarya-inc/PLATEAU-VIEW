@@ -5,7 +5,7 @@ use opentelemetry::trace::TracerProvider;
 use opentelemetry_sdk::trace::{
     Config as TraceConfig, Sampler, TracerProvider as SdkTracerProvider,
 };
-use tile::{ConfigManager, cache::CacheMode, server};
+use tile::{ConfigManager, cache::CacheMode, server, terrain::TerrainSettings};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -62,19 +62,31 @@ async fn main() -> Result<()> {
     // Initialize tracing
     init_tracing();
 
-    // Load configuration
-    let config_url =
-        env::var("CONFIG_URL").context("CONFIG_URL environment variable is required")?;
+    // Load configuration. CONFIG_URL is optional: when unset, the server still
+    // serves the built-in terrain endpoint (`/terrain/...`, `/terrarium/...`,
+    // `/terrain-viewer`). Custom XYZ/COG/MapLibre sources require CONFIG_URL.
+    let config_url = env::var("CONFIG_URL").ok();
 
     let port = env::var("PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(8080);
 
-    let cache_size_mb = env::var("CACHE_SIZE_MB")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(512);
+    // NO_CACHE=true disables all caching: memory cache set to 0, persistent
+    // cache forced off, and Cache-Control overridden to prevent browser caching.
+    // Useful during local iteration on terrain output.
+    let no_cache = env::var("NO_CACHE")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+
+    let cache_size_mb = if no_cache {
+        0
+    } else {
+        env::var("CACHE_SIZE_MB")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(512)
+    };
 
     let reload_secret = env::var("RELOAD_SECRET").ok();
 
@@ -87,27 +99,53 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "sync".to_string());
 
     // Persistent cache URL (optional): file://, gs://, s3://, r2://
-    let tile_cache_url = env::var("TILE_CACHE_URL").ok();
+    let tile_cache_url = if no_cache {
+        None
+    } else {
+        env::var("TILE_CACHE_URL").ok()
+    };
 
     // Cache mode: "read-write" (default) or "write-only"
-    let cache_mode = env::var("TILE_CACHE_MODE")
-        .map(|v| CacheMode::parse(&v))
-        .unwrap_or_default();
+    let cache_mode = if no_cache {
+        CacheMode::None
+    } else {
+        env::var("TILE_CACHE_MODE")
+            .map(|v| CacheMode::parse(&v))
+            .unwrap_or_default()
+    };
 
-    // Cache-Control header for HTTP responses
-    let cache_control =
-        Some(env::var("CACHE_CONTROL").unwrap_or_else(|_| DEFAULT_CACHE_CONTROL.to_string()));
+    // Cache-Control header for HTTP responses. NO_CACHE forces no-store.
+    let cache_control = Some(if no_cache {
+        "no-store, must-revalidate".to_string()
+    } else {
+        env::var("CACHE_CONTROL").unwrap_or_else(|_| DEFAULT_CACHE_CONTROL.to_string())
+    });
+
+    if no_cache {
+        tracing::info!(
+            "NO_CACHE=true: memory cache disabled, persistent cache off, \
+             Cache-Control forced to no-store"
+        );
+    }
 
     // Cache-Control header for stored objects in persistent cache (optional)
     let object_cache_control = env::var("TILE_CACHE_CONTROL").ok();
 
-    tracing::info!("Loading configuration from {}", config_url);
-
-    let config_manager = Arc::new(
-        ConfigManager::new(&config_url)
-            .await
-            .context("Failed to load configuration")?,
-    );
+    let config_manager = Arc::new(match config_url.as_deref() {
+        Some(url) => {
+            tracing::info!("Loading configuration from {}", url);
+            ConfigManager::new(url)
+                .await
+                .context("Failed to load configuration")?
+        }
+        None => {
+            tracing::info!(
+                "CONFIG_URL not set; starting with built-in terrain endpoint only \
+                 (set CONFIG_URL to enable /tiles/... sources)"
+            );
+            ConfigManager::empty()
+        }
+    });
 
     // Start server
     let addr = format!("0.0.0.0:{port}");
@@ -129,6 +167,13 @@ async fn main() -> Result<()> {
         tracing::info!("Cache-Control (objects): {}", cc);
     }
 
+    let terrain_settings = TerrainSettings::from_env();
+    tracing::info!(
+        dem_url = %terrain_settings.dem_url.as_deref().unwrap_or("(default Mapterhorn)"),
+        default_geoid = %terrain_settings.default_geoid,
+        "Terrain settings",
+    );
+
     server::run(
         config_manager,
         &addr,
@@ -140,6 +185,7 @@ async fn main() -> Result<()> {
         cache_mode,
         cache_control,
         object_cache_control,
+        terrain_settings,
     )
     .await?;
 

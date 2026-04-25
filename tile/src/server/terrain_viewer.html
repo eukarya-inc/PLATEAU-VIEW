@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PLATEAU Terrain Viewer</title>
+  <link
+    href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css"
+    rel="stylesheet"
+  />
+  <style>
+    html, body, #cesium { width: 100%; height: 100%; margin: 0; padding: 0; }
+    .toolbar {
+      position: absolute; top: 8px; left: 8px; z-index: 1000;
+      background: rgba(24, 24, 24, 0.85); color: #fff;
+      padding: 8px 12px; border-radius: 6px; font-family: sans-serif;
+      display: flex; gap: 8px; align-items: center; font-size: 12px;
+    }
+    .toolbar a { color: #6cf; text-decoration: none; }
+    .toolbar a:hover { text-decoration: underline; }
+    .toolbar select, .toolbar button { font-size: 12px; }
+    .sep { opacity: 0.4; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/">← Map View</a>
+    <span class="sep">|</span>
+    <label>Imagery:</label>
+    <select id="imagery"></select>
+    <label>Geoid:</label>
+    <select id="geoid">
+      <option value="gsigeo2011">GSIGEO2011（日本域）</option>
+      <option value="jpgeo2024">JPGEO2024（日本域+海域）</option>
+      <option value="jpgeo2024-hrefconv">JPGEO2024 + Hrefconv（日本域のみ）</option>
+      <option value="none">なし（オルソ高のまま）</option>
+    </select>
+    <button id="flyChiyoda">千代田区へ</button>
+  </div>
+  <div id="cesium"></div>
+  <script id="sources-data" type="application/json">{{SOURCES_JSON}}</script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+  <script>
+    Cesium.Ion.defaultAccessToken = null;
+
+    // ── Imagery options ────────────────────────────────────────────────
+    // Configured /tiles/<name>/ sources are listed first. If none exist,
+    // we fall back to OSM purely as a debug default so the globe still has
+    // something on it.
+    const sources = JSON.parse(document.getElementById('sources-data').textContent);
+    const imagerySelect = document.getElementById('imagery');
+
+    const options = sources.map((name) => ({
+      id: `tiles:${name}`,
+      label: name,
+      build: () =>
+        new Cesium.UrlTemplateImageryProvider({
+          url: `/tiles/${name}/{z}/{x}/{y}.png`,
+          credit:
+            '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>',
+        }),
+    }));
+
+    if (options.length === 0) {
+      options.push({
+        id: 'osm',
+        label: 'OSM (debug)',
+        build: () =>
+          new Cesium.OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/',
+            credit:
+              '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+          }),
+      });
+    }
+
+    for (const opt of options) {
+      const el = document.createElement('option');
+      el.value = opt.id;
+      el.textContent = opt.label;
+      imagerySelect.appendChild(el);
+    }
+
+    // ── Cesium init ────────────────────────────────────────────────────
+    const initialOption = options[0];
+    const viewer = new Cesium.Viewer('cesium', {
+      baseLayer: Cesium.ImageryLayer.fromProviderAsync(
+        Promise.resolve(initialOption.build()),
+      ),
+      timeline: false,
+      animation: false,
+      baseLayerPicker: false,
+      geocoder: false,
+      homeButton: false,
+      navigationHelpButton: false,
+      sceneModePicker: false,
+      infoBox: false,
+      selectionIndicator: false,
+    });
+
+    // Fixed clock at 10:00 JST so lighting & shadows are consistent.
+    const fixedTime = Cesium.JulianDate.fromIso8601('2025-03-21T01:00:00Z');
+    viewer.clock.currentTime = fixedTime.clone();
+    viewer.clock.startTime = fixedTime.clone();
+    viewer.clock.stopTime = fixedTime.clone();
+    viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
+    viewer.clock.shouldAnimate = false;
+
+    viewer.scene.globe.enableLighting = true;
+    viewer.shadows = true;
+    viewer.scene.globe.shadows = Cesium.ShadowMode.RECEIVE_ONLY;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    function setImagery(id) {
+      const opt = options.find((o) => o.id === id) || options[0];
+      const layers = viewer.imageryLayers;
+      // Replace the bottom layer with the new provider.
+      while (layers.length > 0) {
+        layers.remove(layers.get(0), true);
+      }
+      const layer = Cesium.ImageryLayer.fromProviderAsync(
+        Promise.resolve(opt.build()),
+      );
+      layers.add(layer);
+    }
+    imagerySelect.addEventListener('change', (e) => setImagery(e.target.value));
+
+    // ── Terrain ────────────────────────────────────────────────────────
+    async function setTerrain(geoid) {
+      const resource = new Cesium.Resource({
+        url: '/terrain',
+        queryParameters: { geoid },
+      });
+      viewer.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
+        resource,
+        { requestVertexNormals: true, requestWaterMask: false },
+      );
+    }
+    setTerrain(document.getElementById('geoid').value);
+    document.getElementById('geoid').addEventListener('change', (e) => {
+      setTerrain(e.target.value).catch(console.error);
+    });
+
+    // ── 3D Tiles LOD1 of Chiyoda-ku for grounding sanity check ─────────
+    const CHIYODA_LOD1_URL =
+      'https://assets.cms.plateau.reearth.io/assets/3f/e07412-5455-40c0-9f64-2ac43086a209/13101_chiyoda-ku_pref_2025_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json';
+    (async () => {
+      try {
+        const tileset = await Cesium.Cesium3DTileset.fromUrl(CHIYODA_LOD1_URL, {
+          shadows: Cesium.ShadowMode.ENABLED,
+        });
+        viewer.scene.primitives.add(tileset);
+      } catch (err) {
+        console.error('Failed to load Chiyoda LOD1 tileset:', err);
+      }
+    })();
+
+    // ── Camera ─────────────────────────────────────────────────────────
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(139.753, 35.68, 3000),
+      orientation: {
+        heading: Cesium.Math.toRadians(0.0),
+        pitch: Cesium.Math.toRadians(-35.0),
+        roll: 0.0,
+      },
+    });
+    document.getElementById('flyChiyoda').addEventListener('click', () => {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(139.753, 35.68, 3000),
+        orientation: {
+          heading: Cesium.Math.toRadians(0.0),
+          pitch: Cesium.Math.toRadians(-35.0),
+          roll: 0.0,
+        },
+      });
+    });
+  </script>
+</body>
+</html>

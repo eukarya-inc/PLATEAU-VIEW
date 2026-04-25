@@ -79,6 +79,18 @@
         .spacer {
             flex: 1;
         }
+        .terrain-link {
+            color: #fff;
+            text-decoration: none;
+            background: #1a1a2e;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .terrain-link:hover {
+            background: #2a2a4e;
+        }
         .info {
             color: #888;
             font-size: 12px;
@@ -181,6 +193,7 @@
         </select>
         <button id="copyUrl" title="Copy tile URL template">URL</button>
         <button id="gsiToggle" class="active">地理院</button>
+        <a href="/terrain-viewer" class="terrain-link" title="3D terrain view">Terrain →</a>
         <span class="spacer"></span>
         <span class="info" id="coords"></span>
         <button class="help-btn" id="helpBtn">?</button>

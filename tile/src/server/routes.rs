@@ -19,9 +19,10 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use super::{
     handlers,
     state::AppState,
+    terrain as terrain_handlers,
     tracing::{HttpRequestLoggingLayer, TracingMakeSpan, TracingOnRequest},
 };
-use crate::{ConfigManager, cache::CacheMode};
+use crate::{ConfigManager, cache::CacheMode, terrain::TerrainSettings};
 
 /// Create CORS layer from origins configuration.
 /// - None or "*" -> permissive (allow all origins)
@@ -48,6 +49,23 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
         .route("/", get(handlers::viewer))
         .route("/tiles/{name}/tilejson.json", get(handlers::get_tilejson))
         .route("/tiles/{name}/{z}/{x}/{y}", get(handlers::get_tile))
+        .route("/terrain-viewer", get(terrain_handlers::terrain_viewer))
+        .route(
+            "/terrain/layer.json",
+            get(terrain_handlers::terrain_layer_json),
+        )
+        .route(
+            "/terrain/{z}/{x}/{y_ext}",
+            get(terrain_handlers::terrain_tile),
+        )
+        .route(
+            "/terrarium/tilejson.json",
+            get(terrain_handlers::terrarium_tilejson),
+        )
+        .route(
+            "/terrarium/{z}/{x}/{y_ext}",
+            get(terrain_handlers::terrarium_tile),
+        )
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
         .layer(create_cors_layer(cors_origins))
@@ -76,6 +94,7 @@ pub async fn run(
     cache_mode: CacheMode,
     cache_control: Option<String>,
     object_cache_control: Option<String>,
+    terrain_settings: TerrainSettings,
 ) -> Result<()> {
     let state = Arc::new(
         AppState::new(
@@ -87,6 +106,7 @@ pub async fn run(
             cache_mode,
             cache_control,
             object_cache_control,
+            terrain_settings,
         )
         .await,
     );

@@ -9,6 +9,7 @@ use xxhash_rust::xxh64::xxh64;
 use crate::{
     cache::{CacheMode, TileCache},
     config::{ConfigManager, LayerConfig, SourceConfig},
+    terrain::TerrainSettings,
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
 
@@ -22,6 +23,8 @@ pub struct AppState {
     pub reload_secret: Option<String>,
     /// Cache-Control header value (optional)
     pub cache_control: Option<String>,
+    /// Terrain endpoint state.
+    pub terrain: Arc<super::terrain::TerrainState>,
 }
 
 impl AppState {
@@ -35,6 +38,7 @@ impl AppState {
         cache_mode: CacheMode,
         cache_control: Option<String>,
         object_cache_control: Option<String>,
+        terrain_settings: TerrainSettings,
     ) -> Self {
         let config = config_manager.get().await;
 
@@ -66,13 +70,26 @@ impl AppState {
             }
         }
 
+        let terrain = Self::build_terrain(&terrain_settings);
+
         Self {
             config_manager,
             cache,
             sources: Arc::new(RwLock::new(sources)),
             reload_secret,
             cache_control,
+            terrain,
         }
+    }
+
+    fn build_terrain(settings: &TerrainSettings) -> Arc<super::terrain::TerrainState> {
+        Arc::new(super::terrain::TerrainState {
+            dem: settings.build_dem(),
+            tile_size: settings.tile_size,
+            default_geoid: settings.default_geoid,
+            max_zoom: settings.max_zoom,
+            max_error: settings.max_error,
+        })
     }
 
     /// Preload all sources in parallel (e.g., COG metadata).

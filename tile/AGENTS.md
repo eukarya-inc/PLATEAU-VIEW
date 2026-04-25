@@ -57,7 +57,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `CONFIG_URL` | Yes | - | Config JSON URL (file://, http://, https://) |
+| `CONFIG_URL` | No | - | Config JSON URL (file://, http://, https://). Omit to run with built-in terrain only |
 | `PORT` | No | 8080 | Server port |
 | `CACHE_SIZE_MB` | No | 512 | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret for config reload endpoint |
@@ -67,6 +67,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 | `TILE_CACHE_MODE` | No | read-write | Cache mode: "read-write", "read-only", "write-only", or "none" |
 | `TILE_CACHE_CONTROL` | No | - | Cache-Control header for stored objects (e.g., "public, max-age=31536000") |
 | `CACHE_CONTROL` | No | public, max-age=3600, must-revalidate | Cache-Control header for HTTP responses |
+| `NO_CACHE` | No | - | Truthy disables memory+persistent cache and forces `Cache-Control: no-store` (local dev) |
 | `R2_ACCOUNT_ID` | For R2 | - | Cloudflare R2 account ID |
 | `R2_ACCESS_KEY_ID` | For R2 | - | Cloudflare R2 access key ID |
 | `R2_SECRET_ACCESS_KEY` | For R2 | - | Cloudflare R2 secret access key |
@@ -78,6 +79,19 @@ Available layer types in config JSON:
 - `xyz`: XYZ tile proxy (supports URL template `{z}/{x}/{y}`)
 - `cog`: Cloud Optimized GeoTIFF (supports HTTP/GCS/S3)
 - `maplibre`: MapLibre style.json rendering (requires `maplibre` feature, Linux only)
+
+## Terrain
+
+`/terrain/` (quantized-mesh-1.0) and `/terrarium/` endpoints are built-in. DEM defaults to Mapterhorn (512 px Terrarium WebP) and is composed with a `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv) to produce **ellipsoidal heights**. Tiles outside the configured geoid coverage respond 404. Default geoid is `gsigeo2011`, overridable per-request via `?geoid=...`.
+
+Configured via env vars (the config JSON only describes `/tiles/...` overlay sources):
+- `DEM_URL` — base DEM URL. `*.pmtiles` selects the PMTiles backend; supports `https://`, `gs://`, `s3://`, `r2://`, `file://`. Anything else is read as a Mapterhorn-style `{z}/{x}/{y}` template.
+- `DEM_VERSION`, `DEM_MAX_ZOOM`, `DEM_NATIVE_TILE_SIZE`
+- `TERRAIN_TILE_SIZE`, `TERRAIN_DEFAULT_GEOID`, `TERRAIN_MAX_ZOOM`, `TERRAIN_MAX_ERROR`
+
+Cache keys include the DEM version, upstream ETag digest, geoid slug, and (for Terrarium) output size. Switching geoid at request time does **not** require a CDN purge — each model lives at a separate key.
+
+Terrain source code lives in `src/terrain/` (quantized-mesh + martini + terrarium + geodetic resampling ported from <https://github.com/MIERUNE/stralift>) and `src/server/terrain.rs` (handlers). Build & ship a Japan-only PMTiles mirror with `scripts/japan-pmtiles/`.
 
 ## Features
 
