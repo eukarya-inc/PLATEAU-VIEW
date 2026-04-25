@@ -29,6 +29,8 @@ curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets | jq '.city
 
 主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（PLATEAU CMS 上の zip ファイル URL）, `composite_url`（自治体・整備年度を指定して zip にリダイレクトする安定 URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
 
+レスポンスには加えて `latest_citygml` 配列が含まれます。各自治体について **最新整備年度** の zip にリダイレクトする URL を提供し、`year` は常に `"latest"`。新しいデータが公開されてもアプリケーション側の URL を変更する必要がありません。
+
 :::tip[`url` ではなく `composite_url` の利用を推奨します]
 PLATEAU の都市データは毎年更新され、`url` フィールドの CMS 直リンクは新しい年度のデータが公開されるとパスが変わる場合があります。`composite_url`（`/datacatalog/citygml/{cityCode}-{year|latest}/citygml.zip`）は API サーバ側で動的に解決するため、URL がより安定しています。さらに整備年度を `latest` に指定すれば、新しいデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
 :::

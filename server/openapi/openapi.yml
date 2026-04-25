@@ -174,6 +174,13 @@ paths:
                         texture:
                           type: boolean
                           description: 3D Tilesでテクスチャがある場合は `true`。テクスチャがない場合やMVTの場合は `false`。
+                        interior:
+                          type: boolean
+                          nullable: true
+                          description: |
+                            CityGML 3.0 の屋内モデル区分。`true` のデータセットは
+                            屋内モデル専用で、屋外モデルとは別行として現れます。
+                            interior 概念がそもそも適用されないデータでは省略されます。
                         composite_url:
                           type: string
                           format: uri
@@ -241,6 +248,13 @@ paths:
                           description: 種別の英語コード（例 `bldg`）
                         lod:
                           type: integer
+                        interior:
+                          type: boolean
+                          nullable: true
+                          description: |
+                            `true` の場合は CityGML 3.0 屋内モデルの集約。
+                            屋外モデルとは別エントリとして現れ、interior 概念が
+                            適用されないデータでは省略されます。
                         texture:
                           type: boolean
                           nullable: true
@@ -377,6 +391,10 @@ paths:
                         lod:
                           type: string
                           nullable: true
+                        interior:
+                          type: boolean
+                          nullable: true
+                          description: CityGML 3.0 屋内モデルの場合に `true`。
                         texture:
                           type: boolean
                           nullable: true
@@ -442,7 +460,7 @@ paths:
         パスパラメータ `spec` の書式は次の通りです：
 
         ```
-        <area>-<type>-<lod>[-<texture>]-<year>
+        <area>-<type>-<lod>[-interior][-<texture>]-<year>
         ```
 
         - `area`:
@@ -453,6 +471,9 @@ paths:
         - `lod`:
           - `lod<N>`: LOD が `<N>` と完全一致するデータのみ
           - `maxlod<N>`: LOD が `<N>` 以下で、各エリアごとに利用可能な最高 LOD を採用
+        - `interior` (省略可):
+          - 省略時: 屋外モデル（CityGML 3.0 以前のデータも含む）
+          - `interior`: CityGML 3.0 の屋内モデル（屋内データセット）のみ
         - `texture` (省略可):
           - 省略時: テクスチャありを優先、無ければテクスチャなしを採用
           - `texture`: テクスチャありのデータのみ
@@ -468,6 +489,7 @@ paths:
         - `/datacatalog/3dtiles/13-bldg-lod2-texture-2025/tileset.json`
         - `/datacatalog/3dtiles/13101-bldg-lod2-notexture-2025/tileset.json`
         - `/datacatalog/3dtiles/all-bldg-lod2-latest/tileset.json`
+        - `/datacatalog/3dtiles/13101-bldg-lod3-interior-2025/tileset.json`
       parameters:
         - in: path
           name: spec
@@ -501,7 +523,7 @@ paths:
         パスパラメータ `spec` の書式は次の通りです：
 
         ```
-        <cityCode>-<type>[-lod<N>]-<year>
+        <cityCode>-<type>[-lod<N>][-interior]-<year>
         ```
 
         - `cityCode`: 5桁の市区町村コード（区がある場合は区コード、無ければ市コード）
@@ -509,6 +531,9 @@ paths:
         - `lod<N>` (省略可):
           - 省略時: LOD が指定されていないデータセットを採用
           - `lod<N>`: LOD が `<N>` のデータセットを採用
+        - `interior` (省略可):
+          - 省略時: 屋外モデル
+          - `interior`: CityGML 3.0 の屋内モデルのみ
         - `year`:
           - 西暦4桁: その整備年度のデータのみを採用
           - `latest`: 利用可能な最新整備年度のデータを採用
@@ -518,6 +543,7 @@ paths:
         - `/datacatalog/mvt/13101-luse-2025/tilejson.json`
         - `/datacatalog/mvt/13101-luse-latest/tilejson.json`
         - `/datacatalog/mvt/13101-fld-lod1-2025/tilejson.json`
+        - `/datacatalog/mvt/13101-bldg-lod3-interior-2025/tilejson.json`
       parameters:
         - in: path
           name: spec

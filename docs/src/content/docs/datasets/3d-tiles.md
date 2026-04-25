@@ -133,7 +133,11 @@ PLATEAU の都市データは毎年更新され、新しい整備年度のデー
 `composite_url` は API サーバ側でデータセットを動的に解決して `tileset.json` / `tilejson.json` を返すため、URL がより安定しています。さらに、後述の [複合 tileset.json](#42-複合-tilesetjson複数都市の-3d-tiles-を-1-つの-url-でまとめて取得) や [MVT TileJSON](#43-自治体単位の-mvt-tilejsonmaplibre-などから利用) で **整備年度を `latest` に指定した形**（例: `13101-bldg-lod2-latest`、`13101-luse-latest`）を使えば、新しい整備年度のデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
 :::
 
-レスポンスにはさらに `composite_tilesets` 配列が含まれます。これは全国（`all-...`）と都道府県別（`13-...` など）の複合 tileset.json を実データから派生して列挙したリストで、CesiumJS で広域をまとめて表示したい場合の入口として利用できます。
+レスポンスにはさらに次の配列が含まれます。
+
+- `composite_tilesets`: 全国（`all-...`）と都道府県別（`13-...` など）の複合 `tileset.json` を実データから派生して列挙したリスト。CesiumJS で広域をまとめて表示したい場合の入口として利用できます。年度別エントリと「最新整備年度」を自動採用する `-latest` エントリの両方を含みます。
+- `latest_datasets`: 各 `(自治体, 種別, LOD, 形式)` について **最新整備年度** を自動採用する 3D Tiles / MVT 用の動的 URL 一覧。`year` は常に `"latest"`。新しい整備年度が公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
+- `latest_citygml`: 各自治体について **最新整備年度** の CityGML zip にリダイレクトする URL 一覧。同様に `year` は `"latest"`。
 
 加えて `citygml` 配列には、自治体ごとの CityGML データセットが含まれます。地物型ごとには分かれず、各自治体の全地物型を 1 つの zip ファイルにまとめた形で、自治体単位で 1 件ずつ返却されます。詳細は [PLATEAU-CityGML](/datasets/citygml/) を参照してください。
 
@@ -158,7 +162,7 @@ https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tilese
 #### `{spec}` の書式
 
 ```
-<area>-<type>-<lod>[-<texture>]-<year>
+<area>-<type>-<lod>[-interior][-<texture>]-<year>
 ```
 
 | セグメント | 値 | 意味 |
@@ -169,6 +173,8 @@ https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tilese
 | `type` | `bldg` / `tran` / `dem` など | データセットの種別コード |
 | `lod` | `lod<N>` | LOD が `<N>` と完全一致するデータのみ |
 | | `maxlod<N>` | LOD が `<N>` 以下で、各エリアごとに利用可能な最高 LOD を採用 |
+| `interior` | （省略） | 屋外モデル（CityGML 3.0 以前のデータも含む） |
+| | `interior` | CityGML 3.0 の屋内モデルのみ |
 | `texture` | （省略） | テクスチャありを優先、無ければテクスチャなしを採用 |
 | | `texture` | テクスチャありのデータのみ |
 | | `notexture` | テクスチャなしのデータのみ |
@@ -210,7 +216,7 @@ GET /datacatalog/mvt/{spec}/tilejson.json
 `{spec}` の書式：
 
 ```
-<cityCode>-<type>[-lod<N>]-<year>
+<cityCode>-<type>[-lod<N>][-interior]-<year>
 ```
 
 | セグメント | 値 | 意味 |
@@ -219,6 +225,8 @@ GET /datacatalog/mvt/{spec}/tilejson.json
 | `type` | `luse` / `fld` など | データセットの種別コード |
 | `lod<N>` | （省略） | LOD が指定されていないデータセットを採用 |
 | | `lod<N>` | LOD が `<N>` のデータセットを採用 |
+| `interior` | （省略） | 屋外モデル |
+| | `interior` | CityGML 3.0 の屋内モデルのみ |
 | `year` | 4 桁の西暦 | その整備年度のデータのみを採用 |
 | | `latest` | 利用可能な最新整備年度のデータを採用 |
 
@@ -229,6 +237,7 @@ GET /datacatalog/mvt/{spec}/tilejson.json
 | `13101-luse-2025` | 千代田区の土地利用 MVT（2025年度整備） |
 | `13101-luse-latest` | 千代田区の土地利用 MVT、最新整備年度 |
 | `13101-fld-lod1-2025` | 千代田区の洪水浸水想定区域 MVT（LOD1） |
+| `13101-bldg-lod3-interior-2025` | 千代田区の建築物モデル LOD3、屋内モデルのみ |
 
 [シンプル API](#41-シンプル-api) のレスポンスでも、各 MVT 行の `composite_url` フィールドにこの TileJSON URL が入ります。
 
