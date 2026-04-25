@@ -111,13 +111,16 @@ type SearchDatasetsResponse struct {
 }
 
 type DatasetItemInfo struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Format  string   `json:"format"`
-	URL     string   `json:"url"`
-	Lod     *int     `json:"lod,omitempty"`
-	Texture *string  `json:"texture,omitempty"` // NONE, TEXTURE
-	Layers  []string `json:"layers,omitempty"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Format       string   `json:"format"`
+	URL          string   `json:"url"`
+	CompositeURL *string  `json:"composite_url,omitempty"`
+	LatestURL    *string  `json:"latest_url,omitempty"`
+	Lod          *int     `json:"lod,omitempty"`
+	Interior     *bool    `json:"interior,omitempty"`
+	Texture      *string  `json:"texture,omitempty"` // NONE, TEXTURE
+	Layers       []string `json:"layers,omitempty"`
 }
 
 type DatasetAreaDetail struct {

@@ -3,6 +3,7 @@ package datacatalogmcp
 import (
 	"context"
 	"reflect"
+	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
@@ -320,8 +321,10 @@ func generateDatasetSuggestions(totalCount int, input *SearchDatasetsInput) []st
 	return suggestions
 }
 
-// TransformGetDataset converts GraphQL dataset to MCP response
-func TransformGetDataset(dataset plateauapi.Dataset) *GetDatasetResponse {
+// TransformGetDataset converts GraphQL dataset to MCP response.
+// host is the externally reachable origin (scheme + host) of the API and is
+// used to build composite/latest URLs. An empty host omits those URLs.
+func TransformGetDataset(dataset plateauapi.Dataset, host string) *GetDatasetResponse {
 	var desc *string
 	if dataset.GetDescription() != nil {
 		d := *dataset.GetDescription()
@@ -345,7 +348,7 @@ func TransformGetDataset(dataset plateauapi.Dataset) *GetDatasetResponse {
 	}
 
 	items := lo.Map(dataset.GetItems(), func(item plateauapi.DatasetItem, _ int) DatasetItemInfo {
-		return transformDatasetItem(item)
+		return transformDatasetItem(item, dataset, host)
 	})
 
 	// Get dataset type safely (same logic as transformDatasetInfo)
@@ -411,7 +414,7 @@ func transformAreaParent(area plateauapi.Area) *AreaParent {
 	}
 }
 
-func transformDatasetItem(item plateauapi.DatasetItem) DatasetItemInfo {
+func transformDatasetItem(item plateauapi.DatasetItem, parent plateauapi.Dataset, host string) DatasetItemInfo {
 	info := DatasetItemInfo{
 		ID:     string(item.GetID()),
 		Name:   item.GetName(),
@@ -420,7 +423,10 @@ func transformDatasetItem(item plateauapi.DatasetItem) DatasetItemInfo {
 		Layers: item.GetLayers(),
 	}
 
-	if pitem, ok := item.(*plateauapi.PlateauDatasetItem); ok {
+	pitem, _ := item.(*plateauapi.PlateauDatasetItem)
+	pparent, _ := parent.(*plateauapi.PlateauDataset)
+
+	if pitem != nil {
 		if pitem.Lod != nil {
 			lod := *pitem.Lod
 			info.Lod = &lod
@@ -428,6 +434,18 @@ func transformDatasetItem(item plateauapi.DatasetItem) DatasetItemInfo {
 		if pitem.Texture != nil {
 			texture := string(*pitem.Texture)
 			info.Texture = &texture
+		}
+	}
+	if pparent != nil && strings.Contains(string(pparent.ID), "_interior") {
+		t := true
+		info.Interior = &t
+	}
+	if pitem != nil && pparent != nil {
+		if u := plateauapi.BuildPlateauItemDynamicURL(host, pitem, pparent, false); u != "" {
+			info.CompositeURL = &u
+		}
+		if u := plateauapi.BuildPlateauItemDynamicURL(host, pitem, pparent, true); u != "" {
+			info.LatestURL = &u
 		}
 	}
 

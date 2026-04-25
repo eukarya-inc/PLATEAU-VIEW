@@ -321,7 +321,7 @@ func (r *ToolRegistrar) handleGetDataset(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError("dataset not found"), nil
 	}
 
-	resp := TransformGetDataset(dataset)
+	resp := TransformGetDataset(dataset, r.host)
 	return convertToToolResult(resp)
 }
 

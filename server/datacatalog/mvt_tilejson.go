@@ -50,6 +50,7 @@ func (h *ReposHandler) MVTTileJSONAPI() echo.HandlerFunc {
 				TypeName: d.Type,
 				Year:     d.Year,
 				LOD:      d.LOD,
+				Interior: d.Interior,
 				Layers:   d.Layers,
 				PrefCode: d.PrefCode,
 				CityCode: d.CityCode,

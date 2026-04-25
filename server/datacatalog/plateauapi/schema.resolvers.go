@@ -209,7 +209,7 @@ func (r *plateauDatasetItemResolver) CompositeURL(ctx context.Context, obj *Plat
 	if err != nil || parent == nil {
 		return nil, err
 	}
-	if u := buildPlateauItemDynamicURL(r.Host, obj, parent, false); u != "" {
+	if u := BuildPlateauItemDynamicURL(r.Host, obj, parent, false); u != "" {
 		return &u, nil
 	}
 	return nil, nil
@@ -221,7 +221,7 @@ func (r *plateauDatasetItemResolver) LatestURL(ctx context.Context, obj *Plateau
 	if err != nil || parent == nil {
 		return nil, err
 	}
-	if u := buildPlateauItemDynamicURL(r.Host, obj, parent, true); u != "" {
+	if u := BuildPlateauItemDynamicURL(r.Host, obj, parent, true); u != "" {
 		return &u, nil
 	}
 	return nil, nil

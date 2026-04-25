@@ -13,6 +13,7 @@ type Input struct {
 	TypeCode string
 	Year     int
 	LOD      *string
+	Interior *bool // nil/false = non-interior; true = interior (CityGML 3.0)
 	Texture  *bool
 	PrefCode string
 	CityCode *string
@@ -70,6 +71,18 @@ func Select(datasets []Input, spec Spec) []Candidate {
 			}
 		case LODMax:
 			if lod > spec.LOD {
+				continue
+			}
+		}
+
+		isInterior := d.Interior != nil && *d.Interior
+		switch spec.Interior {
+		case InteriorExclude:
+			if isInterior {
+				continue
+			}
+		case InteriorOnly:
+			if !isInterior {
 				continue
 			}
 		}

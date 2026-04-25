@@ -353,7 +353,7 @@ func TestTransformGetDataset(t *testing.T) {
 		},
 	}
 
-	resp := TransformGetDataset(dataset)
+	resp := TransformGetDataset(dataset, "")
 
 	assert.NotNil(t, resp)
 	assert.Equal(t, "ds_bldg_13101", resp.ID)
@@ -556,7 +556,7 @@ func TestTransformGetDataset_WithNilType(t *testing.T) {
 	}
 
 	// This should not panic
-	resp := TransformGetDataset(dataset)
+	resp := TransformGetDataset(dataset, "")
 
 	assert.NotNil(t, resp)
 	assert.Equal(t, "ds_1", resp.ID)

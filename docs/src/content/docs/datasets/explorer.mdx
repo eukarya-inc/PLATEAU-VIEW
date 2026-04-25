@@ -341,7 +341,13 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       }
       if (typeSel.value && d.type !== typeSel.value) return false;
       if (formatSel.value && d.format !== formatSel.value) return false;
-      if (lodSel.value && String(d.lod ?? '') !== lodSel.value) return false;
+      if (lodSel.value) {
+        // value 形式: "<lod>" または "<lod>:interior"。空 lod も許容（""、":interior"）
+        const [wantLod, wantTag] = lodSel.value.split(':');
+        if (String(d.lod ?? '') !== wantLod) return false;
+        const isInterior = d.interior === true;
+        if ((wantTag === 'interior') !== isInterior) return false;
+      }
       if (yearSel.value && String(d.year ?? '') !== yearSel.value) return false;
       if (textureSel.value === 'true' && d.texture !== true) return false;
       if (textureSel.value === 'false' && d.texture !== false) return false;
@@ -490,6 +496,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           format: '3D Tiles',
           lod: c.lod != null ? String(c.lod) : '',
           texture: c.texture,
+          interior: c.interior === true ? true : null,
           _area: c.area,
         }));
         const latestDatasets = ((data && data.latest_datasets) || []).map(d => ({
@@ -512,6 +519,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           format: d.format,
           lod: d.lod != null ? String(d.lod) : '',
           texture: d.texture,
+          interior: d.interior === true ? true : null,
         }));
         const latestCitygmls = ((data && data.latest_citygml) || []).map(c => ({
           id: \`latest-citygml-\${c.id}\`,
@@ -597,7 +605,34 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
             typeSel.appendChild(opt);
           }
         }
-        fillSelect(lodSel, uniqSorted(datasets, 'lod', (a, b) => String(a).localeCompare(String(b), 'ja', { numeric: true })));
+        {
+          // (lod, interior) の組を列挙。interior=true の組み合わせは
+          // 該当データが存在するときだけ追加する。
+          const seen = new Set();
+          for (const d of datasets) {
+            const lod = d.lod ?? '';
+            if (lod === '' && d.interior !== true) continue; // 空 LOD で非 interior は出さない
+            const tag = d.interior === true ? ':interior' : '';
+            seen.add(\`\${lod}\${tag}\`);
+          }
+          const opts = [...seen].sort((a, b) => {
+            const [la, ta] = a.split(':');
+            const [lb, tb] = b.split(':');
+            const lc = String(la).localeCompare(String(lb), 'ja', { numeric: true });
+            if (lc !== 0) return lc;
+            return (ta ? 1 : 0) - (tb ? 1 : 0);
+          });
+          const first = lodSel.options[0];
+          lodSel.innerHTML = '';
+          lodSel.appendChild(first);
+          for (const v of opts) {
+            const [lod, tag] = v.split(':');
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = tag === 'interior' ? \`\${lod}（屋内）\` : lod;
+            lodSel.appendChild(opt);
+          }
+        }
         {
           // year: composites は文字列、baseDatasets は数値で来るので String 化して dedup。
           // "latest" を先頭、その後は数値降順。

@@ -9,11 +9,13 @@ import (
 )
 
 func TestBuildSpec(t *testing.T) {
-	assert.Equal(t, "13101-bldg-lod1-2025", buildSpec("13101", "bldg", "1", nil, "2025"))
-	assert.Equal(t, "13101-bldg-lod2-texture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(true), "2025"))
-	assert.Equal(t, "13101-bldg-lod2-notexture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(false), "2025"))
-	assert.Equal(t, "all-bldg-lod1-2025", buildSpec("all", "bldg", "1", nil, "2025"))
-	assert.Equal(t, "all-bldg-lod1-latest", buildSpec("all", "bldg", "1", nil, "latest"))
+	assert.Equal(t, "13101-bldg-lod1-2025", buildSpec("13101", "bldg", "1", false, nil, "2025"))
+	assert.Equal(t, "13101-bldg-lod2-texture-2025", buildSpec("13101", "bldg", "2", false, lo.ToPtr(true), "2025"))
+	assert.Equal(t, "13101-bldg-lod2-notexture-2025", buildSpec("13101", "bldg", "2", false, lo.ToPtr(false), "2025"))
+	assert.Equal(t, "all-bldg-lod1-2025", buildSpec("all", "bldg", "1", false, nil, "2025"))
+	assert.Equal(t, "all-bldg-lod1-latest", buildSpec("all", "bldg", "1", false, nil, "latest"))
+	assert.Equal(t, "13101-bldg-lod3-interior-2025", buildSpec("13101", "bldg", "3", true, nil, "2025"))
+	assert.Equal(t, "13101-bldg-lod3-interior-notexture-2025", buildSpec("13101", "bldg", "3", true, lo.ToPtr(false), "2025"))
 }
 
 func TestBuildDatasetCompositeURL(t *testing.T) {

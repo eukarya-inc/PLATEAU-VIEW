@@ -40,6 +40,7 @@ type SimpleLatestDataset struct {
 	Format   string   `json:"format"`
 	LOD      *string  `json:"lod"`
 	Texture  *bool    `json:"texture"`
+	Interior *bool    `json:"interior,omitempty"`
 }
 
 // SimpleLatestCityGMLDataset is a per-city CityGML entry whose URL redirects
@@ -91,6 +92,10 @@ type SimpleDatasetsResponseDataset struct {
 	Format           string   `json:"format"`
 	LOD              *string  `json:"lod"`
 	Texture          *bool    `json:"texture"`
+	// Interior は CityGML 3.0 の屋内モデル区分を表す。`true` の行は
+	// interior 専用データセットを指し、`false` は明示的な非 interior、
+	// `null` は interior 区分がそもそも存在しないデータ（LOD1 や MVT 等）。
+	Interior *bool `json:"interior,omitempty"`
 }
 
 // SimpleCompositeTileset describes a virtual tileset.json that aggregates
@@ -104,6 +109,7 @@ type SimpleCompositeTileset struct {
 	TypeCode string  `json:"type_en"`
 	Type     string  `json:"type"`
 	LOD      int     `json:"lod"`
+	Interior *bool   `json:"interior,omitempty"`
 	Texture  *bool   `json:"texture"` // nil=auto; true/false when explicitly filtered
 	// Year is a 4-digit year string (e.g. "2025") for year-specific entries,
 	// or "latest" for entries that resolve to the newest year per area.
@@ -194,6 +200,15 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			}
 		}
 
+		// Interior datasets (CityGML 3.0 屋内モデル) are split as dedicated
+		// PlateauDataset entities whose IDs carry an "_interior" segment.
+		// We surface that flag only when set — non-interior rows leave the
+		// field nil because legacy data has no interior concept at all.
+		var interiorFlag *bool
+		if strings.Contains(string(d.GetID()), "_interior") {
+			interiorFlag = lo.ToPtr(true)
+		}
+
 		common := SimpleDatasetsResponseDataset{
 			Name:             d.GetName(),
 			Pref:             prefName,
@@ -202,6 +217,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			CityCode:         cityCode,
 			Ward:             wardName,
 			WardCode:         wardCode,
+			Interior:         interiorFlag,
 			Type:             typeName,
 			TypeCode:         typeCode,
 			Year:             d.GetYear(),
@@ -260,6 +276,7 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 		typeCode string
 		lod      string // "" when LOD is absent
 		format   string
+		interior bool
 		// Texture variants are kept separate so non-textured rows do not
 		// shadow textured rows of the same year.
 		texture string // "true"/"false"/""
@@ -299,7 +316,7 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 				tex = "false"
 			}
 		}
-		k := bucketKey{areaCode: areaCode, typeCode: d.TypeCode, lod: lod, format: d.Format, texture: tex}
+		k := bucketKey{areaCode: areaCode, typeCode: d.TypeCode, lod: lod, format: d.Format, interior: isTrue(d.Interior), texture: tex}
 		if e := picked[k]; e == nil || d.Year > e.row.Year {
 			picked[k] = &entry{row: d}
 		}
@@ -320,9 +337,9 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 			if d.LOD == nil || *d.LOD == "" {
 				continue
 			}
-			url = host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, "latest") + "/tileset.json"
+			url = host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, isTrue(d.Interior), d.Texture, "latest") + "/tileset.json"
 		case "MVT":
-			url = host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, "latest") + "/tilejson.json"
+			url = host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, isTrue(d.Interior), "latest") + "/tilejson.json"
 		default:
 			continue
 		}
@@ -343,6 +360,7 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 			Format:   d.Format,
 			LOD:      d.LOD,
 			Texture:  d.Texture,
+			Interior: d.Interior,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
@@ -481,12 +499,15 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 		if d.LOD == nil || *d.LOD == "" {
 			return ""
 		}
-		return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
+		return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, isTrue(d.Interior), d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
 	case "MVT":
-		return host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, strconv.Itoa(d.Year)) + "/tilejson.json"
+		return host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, isTrue(d.Interior), strconv.Itoa(d.Year)) + "/tilejson.json"
 	}
 	return ""
 }
+
+// isTrue reports whether b is non-nil and points to true.
+func isTrue(b *bool) bool { return b != nil && *b }
 
 // buildCityGMLCompositeURL returns a stable redirect URL that resolves to the
 // per-city CityGML zip. Empty when prerequisites are missing.
@@ -503,10 +524,13 @@ func buildCityGMLCompositeURL(host string, d *SimpleCityGMLDataset) string {
 // buildMVTSpec assembles the path segment used by the MVT TileJSON endpoint.
 // LOD is included only when the dataset specifies one; the year argument is
 // either a 4-digit string or "latest".
-func buildMVTSpec(area, typeCode string, lod *string, year string) string {
+func buildMVTSpec(area, typeCode string, lod *string, interior bool, year string) string {
 	parts := []string{area, typeCode}
 	if lod != nil && *lod != "" {
 		parts = append(parts, "lod"+*lod)
+	}
+	if interior {
+		parts = append(parts, "interior")
 	}
 	parts = append(parts, year)
 	return strings.Join(parts, "-")
@@ -515,8 +539,11 @@ func buildMVTSpec(area, typeCode string, lod *string, year string) string {
 // buildSpec assembles the path segment used by the composite tileset endpoint.
 // The lod argument is expected to be a numeric string ("1", "2", ...).
 // The year argument is a 4-digit string ("2025") or the literal "latest".
-func buildSpec(area, typeCode, lod string, texture *bool, year string) string {
+func buildSpec(area, typeCode, lod string, interior bool, texture *bool, year string) string {
 	parts := []string{area, typeCode, "lod" + lod}
+	if interior {
+		parts = append(parts, "interior")
+	}
 	if texture != nil {
 		if *texture {
 			parts = append(parts, "texture")
@@ -547,6 +574,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 		typeCode string
 		typeName string
 		lod      int
+		interior bool
 		year     string // 4-digit year or "latest"
 	}
 	type groupAgg struct {
@@ -586,6 +614,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 			continue
 		}
 
+		interior := isTrue(d.Interior)
 		years := []string{strconv.Itoa(d.Year), "latest"}
 		for _, y := range years {
 			// all-Japan
@@ -594,6 +623,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 				typeCode: d.TypeCode,
 				typeName: d.Type,
 				lod:      lod,
+				interior: interior,
 				year:     y,
 			}, d.Texture)
 
@@ -606,6 +636,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 					typeCode: d.TypeCode,
 					typeName: d.Type,
 					lod:      lod,
+					interior: interior,
 					year:     y,
 				}, d.Texture)
 			}
@@ -619,7 +650,8 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 			areaCode = k.prefCode
 		}
 		base := func(textureSuffix *bool) *SimpleCompositeTileset {
-			spec := buildSpec(areaCode, k.typeCode, strconv.Itoa(k.lod), textureSuffix, k.year)
+			spec := buildSpec(areaCode, k.typeCode, strconv.Itoa(k.lod), k.interior, textureSuffix, k.year)
+			interior := k.interior
 			ent := &SimpleCompositeTileset{
 				ID:       spec,
 				URL:      host + "/datacatalog/3dtiles/" + spec + "/tileset.json",
@@ -627,6 +659,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 				TypeCode: k.typeCode,
 				Type:     k.typeName,
 				LOD:      k.lod,
+				Interior: lo.If(interior, lo.ToPtr(true)).Else(nil),
 				Texture:  textureSuffix,
 				Year:     k.year,
 			}

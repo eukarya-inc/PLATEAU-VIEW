@@ -41,6 +41,7 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 				TypeCode: d.TypeCode,
 				Year:     d.Year,
 				LOD:      d.LOD,
+				Interior: d.Interior,
 				Texture:  d.Texture,
 				PrefCode: d.PrefCode,
 				CityCode: d.CityCode,

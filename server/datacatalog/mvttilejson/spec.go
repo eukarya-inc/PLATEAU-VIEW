@@ -18,22 +18,26 @@ const (
 
 // Spec represents the parsed path parameter for an MVT TileJSON request.
 //
-// Format: <cityCode>-<type>[-lod<N>]-<year>
+// Format: <cityCode>-<type>[-lod<N>][-interior]-<year>
 //   - cityCode: 5-digit municipal or ward code (pinpoint only)
 //   - type:     dataset type code (e.g. "luse")
 //   - lod<N>:   optional. When present, matches datasets whose LOD equals N.
 //     When omitted, matches datasets without LOD only.
+//   - interior: optional. When present, matches the CityGML 3.0 interior
+//     variant; when omitted, only non-interior datasets match.
 //   - year:     4-digit year, or the literal "latest"
 //
 // Examples:
 //   - 13101-luse-2025
 //   - 13101-luse-latest
 //   - 13101-fld-lod1-2025
+//   - 13101-bldg-lod3-interior-2025
 type Spec struct {
 	CityCode string
 	Type     string
 	LOD      *int // nil when LOD is omitted from the spec
-	Year     int  // 0 when YearMode is YearLatest
+	Interior bool
+	Year     int // 0 when YearMode is YearLatest
 	YearMode YearMode
 }
 
@@ -58,15 +62,21 @@ func ParseSpec(s string) (Spec, error) {
 	}
 
 	var lod *int
-	yearIdx := 2
-	if len(parts) >= 4 && strings.HasPrefix(parts[2], "lod") {
-		n, err := strconv.Atoi(strings.TrimPrefix(parts[2], "lod"))
+	idx := 2
+	if idx < len(parts)-1 && strings.HasPrefix(parts[idx], "lod") {
+		n, err := strconv.Atoi(strings.TrimPrefix(parts[idx], "lod"))
 		if err != nil || n < 0 {
 			return Spec{}, fmt.Errorf("invalid spec %q: invalid lod value", s)
 		}
 		lod = &n
-		yearIdx = 3
+		idx++
 	}
+	interior := false
+	if idx < len(parts)-1 && parts[idx] == "interior" {
+		interior = true
+		idx++
+	}
+	yearIdx := idx
 
 	if len(parts) != yearIdx+1 {
 		return Spec{}, fmt.Errorf("invalid spec %q: unexpected trailing segments", s)
@@ -89,6 +99,7 @@ func ParseSpec(s string) (Spec, error) {
 		CityCode: cityCode,
 		Type:     typeCode,
 		LOD:      lod,
+		Interior: interior,
 		Year:     year,
 		YearMode: yearMode,
 	}, nil

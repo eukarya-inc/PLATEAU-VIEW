@@ -380,7 +380,7 @@ func (s *Service) handleGetDataset(ctx context.Context, request mcp.CallToolRequ
 	}
 
 	// Transform to response
-	resp := TransformGetDataset(dataset)
+	resp := TransformGetDataset(dataset, s.host)
 
 	// Convert to JSON and return
 	return convertToToolResult(resp)

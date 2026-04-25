@@ -48,6 +48,17 @@ const (
 	YearLatest
 )
 
+// InteriorMode controls whether interior datasets are matched.
+type InteriorMode int
+
+const (
+	// InteriorExclude (default) keeps only non-interior datasets.
+	InteriorExclude InteriorMode = iota
+	// InteriorOnly keeps only datasets marked as interior (CityGML 3.0
+	// 屋内モデル).
+	InteriorOnly
+)
+
 // TextureMode controls how the texture variant is selected.
 type TextureMode int
 
@@ -68,11 +79,13 @@ const (
 //   - "all-bldg-lod2-texture-2025"     (textured only)
 //   - "all-bldg-lod2-notexture-2025"   (non-textured only)
 //   - "all-bldg-lod2-latest"           (newest year per area)
+//   - "all-bldg-lod3-interior-2025"    (CityGML 3.0 屋内モデルのみ)
 type Spec struct {
 	Area     Area
 	Type     string // dataset type code (e.g. "bldg")
 	LOD      int    // 1, 2, 3, ...
 	LODMode  LODMode
+	Interior InteriorMode
 	Texture  TextureMode
 	Year     int // 4-digit year; ignored when YearMode is YearLatest
 	YearMode YearMode
@@ -128,18 +141,25 @@ func ParseSpec(s string) (Spec, error) {
 		return Spec{}, fmt.Errorf("invalid spec %q: invalid lod value", s)
 	}
 
+	// Optional segments between lod and year, in order: [interior] [texture|notexture].
+	interior := InteriorExclude
 	texture := TextureAuto
-	yearIdx := 3
-	if len(parts) >= 5 {
-		switch parts[3] {
+	idx := 3
+	if idx < len(parts)-1 && parts[idx] == "interior" {
+		interior = InteriorOnly
+		idx++
+	}
+	if idx < len(parts)-1 {
+		switch parts[idx] {
 		case "texture":
 			texture = TextureOnly
-			yearIdx = 4
+			idx++
 		case "notexture":
 			texture = TextureNone
-			yearIdx = 4
+			idx++
 		}
 	}
+	yearIdx := idx
 
 	if len(parts) != yearIdx+1 {
 		return Spec{}, fmt.Errorf("invalid spec %q: unexpected trailing segments", s)
@@ -163,6 +183,7 @@ func ParseSpec(s string) (Spec, error) {
 		Type:     typeCode,
 		LOD:      lod,
 		LODMode:  lodMode,
+		Interior: interior,
 		Texture:  texture,
 		Year:     year,
 		YearMode: yearMode,

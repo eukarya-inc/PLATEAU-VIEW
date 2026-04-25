@@ -13,6 +13,7 @@ type Input struct {
 	TypeName string
 	Year     int
 	LOD      *string
+	Interior *bool // nil/false = non-interior; true = interior
 	Layers   []string
 	PrefCode string
 	CityCode *string
@@ -40,6 +41,9 @@ func Select(datasets []Input, spec Spec) *Input {
 			continue
 		}
 		if !lodMatches(spec.LOD, d.LOD) {
+			continue
+		}
+		if spec.Interior != (d.Interior != nil && *d.Interior) {
 			continue
 		}
 		if spec.YearMode == YearExact && d.Year != spec.Year {
