@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ===== 引数チェック =====
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 <target>"
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 <target> [<commit>]"
   echo ""
   echo "Available targets:"
   echo "  server    # Watch and deploy PLATEAU Server"
@@ -11,13 +11,18 @@ if [[ $# -ne 1 ]]; then
   echo "  tile      # Watch and deploy PLATEAU Tile"
   echo "  docs      # Watch and deploy PLATEAU Docs"
   echo ""
+  echo "When <commit> is omitted, the script picks the most recent commit on"
+  echo "main that actually touched the target's source path. This skips"
+  echo "unrelated commits whose CI did not rebuild the target image."
+  echo ""
   echo "Examples:"
-  echo "  $0 server"
-  echo "  $0 tile"
+  echo "  $0 server               # auto-pick latest server-touching commit"
+  echo "  $0 tile 746e35ae        # explicit commit"
   exit 1
 fi
 
 TARGET_TYPE="$1"
+EXPLICIT_COMMIT="${2:-}"
 
 # ===== 設定 =====
 CI_WORKFLOW_NAME="ci"                              # 最初に待機するCIワークフロー
@@ -30,18 +35,22 @@ case "$TARGET_TYPE" in
   server)
     DEV_WORKFLOW_FILE="deploy-server-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-server-prod.yml"
+    SOURCE_PATH="server"
     ;;
   worker)
     DEV_WORKFLOW_FILE="deploy-worker-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-worker-prod.yml"
+    SOURCE_PATH="worker"
     ;;
   tile)
     DEV_WORKFLOW_FILE="deploy-tile-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-tile-prod.yml"
+    SOURCE_PATH="tile"
     ;;
   docs)
     DEV_WORKFLOW_FILE="deploy-docs-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-docs-prod.yml"
+    SOURCE_PATH="docs"
     ;;
   *)
     echo "Error: Invalid target type '$TARGET_TYPE'"
@@ -54,10 +63,27 @@ echo "Watching CI workflow '$CI_WORKFLOW_NAME' and Dev workflow '$DEV_WORKFLOW_F
 echo "On success, will dispatch '$DISPATCH_WORKFLOW_FILE'."
 echo ""
 
-# 最新コミットの情報を取得
-LATEST_COMMIT_SHA=$(git rev-parse "$TARGET_BRANCH")
-LATEST_COMMIT_DATE=$(git log -1 --format=%cI "$TARGET_BRANCH")
-echo "Latest commit on $TARGET_BRANCH:"
+# 対象コミットの決定
+if [[ -n "$EXPLICIT_COMMIT" ]]; then
+  # 明示された commit を完全長 SHA に正規化
+  if ! LATEST_COMMIT_SHA=$(git rev-parse --verify "${EXPLICIT_COMMIT}^{commit}" 2>/dev/null); then
+    echo "Error: '$EXPLICIT_COMMIT' is not a valid commit." >&2
+    exit 1
+  fi
+  COMMIT_SOURCE="explicit"
+else
+  # ${TARGET_BRANCH} 上で ${SOURCE_PATH} に変更がある最新コミットを採用。
+  # これにより、対象パスに変更がなく CI が対象イメージを再ビルドしていない
+  # コミットを跨いで「最後に対象を変更したコミット」を待機できる。
+  LATEST_COMMIT_SHA=$(git log -1 --format=%H "$TARGET_BRANCH" -- "$SOURCE_PATH" || true)
+  if [[ -z "$LATEST_COMMIT_SHA" ]]; then
+    echo "Error: no commit on $TARGET_BRANCH touches '$SOURCE_PATH/'." >&2
+    exit 1
+  fi
+  COMMIT_SOURCE="auto-picked (last commit touching $SOURCE_PATH/)"
+fi
+LATEST_COMMIT_DATE=$(git log -1 --format=%cI "$LATEST_COMMIT_SHA")
+echo "Target commit ($COMMIT_SOURCE):"
 echo "  SHA: $LATEST_COMMIT_SHA"
 echo "  Date: $LATEST_COMMIT_DATE"
 echo ""
