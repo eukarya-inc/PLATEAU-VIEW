@@ -1,0 +1,27 @@
+---
+title: GraphQL プレイグラウンド
+description: ブラウザ上で PLATEAU データカタログ GraphQL API を対話的に試せるプレイグラウンド
+tableOfContents: false
+---
+
+import GraphQLSandbox from "../../../../components/GraphQLSandbox.astro";
+
+下のエクスプローラから、PLATEAU データカタログ GraphQL API のクエリを実行できます。
+左側のスキーマパネルで型を確認し、中央のエディタでクエリを書いて再生ボタンで実行してください。
+
+<GraphQLSandbox
+  endpoint="https://api.plateauview.mlit.go.jp/datacatalog/graphql"
+  initialQuery={`query Sample {
+  area(code: "13101") {
+    id
+    datasets {
+      name
+      items { url }
+    }
+  }
+}`}
+/>
+
+埋め込みが表示されない場合は、API エンドポイントを直接ブラウザで開くと組み込みの **GraphiQL** が起動します:
+
+[https://api.plateauview.mlit.go.jp/datacatalog/graphql](https://api.plateauview.mlit.go.jp/datacatalog/graphql)

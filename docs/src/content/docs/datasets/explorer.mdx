@@ -1,0 +1,365 @@
+---
+title: データセット一覧
+description: PLATEAU 配信サービスで提供されている全データセットを絞り込み検索し、配信 URL をコピーできるエクスプローラ
+tableOfContents: false
+---
+
+PLATEAU 配信サービスで現在配信されているすべてのデータセットの一覧です。
+都道府県・種別・形式などで絞り込み、配信 URL をワンクリックでコピーできます。このページは [`GET /datacatalog/plateau-datasets`](/datasets/3d-tiles/#41-通常の-web-api) の内容をブラウザで読み込んで表示しています。
+
+<div id="explorer-root">
+  <div class="explorer-controls">
+    <div class="explorer-search-row">
+      <input id="explorer-search" type="search" placeholder="名称・市区町村・種別を検索…" autocomplete="off" />
+      <button id="explorer-reset" type="button">リセット</button>
+    </div>
+    <select id="explorer-pref"><option value="">都道府県（すべて）</option></select>
+    <select id="explorer-city"><option value="">市区町村（すべて）</option></select>
+    <select id="explorer-type"><option value="">種別（すべて）</option></select>
+    <select id="explorer-format">
+      <option value="">形式（すべて）</option>
+      <option value="3D Tiles">3D Tiles</option>
+      <option value="MVT">MVT</option>
+    </select>
+    <select id="explorer-lod"><option value="">LOD（すべて）</option></select>
+    <select id="explorer-year"><option value="">整備年度（すべて）</option></select>
+    <label class="explorer-checkbox"><input id="explorer-texture" type="checkbox" />テクスチャありのみ</label>
+  </div>
+
+  <div class="explorer-status" id="explorer-status"></div>
+  <div class="explorer-loading" id="explorer-loading" role="status" aria-live="polite">
+    <span class="explorer-spinner" aria-hidden="true"></span>
+    <span>データを読み込んでいます…</span>
+  </div>
+  <div class="explorer-table-wrap" id="explorer-table-wrap" hidden>
+    <table class="explorer-table" id="explorer-table">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>都道府県</th>
+          <th>市区町村</th>
+          <th>区</th>
+          <th>種別</th>
+          <th>形式</th>
+          <th>LOD</th>
+          <th>テクスチャ</th>
+          <th>整備年度</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<style>{`
+  #explorer-root {
+    --explorer-border: var(--sl-color-gray-5);
+    --explorer-bg: var(--sl-color-gray-7);
+    margin-block: 1.5rem;
+  }
+  .explorer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .explorer-controls > * {
+    margin: 0;
+  }
+  .explorer-controls input[type="search"],
+  .explorer-controls select {
+    box-sizing: border-box;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--explorer-border);
+    border-radius: 0.375rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font-size: 0.9rem;
+    min-height: 2.25rem;
+  }
+  .explorer-search-row {
+    flex: 1 1 100%;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .explorer-search-row > * { margin: 0; }
+  .explorer-controls input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 2.1rem;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
+    background-repeat: no-repeat;
+    background-position: 0.65rem center;
+    background-size: 0.95rem auto;
+  }
+  .explorer-controls select {
+    flex: 0 0 auto;
+    width: 12rem;
+    max-width: 100%;
+  }
+  .explorer-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+  }
+  .explorer-controls button {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--explorer-border);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .explorer-controls button:hover { background: var(--sl-color-gray-6); }
+
+  .explorer-status {
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+    margin-bottom: 0.5rem;
+  }
+  .explorer-status[data-state="error"] { color: var(--sl-color-red); }
+
+  .explorer-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--explorer-border);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+  }
+  .explorer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+  .explorer-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--explorer-bg);
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--explorer-border);
+    white-space: nowrap;
+    z-index: 1;
+  }
+  .explorer-table tbody td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--explorer-border);
+    vertical-align: top;
+  }
+  .explorer-table tbody tr:hover { background: var(--sl-color-gray-7); }
+  .explorer-table .url-cell {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    max-width: 28rem;
+  }
+  .explorer-table .url-cell code {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+  }
+  .explorer-table .copy-btn {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--explorer-border);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    border-radius: 0.3rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .explorer-table .copy-btn:hover { background: var(--sl-color-accent); color: var(--sl-color-accent-high); }
+  .explorer-table .copy-btn.copied { background: var(--sl-color-green); color: white; border-color: transparent; }
+  .explorer-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--sl-color-gray-3);
+  }
+  .explorer-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 18rem;
+    color: var(--sl-color-gray-3);
+    font-size: 0.95rem;
+  }
+  .explorer-loading[hidden] { display: none; }
+  .explorer-spinner {
+    display: inline-block;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid var(--sl-color-gray-5);
+    border-top-color: var(--sl-color-accent-high, var(--sl-color-accent));
+    border-radius: 50%;
+    animation: explorer-spin 0.8s linear infinite;
+  }
+  @keyframes explorer-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .explorer-spinner { animation: none; }
+  }
+`}</style>
+
+<script>{`
+  (() => {
+    const ENDPOINT = 'https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets';
+    const $ = (id) => document.getElementById(id);
+    const status = $('explorer-status');
+    const loading = $('explorer-loading');
+    const tableWrap = $('explorer-table-wrap');
+    const tbody = $('explorer-table').querySelector('tbody');
+    const search = $('explorer-search');
+    const prefSel = $('explorer-pref');
+    const citySel = $('explorer-city');
+    const typeSel = $('explorer-type');
+    const formatSel = $('explorer-format');
+    const lodSel = $('explorer-lod');
+    const yearSel = $('explorer-year');
+    const textureChk = $('explorer-texture');
+    const resetBtn = $('explorer-reset');
+
+    let datasets = [];
+
+    const fillSelect = (sel, values) => {
+      const first = sel.options[0];
+      sel.innerHTML = '';
+      sel.appendChild(first);
+      for (const v of values) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      }
+    };
+
+    const uniqSorted = (items, key, cmp) => {
+      const set = new Set();
+      for (const it of items) {
+        const v = it[key];
+        if (v != null && v !== '') set.add(v);
+      }
+      return [...set].sort(cmp || ((a, b) => String(a).localeCompare(String(b), 'ja')));
+    };
+
+    const refreshCityOptions = () => {
+      const pref = prefSel.value;
+      const filtered = pref ? datasets.filter(d => d.pref === pref) : datasets;
+      const cities = uniqSorted(filtered, 'city');
+      const prev = citySel.value;
+      fillSelect(citySel, cities);
+      if (cities.includes(prev)) citySel.value = prev;
+    };
+
+    const matches = (d) => {
+      if (prefSel.value && d.pref !== prefSel.value) return false;
+      if (citySel.value && d.city !== citySel.value) return false;
+      if (typeSel.value && d.type !== typeSel.value) return false;
+      if (formatSel.value && d.format !== formatSel.value) return false;
+      if (lodSel.value && String(d.lod ?? '') !== lodSel.value) return false;
+      if (yearSel.value && String(d.year ?? '') !== yearSel.value) return false;
+      if (textureChk.checked && !d.texture) return false;
+      const q = search.value.trim().toLowerCase();
+      if (q) {
+        const hay = [d.name, d.pref, d.city, d.ward, d.type, d.type_en].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    };
+
+    const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
+    const render = () => {
+      const filtered = datasets.filter(matches);
+      status.removeAttribute('data-state');
+      status.textContent = filtered.length === datasets.length
+        ? \`全 \${datasets.length} 件\`
+        : \`\${filtered.length.toLocaleString()} / \${datasets.length.toLocaleString()} 件\`;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="explorer-empty">該当するデータセットがありません</td></tr>';
+        return;
+      }
+
+      const rows = filtered.map(d => {
+        const url = d.url || '';
+        const escUrl = escapeHtml(url);
+        return \`<tr>
+          <td>\${escapeHtml(d.name)}</td>
+          <td>\${escapeHtml(d.pref ?? '')}</td>
+          <td>\${escapeHtml(d.city ?? '')}</td>
+          <td>\${escapeHtml(d.ward ?? '')}</td>
+          <td>\${escapeHtml(d.type ?? '')}</td>
+          <td>\${escapeHtml(d.format ?? '')}</td>
+          <td>\${escapeHtml(d.lod ?? '')}</td>
+          <td>\${d.texture ? '○' : ''}</td>
+          <td>\${escapeHtml(d.year ?? '')}</td>
+          <td><div class="url-cell"><code title="\${escUrl}">\${escUrl}</code><button class="copy-btn" type="button" data-url="\${escUrl}">コピー</button></div></td>
+        </tr>\`;
+      });
+      tbody.innerHTML = rows.join('');
+    };
+
+    tbody.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      const url = btn.getAttribute('data-url');
+      try {
+        await navigator.clipboard.writeText(url);
+        const orig = btn.textContent;
+        btn.textContent = '✓ コピー済み';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+      } catch (err) {
+        btn.textContent = 'コピー失敗';
+      }
+    });
+
+    [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureChk, search].forEach(el => {
+      el.addEventListener('input', () => {
+        if (el === prefSel) refreshCityOptions();
+        render();
+      });
+    });
+
+    resetBtn.addEventListener('click', () => {
+      search.value = '';
+      [prefSel, citySel, typeSel, formatSel, lodSel, yearSel].forEach(s => s.value = '');
+      textureChk.checked = false;
+      refreshCityOptions();
+      render();
+    });
+
+    fetch(ENDPOINT, { headers: { Accept: 'application/json' } })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        datasets = (data && data.datasets) || [];
+        fillSelect(prefSel, uniqSorted(datasets, 'pref'));
+        fillSelect(typeSel, uniqSorted(datasets, 'type'));
+        fillSelect(lodSel, uniqSorted(datasets, 'lod', (a, b) => String(a).localeCompare(String(b), 'ja', { numeric: true })));
+        fillSelect(yearSel, uniqSorted(datasets, 'year', (a, b) => Number(b) - Number(a)));
+        refreshCityOptions();
+        loading.hidden = true;
+        tableWrap.hidden = false;
+        render();
+      })
+      .catch(err => {
+        loading.hidden = true;
+        status.setAttribute('data-state', 'error');
+        status.textContent = \`データの取得に失敗しました: \${err.message}\`;
+      });
+  })();
+`}</script>

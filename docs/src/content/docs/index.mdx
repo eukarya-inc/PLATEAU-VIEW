@@ -1,0 +1,134 @@
+---
+title: PLATEAU 配信サービス
+description: PLATEAU 3D都市モデルの配信API・データセット利用ガイド
+template: splash
+hero:
+  tagline: PLATEAU 3D都市モデル配信サービスの公式ドキュメント
+  image:
+    file: ../../../public/image.webp
+  actions:
+    - text: クイックスタート
+      link: /quickstart/
+      icon: right-arrow
+      variant: primary
+---
+
+import { CardGrid, Icon } from "@astrojs/starlight/components";
+
+<CardGrid>
+  <a class="doc-card" href="/datasets/explorer/">
+    <Icon name="magnifier" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">データセット一覧</span>
+      <span class="doc-card__desc">絞り込み検索して配信 URL をコピー</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/datasets/citygml/">
+    <Icon name="seti:xml" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">PLATEAU-CityGML</span>
+      <span class="doc-card__desc">CityGML 形式データの配信仕様と CityGML API</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/datasets/3d-tiles/">
+    <Icon name="seti:json" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">PLATEAU-3DTiles / MVT</span>
+      <span class="doc-card__desc">3D Tiles / MVT データとデータカタログ API</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/datasets/terrain/">
+    <Icon name="seti:image" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">PLATEAU-Terrain</span>
+      <span class="doc-card__desc">地形モデルの terraindb / Terrain-RGB 配信</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/datasets/ortho/">
+    <Icon name="sun" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">PLATEAU-Ortho</span>
+      <span class="doc-card__desc">航空写真オルソ画像タイルの配信</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/api/">
+    <Icon name="seti:default" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">API リファレンス</span>
+      <span class="doc-card__desc">REST API と GraphQL のリファレンス & プレイグラウンド</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/mcp/overview/">
+    <Icon name="rocket" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">MCP Server</span>
+      <span class="doc-card__desc">AI クライアント向け Model Context Protocol サーバー</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+  <a class="doc-card" href="/spec/visualization/">
+    <Icon name="document" class="doc-card__icon" size="1.6rem" />
+    <span class="doc-card__body">
+      <span class="doc-card__title">可視化用データ変換仕様</span>
+      <span class="doc-card__desc">CityGML から 3D Tiles / MVT への変換仕様</span>
+    </span>
+    <Icon name="right-arrow" class="doc-card__arrow rtl:flip" size="1.2rem" />
+  </a>
+</CardGrid>
+
+<style>{`
+  .doc-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.85rem;
+    align-items: start;
+    padding: 1.1rem 1.2rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    box-shadow: var(--sl-shadow-sm);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  }
+  .doc-card:hover {
+    background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+    border-color: var(--sl-color-gray-2);
+  }
+  .doc-card__icon {
+    color: var(--sl-color-accent-high, var(--sl-color-accent));
+    margin-top: 0.1rem;
+  }
+  .doc-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+  .doc-card__title {
+    font-weight: 600;
+    font-size: var(--sl-text-lg);
+    color: var(--sl-color-white);
+    line-height: var(--sl-line-height-headings);
+  }
+  .doc-card__desc {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    line-height: 1.5;
+  }
+  .doc-card__arrow {
+    color: var(--sl-color-gray-3);
+    margin-top: 0.25rem;
+    transition: color 0.12s ease, transform 0.12s ease;
+  }
+  .doc-card:hover .doc-card__arrow {
+    color: var(--sl-color-white);
+    transform: translateX(2px);
+  }
+`}</style>

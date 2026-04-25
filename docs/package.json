@@ -1,0 +1,30 @@
+{
+  "name": "plateau-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check",
+    "gql:fetch": "node scripts/build-graphql-docs.mjs fetch",
+    "gql:gen": "node scripts/build-graphql-docs.mjs gen",
+    "gql:build": "node scripts/build-graphql-docs.mjs all"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.38.0",
+    "astro": "^6.0.0",
+    "sharp": "^0.34.5",
+    "starlight-llms-txt": "^0.8.0",
+    "starlight-openapi": "^0.25.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.8",
+    "graphql": "^16.13.2",
+    "graphql-markdown": "^7.3.0",
+    "typescript": "^5.9.3"
+  }
+}

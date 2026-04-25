@@ -1,0 +1,59 @@
+---
+interface Props {
+  endpoint: string;
+  initialQuery?: string;
+}
+
+const { endpoint, initialQuery } = Astro.props;
+---
+
+<div
+  id="embedded-sandbox"
+  class="graphql-sandbox"
+  data-endpoint={endpoint}
+  data-initial-query={initialQuery ?? ""}
+>
+</div>
+
+<script
+  is:inline
+  src="https://embeddable-sandbox.cdn.apollographql.com/_latest/embeddable-sandbox.umd.production.min.js"
+></script>
+<script is:inline>
+  (function init() {
+    if (typeof window === "undefined") return;
+    function mount() {
+      if (!window.EmbeddedSandbox) {
+        return setTimeout(mount, 100);
+      }
+      var target = document.getElementById("embedded-sandbox");
+      if (!target || target.dataset.mounted === "true") return;
+      target.dataset.mounted = "true";
+      new window.EmbeddedSandbox({
+        target: target,
+        initialEndpoint: target.dataset.endpoint,
+        endpointIsEditable: false,
+        initialState: target.dataset.initialQuery
+          ? { document: target.dataset.initialQuery }
+          : undefined,
+      });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", mount);
+    } else {
+      mount();
+    }
+  })();
+</script>
+
+<style>
+  .graphql-sandbox {
+    display: block;
+    width: 100%;
+    height: min(80vh, 50rem);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    margin-block: 1rem;
+    overflow: hidden;
+  }
+</style>

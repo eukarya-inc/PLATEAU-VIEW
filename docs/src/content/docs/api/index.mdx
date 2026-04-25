@@ -1,0 +1,32 @@
+---
+title: API リファレンス
+description: PLATEAU 配信サービスが提供する REST API と GraphQL API のリファレンス
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+PLATEAU 配信サービスでは、用途に応じて 2 種類の API を提供しています。
+
+<CardGrid>
+  <LinkCard
+    title="REST API"
+    description="CityGML のパック・属性取得・データカタログなどのエンドポイント。OpenAPI 仕様 (Scalar) で対話的に試せます。"
+    href="/api/rest/"
+  />
+  <LinkCard
+    title="GraphQL API"
+    description="データカタログを柔軟に検索・取得できる GraphQL エンドポイント。スキーマリファレンスとプレイグラウンドを公開しています。"
+    href="/api/graphql/"
+  />
+</CardGrid>
+
+## エンドポイント
+
+| API | エンドポイント | スキーマ定義 |
+|:---|:---|:---|
+| REST | `https://api.plateauview.mlit.go.jp` | [OpenAPI 3.0 (JSON)](https://api.plateauview.mlit.go.jp/openapi.json) |
+| GraphQL | `https://api.plateauview.mlit.go.jp/datacatalog/graphql` | [introspection](https://api.plateauview.mlit.go.jp/datacatalog/graphql)（GraphiQL から確認可能） |
+
+:::caution
+これらの API は試験運用中です。スキーマやレスポンスは予告なく変更されることがあり、提供期間やサービスレベルの保証もしておりません。
+:::

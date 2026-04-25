@@ -1,0 +1,72 @@
+/* データセットエクスプローラと GraphQL プレイグラウンドは横幅いっぱいに広げる */
+body:has(#explorer-root),
+body:has(#embedded-sandbox) {
+  --sl-content-width: 100%;
+}
+body:has(#explorer-root) .main-pane .sl-container,
+body:has(#embedded-sandbox) .main-pane .sl-container {
+  max-width: none;
+}
+
+/* トップページのドキュメントカードを 3 列固定 */
+.sl-container .card-grid:has(.doc-card) {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 60rem) {
+  .sl-container .card-grid:has(.doc-card) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 38rem) {
+  .sl-container .card-grid:has(.doc-card) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ヘッダーのテーマ切替をアイコンだけに */
+starlight-theme-select label {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+starlight-theme-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+starlight-theme-select .label-icon {
+  pointer-events: none;
+}
+starlight-theme-select .caret {
+  display: none;
+}
+
+/* ページネーションの「前へ／次へ」リンクの文字を抑える */
+.pagination-links a .link-title {
+  font-size: var(--sl-text-base);
+  font-weight: 600;
+}
+
+/* ヘッダーのサイトタイトルを少し小さく */
+.site-title {
+  font-size: var(--sl-text-base);
+  font-weight: 600;
+}
+
+/* スマホ幅でも読みやすいように */
+@media (min-width: 50rem) {
+  .site-title {
+    font-size: var(--sl-text-lg);
+  }
+}

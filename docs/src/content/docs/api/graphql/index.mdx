@@ -1,0 +1,66 @@
+---
+title: GraphQL API
+description: PLATEAU データカタログ GraphQL API の概要・利用方法・スキーマ・プレイグラウンド
+---
+
+import { LinkCard, CardGrid } from "@astrojs/starlight/components";
+import { GITHUB_PLATEAUAPI_URL } from "../../../../site.js";
+
+PLATEAU データカタログ API は **GraphQL** ベースで提供されており、必要な情報を 1 リクエストで柔軟に取得できます。
+
+## エンドポイント
+
+```
+https://api.plateauview.mlit.go.jp/datacatalog/graphql
+```
+
+ブラウザで上記 URL を開くと、組み込みの **GraphiQL** が起動し、対話的にクエリを試せます。
+
+## ドキュメント
+
+<CardGrid>
+  <LinkCard
+    title="スキーマリファレンス"
+    description="全ての Query / Object / Input / Enum 型の自動生成リファレンス"
+    href="/api/graphql/schema/"
+  />
+  <LinkCard
+    title="プレイグラウンド"
+    description="ブラウザ上で GraphQL クエリを実行できる対話環境"
+    href="/api/graphql/playground/"
+  />
+</CardGrid>
+
+## クエリ例
+
+```graphql
+query {
+  area(code: "13101") {
+    id
+    type
+    datasets {
+      id
+      name
+      items {
+        id
+        name
+        url
+      }
+    }
+  }
+}
+```
+
+```bash
+curl -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
+  -H 'Content-Type: application/json' \
+  --data '{"query":"{ area(code: \"13101\") { datasets { name items { url } } } }"}'
+```
+
+## スキーマ
+
+スキーマ定義（SDL）は <a href={GITHUB_PLATEAUAPI_URL}>plateauapi (GitHub)</a> のソースコードから生成されており、本ドキュメントの[スキーマリファレンス](/api/graphql/schema/)も同じ introspection から自動生成されています。
+
+:::caution
+GraphQL のスキーマやレスポンスは予告なく変更されることがあります。動作速度低下を防ぐため、一定以上の複雑なクエリは制限されます。レスポンスのサイズが数 MB 以上になることがあるため、モバイル回線での利用にはご注意ください。
+:::

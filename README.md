@@ -1,6 +1,6 @@
 # PLATEAU VIEW 5.0
 
-![thumbnail](./docs/image.webp)
+![thumbnail](./docs/public/image.webp)
 
 PLATEAU VIEW 5.0 は以下のシステムにより構成されます。
 
