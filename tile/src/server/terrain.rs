@@ -238,6 +238,13 @@ pub async fn terrain_layer_json(
     let _ = geoid_model;
     let tiles_template = "{z}/{x}/{y}.terrain".to_string();
 
+    // Cesium quantized-mesh has no per-tile upsample fallback — clamp the
+    // advertised max zoom to the upstream DEM's max so Cesium never asks
+    // for a z > DEM_MAX_ZOOM tile (which would be served from a wrong
+    // parent and lose the geoid offset). The raster `/mapbox` and
+    // `/terrarium` endpoints upsample beyond DEM_MAX_ZOOM, so their
+    // tilejson advertises the full `terrain.max_zoom`.
+    let qm_max_zoom = terrain.max_zoom.min(terrain.dem.max_zoom());
     let config = crate::terrain::layer_json::LayerJsonConfig {
         tiles_template,
         version: terrain.dem.version().to_string(),
@@ -245,9 +252,9 @@ pub async fn terrain_layer_json(
             r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#
                 .to_string(),
         ),
-        available: japan_availability(terrain.max_zoom),
+        available: japan_availability(qm_max_zoom),
         min_zoom: Some(0),
-        max_zoom: Some(terrain.max_zoom),
+        max_zoom: Some(qm_max_zoom),
         scheme: "tms".to_string(),
         bounds: Some([
             JAPAN_BOUNDS_WEST,
