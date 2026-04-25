@@ -302,18 +302,9 @@ pub async fn get_tilejson(
         }
     };
 
-    // Get host from header
-    let host = headers
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost");
-
-    // Build tile URL template (use https if host doesn't look like localhost)
-    let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-        "http"
-    } else {
-        "https"
-    };
+    // Build tile URL template using the externally-visible origin (front
+    // proxies often rewrite `Host` to `localhost`, so prefer `X-Forwarded-*`).
+    let (scheme, host) = crate::server::terrain::external_origin(&headers);
     let tile_url = format!("{scheme}://{host}/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
 
     let tilejson = TileJson {

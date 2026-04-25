@@ -154,6 +154,42 @@ fn digest(s: &str) -> String {
     format!("{:x}", xxh64(s.as_bytes(), 0))
 }
 
+/// Resolve the public `(scheme, host)` for URLs we embed in JSON responses.
+/// Front proxies (Cloud Run, Cloudflare) often rewrite the `Host` header to
+/// `localhost`, so we prefer `Forwarded` / `X-Forwarded-Host` /
+/// `X-Forwarded-Proto` when present, and only fall back to the `Host`
+/// header (with a localhost-aware scheme guess) when nothing else is given.
+pub fn external_origin(headers: &HeaderMap) -> (String, String) {
+    let proto = headers
+        .get("x-forwarded-proto")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string());
+
+    let host = headers
+        .get("x-forwarded-host")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers
+                .get(header::HOST)
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "localhost".to_string());
+
+    let scheme = proto.unwrap_or_else(|| {
+        if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+            "http".to_string()
+        } else {
+            "https".to_string()
+        }
+    });
+
+    (scheme, host)
+}
+
 // ─────────────────────────────── Handlers ───────────────────────────────
 
 /// Embedded Cesium viewer for quick eyeballing of terrain output.
@@ -176,19 +212,16 @@ pub async fn terrain_layer_json(
         Err(r) => return r,
     };
 
-    let host = headers
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost");
-    let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-        "http"
-    } else {
-        "https"
-    };
-    let tiles_template = format!(
-        "{scheme}://{host}/terrain/{{z}}/{{x}}/{{y}}.terrain?geoid={}",
-        geoid_model.slug()
-    );
+    // Use a relative tile URL so Cesium resolves it against the layer.json
+    // location. Avoids any reliance on `Host` / `X-Forwarded-Host`, which
+    // fronting load balancers (Cloud Run / Cloudflare) sometimes rewrite to
+    // `localhost` and trigger Chrome's Private Network Access prompt.
+    // The viewer passes `geoid` via `Resource.queryParameters`, which Cesium
+    // automatically propagates onto every derived tile request — so we
+    // don't put it in the template here (avoids duplicate `?geoid=`).
+    let _ = &headers;
+    let _ = geoid_model;
+    let tiles_template = "{z}/{x}/{y}.terrain".to_string();
 
     let config = crate::terrain::layer_json::LayerJsonConfig {
         tiles_template,
@@ -563,15 +596,7 @@ async fn raster_tilejson(
     if !["png", "webp", "avif"].contains(&fmt) {
         return (StatusCode::BAD_REQUEST, "format must be png, webp, or avif").into_response();
     }
-    let host = headers
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost");
-    let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-        "http"
-    } else {
-        "https"
-    };
+    let (scheme, host) = external_origin(&headers);
     let tile_url = format!(
         "{scheme}://{host}/{slug}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
         slug = encoding.slug(),

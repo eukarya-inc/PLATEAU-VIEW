@@ -43,14 +43,26 @@
     Cesium.Ion.defaultAccessToken = null;
 
     // ── Imagery options ────────────────────────────────────────────────
-    // OSM is always available as a debug base. If `/tiles/sources.json`
-    // returns any configured sources, those are inserted before OSM and the
-    // first one is auto-selected.
+    // GSI (国土地理院) is the default base map. OSM is exposed only as a
+    // fallback when no PLATEAU sources are configured. Configured
+    // `/tiles/<name>/...` sources, when available, are inserted before
+    // GSI and the first one is auto-selected.
     const imagerySelect = document.getElementById('imagery');
 
+    const gsiOption = {
+      id: 'gsi',
+      label: '地理院（標準）',
+      build: () =>
+        new Cesium.UrlTemplateImageryProvider({
+          url: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+          credit:
+            '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
+          maximumLevel: 18,
+        }),
+    };
     const osmOption = {
       id: 'osm',
-      label: 'OSM (debug)',
+      label: 'OSM',
       build: () =>
         new Cesium.OpenStreetMapImageryProvider({
           url: 'https://tile.openstreetmap.org/',
@@ -58,9 +70,9 @@
             '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
         }),
     };
-    const options = [osmOption];
+    const options = [gsiOption, osmOption];
 
-    function rebuildImagerySelect() {
+    function rebuildImagerySelect(selectedId) {
       imagerySelect.innerHTML = '';
       for (const opt of options) {
         const el = document.createElement('option');
@@ -68,15 +80,17 @@
         el.textContent = opt.label;
         imagerySelect.appendChild(el);
       }
+      if (selectedId) {
+        imagerySelect.value = selectedId;
+      }
     }
-    rebuildImagerySelect();
+    rebuildImagerySelect(gsiOption.id);
 
     // ── Cesium init ────────────────────────────────────────────────────
-    const initialOption = options[0];
+    // Start without a base layer; we add one synchronously below so that
+    // setImagery has a single, well-defined entry to swap.
     const viewer = new Cesium.Viewer('cesium', {
-      baseLayer: Cesium.ImageryLayer.fromProviderAsync(
-        Promise.resolve(initialOption.build()),
-      ),
+      baseLayer: false,
       timeline: false,
       animation: false,
       baseLayerPicker: false,
@@ -101,6 +115,22 @@
     viewer.scene.globe.shadows = Cesium.ShadowMode.RECEIVE_ONLY;
     viewer.scene.globe.depthTestAgainstTerrain = true;
 
+    function setImagery(id) {
+      const opt = options.find((o) => o.id === id) || options[0];
+      const layers = viewer.imageryLayers;
+      // Add the new provider first so there's no blank flash, then drop
+      // every prior layer. `addImageryProvider` is synchronous for these
+      // providers, so the new layer is queryable immediately.
+      const newLayer = layers.addImageryProvider(opt.build());
+      // Remove anything below the new top layer.
+      while (layers.length > 1) {
+        layers.remove(layers.get(0), true);
+      }
+      void newLayer;
+    }
+    setImagery(gsiOption.id);
+    imagerySelect.addEventListener('change', (e) => setImagery(e.target.value));
+
     // Once /tiles/sources.json arrives, prepend each configured source as
     // an imagery option and switch to the first one.
     fetch('/tiles/sources.json')
@@ -119,23 +149,10 @@
         }));
         if (tilesOptions.length === 0) return;
         options.splice(0, 0, ...tilesOptions);
-        rebuildImagerySelect();
-        setImagery(tilesOptions[0].id);
+        const firstId = tilesOptions[0].id;
+        rebuildImagerySelect(firstId);
+        setImagery(firstId);
       });
-
-    function setImagery(id) {
-      const opt = options.find((o) => o.id === id) || options[0];
-      const layers = viewer.imageryLayers;
-      // Replace the bottom layer with the new provider.
-      while (layers.length > 0) {
-        layers.remove(layers.get(0), true);
-      }
-      const layer = Cesium.ImageryLayer.fromProviderAsync(
-        Promise.resolve(opt.build()),
-      );
-      layers.add(layer);
-    }
-    imagerySelect.addEventListener('change', (e) => setImagery(e.target.value));
 
     // ── Terrain ────────────────────────────────────────────────────────
     async function setTerrain(geoid) {

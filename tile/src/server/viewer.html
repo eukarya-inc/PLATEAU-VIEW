@@ -257,13 +257,24 @@
             return sourcesPromise;
         }
 
-        // Populate source dropdown.
+        // Populate source dropdown. After the list arrives, auto-select the
+        // first source and render its tiles — otherwise the map sits on the
+        // GSI base with nothing on top until the user picks something.
         loadSources().then((data) => {
-            for (const src of data.sources || []) {
+            const list = data.sources || [];
+            for (const src of list) {
                 const option = document.createElement('option');
                 option.value = src.name;
                 option.textContent = src.name;
                 sourceSelect.appendChild(option);
+            }
+            if (list.length > 0) {
+                sourceSelect.value = list[0].name;
+                if (map.loaded()) {
+                    updateSource();
+                } else {
+                    map.once('load', updateSource);
+                }
             }
         });
 
@@ -321,13 +332,16 @@
                 attribution: `${sourceName} (${format.toUpperCase()})`
             });
 
+            // Insert below the inspector overlay if it's currently shown,
+            // otherwise just append on top.
+            const beforeId = map.getLayer('inspector-fill') ? 'inspector-fill' : undefined;
             map.addLayer({
                 id: 'tiles',
                 type: 'raster',
                 source: 'tiles',
                 minzoom: 0,
                 maxzoom: 22
-            });
+            }, beforeId);
         }
 
         // Modal functions
@@ -591,12 +605,6 @@
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) closeModal();
         });
-
-        // Load first source
-        if (sources.length > 0) {
-            sourceSelect.value = sources[0];
-            map.on('load', updateSource);
-        }
     </script>
 </body>
 </html>
