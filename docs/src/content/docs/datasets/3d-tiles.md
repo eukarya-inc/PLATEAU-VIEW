@@ -76,7 +76,7 @@ PLATEAU-3DTiles / MVT の配信サービスを利用することで、独自に�
 
     // 東京都千代田区の建築物モデル（3D Tiles）
     Cesium.Cesium3DTileset.fromUrl(
-      'https://assets.cms.plateau.reearth.io/assets/0e/e5948a-e95c-4e31-be85-1f8c066ed996/13101_chiyoda-ku_pref_2023_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json'
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13101-bldg-lod2-2025/tileset.json'
     ).then((tileset) => {
       viewer.scene.primitives.add(tileset);
     });
@@ -121,13 +121,71 @@ Project PLATEAU が [G空間情報センター](https://www.geospatial.jp/ckan/d
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets
 ```
 
-主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles のみ。後述の複合 tileset.json への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+
+レスポンスにはさらに `composite_tilesets` 配列が含まれます。これは全国（`all-...`）と都道府県別（`13-...` など）の複合 tileset.json を実データから派生して列挙したリストで、CesiumJS で広域をまとめて表示したい場合の入口として利用できます。
 
 :::caution
 レスポンスサイズは約 2 MB 以上あります。API は gzip 圧縮に対応しているものの、モバイル回線では十分ご注意ください。手早くデータを探したいだけなら [データセット一覧](/datasets/explorer/) ページがおすすめです。
 :::
 
-### 4.2. GraphQL API
+### 4.2. 複合 tileset.json（複数都市の 3D Tiles を 1 つの URL でまとめて取得）
+
+複数の都市の 3D Tiles を CesiumJS で表示したい場合、各都市の `tileset.json` を個別に追加する代わりに、**複合 tileset.json API** を利用すると 1 つの URL で対象都市の 3D Tiles を一度に表示できます。これは [3D Tiles 仕様の external tileset 参照](https://github.com/CesiumGS/3d-tiles/tree/main/specification#external-tilesets) を使い、子タイルの `content.uri` で各都市の `tileset.json` を間接的に指す `tileset.json` を動的生成する仕組みです。
+
+```
+GET /datacatalog/3dtiles/{spec}/tileset.json
+```
+
+例:
+
+```
+https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tileset.json
+```
+
+#### `{spec}` の書式
+
+```
+<area>-<type>-<lod>[-<texture>]-<year>
+```
+
+| セグメント | 値 | 意味 |
+| --- | --- | --- |
+| `area` | `all` | 全国 |
+| | 2 桁数字 | 都道府県コード（例: `13` = 東京都） |
+| | 5 桁数字 | 市区町村コード（区がある場合は区コード、無ければ市コード） |
+| `type` | `bldg` / `tran` / `dem` など | データセットの種別コード |
+| `lod` | `lod<N>` | LOD が `<N>` と完全一致するデータのみ |
+| | `maxlod<N>` | LOD が `<N>` 以下で、各エリアごとに利用可能な最高 LOD を採用 |
+| `texture` | （省略） | テクスチャありを優先、無ければテクスチャなしを採用 |
+| | `texture` | テクスチャありのデータのみ |
+| | `notexture` | テクスチャなしのデータのみ |
+| `year` | 4 桁の西暦 | データの整備年度 |
+
+例:
+
+| URL | 意味 |
+| --- | --- |
+| `all-bldg-lod1-2025` | 全国の建築物モデル LOD1（2025年度整備） |
+| `all-bldg-maxlod2-2025` | 全国の建築物モデル、各都市で LOD2 まで取れるなら LOD2、無ければ LOD1 |
+| `13-bldg-lod2-texture-2025` | 東京都の建築物モデル LOD2、テクスチャあり限定 |
+| `13101-bldg-lod2-2025` | 千代田区の建築物モデル LOD2 |
+
+#### CesiumJS での利用例
+
+```javascript
+const tileset = await Cesium.Cesium3DTileset.fromUrl(
+  "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tileset.json",
+);
+viewer.scene.primitives.add(tileset);
+```
+
+:::caution
+- 子の `tileset.json` 自体は別ホスト（PLATEAU CMS）から配信されます。CesiumJS は自動でクロスオリジン取得を行いますが、ネットワーク環境によってはまとめて読み込む際に時間がかかる場合があります。
+- API は試験運用中であり、URL の書式やレスポンスは予告なく変更されることがあります。
+:::
+
+### 4.3. GraphQL API
 
 [GraphQL](https://graphql.org/) API では、必要な型・フィールドだけを 1 リクエストで取得できます。エンドポイント:
 
