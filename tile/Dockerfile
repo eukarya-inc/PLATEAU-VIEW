@@ -9,6 +9,7 @@ WORKDIR /app
 # Install Rust and build dependencies for maplibre-native
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
     build-essential \
     pkg-config \
     libssl-dev \
