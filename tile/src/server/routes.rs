@@ -66,6 +66,14 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
             "/terrarium/{z}/{x}/{y_ext}",
             get(terrain_handlers::terrarium_tile),
         )
+        .route(
+            "/mapbox/tilejson.json",
+            get(terrain_handlers::mapbox_tilejson),
+        )
+        .route(
+            "/mapbox/{z}/{x}/{y_ext}",
+            get(terrain_handlers::mapbox_tile),
+        )
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))
         .layer(create_cors_layer(cors_origins))

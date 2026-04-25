@@ -13,6 +13,7 @@ pub mod ellipsoid;
 pub mod geodetic;
 pub mod geoid;
 pub mod layer_json;
+pub mod mapbox;
 pub mod mapterhorn;
 pub mod martini;
 pub mod mesh_gen;

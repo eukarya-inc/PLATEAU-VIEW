@@ -33,6 +33,7 @@ use tokio::sync::OnceCell;
 use url::Url;
 
 use super::dem::{DemError, DemProvider, DemTile};
+use super::mapbox::mapbox_rgb_to_elevation;
 use super::terrarium::rgb_to_elevation;
 
 /// Encoding used by the PMTiles archive's tile payloads.
@@ -42,6 +43,8 @@ pub enum PmtilesEncoding {
     /// Terrarium (Mapterhorn / AWS-style): `h = (R*256 + G + B/256) - 32768`.
     #[default]
     Terrarium,
+    /// Mapbox Terrain-RGB v1: `h = -10000 + ((R*65536 + G*256 + B) * 0.1)`.
+    Mapbox,
 }
 
 pub struct PmtilesSource {
@@ -149,9 +152,12 @@ impl DemProvider for PmtilesSource {
         let (src_w, src_h) = img.dimensions();
         let rgba = img.to_rgba8();
 
-        let decode = match self.encoding {
+        let decode: fn(u8, u8, u8) -> f64 = match self.encoding {
             PmtilesEncoding::Terrarium => {
-                |r: u8, g: u8, b: u8| -> f64 { rgb_to_elevation(image::Rgb([r, g, b])) }
+                |r: u8, g: u8, b: u8| rgb_to_elevation(image::Rgb([r, g, b]))
+            }
+            PmtilesEncoding::Mapbox => {
+                |r: u8, g: u8, b: u8| mapbox_rgb_to_elevation(image::Rgb([r, g, b]))
             }
         };
 

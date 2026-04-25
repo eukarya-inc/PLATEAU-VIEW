@@ -29,10 +29,41 @@ use crate::terrain::{
         CESIUM_TILE_SIZE, GeodeticBounds, fetch_geodetic_tile_elevations, geodetic_tms_bounds,
     },
     layer_json::TileAvailability,
+    mapbox::encode_mapbox,
     mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
     quantized_mesh::TileBounds as QmBounds,
     terrarium::encode_terrarium,
 };
+
+/// Output encoding for the elevation raster endpoints.
+#[derive(Debug, Clone, Copy)]
+enum RasterEncoding {
+    Terrarium,
+    Mapbox,
+}
+
+impl RasterEncoding {
+    fn slug(self) -> &'static str {
+        match self {
+            Self::Terrarium => "terrarium",
+            Self::Mapbox => "mapbox",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Terrarium => "terrarium-ellipsoid",
+            Self::Mapbox => "mapbox-terrain-rgb-ellipsoid",
+        }
+    }
+
+    fn encode(self, elevations: &[f64], width: u32, height: u32) -> image::RgbImage {
+        match self {
+            Self::Terrarium => encode_terrarium(elevations, width, height),
+            Self::Mapbox => encode_mapbox(elevations, width, height),
+        }
+    }
+}
 
 /// Approximate bounds of the Japan geoid coverage, used for `layer.json`
 /// availability. GSIGEO2011 and JPGEO2024 both cover Japan including
@@ -361,10 +392,30 @@ pub async fn terrain_tile(
 
 /// GET /terrarium/{z}/{x}/{y}.{png|webp|avif}
 pub async fn terrarium_tile(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    path: Path<(u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tile(state, headers, path, query, RasterEncoding::Terrarium).await
+}
+
+/// GET /mapbox/{z}/{x}/{y}.{png|webp|avif}
+pub async fn mapbox_tile(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    path: Path<(u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tile(state, headers, path, query, RasterEncoding::Mapbox).await
+}
+
+async fn raster_tile(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
     Query(q): Query<GeoidQuery>,
+    encoding: RasterEncoding,
 ) -> Response {
     let terrain = state.terrain.clone();
 
@@ -417,7 +468,7 @@ pub async fn terrarium_tile(
         format!("geoid:{}", geoid_model.slug()),
         format!("size:{}", terrain.tile_size),
     ];
-    let etag = compute_etag(&etag_keys, "terrarium", format, z as u32, x, y);
+    let etag = compute_etag(&etag_keys, encoding.slug(), format, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
 
     if etag_matches(&headers, &etag) {
@@ -425,7 +476,7 @@ pub async fn terrarium_tile(
     }
 
     let cache_key = TerrainCacheKey {
-        prefix: "terrarium",
+        prefix: encoding.slug(),
         dem_slug: terrain.dem.slug(),
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
@@ -461,7 +512,7 @@ pub async fn terrarium_tile(
 
                 // Upsample 65×65 ellipsoid grid to tile_size × tile_size.
                 let upsampled = upsample_grid(&elevations, CESIUM_TILE_SIZE, tile_size);
-                let img_rgb = encode_terrarium(&upsampled, tile_size, tile_size);
+                let img_rgb = encoding.encode(&upsampled, tile_size, tile_size);
                 let img_rgba = rgb_to_rgba(&img_rgb);
                 encode_image(&img_rgba, format)
                     .map_err(|e| crate::tile::TileError::ImageError(e.to_string()))
@@ -472,10 +523,10 @@ pub async fn terrarium_tile(
     match result {
         Ok(bytes) => tile_response(bytes, format, Some(&etag), state.cache_control.as_deref()),
         Err(e) => {
-            tracing::error!("terrarium generate failed: {e}");
+            tracing::error!(encoding = encoding.slug(), "raster generate failed: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "terrarium generation failed",
+                "raster generation failed",
             )
                 .into_response()
         }
@@ -484,9 +535,27 @@ pub async fn terrarium_tile(
 
 /// GET /terrarium/tilejson.json
 pub async fn terrarium_tilejson(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tilejson(state, headers, query, RasterEncoding::Terrarium).await
+}
+
+/// GET /mapbox/tilejson.json
+pub async fn mapbox_tilejson(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tilejson(state, headers, query, RasterEncoding::Mapbox).await
+}
+
+async fn raster_tilejson(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(q): Query<GeoidQuery>,
+    encoding: RasterEncoding,
 ) -> Response {
     let terrain = state.terrain.clone();
     let geoid_model = match resolve_geoid(&terrain, &q) {
@@ -507,8 +576,9 @@ pub async fn terrarium_tilejson(
         "https"
     };
     let tile_url = format!(
-        "{scheme}://{host}/terrarium/{{z}}/{{x}}/{{y}}.{fmt}?geoid={}",
-        geoid_model.slug()
+        "{scheme}://{host}/{slug}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
+        slug = encoding.slug(),
+        geoid = geoid_model.slug(),
     );
 
     #[derive(Serialize)]
@@ -525,7 +595,7 @@ pub async fn terrarium_tilejson(
     Json(TileJson {
         tilejson: "3.0.0",
         tiles: vec![tile_url],
-        name: "terrarium-ellipsoid",
+        name: encoding.name(),
         attribution:
             r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#,
         scheme: "xyz",

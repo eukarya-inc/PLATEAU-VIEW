@@ -158,6 +158,8 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 | GET | `/terrain/:z/:x/:y.terrain` | Quantized-mesh-1.0 tile (gzipped, octvertexnormals). Same `?geoid=` query |
 | GET | `/terrarium/tilejson.json` | TileJSON for the Terrarium raster output. Query: `?geoid=...&format=png\|webp\|avif` |
 | GET | `/terrarium/:z/:x/:y.{format}` | Terrarium raster of **ellipsoidal** heights (orthometric DEM + geoid offset) |
+| GET | `/mapbox/tilejson.json` | TileJSON for the Mapbox Terrain-RGB v1 raster output |
+| GET | `/mapbox/:z/:x/:y.{format}` | Mapbox Terrain-RGB v1 raster of ellipsoidal heights |
 | GET | `/terrain-viewer` | Embedded Cesium preview of the terrain output |
 | GET | `/health` | Health check |
 | POST | `/reload` | Reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set) |
