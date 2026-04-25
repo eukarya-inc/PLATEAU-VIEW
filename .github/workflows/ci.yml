@@ -18,6 +18,10 @@ on:
           - tools
           - worker
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
