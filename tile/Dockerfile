@@ -7,7 +7,14 @@ FROM ubuntu:24.04 AS builder
 WORKDIR /app
 
 # Install Rust and build dependencies for maplibre-native
-RUN apt-get update && apt-get install -y \
+# Note: maplibre_native's build.rs uses `git clone --revision` (requires Git 2.49+),
+# but Ubuntu 24.04 ships Git 2.43. Install a newer Git from the git-core PPA.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    gnupg \
+    software-properties-common \
+    && add-apt-repository -y ppa:git-core/ppa \
+    && apt-get update && apt-get install -y \
     curl \
     git \
     build-essential \
