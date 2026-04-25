@@ -23,6 +23,7 @@ pub mod pmtiles;
 pub mod quantized_mesh;
 pub mod settings;
 pub mod terrarium;
+pub mod webmercator;
 pub mod xyz_dem;
 
 pub use cog_dem::CogDemSource;

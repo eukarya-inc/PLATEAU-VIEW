@@ -83,7 +83,7 @@ Available layer types in config JSON:
 
 ## Terrain
 
-`/terrain/` (quantized-mesh-1.0) and `/terrarium/` endpoints are built-in. DEM defaults to Mapterhorn (512 px Terrarium WebP) and is composed with a `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv) to produce **ellipsoidal heights**. Tiles outside the configured geoid coverage respond 404. Default geoid is `gsigeo2011`, overridable per-request via `?geoid=...`.
+`/terrain/` (quantized-mesh-1.0, **TMS Geodetic** for Cesium), plus `/terrarium/` (Mapzen Terrarium) and `/mapbox/` (Mapbox Terrain-RGB) endpoints are built-in. The two raster endpoints serve **Web Mercator XYZ** tiles per their respective specs — same projection as a normal MapLibre/Mapbox raster source. DEM defaults to Mapterhorn (512 px Terrarium WebP) and is composed with a `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv) to produce **ellipsoidal heights**. Tiles outside the configured geoid coverage respond 404. Default geoid is `gsigeo2011`, overridable per-request via `?geoid=...`.
 
 Configured via env vars (the config JSON only describes `/tiles/...` overlay sources):
 - `DEM_URL` — base DEM URL. `*.pmtiles` selects the PMTiles backend; supports `https://`, `gs://`, `s3://`, `r2://`, `file://`. Anything else is read as a Mapterhorn-style `{z}/{x}/{y}` template.

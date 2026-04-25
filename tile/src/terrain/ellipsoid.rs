@@ -7,6 +7,7 @@
 
 use super::geodetic::{CESIUM_TILE_SIZE, GeodeticBounds};
 use super::geoid::Geoid;
+use super::webmercator::{xyz_pixel_lat, xyz_pixel_lon};
 
 /// Apply the geoid to an orthometric elevation grid (in-place), producing
 /// ellipsoidal heights.
@@ -24,6 +25,44 @@ pub fn apply_geoid_to_grid(bounds: &GeodeticBounds, grid: &mut [f64], geoid: &Ge
             let t_x = dst_x as f64 / (n - 1) as f64;
             let lng = bounds.west + t_x * (bounds.east - bounds.west);
             let idx = dst_y * n + dst_x;
+            let ortho = grid[idx];
+            if ortho.is_nan() {
+                continue;
+            }
+            grid[idx] = ortho + geoid.height_or_zero(lng, lat);
+        }
+    }
+}
+
+/// Apply the geoid to an orthometric elevation grid (in-place) for a
+/// `tile_size × tile_size` Web Mercator XYZ tile, producing ellipsoidal
+/// heights.
+///
+/// The grid is row-major with row 0 at the tile's north edge and column 0 at
+/// the west edge (matching the layout returned by `DemProvider`). Latitude is
+/// mercator-Y uniform (not lat uniform), so we recompute lat per row.
+/// NaN elevations are preserved; out-of-coverage geoid samples fall back to 0.
+pub fn apply_geoid_to_xyz_grid(
+    z: u8,
+    x: u32,
+    y: u32,
+    tile_size: u32,
+    grid: &mut [f64],
+    geoid: &Geoid,
+) {
+    let n = tile_size as usize;
+    debug_assert_eq!(grid.len(), n * n);
+
+    // Pre-compute per-column longitudes (lon is column-linear).
+    let lons: Vec<f64> = (0..tile_size)
+        .map(|px| xyz_pixel_lon(z, x, tile_size, px))
+        .collect();
+
+    for py in 0..tile_size {
+        let lat = xyz_pixel_lat(z, y, tile_size, py);
+        let row_off = (py as usize) * n;
+        for (px, &lng) in lons.iter().enumerate() {
+            let idx = row_off + px;
             let ortho = grid[idx];
             if ortho.is_nan() {
                 continue;
@@ -53,6 +92,26 @@ mod tests {
         // All pixels should have been shifted by a finite positive geoid offset
         // (Japan's geoid height is roughly 30-40m).
         assert!(grid.iter().all(|&h| h > 120.0 && h < 160.0));
+    }
+
+    #[test]
+    fn xyz_grid_applies_geoid_over_tokyo() {
+        // Tokyo z=10 tile (≈139.7E, 35.7N).
+        let size = 32u32;
+        let mut grid = vec![100.0f64; (size * size) as usize];
+        let geoid = Geoid::load(GeoidModel::Gsigeo2011);
+        apply_geoid_to_xyz_grid(10, 909, 403, size, &mut grid, &geoid);
+        assert!(grid.iter().all(|&h| h > 120.0 && h < 160.0));
+    }
+
+    #[test]
+    fn xyz_grid_out_of_coverage_keeps_orthometric() {
+        // Mid-Pacific: well outside GSIGEO2011 coverage.
+        let size = 8u32;
+        let mut grid = vec![42.0f64; (size * size) as usize];
+        let geoid = Geoid::load(GeoidModel::Gsigeo2011);
+        apply_geoid_to_xyz_grid(4, 2, 7, size, &mut grid, &geoid);
+        assert!(grid.iter().all(|&h| (h - 42.0).abs() < 1e-9));
     }
 
     #[test]

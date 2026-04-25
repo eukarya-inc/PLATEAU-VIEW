@@ -1,9 +1,14 @@
-//! Terrain (quantized-mesh-1.0) and Terrarium raster HTTP handlers.
+//! Terrain (quantized-mesh-1.0) and raster DEM HTTP handlers.
 //!
 //! - `GET /terrain/layer.json[?geoid=...]`
 //! - `GET /terrain/{z}/{x}/{y}.terrain[?geoid=...]` — gzipped quantized-mesh-1.0
-//! - `GET /terrarium/{z}/{x}/{y}.{png|webp|avif}[?geoid=...]` — ellipsoid-height terrarium
+//!   (Cesium **TMS Geodetic** addressing).
+//! - `GET /terrarium/{z}/{x}/{y}.{png|webp|avif}[?geoid=...]` — ellipsoid-height
+//!   Mapzen Terrarium tiles in **Web Mercator XYZ**.
 //! - `GET /terrarium/tilejson.json[?geoid=...&format=...]`
+//! - `GET /mapbox/{z}/{x}/{y}.{png|webp|avif}[?geoid=...]` — ellipsoid-height
+//!   Mapbox Terrain-RGB tiles in **Web Mercator XYZ**.
+//! - `GET /mapbox/tilejson.json[?geoid=...&format=...]`
 //!
 //! Heights are served as ellipsoidal (orthometric Mapterhorn + japan-geoid offset).
 //! Tiles entirely outside the geoid's coverage area respond 404.
@@ -24,15 +29,14 @@ use super::state::AppState;
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
     DemProvider, Geoid, GeoidModel,
-    ellipsoid::apply_geoid_to_grid,
-    geodetic::{
-        CESIUM_TILE_SIZE, GeodeticBounds, fetch_geodetic_tile_elevations, geodetic_tms_bounds,
-    },
+    ellipsoid::{apply_geoid_to_grid, apply_geoid_to_xyz_grid},
+    geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations, geodetic_tms_bounds},
     layer_json::TileAvailability,
     mapbox::encode_mapbox,
     mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
     quantized_mesh::TileBounds as QmBounds,
     terrarium::encode_terrarium,
+    webmercator::xyz_tile_bounds,
 };
 
 /// Output encoding for the elevation raster endpoints.
@@ -47,6 +51,16 @@ impl RasterEncoding {
         match self {
             Self::Terrarium => "terrarium",
             Self::Mapbox => "mapbox",
+        }
+    }
+
+    /// Internal cache/etag prefix. Includes the `-xyz` suffix to invalidate
+    /// any caches written by the previous TMS-Geodetic implementation, which
+    /// shared numeric `(z,x,y)` coordinates with the new XYZ scheme.
+    fn cache_prefix(self) -> &'static str {
+        match self {
+            Self::Terrarium => "terrarium-xyz",
+            Self::Mapbox => "mapbox-xyz",
         }
     }
 
@@ -466,24 +480,26 @@ async fn raster_tile(
     };
     let geoid = Geoid::load(geoid_model);
 
-    let bounds = geodetic_tms_bounds(z, x, y);
+    // Web Mercator XYZ tile bounds for coverage check.
+    let bounds = xyz_tile_bounds(z, x, y);
     if !geoid.bounds_have_any_coverage(bounds.west, bounds.south, bounds.east, bounds.north) {
         return (StatusCode::NOT_FOUND, "Out of geoid coverage").into_response();
     }
 
+    // Fetch DEM at the requested XYZ tile directly — no reprojection.
+    let tile_size = terrain.tile_size;
     let dem_zoom = z.min(terrain.dem.max_zoom());
-    let fetch = match fetch_geodetic_tile_elevations(
-        terrain.dem.as_ref(),
-        dem_zoom,
-        x,
-        y,
-        terrain.dem.native_tile_size(),
-    )
-    .await
+    let dem_tile = match terrain
+        .dem
+        .get_tile_elevations(dem_zoom, x, y, tile_size)
+        .await
     {
-        Ok(r) => r,
+        Ok(t) => t,
         Err(crate::terrain::DemError::NotFound) => {
             return (StatusCode::NOT_FOUND, "DEM tile not found").into_response();
+        }
+        Err(crate::terrain::DemError::OutOfRange) => {
+            return (StatusCode::NOT_FOUND, "DEM zoom out of range").into_response();
         }
         Err(e) => {
             tracing::error!(error=%e, "DEM fetch failed");
@@ -491,14 +507,16 @@ async fn raster_tile(
         }
     };
 
-    let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
+    let source_etag = dem_tile.etag.unwrap_or_default();
+    let upstream_etag_digest = digest(&source_etag);
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
         format!("dem-etag:{}", upstream_etag_digest),
         format!("geoid:{}", geoid_model.slug()),
-        format!("size:{}", terrain.tile_size),
+        format!("size:{}", tile_size),
+        format!("proj:webmercator"),
     ];
-    let etag = compute_etag(&etag_keys, encoding.slug(), format, z as u32, x, y);
+    let etag = compute_etag(&etag_keys, encoding.cache_prefix(), format, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
 
     if etag_matches(&headers, &etag) {
@@ -506,7 +524,7 @@ async fn raster_tile(
     }
 
     let cache_key = TerrainCacheKey {
-        prefix: encoding.slug(),
+        prefix: encoding.cache_prefix(),
         dem_slug: terrain.dem.slug(),
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
@@ -515,7 +533,7 @@ async fn raster_tile(
         x,
         y,
         ext: format.extension(),
-        size: Some(terrain.tile_size),
+        size: Some(tile_size),
     }
     .to_key();
 
@@ -525,9 +543,7 @@ async fn raster_tile(
         etag: Some(etag.clone()),
     };
 
-    let tile_size = terrain.tile_size;
-    let mut elevations = fetch.elevations;
-    let bounds_copy = bounds;
+    let mut elevations = dem_tile.elevations;
     let geoid_for_gen = geoid_model;
 
     let result = state
@@ -538,11 +554,9 @@ async fn raster_tile(
             Some(meta),
             move || async move {
                 let g = Geoid::load(geoid_for_gen);
-                apply_geoid_to_grid(&bounds_copy, &mut elevations, &g);
+                apply_geoid_to_xyz_grid(z, x, y, tile_size, &mut elevations, &g);
 
-                // Upsample 65×65 ellipsoid grid to tile_size × tile_size.
-                let upsampled = upsample_grid(&elevations, CESIUM_TILE_SIZE, tile_size);
-                let img_rgb = encoding.encode(&upsampled, tile_size, tile_size);
+                let img_rgb = encoding.encode(&elevations, tile_size, tile_size);
                 let img_rgba = rgb_to_rgba(&img_rgb);
                 encode_image(&img_rgba, format)
                     .map_err(|e| crate::tile::TileError::ImageError(e.to_string()))
@@ -634,35 +648,6 @@ fn rgb_to_rgba(img: &image::RgbImage) -> image::RgbaImage {
     let mut out = image::RgbaImage::new(w, h);
     for (x, y, p) in img.enumerate_pixels() {
         out.put_pixel(x, y, image::Rgba([p.0[0], p.0[1], p.0[2], 255]));
-    }
-    out
-}
-
-fn upsample_grid(src: &[f64], src_n: u32, dst_n: u32) -> Vec<f64> {
-    if src_n == dst_n {
-        return src.to_vec();
-    }
-    let src_n_i = src_n as usize;
-    let mut out = Vec::with_capacity((dst_n * dst_n) as usize);
-    for dy in 0..dst_n {
-        for dx in 0..dst_n {
-            let sx = dx as f64 * (src_n - 1) as f64 / (dst_n - 1).max(1) as f64;
-            let sy = dy as f64 * (src_n - 1) as f64 / (dst_n - 1).max(1) as f64;
-            let x0 = sx.floor() as usize;
-            let y0 = sy.floor() as usize;
-            let x1 = (x0 + 1).min(src_n_i - 1);
-            let y1 = (y0 + 1).min(src_n_i - 1);
-            let fx = sx - x0 as f64;
-            let fy = sy - y0 as f64;
-            let get = |x: usize, y: usize| -> f64 { src[y * src_n_i + x] };
-            let v00 = get(x0, y0);
-            let v10 = get(x1, y0);
-            let v01 = get(x0, y1);
-            let v11 = get(x1, y1);
-            let v0 = v00 * (1.0 - fx) + v10 * fx;
-            let v1 = v01 * (1.0 - fx) + v11 * fx;
-            out.push(v0 * (1.0 - fy) + v1 * fy);
-        }
     }
     out
 }

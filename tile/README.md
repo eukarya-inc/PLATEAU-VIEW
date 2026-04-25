@@ -16,11 +16,11 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Smart ETag**: Per-tile ETag calculation based on covering layers with If-None-Match support for 304 responses
 - **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
 - **Multi-Format Output**: Support for PNG, WebP, and AVIF image formats
-- **Terrain**: Cesium quantized-mesh-1.0 and Terrarium raster tiles, generated from a Mapterhorn DEM and a selectable `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). Heights are **ellipsoidal** (orthometric + geoid). Tiles fully outside the geoid coverage respond 404.
+- **Terrain**: Cesium quantized-mesh-1.0 (TMS Geodetic) plus Mapzen Terrarium and Mapbox Terrain-RGB raster tiles (Web Mercator XYZ), generated from a Mapterhorn DEM and a selectable `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). Heights are **ellipsoidal** (orthometric + geoid). Tiles fully outside the geoid coverage respond 404.
 
 ## Terrain
 
-The server generates Cesium quantized-mesh-1.0 (`/terrain/`) and Terrarium raster tiles (`/terrarium/`) on the fly from a DEM source plus a geoid model. The output is in **ellipsoidal heights**, ready to drop into Cesium without a vertical-datum mismatch against 3D Tiles or geocoded data.
+The server generates Cesium quantized-mesh-1.0 (`/terrain/`, **TMS Geodetic** addressing as Cesium expects) plus Mapzen Terrarium (`/terrarium/`) and Mapbox Terrain-RGB v1 (`/mapbox/`) raster tiles on the fly from a DEM source plus a geoid model. The two raster endpoints serve **Web Mercator XYZ** tiles — same projection as a normal MapLibre/Mapbox raster source. The output is in **ellipsoidal heights**, ready to drop into Cesium (or any MapLibre style that consumes Mapbox/Terrarium DEM) without a vertical-datum mismatch against 3D Tiles or geocoded data.
 
 ### Why Mapterhorn for the DEM
 
