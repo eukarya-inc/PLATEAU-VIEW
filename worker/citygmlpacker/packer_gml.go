@@ -67,7 +67,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 
 	deps := depsMapToSlice(depsMap, pctx.seen, u)
 
-	log.Infof("%d deps detected from %s", ustr, len(deps), ustr)
+	log.Infof("%d deps detected from %s", len(deps), ustr)
 
 	p.p.AddDep(int64(len(deps)))
 	defer p.p.DepEnd()

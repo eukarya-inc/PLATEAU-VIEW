@@ -19,7 +19,7 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-const defaultTimeout = 15 * time.Minute
+const defaultTimeout = 1 * time.Hour
 
 func Run(conf Config) (err error) {
 	if conf.Timeout <= 0 {
