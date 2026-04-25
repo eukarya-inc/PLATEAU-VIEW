@@ -118,6 +118,17 @@ func (m *Merger) Datasets(ctx context.Context, input *DatasetsInput) ([]Dataset,
 	return mergeResults(datasets, false), nil
 }
 
+func (m *Merger) CitygmlDatasets(ctx context.Context, input *CityGMLDatasetsInput) ([]*CityGMLDataset, error) {
+	res, err := getFlattenRepoResults(m.repos, func(r Repo) ([]*CityGMLDataset, error) {
+		return r.CitygmlDatasets(ctx, input)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return mergeResults(res, false), nil
+}
+
 func (m *Merger) PlateauSpecs(ctx context.Context) ([]*PlateauSpec, error) {
 	res, err := getFlattenRepoResults(m.repos, func(r Repo) ([]*PlateauSpec, error) {
 		return r.PlateauSpecs(ctx)

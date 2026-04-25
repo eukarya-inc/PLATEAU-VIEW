@@ -77,7 +77,7 @@ paths:
       summary: データカタログ シンプルAPI
       tags:
         - Data Catalog API
-      description: 3D Tiles/MVT のデータセット一覧がJSON形式で返却されます。
+      description: 3D Tiles/MVT のデータセット一覧、複合 tileset.json のリスト、および CityGML データセット一覧がJSON形式で返却されます。
       responses:
         "200":
           description: 成功時のレスポンス
@@ -252,9 +252,70 @@ paths:
                         - type_en
                         - lod
                         - year
+                  citygml:
+                    type: array
+                    description: |
+                      自治体ごとの CityGML データセットのリストです。
+                      地物型ごとには分かれず、各自治体の全地物型を 1 つの zip ファイルにまとめた形で、自治体ごとに 1 件返却されます。
+                    items:
+                      type: object
+                      description: 自治体ごとの全地物型をまとめた CityGML データセットを表すオブジェクト。
+                      properties:
+                        id:
+                          type: string
+                          description: データセットのID（市区町村コードと一致）
+                        pref:
+                          type: string
+                          description: 都道府県名
+                        pref_code:
+                          type: string
+                          description: 2桁の都道府県コード
+                        city:
+                          type: string
+                          description: 市区町村名
+                        city_code:
+                          type: string
+                          description: 5桁の市区町村コード
+                        url:
+                          type: string
+                          format: uri
+                          description: |
+                            CityGML の zip ファイルの URL。地物型ごとには分かれず、各自治体の全地物型を 1 つにまとめた zip ファイルです。
+                        feature_types:
+                          type: array
+                          description: |
+                            この CityGML が含む地物型コードのリスト。
+                            例: `["bldg", "tran", "dem"]`
+                          items:
+                            type: string
+                        year:
+                          type: integer
+                          description: データが整備された年度（西暦）。
+                          example: 2024
+                        registration_year:
+                          type: integer
+                          description: データがPLATEAU VIEWに登録された年度（西暦）。
+                          example: 2024
+                        spec:
+                          type: string
+                          description: |
+                            原典となる CityGML データが準拠する PLATEAU 3D 都市モデル標準製品仕様書のバージョン（文字列）。
+                          example: "4.1"
+                      required:
+                        - id
+                        - pref
+                        - pref_code
+                        - city
+                        - city_code
+                        - url
+                        - feature_types
+                        - year
+                        - registration_year
+                        - spec
                 required:
                   - datasets
                   - composite_tilesets
+                  - citygml
 
   /datacatalog/3dtiles/{spec}/tileset.json:
     get:

@@ -14,6 +14,22 @@ import (
 type SimpleDatasetsResponse struct {
 	Datasets          []*SimpleDatasetsResponseDataset `json:"datasets"`
 	CompositeTilesets []*SimpleCompositeTileset        `json:"composite_tilesets"`
+	CityGML           []*SimpleCityGMLDataset          `json:"citygml"`
+}
+
+// SimpleCityGMLDataset describes a per-city CityGML merged.zip dataset
+// derived from the G-Spatial Information Center dataset model.
+type SimpleCityGMLDataset struct {
+	ID               string   `json:"id"`
+	Pref             string   `json:"pref"`
+	PrefCode         string   `json:"pref_code"`
+	City             string   `json:"city"`
+	CityCode         string   `json:"city_code"`
+	URL              string   `json:"url"`
+	FeatureTypes     []string `json:"feature_types"`
+	Year             int      `json:"year"`
+	RegistrationYear int      `json:"registration_year"`
+	Spec             string   `json:"spec"`
 }
 
 type SimpleDatasetsResponseDataset struct {
@@ -179,6 +195,78 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 	}
 
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
+
+	citygml, err := fetchSimpleCityGMLDatasets(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	res.CityGML = citygml
+
+	return res, nil
+}
+
+func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo) ([]*SimpleCityGMLDataset, error) {
+	ds, err := r.CitygmlDatasets(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch citygml datasets: %w", err)
+	}
+
+	res := make([]*SimpleCityGMLDataset, 0, len(ds))
+	for _, d := range ds {
+		if d == nil || d.URL == "" {
+			continue
+		}
+
+		var prefName, prefCode string
+		{
+			node, err := r.Node(ctx, d.PrefectureID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch prefecture: %w", err)
+			}
+			if pref, _ := node.(*plateauapi.Prefecture); pref != nil {
+				prefName = pref.GetName()
+				prefCode = pref.GetCode().String()
+			}
+		}
+
+		var cityName, cityCode string
+		{
+			node, err := r.Node(ctx, d.CityID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch city: %w", err)
+			}
+			if city, _ := node.(*plateauapi.City); city != nil {
+				cityName = city.GetName()
+				cityCode = city.GetCode().String()
+			}
+		}
+
+		var spec string
+		{
+			node, err := r.Node(ctx, d.PlateauSpecMinorID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch spec: %w", err)
+			}
+			if sp, _ := node.(*plateauapi.PlateauSpecMinor); sp != nil {
+				spec = sp.Version
+			}
+		}
+
+		res = append(res, &SimpleCityGMLDataset{
+			ID:               strings.TrimPrefix(string(d.ID), "cg_"),
+			Pref:             prefName,
+			PrefCode:         prefCode,
+			City:             cityName,
+			CityCode:         cityCode,
+			URL:              d.URL,
+			FeatureTypes:     append([]string(nil), d.FeatureTypes...),
+			Year:             d.Year,
+			RegistrationYear: d.RegistrationYear,
+			Spec:             spec,
+		})
+	}
+
+	sort.Slice(res, func(i, j int) bool { return res[i].ID < res[j].ID })
 	return res, nil
 }
 

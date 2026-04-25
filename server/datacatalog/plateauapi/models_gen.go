@@ -270,6 +270,16 @@ func (CityGMLDataset) IsNode() {}
 // オブジェクトのID
 func (this CityGMLDataset) GetID() ID { return this.ID }
 
+// CityGMLデータセットを検索するためのクエリ。
+type CityGMLDatasetsInput struct {
+	// データセットの都道府県コード。複数指定するとOR条件で検索を行います。
+	PrefectureCodes []AreaCode `json:"prefectureCodes,omitempty"`
+	// データセットの市区町村コード。複数指定するとOR条件で検索を行います。
+	CityCodes []AreaCode `json:"cityCodes,omitempty"`
+	// データの整備年度（西暦）。複数指定するとOR条件で検索を行います。
+	Years []int `json:"years,omitempty"`
+}
+
 // データセットの種類を検索するためのクエリ。
 type DatasetTypesInput struct {
 	// データセットの種類のカテゴリ。

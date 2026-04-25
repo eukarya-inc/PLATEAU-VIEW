@@ -316,6 +316,11 @@ func (r *queryResolver) Datasets(ctx context.Context, input *DatasetsInput) ([]D
 	return r.Repo.Datasets(ctx, input)
 }
 
+// CitygmlDatasets is the resolver for the citygmlDatasets field.
+func (r *queryResolver) CitygmlDatasets(ctx context.Context, input *CityGMLDatasetsInput) ([]*CityGMLDataset, error) {
+	return r.Repo.CitygmlDatasets(ctx, input)
+}
+
 // PlateauSpecs is the resolver for the plateauSpecs field.
 func (r *queryResolver) PlateauSpecs(ctx context.Context) ([]*PlateauSpec, error) {
 	return r.Repo.PlateauSpecs(ctx)

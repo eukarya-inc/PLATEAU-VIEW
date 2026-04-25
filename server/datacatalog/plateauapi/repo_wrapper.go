@@ -163,6 +163,14 @@ func (a *RepoWrapper) Datasets(ctx context.Context, input *DatasetsInput) (res [
 	return
 }
 
+func (a *RepoWrapper) CitygmlDatasets(ctx context.Context, input *CityGMLDatasetsInput) (res []*CityGMLDataset, err error) {
+	err = a.use(func(r Repo) (err error) {
+		res, err = r.CitygmlDatasets(ctx, input)
+		return
+	})
+	return
+}
+
 func (a *RepoWrapper) PlateauSpecs(ctx context.Context) (res []*PlateauSpec, err error) {
 	err = a.use(func(r Repo) (err error) {
 		res, err = r.PlateauSpecs(ctx)

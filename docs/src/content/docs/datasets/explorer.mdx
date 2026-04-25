@@ -18,6 +18,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     <select id="explorer-type"><option value="">地物型（すべて）</option></select>
     <select id="explorer-format">
       <option value="">形式（すべて）</option>
+      <option value="CityGML">CityGML</option>
       <option value="3D Tiles">3D Tiles</option>
       <option value="MVT">MVT</option>
     </select>
@@ -334,7 +335,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       if (textureSel.value === 'false' && d.texture !== false) return false;
       const q = search.value.trim().toLowerCase();
       if (q) {
-        const hay = [d.name, d.pref, d.city, d.ward, d.type, d.type_en].filter(Boolean).join(' ').toLowerCase();
+        const hay = [d.name, d.pref, d.city, d.ward, d.type, d.type_en, ...(d.feature_types || [])].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -345,9 +346,10 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     const render = () => {
       const filtered = datasets.filter(matches);
       const compositeCount = filtered.filter(d => d._area).length;
-      const realCount = filtered.length - compositeCount;
+      const citygmlCount = filtered.filter(d => d.format === 'CityGML').length;
+      const realCount = filtered.length - compositeCount - citygmlCount;
       const fmt = (n) => n.toLocaleString();
-      const breakdown = \`実データセット \${fmt(realCount)} 件・複合タイルセット \${fmt(compositeCount)} 件\`;
+      const breakdown = \`実データセット \${fmt(realCount)} 件・CityGML \${fmt(citygmlCount)} 件・複合タイルセット \${fmt(compositeCount)} 件\`;
       status.removeAttribute('data-state');
       status.textContent = filtered.length === datasets.length
         ? \`全 \${fmt(datasets.length)} 件（\${breakdown}）\`
@@ -362,12 +364,15 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       const rows = filtered.map(d => {
         const url = (useRaw ? d.url : (d.composite_url || d.url)) || '';
         const escUrl = escapeHtml(url);
+        const typeCell = d.format === 'CityGML' && Array.isArray(d.feature_types) && d.feature_types.length
+          ? d.feature_types.join(', ')
+          : (d.type ?? '');
         return \`<tr>
           <td>\${escapeHtml(d.name)}</td>
           <td>\${escapeHtml(d.pref ?? '')}</td>
           <td>\${escapeHtml(d.city ?? '')}</td>
           <td>\${escapeHtml(d.ward ?? '')}</td>
-          <td>\${escapeHtml(d.type ?? '')}</td>
+          <td>\${escapeHtml(typeCell)}</td>
           <td>\${escapeHtml(d.format ?? '')}</td>
           <td>\${escapeHtml(d.lod ?? '')}</td>
           <td>\${d.texture === true ? '○' : d.texture === false ? '' : '—'}</td>
@@ -415,6 +420,28 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       })
       .then(data => {
         const baseDatasets = (data && data.datasets) || [];
+        const citygmls = ((data && data.citygml) || []).map(c => ({
+          id: \`citygml-\${c.id}\`,
+          name: \`\${c.city ?? ''}（CityGML 全地物型）\`,
+          pref: c.pref ?? '',
+          pref_code: c.pref_code ?? '',
+          city: c.city ?? '',
+          city_code: c.city_code ?? '',
+          ward: null,
+          ward_code: null,
+          type: '',
+          type_en: '',
+          url: c.url,
+          composite_url: null,
+          layers: null,
+          year: c.year,
+          registration_year: c.registration_year,
+          spec: c.spec,
+          format: 'CityGML',
+          lod: '',
+          texture: null,
+          feature_types: c.feature_types || [],
+        }));
         const composites = ((data && data.composite_tilesets) || []).map(c => ({
           id: c.id,
           name: c.area === 'all'
@@ -439,7 +466,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           texture: c.texture,
           _area: c.area,
         }));
-        datasets = baseDatasets.concat(composites);
+        datasets = baseDatasets.concat(citygmls).concat(composites);
 
         // 都道府県セレクト: コード順 + 「日本全国（複合）」を先頭に
         prefSel.innerHTML = '';

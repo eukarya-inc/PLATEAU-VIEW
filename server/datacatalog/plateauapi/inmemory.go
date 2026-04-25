@@ -181,6 +181,33 @@ func (c *InMemoryRepo) Datasets(ctx context.Context, input *DatasetsInput) (res 
 	})), nil
 }
 
+func (c *InMemoryRepo) CitygmlDatasets(ctx context.Context, input *CityGMLDatasetsInput) ([]*CityGMLDataset, error) {
+	inp := lo.FromPtr(input)
+	stages := allowAdminStages(ctx)
+
+	res := make([]*CityGMLDataset, 0, len(c.ctx.CityGML))
+	for _, d := range c.ctx.CityGML {
+		if d == nil || !filterCityGMLDataset(d, stages) {
+			continue
+		}
+		if !filterCityGMLDatasetByInput(d, inp) {
+			continue
+		}
+		res = append(res, removeAdminFromCityGMLDataset(ctx, d))
+	}
+
+	slices.SortFunc(res, func(a, b *CityGMLDataset) int {
+		if a.ID == b.ID {
+			return 0
+		}
+		if a.ID < b.ID {
+			return -1
+		}
+		return 1
+	})
+	return res, nil
+}
+
 func (c *InMemoryRepo) PlateauSpecs(ctx context.Context) ([]*PlateauSpec, error) {
 	return lo.Map(c.ctx.PlateauSpecs, func(p PlateauSpec, _ int) *PlateauSpec {
 		return &p

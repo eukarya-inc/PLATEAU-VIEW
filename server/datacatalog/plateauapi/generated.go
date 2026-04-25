@@ -244,14 +244,15 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Area         func(childComplexity int, code AreaCode) int
-		Areas        func(childComplexity int, input *AreasInput) int
-		DatasetTypes func(childComplexity int, input *DatasetTypesInput) int
-		Datasets     func(childComplexity int, input *DatasetsInput) int
-		Node         func(childComplexity int, id ID) int
-		Nodes        func(childComplexity int, ids []ID) int
-		PlateauSpecs func(childComplexity int) int
-		Years        func(childComplexity int) int
+		Area            func(childComplexity int, code AreaCode) int
+		Areas           func(childComplexity int, input *AreasInput) int
+		CitygmlDatasets func(childComplexity int, input *CityGMLDatasetsInput) int
+		DatasetTypes    func(childComplexity int, input *DatasetTypesInput) int
+		Datasets        func(childComplexity int, input *DatasetsInput) int
+		Node            func(childComplexity int, id ID) int
+		Nodes           func(childComplexity int, ids []ID) int
+		PlateauSpecs    func(childComplexity int) int
+		Years           func(childComplexity int) int
 	}
 
 	RelatedDataset struct {
@@ -393,6 +394,7 @@ type QueryResolver interface {
 	Areas(ctx context.Context, input *AreasInput) ([]Area, error)
 	DatasetTypes(ctx context.Context, input *DatasetTypesInput) ([]DatasetType, error)
 	Datasets(ctx context.Context, input *DatasetsInput) ([]Dataset, error)
+	CitygmlDatasets(ctx context.Context, input *CityGMLDatasetsInput) ([]*CityGMLDataset, error)
 	PlateauSpecs(ctx context.Context) ([]*PlateauSpec, error)
 	Years(ctx context.Context) ([]int, error)
 }
@@ -1512,6 +1514,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Areas(childComplexity, args["input"].(*AreasInput)), true
 
+	case "Query.citygmlDatasets":
+		if e.complexity.Query.CitygmlDatasets == nil {
+			break
+		}
+
+		args, err := ec.field_Query_citygmlDatasets_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.CitygmlDatasets(childComplexity, args["input"].(*CityGMLDatasetsInput)), true
+
 	case "Query.datasetTypes":
 		if e.complexity.Query.DatasetTypes == nil {
 			break
@@ -1964,6 +1978,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAreasInput,
+		ec.unmarshalInputCityGMLDatasetsInput,
 		ec.unmarshalInputDatasetTypesInput,
 		ec.unmarshalInputDatasetsInput,
 	)
@@ -2316,6 +2331,34 @@ func (ec *executionContext) field_Query_areas_argsInput(
 	}
 
 	var zeroVal *AreasInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_citygmlDatasets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_citygmlDatasets_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_citygmlDatasets_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*CityGMLDatasetsInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal *CityGMLDatasetsInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalOCityGMLDatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDatasetsInput(ctx, tmp)
+	}
+
+	var zeroVal *CityGMLDatasetsInput
 	return zeroVal, nil
 }
 
@@ -10012,6 +10055,95 @@ func (ec *executionContext) fieldContext_Query_datasets(ctx context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_citygmlDatasets(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_citygmlDatasets(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().CitygmlDatasets(rctx, fc.Args["input"].(*CityGMLDatasetsInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*CityGMLDataset)
+	fc.Result = res
+	return ec.marshalNCityGMLDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDatasetᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_citygmlDatasets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_CityGMLDataset_id(ctx, field)
+			case "year":
+				return ec.fieldContext_CityGMLDataset_year(ctx, field)
+			case "registrationYear":
+				return ec.fieldContext_CityGMLDataset_registrationYear(ctx, field)
+			case "prefectureId":
+				return ec.fieldContext_CityGMLDataset_prefectureId(ctx, field)
+			case "prefectureCode":
+				return ec.fieldContext_CityGMLDataset_prefectureCode(ctx, field)
+			case "cityId":
+				return ec.fieldContext_CityGMLDataset_cityId(ctx, field)
+			case "cityCode":
+				return ec.fieldContext_CityGMLDataset_cityCode(ctx, field)
+			case "plateauSpecMinorId":
+				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
+			case "url":
+				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "gspatialjpDatasetUrl":
+				return ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
+			case "prefecture":
+				return ec.fieldContext_CityGMLDataset_prefecture(ctx, field)
+			case "city":
+				return ec.fieldContext_CityGMLDataset_city(ctx, field)
+			case "plateauSpecMinor":
+				return ec.fieldContext_CityGMLDataset_plateauSpecMinor(ctx, field)
+			case "featureTypes":
+				return ec.fieldContext_CityGMLDataset_featureTypes(ctx, field)
+			case "metadataZipUrls":
+				return ec.fieldContext_CityGMLDataset_metadataZipUrls(ctx, field)
+			case "admin":
+				return ec.fieldContext_CityGMLDataset_admin(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CityGMLDataset", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_citygmlDatasets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_plateauSpecs(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_plateauSpecs(ctx, field)
 	if err != nil {
@@ -14856,6 +14988,47 @@ func (ec *executionContext) unmarshalInputAreasInput(ctx context.Context, obj an
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCityGMLDatasetsInput(ctx context.Context, obj any) (CityGMLDatasetsInput, error) {
+	var it CityGMLDatasetsInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"prefectureCodes", "cityCodes", "years"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "prefectureCodes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("prefectureCodes"))
+			data, err := ec.unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PrefectureCodes = data
+		case "cityCodes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cityCodes"))
+			data, err := ec.unmarshalOAreaCode2ᚕgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAreaCodeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CityCodes = data
+		case "years":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("years"))
+			data, err := ec.unmarshalOInt2ᚕintᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Years = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputDatasetTypesInput(ctx context.Context, obj any) (DatasetTypesInput, error) {
 	var it DatasetTypesInput
 	asMap := map[string]any{}
@@ -17416,6 +17589,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "citygmlDatasets":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_citygmlDatasets(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "plateauSpecs":
 			field := field
 
@@ -18695,6 +18890,60 @@ func (ec *executionContext) marshalNCity2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATE
 		return graphql.Null
 	}
 	return ec._City(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCityGMLDataset2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDatasetᚄ(ctx context.Context, sel ast.SelectionSet, v []*CityGMLDataset) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDataset(ctx context.Context, sel ast.SelectionSet, v *CityGMLDataset) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CityGMLDataset(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNDataset2githubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDataset(ctx context.Context, sel ast.SelectionSet, v Dataset) graphql.Marshaler {
@@ -20056,6 +20305,14 @@ func (ec *executionContext) marshalOCityGMLDataset2ᚖgithubᚗcomᚋeukaryaᚑi
 	return ec._CityGMLDataset(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOCityGMLDatasetsInput2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCityGMLDatasetsInput(ctx context.Context, v any) (*CityGMLDatasetsInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputCityGMLDatasetsInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v any) (*DatasetFormat, error) {
 	if v == nil {
 		return nil, nil
@@ -20209,6 +20466,42 @@ func (ec *executionContext) marshalOID2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAU
 	_ = ctx
 	res := graphql.MarshalString(string(*v))
 	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚕintᚄ(ctx context.Context, v any) ([]int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]int, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInt2int(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOInt2ᚕintᚄ(ctx context.Context, sel ast.SelectionSet, v []int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNInt2int(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {

@@ -17,7 +17,37 @@ Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルの�
 この API は試験運用中であり、API のスキーマやレスポンスは予告なく変更されることがあります。また、提供期間やサービスレベルの保証もしておりません。クエリによってはレスポンスのサイズが大きくなることがあるため、モバイル回線などで使用する際は十分ご注意ください。
 :::
 
-## 1. CityGML ファイル検索 API
+## 1. 自治体ごとの CityGML 一覧 API
+
+各自治体ごとに、すべての地物型を 1 つの zip ファイルにまとめた CityGML を一括取得できます。地物型ごとにファイルが分かれていない、配信用の統合された zip ファイルです。
+
+[**`GET /datacatalog/plateau-datasets`**](/api/rest/operations/datacatalogplateau-datasets/) のレスポンスに含まれる `citygml` 配列に、自治体ごとの 1 件ずつの CityGML データセットが返却されます。
+
+```sh
+curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets | jq '.citygml[0]'
+```
+
+主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（zip ファイルの URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
+
+GraphQL からも同じ情報を取得できます。`citygmlDatasets` クエリで都道府県・市区町村・年度によるフィルタが可能です:
+
+```graphql
+query {
+  citygmlDatasets(input: { prefectureCodes: ["13"] }) {
+    id
+    cityCode
+    url
+    year
+    featureTypes
+  }
+}
+```
+
+:::tip
+個別の CityGML ファイル（`bldg`、`tran` など地物型ごとに分かれた gml ファイル）が必要な場合は、続く CityGML ファイル検索 API を使用してください。
+:::
+
+## 2. CityGML ファイル検索 API
 
 自治体コードやメッシュコードなど、様々な方法で指定した範囲に含まれる各種 CityGML ファイルの URL のリストを取得します。
 
@@ -39,7 +69,7 @@ Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルの�
 curl 'https://api.plateauview.mlit.go.jp/datacatalog/citygml/m:533935'
 ```
 
-## 2. CityGML Pack API
+## 3. CityGML Pack API
 
 複数の CityGML ファイル URL を投入すると、関連するファイルをまとめた zip ファイルを非同期で生成します。
 
@@ -63,7 +93,7 @@ curl https://api.plateauview.mlit.go.jp/citygml/pack \
 
 サーバー負荷抑制のためタイムアウトなどの制限が設けられており、また一度作成された zip は一定時間経過後に削除されることがあります。投入できる URL は PLATEAU CMS（`assets.cms.plateau.reearth.io`）からのファイルのみです。
 
-## 3. CityGML 属性 API
+## 4. CityGML 属性 API
 
 CityGML ファイルの URL と地物の `gml:id` を渡すと、その地物の属性情報を JSON で返します。
 
@@ -73,7 +103,7 @@ CityGML ファイルの URL と地物の `gml:id` を渡すと、その地物の
 - `id`: `gml:id` をカンマ区切りで複数指定
 - `skip_code_list_fetch`: コードリスト取得をスキップして生のコードを返す
 
-## 4. CityGML 空間 ID 検索 API
+## 5. CityGML 空間 ID 検索 API
 
 CityGML の URL と空間 ID のリストを渡すと、その空間 ID 内に含まれる地物の `gml:id` のリストを返します。
 
@@ -82,9 +112,9 @@ CityGML の URL と空間 ID のリストを渡すと、その空間 ID 内に�
 - `url`: CityGML ファイルの URL
 - `sid`: 空間 ID（カンマ区切り、`z/x/y`・`z/f/x/y`・ハッシュタイル形式）
 
-## 5. CityGML 空間 ID 属性 API
+## 6. CityGML 空間 ID 属性 API
 
-空間 ID と地物型のリストを渡すと、該当地物の属性情報を JSON で返します。1・4・3 の API を順番に呼び出す手間を省く統合 API です。
+空間 ID と地物型のリストを渡すと、該当地物の属性情報を JSON で返します。2・5・4 の API を順番に呼び出す手間を省く統合 API です。
 
 [**`GET /citygml/spatialid_attributes`**](/api/rest/operations/citygmlspatialid_attributes/) — クエリパラメータ:
 

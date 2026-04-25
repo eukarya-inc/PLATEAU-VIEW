@@ -388,6 +388,19 @@ func filterCityGMLDataset(d *CityGMLDataset, stages []string) bool {
 	return true
 }
 
+func filterCityGMLDatasetByInput(d *CityGMLDataset, input CityGMLDatasetsInput) bool {
+	if len(input.PrefectureCodes) > 0 && !slices.Contains(input.PrefectureCodes, d.PrefectureCode) {
+		return false
+	}
+	if len(input.CityCodes) > 0 && !slices.Contains(input.CityCodes, d.CityCode) {
+		return false
+	}
+	if len(input.Years) > 0 && !slices.Contains(input.Years, d.Year) {
+		return false
+	}
+	return true
+}
+
 type bypassAdminRemovalKey struct{}
 
 func BypassAdminRemoval(ctx context.Context, b bool) context.Context {

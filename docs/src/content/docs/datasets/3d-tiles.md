@@ -125,6 +125,8 @@ curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets
 
 レスポンスにはさらに `composite_tilesets` 配列が含まれます。これは全国（`all-...`）と都道府県別（`13-...` など）の複合 tileset.json を実データから派生して列挙したリストで、CesiumJS で広域をまとめて表示したい場合の入口として利用できます。
 
+加えて `citygml` 配列には、自治体ごとの CityGML データセットが含まれます。地物型ごとには分かれず、各自治体の全地物型を 1 つの zip ファイルにまとめた形で、自治体単位で 1 件ずつ返却されます。詳細は [PLATEAU-CityGML](/datasets/citygml/) を参照してください。
+
 :::caution
 レスポンスサイズは約 2 MB 以上あります。API は gzip 圧縮に対応しているものの、モバイル回線では十分ご注意ください。手早くデータを探したいだけなら [データセット一覧](/datasets/explorer/) ページがおすすめです。
 :::
