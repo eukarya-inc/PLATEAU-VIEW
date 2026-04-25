@@ -78,6 +78,7 @@ Available layer types in config JSON:
 
 - `xyz`: XYZ tile proxy (supports URL template `{z}/{x}/{y}`)
 - `cog`: Cloud Optimized GeoTIFF (supports HTTP/GCS/S3)
+- `pmtiles`: raster PMTiles archive (supports https/gs/s3/r2/file)
 - `maplibre`: MapLibre style.json rendering (requires `maplibre` feature, Linux only)
 
 ## Terrain
@@ -90,6 +91,8 @@ Configured via env vars (the config JSON only describes `/tiles/...` overlay sou
 - `TERRAIN_TILE_SIZE`, `TERRAIN_DEFAULT_GEOID`, `TERRAIN_MAX_ZOOM`, `TERRAIN_MAX_ERROR`
 
 Cache keys include the DEM version, upstream ETag digest, geoid slug, and (for Terrarium) output size. Switching geoid at request time does **not** require a CDN purge — each model lives at a separate key.
+
+A source named `"dem"` in the config JSON is **special-cased**: its `layers` (cog/xyz/pmtiles, in array order — index 0 = bottom-most overlay, last = frontmost) are stacked over the base DEM via `CompositeDemProvider`. Each overlay's bbox is fetched on startup and indexed in an R*-tree, so per-tile fetches only hit overlays whose footprint actually intersects the tile. Overlay fetch failures fall back to the layer below and contribute a `failed:slug` marker to the etag so caches roll back automatically when the upstream recovers.
 
 Terrain source code lives in `src/terrain/` (quantized-mesh + martini + terrarium + geodetic resampling ported from <https://github.com/MIERUNE/stralift>) and `src/server/terrain.rs` (handlers). Build & ship a Japan-only PMTiles mirror with `scripts/japan-pmtiles/`.
 

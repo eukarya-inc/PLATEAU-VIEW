@@ -8,6 +8,8 @@
 
 #![allow(dead_code)]
 
+pub mod cog_dem;
+pub mod composite;
 pub mod dem;
 pub mod ellipsoid;
 pub mod geodetic;
@@ -21,12 +23,16 @@ pub mod pmtiles;
 pub mod quantized_mesh;
 pub mod settings;
 pub mod terrarium;
+pub mod xyz_dem;
 
-pub use dem::{DemError, DemProvider, DemTile};
+pub use cog_dem::CogDemSource;
+pub use composite::{CompositeDemProvider, build as build_composite_dem};
+pub use dem::{DemError, DemProvider, DemTile, GeoBounds};
 pub use geoid::{Geoid, GeoidModel, UnknownGeoidModel};
 pub use mapterhorn::MapterhornSource;
 pub use pmtiles::{PmtilesEncoding, PmtilesSource};
 pub use settings::TerrainSettings;
+pub use xyz_dem::{XyzDemEncoding, XyzDemSource};
 
 /// Bilinear resample a row-major grid. Shared between DEM sources.
 pub(crate) fn resample_bilinear(

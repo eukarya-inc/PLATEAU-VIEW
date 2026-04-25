@@ -9,9 +9,16 @@ use xxhash_rust::xxh64::xxh64;
 use crate::{
     cache::{CacheMode, TileCache},
     config::{ConfigManager, LayerConfig, SourceConfig},
-    terrain::TerrainSettings,
+    terrain::{
+        CogDemSource, DemProvider, GeoBounds, PmtilesEncoding, PmtilesSource, TerrainSettings,
+        XyzDemEncoding, XyzDemSource, build_composite_dem,
+    },
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
+
+/// Name of the special source whose layers are interpreted as DEM overlays
+/// rather than `/tiles/...` raster sources.
+const DEM_SOURCE_KEY: &str = "dem";
 
 /// Application state shared across handlers.
 pub struct AppState {
@@ -70,7 +77,7 @@ impl AppState {
             }
         }
 
-        let terrain = Self::build_terrain(&terrain_settings);
+        let terrain = Self::build_terrain(&terrain_settings, &config.sources).await;
 
         Self {
             config_manager,
@@ -82,9 +89,37 @@ impl AppState {
         }
     }
 
-    fn build_terrain(settings: &TerrainSettings) -> Arc<super::terrain::TerrainState> {
+    /// Construct the terrain state. Base DEM comes from `terrain_settings`
+    /// (env vars). If a source named `"dem"` exists in the config, its
+    /// `layers` (in original order — first = bottom-most overlay, last =
+    /// frontmost) are used as overlays atop the base via
+    /// `CompositeDemProvider`.
+    async fn build_terrain(
+        settings: &TerrainSettings,
+        sources: &HashMap<String, SourceConfig>,
+    ) -> Arc<super::terrain::TerrainState> {
+        let base = settings.build_dem();
+
+        let dem: Arc<dyn DemProvider> = match sources.get(DEM_SOURCE_KEY) {
+            None => base,
+            Some(dem_cfg) if dem_cfg.layers.is_empty() => base,
+            Some(dem_cfg) => {
+                let overlays: Vec<Arc<dyn DemProvider>> = dem_cfg
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, layer)| build_dem_overlay(i, layer))
+                    .collect();
+                tracing::info!(
+                    "Building composite DEM: 1 base + {} overlays",
+                    overlays.len()
+                );
+                Arc::new(build_composite_dem(base, overlays).await)
+            }
+        };
+
         Arc::new(super::terrain::TerrainState {
-            dem: settings.build_dem(),
+            dem,
             tile_size: settings.tile_size,
             default_geoid: settings.default_geoid,
             max_zoom: settings.max_zoom,
@@ -119,6 +154,11 @@ impl AppState {
         let mut sources = HashMap::new();
 
         for (name, config) in source_configs {
+            // The "dem" source is repurposed for terrain overlays — it must
+            // not appear under `/tiles/...`.
+            if name == DEM_SOURCE_KEY {
+                continue;
+            }
             // Skip sources that only have maplibre layers when feature is off
             #[cfg(not(feature = "maplibre"))]
             {
@@ -144,6 +184,7 @@ impl AppState {
         let mut xyz_layers: Vec<&LayerConfig> = Vec::new();
         let mut cog_layers: Vec<(&LayerConfig, i32)> = Vec::new();
         let mut maplibre_layers: Vec<&LayerConfig> = Vec::new();
+        let mut pmtiles_layers: Vec<&LayerConfig> = Vec::new();
 
         for layer in &config.layers {
             match layer {
@@ -155,6 +196,9 @@ impl AppState {
                 }
                 LayerConfig::MapLibre { .. } => {
                     maplibre_layers.push(layer);
+                }
+                LayerConfig::Pmtiles { .. } => {
+                    pmtiles_layers.push(layer);
                 }
             }
         }
@@ -199,6 +243,24 @@ impl AppState {
                 let cog_source =
                     CogTileSource::with_version(url.clone(), nodata.clone(), version.as_deref());
                 composite = composite.with_overlay(Box::new(cog_source));
+            }
+        }
+
+        // Add PMTiles overlays
+        for layer in &pmtiles_layers {
+            if let LayerConfig::Pmtiles {
+                url,
+                range,
+                version,
+                ..
+            } = layer
+            {
+                let src = crate::tile::PmtilesTileSource::with_version(
+                    url.clone(),
+                    range.clone(),
+                    version.as_deref(),
+                );
+                composite = composite.with_overlay(Box::new(src));
             }
         }
 
@@ -286,5 +348,91 @@ impl AppState {
         // Hash and return as hex string prefixed with "layers-"
         let hash = xxh64(input.as_bytes(), 0);
         format!("layers-{hash:x}")
+    }
+}
+
+/// Build a single DEM overlay from a `LayerConfig` entry inside the
+/// `sources.dem.layers` list. Returns `None` for unsupported variants
+/// (e.g. `maplibre`).
+fn build_dem_overlay(idx: usize, layer: &LayerConfig) -> Option<Arc<dyn DemProvider>> {
+    let slug = format!("dem{idx}");
+    let version = layer.version().unwrap_or("v1").to_string();
+    match layer {
+        LayerConfig::Pmtiles {
+            url,
+            encoding,
+            max_zoom,
+            native_tile_size,
+            ..
+        } => {
+            let enc = parse_pmtiles_encoding(encoding.as_deref());
+            Some(Arc::new(PmtilesSource::new(
+                url.clone(),
+                enc,
+                version,
+                max_zoom.unwrap_or(15),
+                native_tile_size.unwrap_or(512),
+            )))
+        }
+        LayerConfig::Xyz {
+            url,
+            encoding,
+            max_zoom,
+            native_tile_size,
+            range,
+            ..
+        } => {
+            let enc = parse_xyz_dem_encoding(encoding.as_deref());
+            // Range-derived bounds aren't geographic, so leave bounds None
+            // unless we add an explicit `bounds` field later.
+            let _ = range; // unused for DEM; XYZ DEM ignores raster zoom range.
+            Some(Arc::new(XyzDemSource::new(
+                slug,
+                url.clone(),
+                enc,
+                version,
+                max_zoom.unwrap_or(15),
+                native_tile_size.unwrap_or(256),
+                None::<GeoBounds>,
+            )))
+        }
+        LayerConfig::Cog {
+            url,
+            nodata,
+            max_zoom,
+            native_tile_size,
+            ..
+        } => {
+            let nodata_value = nodata.as_ref().and_then(|n| match n {
+                crate::config::NoDataConfig::Single(v) => Some(*v),
+                _ => None,
+            });
+            Some(Arc::new(CogDemSource::new(
+                slug,
+                url.clone(),
+                nodata_value,
+                version,
+                max_zoom.unwrap_or(18),
+                native_tile_size.unwrap_or(256),
+            )))
+        }
+        LayerConfig::MapLibre { .. } => {
+            tracing::warn!("MapLibre layers are not supported as DEM overlays; skipping");
+            None
+        }
+    }
+}
+
+fn parse_pmtiles_encoding(s: Option<&str>) -> PmtilesEncoding {
+    match s.unwrap_or("terrarium").to_lowercase().as_str() {
+        "mapbox" => PmtilesEncoding::Mapbox,
+        _ => PmtilesEncoding::Terrarium,
+    }
+}
+
+fn parse_xyz_dem_encoding(s: Option<&str>) -> XyzDemEncoding {
+    match s.unwrap_or("terrarium").to_lowercase().as_str() {
+        "mapbox" => XyzDemEncoding::Mapbox,
+        _ => XyzDemEncoding::Terrarium,
     }
 }

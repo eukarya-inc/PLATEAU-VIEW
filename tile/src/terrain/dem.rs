@@ -41,6 +41,34 @@ pub struct DemTile {
     pub etag: Option<String>,
 }
 
+/// Geographic coverage of a DEM source, in degrees.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeoBounds {
+    pub west: f64,
+    pub south: f64,
+    pub east: f64,
+    pub north: f64,
+}
+
+impl GeoBounds {
+    pub fn new(west: f64, south: f64, east: f64, north: f64) -> Self {
+        Self {
+            west,
+            south,
+            east,
+            north,
+        }
+    }
+
+    /// Returns true if `self` and `other` share any area (touching counts).
+    pub fn intersects(&self, other: &GeoBounds) -> bool {
+        !(self.east < other.west
+            || self.west > other.east
+            || self.north < other.south
+            || self.south > other.north)
+    }
+}
+
 #[async_trait]
 pub trait DemProvider: Send + Sync {
     /// Fetch elevations for a Web Mercator XYZ tile.
@@ -63,4 +91,20 @@ pub trait DemProvider: Send + Sync {
 
     /// Stable slug used in cache keys / etags.
     fn slug(&self) -> &str;
+
+    /// Optional one-shot startup hook. Implementations that need to read
+    /// remote metadata (PMTiles header, GeoTIFF IFD, etc.) should do so here
+    /// so that `bounds()` is populated before the first request. The default
+    /// is a no-op for sources without metadata to fetch.
+    async fn preload(&self) -> Result<(), DemError> {
+        Ok(())
+    }
+
+    /// Geographic coverage in degrees (west, south, east, north).
+    /// `None` means global / unknown — the composite treats such overlays
+    /// as "always intersects" and skips R-tree pruning for them. Should be
+    /// stable after `preload()`.
+    fn bounds(&self) -> Option<GeoBounds> {
+        None
+    }
 }

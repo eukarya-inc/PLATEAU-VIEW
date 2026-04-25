@@ -40,9 +40,12 @@ pub struct SourceConfig {
     pub layers: Vec<LayerConfig>,
 }
 
-/// Layer configuration (XYZ, COG, or other types)
+/// Layer configuration (XYZ, COG, or other types). Most fields are shared
+/// across raster (`sources.<name>.layers`) and DEM (`sources.dem.layers`)
+/// uses; the DEM-specific knobs (`encoding`, `max_zoom`, `native_tile_size`,
+/// `nodata`) are simply ignored in the raster pipeline.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum LayerConfig {
     #[serde(rename = "xyz")]
     Xyz {
@@ -54,12 +57,21 @@ pub enum LayerConfig {
         /// Layer version for ETag calculation
         #[serde(default)]
         version: Option<String>,
+        /// DEM-only: tile encoding (`terrarium` | `mapbox`).
+        #[serde(default)]
+        encoding: Option<String>,
+        /// DEM-only: upstream max zoom served.
+        #[serde(default)]
+        max_zoom: Option<u8>,
+        /// DEM-only: native tile size in pixels.
+        #[serde(default)]
+        native_tile_size: Option<u32>,
     },
     #[serde(rename = "cog")]
     Cog {
         /// URL to the COG file (HTTP, GCS, S3)
         url: String,
-        /// NoData values to treat as transparent
+        /// NoData values to treat as transparent (raster) / NaN (DEM).
         #[serde(default)]
         nodata: Option<NoDataConfig>,
         /// Layer order (higher = on top)
@@ -68,6 +80,12 @@ pub enum LayerConfig {
         /// Layer version for ETag calculation
         #[serde(default)]
         version: Option<String>,
+        /// DEM-only: upstream max zoom served.
+        #[serde(default)]
+        max_zoom: Option<u8>,
+        /// DEM-only: native tile size in pixels.
+        #[serde(default)]
+        native_tile_size: Option<u32>,
     },
     /// MapLibre style (not yet implemented, ignored)
     #[serde(rename = "maplibre")]
@@ -76,6 +94,26 @@ pub enum LayerConfig {
         /// Layer version for ETag calculation
         #[serde(default)]
         version: Option<String>,
+    },
+    #[serde(rename = "pmtiles")]
+    Pmtiles {
+        /// URL to the .pmtiles archive (https/gs/s3/r2/file).
+        url: String,
+        /// Optional zoom range restriction (raster use).
+        #[serde(default)]
+        range: Option<RangeConfig>,
+        /// Layer version for ETag calculation
+        #[serde(default)]
+        version: Option<String>,
+        /// DEM-only: tile encoding (`terrarium` | `mapbox`).
+        #[serde(default)]
+        encoding: Option<String>,
+        /// DEM-only: upstream max zoom served.
+        #[serde(default)]
+        max_zoom: Option<u8>,
+        /// DEM-only: native tile size in pixels.
+        #[serde(default)]
+        native_tile_size: Option<u32>,
     },
 }
 
@@ -86,6 +124,7 @@ impl LayerConfig {
             LayerConfig::Xyz { .. } => "xyz",
             LayerConfig::Cog { .. } => "cog",
             LayerConfig::MapLibre { .. } => "maplibre",
+            LayerConfig::Pmtiles { .. } => "pmtiles",
         }
     }
 
@@ -95,6 +134,7 @@ impl LayerConfig {
             LayerConfig::Xyz { url, .. } => url,
             LayerConfig::Cog { url, .. } => url,
             LayerConfig::MapLibre { url, .. } => url,
+            LayerConfig::Pmtiles { url, .. } => url,
         }
     }
 
@@ -104,6 +144,7 @@ impl LayerConfig {
             LayerConfig::Xyz { version, .. } => version.as_deref(),
             LayerConfig::Cog { version, .. } => version.as_deref(),
             LayerConfig::MapLibre { version, .. } => version.as_deref(),
+            LayerConfig::Pmtiles { version, .. } => version.as_deref(),
         }
     }
 
@@ -113,6 +154,7 @@ impl LayerConfig {
             LayerConfig::Xyz { .. } => 0,
             LayerConfig::Cog { order, .. } => *order,
             LayerConfig::MapLibre { .. } => 0,
+            LayerConfig::Pmtiles { .. } => 0,
         }
     }
 }

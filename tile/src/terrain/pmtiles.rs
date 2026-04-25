@@ -32,7 +32,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
-use super::dem::{DemError, DemProvider, DemTile};
+use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
 use super::mapbox::mapbox_rgb_to_elevation;
 use super::terrarium::rgb_to_elevation;
 
@@ -56,6 +56,7 @@ pub struct PmtilesSource {
     slug: String,
     reader: OnceCell<Arc<AsyncPmTilesReader<ObjectStoreBackend>>>,
     archive_etag: OnceCell<Option<String>>,
+    bounds_cell: OnceCell<Option<GeoBounds>>,
 }
 
 impl PmtilesSource {
@@ -75,6 +76,7 @@ impl PmtilesSource {
             slug: "pmtiles".to_string(),
             reader: OnceCell::new(),
             archive_etag: OnceCell::new(),
+            bounds_cell: OnceCell::new(),
         }
     }
 
@@ -196,6 +198,33 @@ impl DemProvider for PmtilesSource {
     fn slug(&self) -> &str {
         &self.slug
     }
+
+    async fn preload(&self) -> Result<(), DemError> {
+        // Initializes reader (which parses header) + archive ETag + bounds.
+        let reader = self.reader().await?;
+        let header = reader.get_header();
+        let bounds = GeoBounds::new(
+            header.min_longitude,
+            header.min_latitude,
+            header.max_longitude,
+            header.max_latitude,
+        );
+        let _ = self.bounds_cell.set(Some(bounds));
+        let _ = self.archive_etag().await;
+        Ok(())
+    }
+
+    fn bounds(&self) -> Option<GeoBounds> {
+        self.bounds_cell.get().and_then(|b| *b)
+    }
+}
+
+/// Build an `(ObjectStore, ObjectPath)` pair for the URL scheme. Public so
+/// the raster `tile::PmtilesTileSource` can share it.
+pub fn build_object_store_for(
+    url: &str,
+) -> Result<(Box<dyn ObjectStore>, ObjectPath), crate::tile::TileError> {
+    build_object_store(url).map_err(|e| crate::tile::TileError::Internal(e.to_string()))
 }
 
 /// Build an `(ObjectStore, ObjectPath)` pair for the URL scheme.

@@ -39,6 +39,38 @@ Mapterhorn (and most public DEM tile services) encode **orthometric** heights �
 
 Tiles whose bounds lie **entirely outside** the selected geoid's coverage respond `404`. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
 
+### Layering DEM overlays on top of the base
+
+The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution data over a specific area** — for example a city-level COG, a regional Terrarium PMTiles, or an XYZ DEM service — declare a special source named **`dem`** in the config JSON:
+
+```jsonc
+{
+  "sources": {
+    "ortho": { "layers": [/* regular raster layers */] },
+
+    "dem": {
+      "layers": [
+        // Order matters: index 0 = bottom-most overlay, last = frontmost.
+        { "type": "pmtiles", "url": "gs://my-bucket/japan-2m.pmtiles",
+          "encoding": "terrarium", "version": "v1",
+          "maxZoom": 14, "nativeTileSize": 512 },
+
+        { "type": "cog", "url": "https://.../tokyo-1m.tif",
+          "version": "tokyo-2025q1", "nodata": -9999 },
+
+        { "type": "xyz", "url": "https://.../detailed/{z}/{x}/{y}.png",
+          "encoding": "mapbox", "maxZoom": 18, "nativeTileSize": 256 }
+      ]
+    }
+  }
+}
+```
+
+- The source named `"dem"` is **not** exposed under `/tiles/dem/...`; its layers feed the terrain endpoint instead.
+- Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
+- At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
+- Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
+
 ## Quick Start
 
 ### Build
@@ -307,6 +339,28 @@ Generates tiles from a Cloud Optimized GeoTIFF file.
 | `url` | string | Yes | URL to COG file (HTTP, `gs://`, `s3://`) |
 | `nodata` | various | No | NoData value configuration (see below) |
 | `order` | number | No | Layer order (higher = on top, default: 0) |
+
+#### PMTiles Layer
+
+Reads image tiles from a PMTiles archive. Same URL schemes as DEM PMTiles
+(`https://`, `gs://`, `s3://`, `r2://`, `file://`).
+
+```json
+{
+  "type": "pmtiles",
+  "url": "https://pub-xxx.r2.dev/imagery.pmtiles",
+  "range": { "z_min": 0, "z_max": 18 }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | URL to the `.pmtiles` archive |
+| `range` | object | No | Coordinate range restriction |
+
+When this layer type is used inside the special `sources.dem` source, the
+extra DEM-only fields `encoding` (`terrarium` \| `mapbox`), `maxZoom`, and
+`nativeTileSize` apply.
 
 ### NoData Configuration
 
