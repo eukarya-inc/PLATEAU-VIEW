@@ -1,0 +1,44 @@
+name: Deploy PLATEAU Docs dev
+on:
+  repository_dispatch:
+    types: [deploy-docs-dev]
+  workflow_dispatch:
+env:
+  IMAGE: ghcr.io/eukarya-inc/plateau-view/plateauview-docs:latest
+  IMAGE_GCP: asia-northeast1-docker.pkg.dev/reearth-plateau-dev/reearth-plateau/plateauview-docs:latest
+jobs:
+  deploy_docs:
+    runs-on: ubuntu-latest
+    if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Configure docker
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull docker image from GHCR
+        run: docker pull $IMAGE
+      - name: Push to GCP Artifact Registry
+        run: |
+          docker tag $IMAGE $IMAGE_GCP
+          docker push $IMAGE_GCP
+      - name: Deploy docs to Cloud Run
+        run: |
+          gcloud run deploy plateauview-docs \
+            --image $IMAGE_GCP \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --quiet

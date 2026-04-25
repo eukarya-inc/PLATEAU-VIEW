@@ -9,6 +9,7 @@ if [[ $# -ne 1 ]]; then
   echo "  server    # Watch and deploy PLATEAU Server"
   echo "  worker    # Watch and deploy PLATEAU Worker"
   echo "  tile      # Watch and deploy PLATEAU Tile"
+  echo "  docs      # Watch and deploy PLATEAU Docs"
   echo ""
   echo "Examples:"
   echo "  $0 server"
@@ -38,9 +39,13 @@ case "$TARGET_TYPE" in
     DEV_WORKFLOW_FILE="deploy-tile-dev.yml"
     DISPATCH_WORKFLOW_FILE="deploy-tile-prod.yml"
     ;;
+  docs)
+    DEV_WORKFLOW_FILE="deploy-docs-dev.yml"
+    DISPATCH_WORKFLOW_FILE="deploy-docs-prod.yml"
+    ;;
   *)
     echo "Error: Invalid target type '$TARGET_TYPE'"
-    echo "Must be one of: server, worker, tile"
+    echo "Must be one of: server, worker, tile, docs"
     exit 1
     ;;
 esac

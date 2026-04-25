@@ -17,6 +17,7 @@ on:
           - tile
           - tools
           - worker
+          - docs
 
 permissions:
   contents: write
@@ -38,6 +39,7 @@ jobs:
       cms-server: ${{ steps.cms-server.outputs.any_changed }}
       cms-worker: ${{ steps.cms-worker.outputs.any_changed }}
       cms-web: ${{ steps.cms-web.outputs.any_changed }}
+      docs: ${{ steps.docs.outputs.any_changed }}
       build: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name == 'main' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -97,6 +99,16 @@ jobs:
             .github/workflows/ci-tile.yml
             .github/workflows/build-tile.yml
             .github/workflows/deploy-tile-*.yml
+      - name: changed files for docs
+        id: docs
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
+        with:
+          since_last_remote_commit: true
+          files: |
+            docs/**
+            .github/workflows/ci-docs.yml
+            .github/workflows/build-docs.yml
+            .github/workflows/deploy-docs-*.yml
       - name: changed files for editor - core
         id: editor-core
         uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
@@ -223,6 +235,11 @@ jobs:
     if: ${{ needs.prepare.outputs.tile == 'true' || inputs.action_type == 'tile' }}
     uses: ./.github/workflows/ci-tile.yml
 
+  ci-docs:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.docs == 'true' || inputs.action_type == 'docs' }}
+    uses: ./.github/workflows/ci-docs.yml
+
   ci-cms-server:
     needs: prepare
     if: ${{ needs.prepare.outputs.cms-server == 'true' }}
@@ -247,6 +264,7 @@ jobs:
       - ci-tools
       - ci-worker
       - ci-tile
+      - ci-docs
       - ci-cms-server
       - ci-cms-worker
       - ci-cms-web
@@ -365,6 +383,29 @@ jobs:
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-tile-dev
+
+  build-docs:
+    needs: [prepare]
+    if: ${{ !failure() && (needs.prepare.outputs.docs == 'true' || inputs.action_type == 'docs') && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/build-docs.yml
+
+  push-docs:
+    needs: [prepare, ci-docs, build-docs]
+    if: ${{ !failure() && needs.ci-docs.result == 'success' && needs.build-docs.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/push-image.yml
+    with:
+      build_tag: ${{ needs.build-docs.outputs.image }}
+      latest_tag: ${{ needs.build-docs.outputs.latest_tag }}
+
+  deploy-docs-dev:
+    needs: push-docs
+    if: ${{ always() && needs.push-docs.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch deployment
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
+        with:
+          event-type: deploy-docs-dev
 
   build-editor-core:
     needs:
