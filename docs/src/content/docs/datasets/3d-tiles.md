@@ -69,7 +69,7 @@ PLATEAU-3DTiles / MVT の配信サービスを利用することで、独自に�
 
     // PLATEAU-Ortho
     const imageProvider = new Cesium.UrlTemplateImageryProvider({
-      url: 'https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
+      url: 'https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
       maximumLevel: 19
     });
     viewer.scene.imageryLayers.addImageryProvider(imageProvider);

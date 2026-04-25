@@ -41,7 +41,7 @@ Project PLATEAU で配布しているデータの利用許諾については、�
 2023 年度に作成されたデータが利用可能です。
 
 ```
-https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png
+https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png
 ```
 
 ズームレベルは 10〜19 に対応しています。
@@ -237,7 +237,7 @@ PLATEAU-Terrain については [PLATEAU-Terrain](/datasets/terrain/) を、建�
 
     viewer.scene.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
-        url: 'https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
+        url: 'https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
         maximumLevel: 19
       })
     );
@@ -263,7 +263,7 @@ TerriaJS のカタログファイルに以下のように記述することで�
   "type": "open-street-map",
   "id": "/basemap//オルソ画像タイル/imagery",
   "name": "航空写真",
-  "url": "https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/",
+  "url": "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/",
   "fileExtension": "png",
   "attribution": ""
 }
@@ -287,7 +287,7 @@ Project PLATEAU では [PLATEAU VIEW 1.1](https://github.com/Project-PLATEAU/PLA
       const map = L.map('map').setView([35.68, 139.76], 14);
       map.options.minZoom = 10;
       map.options.maxZoom = 18;
-      L.tileLayer('https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png', {
+      L.tileLayer('https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png', {
         attribution: '<a href="https://www.mlit.go.jp/plateau/">国土交通省 Project PLATEAU</a>'
       }).addTo(map);
     });
@@ -308,7 +308,7 @@ Project PLATEAU では [PLATEAU VIEW 1.1](https://github.com/Project-PLATEAU/PLA
    ![QGIS XYZ メニュー](../../../assets/datasets/ortho/ortho_qgis_xyz.png)
 
 2. 下図のウインドウが出てきますので、名前、URL、最大ズームレベルを記入してください
-    - URL 欄に `https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png` を入力
+    - URL 欄に `https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png` を入力
     - 最大ズームレベルは `19`
     - 「OK」を押します
 

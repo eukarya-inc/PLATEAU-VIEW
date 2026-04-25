@@ -1,55 +1,226 @@
 ---
 title: PLATEAU-Terrain
-description: 地形モデルの terraindb / Terrain-RGB 配信仕様と利用方法
+description: 日本全国の地形データ配信サービスの利用方法
 ---
 
 ## 1. PLATEAU-Terrain の概要
 
-Project PLATEAU では、Cesium をベースに作られた PLATEAU VIEW で利用する日本全国の地形データ「PLATEAU-Terrain」を作成し、配信を行っています。
+Project PLATEAU では、日本全国の地形データを Cesium / MapLibre / Mapbox GL など主要な 3D 地図エンジンから直接利用できるタイル配信サービス「PLATEAU-Terrain」を提供しています。
 
-また PLATEAU が提供する CityGML 形式の地形データを、Mapbox Terrain-RGB に変換する「PLATEAU Mapbox Terrain Converter」を開発し、それを用いて作成した日本全国の地形データの配信も行っています。
+国土地理院の基盤地図情報数値標高モデル（DEM）をはじめとした各種データソースから生成された標高値に、日本のジオイドモデル（[GSIGEO2011](https://www.gsi.go.jp/buturisokuchi/grageo_geoidseika.html) など）を合成して **楕円体高（ellipsoidal height）** に変換したタイルを配信しています。Cesium と MapLibre のどちらから利用しても 3D Tiles などのジオコード済みデータと垂直方向のずれが発生しないようになっています。
 
-本チュートリアルでは、地形データ作成技術および利用方法について解説します。
+本チュートリアルでは、PLATEAU-Terrain の利用方法について解説します。
 
-### 1.1. 地形データについて
+### 1.1. 提供する地形データ
 
-地形データとは、地形を 3 次元でモデル化したデータです。通常、地形データはほかの 3 次元データを重畳するための基盤データとして利用され、地形データ自体を視覚的に表現することはありません。
+PLATEAU-Terrain は、3 種類の標準的なフォーマットで同じ標高データを配信しています。利用する地図エンジンに合わせて選択してください。
 
-PLATEAU VIEW では、地形データの上に、地理院タイルやオルソ写真、そのほか 2 次元のタイルデータをドレープ（覆いかぶせる処理）して地表面を表示しています。地形データとは、3 次元データを表示する際の骨格のようなデータということができます。
+| エンドポイント | フォーマット | 用途 |
+| --- | --- | --- |
+| `/terrain/` | [Cesium quantized-mesh-1.0](https://github.com/CesiumGS/quantized-mesh)（TMS Geodetic、`octvertexnormals` 拡張付き） | CesiumJS の `CesiumTerrainProvider` |
+| `/terrarium/` | [Mapzen Terrarium](https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)（PNG / WebP / AVIF、Web Mercator XYZ） | MapLibre / Mapbox GL の `raster-dem` ソース（`encoding: "terrarium"`） |
+| `/mapbox/` | [Mapbox Terrain-RGB v1](https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/)（PNG / WebP / AVIF、Web Mercator XYZ） | MapLibre / Mapbox GL の `raster-dem` ソース（`encoding: "mapbox"`） |
 
-![地形データのイメージ](../../../assets/datasets/terrain/terrain_image.png)
+### 1.2. 高さの基準（楕円体高）
 
-図 1 地形データのイメージ（引用: <https://cesium.com/blog/2015/12/18/terrain-quantization/>）
+3D 地図エンジンは一般に WGS84 楕円体（GPS と同じ基準面）を 3 次元空間の基準にしているのに対し、国土地理院の DEM や日常的な「標高」は **正標高（orthometric height、平均海面からの高さ）** で表現されています。両者の差はジオイド高 N と呼ばれ、日本付近では概ね **+30〜+45 m** あります。この差を補正しないと、3D Tiles などのデータと地形が垂直方向にずれてしまいます。
 
-地形データの種類やデータフォーマットには様々なものがあります。これらのうち、PLATEAU VIEW を構成する Cesium では、[quantized-mesh 形式](https://github.com/CesiumGS/quantized-mesh)のデータを利用しています。
+PLATEAU-Terrain では各タイル生成時に、選択されたジオイドモデルから算出した N を画素ごとに加算し、結果を楕円体高として配信しています。
 
-Quantized-mesh 形式は、3D のメッシュデータを量子化（quantization）して圧縮する方式で、通常のメッシュデータよりもデータサイズと使用メモリ量を大幅に縮小することができます。
+```
+ellipsoidal height = orthometric height + geoid height (N)
+```
 
-#### 地形データの種類
+### 1.3. ジオイドモデルの切り替え
 
-- 標高タイル: <https://maps.gsi.go.jp/development/demtile.html>
-- Mapbox Terrain-RGB v1: <https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/>
-- Quadtree（四分木）: <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.69.7733&rep=rep1&type=pdf>
-- QuadTin: <https://www.ifi.uzh.ch/dam/jcr:ffffffff-d894-8e94-0000-0000604fd2b6/QuadTIN.pdf>
-- Quantized-mesh: <https://github.com/CesiumGS/quantized-mesh>
-- TIN（triangulated irregular network）: <https://ja.wikipedia.org/wiki/TIN>
+すべてのエンドポイントは `?geoid=` クエリパラメータでジオイドモデルを切り替えられます。
 
-### 1.2. PLATEAU-Terrain の概要
+| `geoid=` | 内容 | 適用範囲 |
+| --- | --- | --- |
+| `gsigeo2011`（既定） | 国土地理院「日本のジオイド 2011」(Ver.2.2) | 日本陸域 |
+| `jpgeo2024` | 国土地理院「日本のジオイド 2024」 | 日本陸域 + 周辺海域 |
+| `jpgeo2024-hrefconv` | JPGEO2024 + Hrefconv 補正 | 日本陸域のみ |
+| `none` | ジオイド補正なし（正標高のまま） | グローバル |
 
-PLATEAU VIEW では、quantized-mesh 形式のデータを `.terraindb` 形式のファイルとして作成した PLATEAU-Terrain を利用しています。
+ジオイドのカバー範囲を完全に外れているタイルは `404 Not Found` を返します。
 
-PLATEAU-Terrain は、国土地理院が整備した基盤地図情報数値標高モデル 5m メッシュを基本とし、5m メッシュが存在しない場所は基盤地図情報数値標高モデル 10m メッシュを利用して作成されています。また、ジオイドモデルには「日本のジオイド 2011 (Ver.2.2)」を使用しています。
+### 1.4. ズームレベルとアップサンプリング
 
-詳細なデータ作成方法については「3. 地形データの作成」を参照してください。
+DEM の元データの最大ズームよりも高いズームレベルが要求された場合、サーバー側で親タイルを取得し、要求された領域を bilinear で **アップサンプリング** して返します。Cesium の terrain LOD や MapLibre の terrain mesh が高ズームでも切れずに描画されます。
 
-## 2. PLATEAU-Terrain の利用方法
+最大ズームは `/terrain/layer.json` および `/terrarium/tilejson.json`、`/mapbox/tilejson.json` の `maxzoom` で確認できます。
 
-### 2.1. アクセストークンおよびアセット ID
-
-PLATEAU-Terrain を Cesium で利用する際は以下のトークンとアセット ID を利用してください。
+## 2. 配信 URL
 
 :::caution
-本サービスはあくまで試験的な運用であるため、提供期間やサービスレベルについては保証できないことをご了承ください。
+本サービスはあくまで試験的な運用であるため、提供期間やサービスレベルについては保証できないことをご了承ください。またデータの内容は予告なく更新されることがあります。
+:::
+
+ベース URL:
+
+```
+https://tile.plateauview.mlit.go.jp
+```
+
+### 2.1. Cesium 用 quantized-mesh terrain
+
+```
+https://tile.plateauview.mlit.go.jp/terrain/layer.json
+https://tile.plateauview.mlit.go.jp/terrain/{z}/{x}/{y}.terrain
+```
+
+CesiumJS の `CesiumTerrainProvider.fromUrl` に `layer.json` の URL を渡すだけで利用できます。`?geoid=` を付けるとジオイドモデルを切り替えられます（既定は `gsigeo2011`）。
+
+### 2.2. MapLibre / Mapbox GL 用 raster-dem（Terrarium）
+
+```
+https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json
+https://tile.plateauview.mlit.go.jp/terrarium/{z}/{x}/{y}.{png|webp|avif}
+```
+
+`tilejson.json` を MapLibre の `raster-dem` ソースの `url` に指定し、`encoding: "terrarium"` を併せて指定してください。タイル拡張子は既定で `webp`、`tilejson.json?format=png` のように切り替えできます。
+
+### 2.3. MapLibre / Mapbox GL 用 raster-dem（Mapbox Terrain-RGB v1）
+
+```
+https://tile.plateauview.mlit.go.jp/mapbox/tilejson.json
+https://tile.plateauview.mlit.go.jp/mapbox/{z}/{x}/{y}.{png|webp|avif}
+```
+
+`encoding: "mapbox"` を指定してください。タイル拡張子は既定で `webp`、`tilejson.json?format=png` のように切り替えできます。
+
+## 3. 利用例
+
+### 3.1. CesiumJS
+
+`Cesium.Ion` のトークンは不要です。`CesiumTerrainProvider.fromUrl` に `/terrain/` の URL を渡すだけで動作します。
+
+```html
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>PLATEAU-Terrain を Cesium で表示</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    #cesiumContainer { position: absolute; inset: 0; margin: 0; }
+    html, body { height: 100%; margin: 0; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <script>
+    const viewer = new Cesium.Viewer("cesiumContainer", { baseLayer: false });
+
+    // PLATEAU-Terrain（quantized-mesh、ellipsoidal heights）
+    Cesium.CesiumTerrainProvider.fromUrl(
+      "https://tile.plateauview.mlit.go.jp/terrain?geoid=gsigeo2011",
+      { requestVertexNormals: true },
+    ).then((provider) => {
+      viewer.terrainProvider = provider;
+    });
+
+    // 地理院タイル（標準地図）をドレープ
+    viewer.imageryLayers.addImageryProvider(
+      new Cesium.UrlTemplateImageryProvider({
+        url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+        maximumLevel: 18,
+      }),
+    );
+
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(138.73, 35.36, 8000),
+      orientation: { pitch: Cesium.Math.toRadians(-30) },
+    });
+  </script>
+</body>
+</html>
+```
+
+### 3.2. MapLibre GL JS
+
+`raster-dem` ソースに `tilejson.json` を URL として渡し、`terrain` と `hillshade` レイヤーで参照します。`encoding` と `tileSize` を必ず指定してください。
+
+```html
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>PLATEAU-Terrain を MapLibre で表示</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <style>#map { position: absolute; inset: 0; } html, body { height: 100%; margin: 0; }</style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    const map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        sources: {
+          basemap: {
+            type: "raster",
+            tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "国土地理院",
+          },
+          "dem": {
+            type: "raster-dem",
+            url: "https://tile.plateauview.mlit.go.jp/mapbox/tilejson.json?geoid=gsigeo2011",
+            encoding: "mapbox",
+            tileSize: 256,
+          },
+        },
+        layers: [
+          { id: "basemap", type: "raster", source: "basemap" },
+          {
+            id: "hillshade",
+            type: "hillshade",
+            source: "dem",
+            paint: {
+              "hillshade-shadow-color": "#000",
+              "hillshade-exaggeration": 0.5,
+            },
+          },
+        ],
+        terrain: { source: "dem", exaggeration: 1.0 },
+      },
+      center: [138.73, 35.36],
+      zoom: 11,
+      pitch: 60,
+    });
+  </script>
+</body>
+</html>
+```
+
+### 3.3. プレビュー
+
+ブラウザで以下にアクセスすると、ジオイド切り替えや 3D / hillshade のオン・オフを試せるプレビューが利用できます。
+
+- MapLibre プレビュー: <https://tile.plateauview.mlit.go.jp/>
+- Cesium プレビュー: <https://tile.plateauview.mlit.go.jp/terrain-viewer>
+
+## 4. 帰属表示
+
+PLATEAU-Terrain を利用する場合は、地図画面上に下記のいずれかの帰属を必ず表示してください。
+
+```
+PLATEAU | Mapterhorn | 国土地理院
+```
+
+`/terrarium/tilejson.json` および `/mapbox/tilejson.json`、`/terrain/layer.json` のレスポンスにも同等の `attribution` 文字列が含まれます。
+
+## 5. PLATEAU-Terrain (Cesium ion)
+
+2024 年度以前から提供している、Cesium ion でホストされた `terraindb` 形式の地形データです。新たに 2 章で説明したタイル配信サービスを利用される場合はそちらが推奨ですが、Cesium ion 経由で従来通り利用したい場合は本節の手順を参照してください。
+
+### 5.1. アクセストークンおよびアセット ID
+
+PLATEAU-Terrain (Cesium ion) を Cesium で利用する際は以下のトークンとアセット ID を利用してください。
+
+:::caution
+本サービスはあくまで試験的な運用であるため、提供期間やサービスレベルについては保証できないことをご了承ください。またデータの内容は予告なく更新されることがあります。
 :::
 
 **トークン**:
@@ -76,9 +247,9 @@ viewer.scene.setTerrain(
 );
 ```
 
-### 2.2. CesiumJS アプリケーションの作成
+### 5.2. CesiumJS アプリケーションの作成
 
-CesiumJS 上で PLATEAU-Terrain を利用するためのサンプルコードを示します。
+CesiumJS 上で PLATEAU-Terrain (Cesium ion) を利用するためのサンプルコードを示します。
 
 地形データの配信についてご質問がある方は、PacificSpatialSolutions 株式会社（info@pacificspatial.com）までご連絡ください。
 
@@ -90,7 +261,7 @@ CesiumJS 上で PLATEAU-Terrain を利用するためのサンプルコードを
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>PLATEAU-3DTiles/MVT、PLATEAU-Ortho、PLATEAU-Terrain を Cesium で表示</title>
+  <title>PLATEAU-3DTiles/MVT、PLATEAU-Ortho、PLATEAU-Terrain (Cesium ion) を Cesium で表示</title>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.117/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <style>
@@ -110,7 +281,7 @@ CesiumJS 上で PLATEAU-Terrain を利用するためのサンプルコードを
 
     viewer.scene.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
-        url: 'https://api.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
+        url: 'https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png',
         maximumLevel: 19
       })
     );
@@ -137,13 +308,13 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
 });
 ```
 
-## 3. 地形データの作成
+### 5.3. Cesium ion 用地形データの作成
 
-PLATEAU-Terrain などのオープンデータとして利用できる地形データを利用することに加え、独自に地形データを作成することも可能です。
+PLATEAU-Terrain (Cesium ion) などのオープンデータとして利用できる地形データを利用することに加え、独自に地形データを作成することも可能です。
 
 本節では、独自に地形データを整備するために必要なデジタル標高モデル（DEM）データの作成方法について説明します。
 
-### 3.1. DEM データの作成
+#### 5.3.1. DEM データの作成
 
 地形データを作成する場合は、地形データのもととなるラスター形式のデジタル標高モデル（DEM）を準備する必要があります。
 
@@ -151,7 +322,7 @@ PLATEAU-Terrain などのオープンデータとして利用できる地形デ�
 
 なお、DEM データは様々な方法で作成可能であり、必ずしも FME を利用する必要はありません。
 
-#### 3.1.1. 作業フォルダと FME ワークスペースの格納
+##### (1) 作業フォルダと FME ワークスペースの格納
 
 基盤地図情報数値標高モデルから地形モデル用 GeoTIFF 形式 DEM ラスターへの変換を行うため、以下のワークスペースをダウンロードして作業フォルダ内に格納してください。
 
@@ -165,7 +336,7 @@ PLATEAU-Terrain などのオープンデータとして利用できる地形デ�
 - FME Hub で公開されているカスタムフォーマット [Japanese Fundamental Geospatial Data (FGD) DEM V2](https://hub.safe.com/publishers/pacific-spatial-solutions/formats/japanese-fundamental-geospatial-data-fgd-dem-v2) のダウンロードとインストール
 - ダウンロードした `JP_FGD_DEM2.fds` をエクスプローラー上で右クリックしてインストール
 
-#### 3.1.2. DEM データのダウンロード
+##### (2) DEM データのダウンロード
 
 基盤地図情報ダウンロードサイトから対象とする地域の数値標高モデル（DEM）データ（5A, 5B, 5C, 10A, 10B）をすべてダウンロードし、作業フォルダーに保存してください。
 
@@ -173,9 +344,9 @@ PLATEAU-Terrain などのオープンデータとして利用できる地形デ�
 
 DEM の種類（5A, 5B, 5C, 10A, 10B）ごとにサブフォルダーに分ける必要はありません。
 
-#### 3.1.3. FME ワークスペースの実行
+##### (3) FME ワークスペースの実行
 
-##### (1) 基盤地図情報 DEM データから GeoTIFF 形式 DEM ラスターへの変換
+###### (3-a) 基盤地図情報 DEM データから GeoTIFF 形式 DEM ラスターへの変換
 
 ワークスペース: `s1_基盤地図情報DEMのGeoTIFF変換_runner.fmw`
 
@@ -195,7 +366,7 @@ DEM の種類（5A, 5B, 5C, 10A, 10B）ごとにサブフォルダーに分け�
 
 このワークスペースは、基盤地図情報 DEM データ（`*.zip`）を 1 ファイルずつ GeoTIFF 形式に変換するための子ワークスペース `s1_基盤地図情報DEMのGeoTIFF変換.fmw` をファイル数分、繰り返し実行します。
 
-##### (2) 海域に標高値を与えた DEM ラスター（10B）の作成
+###### (3-b) 海域に標高値を与えた DEM ラスター（10B）の作成
 
 ワークスペース: `s2_海面つきDEM10B_GeoTIFF作成.fmw`
 
@@ -218,7 +389,7 @@ DEM の種類（5A, 5B, 5C, 10A, 10B）ごとにサブフォルダーに分け�
 
 - 海域に標高値を与えた `10B → 10A → 5C → 5B → 5A`
 
-### 3.2. 地形データへの変換
+#### 5.3.2. 地形データへの変換
 
 ここでは、Cesium ion を利用した DEM データの地形データへの変換方法を説明します。
 
@@ -226,11 +397,11 @@ Cesium ion のサービスを利用することで、データの変換後、地
 
 Cesium ion では、ユーザーがアップロードした DEM ファイルを `terraindb` 形式に変換し、配信に利用可能です。`terraindb` 形式への変換は、Cesium ion のクラウドサービスに加え、Cesium のオンプレミス（有償）で提供される変換プログラムでも行えます。日本全国の詳細な地形データを作成する場合は、Cesium のオンプレミスの利用をお勧めします。
 
-#### 3.2.1. Cesium ion アカウント開設
+##### (1) Cesium ion アカウント開設
 
 まず、[Cesium ion](https://cesium.com/) のアカウントを用意します。データサイズが 50 GB を超える場合、有料の Commercial アカウント以上を利用する必要があります。
 
-#### 3.2.2. 作成した DEM のアップロードと変換
+##### (2) 作成した DEM のアップロードと変換
 
 FME 等で作成した地形データ作成用の DEM を Cesium ion のアカウントにアップロードして `terraindb` 形式の地形データを準備します。
 
@@ -262,11 +433,11 @@ FME により複数の水平解像度の DEM を用意した場合は、海域�
 
    ![Cesium ion ダイアログ 6](../../../assets/datasets/terrain/terrain_ceisum_ion_dialog_6.png)
 
-### 3.3. 地形データの配信について
+#### 5.3.3. 地形データの配信について
 
 Cesium で地形データを利用するには、地形データをサーバーから配信する必要があります。XYZ タイルデータなどと異なり、データファイルを置いておくだけでは地形データは利用できません。
 
-#### TerriaJS で Cesium ion から配信される地形データを表示する方法
+##### TerriaJS で Cesium ion から配信される地形データを表示する方法
 
 - データカタログに登録する方法
 
@@ -290,11 +461,11 @@ Cesium で地形データを利用するには、地形データをサーバー�
   }
   ```
 
-## 4. PLATEAU Mapbox Terrain Converter
+## 6. PLATEAU Mapbox Terrain Converter
 
-これまで説明した `terraindb` 形式のデータは Cesium 向けの地形データ形式ですが、Mapbox GL JS や MapLibre GL JS などの他の地図エンジンは対応していないという課題があります。
+`terraindb` 形式のデータは Cesium 向けの地形データ形式であり、Mapbox GL JS や MapLibre GL JS などの他の地図エンジンが直接扱えないという課題があります。
 
-そこで、2024 年度の事業において、CityGML 形式の PLATEAU 地形モデル（TIN）を Mapbox や MapLibre で利用可能な地形データである Mapbox Terrain-RGB に変換するライブラリ「PLATEAU Mapbox Terrain Converter」を開発しました。
+そこで、2024 年度の事業において、CityGML 形式の PLATEAU 地形モデル（TIN）を Mapbox や MapLibre で利用可能な地形データである Mapbox Terrain-RGB に変換するライブラリ「PLATEAU Mapbox Terrain Converter」が開発されました。
 
 ライブラリの利用方法および生成した日本全域の地形データの利用方法については、下記のリポジトリを参照してください。
 
