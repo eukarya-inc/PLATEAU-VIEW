@@ -24,6 +24,7 @@ import (
 const (
 	PackStatusAccepted  = "accepted"
 	PackStatusSucceeded = "succeeded"
+	PackStatusFailed    = "failed"
 
 	timeoutSignedURL = 10 * time.Minute
 	urlsCountLimit   = 5
@@ -165,7 +166,8 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 	resp.ID = hash
 
 	// check if the object already exists
-	obj := p.bucket.Object(hash + ".zip").If(storage.Conditions{DoesNotExist: true})
+	rawObj := p.bucket.Object(hash + ".zip")
+	obj := rawObj.If(storage.Conditions{DoesNotExist: true})
 	w := obj.NewWriter(ctx)
 	w.Metadata = Status(PackStatusAccepted)
 	_, _ = w.Write(nil)
@@ -177,7 +179,26 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 				"error": "failed to write metadata",
 			})
 		}
-		return c.JSON(http.StatusOK, resp)
+
+		// object already exists: if previous run failed, reset and re-enqueue
+		attrs, err := rawObj.Attrs(ctx)
+		if err != nil {
+			log.Errorfc(ctx, "citygml: packer: failed to get attrs: %v", err)
+			return c.JSON(http.StatusOK, resp)
+		}
+		if getStatus(attrs.Metadata) != PackStatusFailed {
+			return c.JSON(http.StatusOK, resp)
+		}
+
+		log.Infofc(ctx, "citygml: packer: retrying failed pack: %s", hash)
+		if _, err := rawObj.Update(ctx, storage.ObjectAttrsToUpdate{
+			Metadata: Status(PackStatusAccepted),
+		}); err != nil {
+			log.Errorfc(ctx, "citygml: packer: failed to reset metadata: %v", err)
+			return c.JSON(http.StatusInternalServerError, map[string]any{
+				"error": "failed to reset metadata",
+			})
+		}
 	}
 
 	// if the number of urls exceeds the limit, write urls to an object
@@ -202,7 +223,7 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 
 	// enqueue pack job
 	packReq := PackAsyncRequest{
-		Dest:    toURL(obj),
+		Dest:    toURL(rawObj),
 		Domain:  p.conf.Domain,
 		URLs:    urls,
 		Source:  source,
@@ -213,7 +234,7 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 		log.Errorfc(ctx, "citygml: packer: failed to enqueue pack job: %v", err)
 
 		// delete object to prevent orphaned objects
-		if err := obj.Delete(ctx); err != nil {
+		if err := rawObj.Delete(ctx); err != nil {
 			log.Errorfc(ctx, "citygml: packer: failed to delete object: %v", err)
 		}
 
