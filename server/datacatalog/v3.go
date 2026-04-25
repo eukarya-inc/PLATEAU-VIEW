@@ -54,6 +54,10 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	plateauapig.GET("/mvt/:spec/tilejson.json", h.MVTTileJSONAPI())
 	plateauapig.GET("/:pid/mvt/:spec/tilejson.json", h.MVTTileJSONAPI())
 
+	// Per-city CityGML zip redirect API (stable URL → CMS asset URL)
+	plateauapig.GET("/citygml/:spec/citygml.zip", h.CityGMLRedirectAPI())
+	plateauapig.GET("/:pid/citygml/:spec/citygml.zip", h.CityGMLRedirectAPI())
+
 	// warning API
 	plateauapig.GET("/:pid/warnings", h.WarningHandler)
 

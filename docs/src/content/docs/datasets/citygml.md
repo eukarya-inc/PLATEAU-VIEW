@@ -27,7 +27,11 @@ Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルの�
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets | jq '.citygml[0]'
 ```
 
-主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（zip ファイルの URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
+主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（PLATEAU CMS 上の zip ファイル URL）, `composite_url`（自治体・整備年度を指定して zip にリダイレクトする安定 URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
+
+:::tip[`url` ではなく `composite_url` の利用を推奨します]
+PLATEAU の都市データは毎年更新され、`url` フィールドの CMS 直リンクは新しい年度のデータが公開されるとパスが変わる場合があります。`composite_url`（`/datacatalog/citygml/{cityCode}-{year|latest}/citygml.zip`）は API サーバ側で動的に解決するため、URL がより安定しています。さらに整備年度を `latest` に指定すれば、新しいデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
+:::
 
 GraphQL からも同じ情報を取得できます。`citygmlDatasets` クエリで都道府県・市区町村・年度によるフィルタが可能です:
 

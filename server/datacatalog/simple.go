@@ -26,6 +26,7 @@ type SimpleCityGMLDataset struct {
 	City             string   `json:"city"`
 	CityCode         string   `json:"city_code"`
 	URL              string   `json:"url"`
+	CompositeURL     *string  `json:"composite_url"`
 	FeatureTypes     []string `json:"feature_types"`
 	Year             int      `json:"year"`
 	RegistrationYear int      `json:"registration_year"`
@@ -196,7 +197,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
 
-	citygml, err := fetchSimpleCityGMLDatasets(ctx, r)
+	citygml, err := fetchSimpleCityGMLDatasets(ctx, r, host)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +206,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 	return res, nil
 }
 
-func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo) ([]*SimpleCityGMLDataset, error) {
+func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo, host string) ([]*SimpleCityGMLDataset, error) {
 	ds, err := r.CitygmlDatasets(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch citygml datasets: %w", err)
@@ -252,7 +253,7 @@ func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo) ([]*Simp
 			}
 		}
 
-		res = append(res, &SimpleCityGMLDataset{
+		entry := &SimpleCityGMLDataset{
 			ID:               strings.TrimPrefix(string(d.ID), "cg_"),
 			Pref:             prefName,
 			PrefCode:         prefCode,
@@ -263,7 +264,11 @@ func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo) ([]*Simp
 			Year:             d.Year,
 			RegistrationYear: d.RegistrationYear,
 			Spec:             spec,
-		})
+		}
+		if u := buildCityGMLCompositeURL(host, entry); u != "" {
+			entry.CompositeURL = lo.ToPtr(u)
+		}
+		res = append(res, entry)
 	}
 
 	sort.Slice(res, func(i, j int) bool { return res[i].ID < res[j].ID })
@@ -304,6 +309,18 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 		return host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, strconv.Itoa(d.Year)) + "/tilejson.json"
 	}
 	return ""
+}
+
+// buildCityGMLCompositeURL returns a stable redirect URL that resolves to the
+// per-city CityGML zip. Empty when prerequisites are missing.
+func buildCityGMLCompositeURL(host string, d *SimpleCityGMLDataset) string {
+	if host == "" || d == nil {
+		return ""
+	}
+	if d.CityCode == "" || d.Year == 0 {
+		return ""
+	}
+	return host + "/datacatalog/citygml/" + d.CityCode + "-" + strconv.Itoa(d.Year) + "/citygml.zip"
 }
 
 // buildMVTSpec assembles the path segment used by the MVT TileJSON endpoint.

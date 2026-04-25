@@ -289,6 +289,14 @@ paths:
                           format: uri
                           description: |
                             CityGML の zip ファイルの URL。地物型ごとには分かれず、各自治体の全地物型を 1 つにまとめた zip ファイルです。
+                        composite_url:
+                          type: string
+                          format: uri
+                          nullable: true
+                          description: |
+                            自治体・整備年度を指定して zip ファイルへリダイレクトする安定 URL
+                            (`/datacatalog/citygml/{spec}/citygml.zip`)。`url` の CMS 直リンクが
+                            将来変わってもアプリケーション側の URL を書き換える必要がありません。
                         feature_types:
                           type: array
                           description: |
@@ -435,6 +443,54 @@ paths:
                 type: object
         "404":
           description: 該当する MVT データセットが見つからない
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /datacatalog/citygml/{spec}/citygml.zip:
+    get:
+      summary: 自治体単位の CityGML zip リダイレクト
+      tags:
+        - Data Catalog API
+      description: |
+        指定した自治体・整備年度の CityGML zip ファイルへ 302 リダイレクトする安定 URL。
+        実体ファイルは PLATEAU CMS から配信されるため、CMS 上のアセットパスが変わっても
+        アプリケーション側の URL は維持できます。
+
+        パスパラメータ `spec` の書式：
+
+        ```
+        <cityCode>-<year|latest>
+        ```
+
+        - `cityCode`: 5桁の市区町村コード
+        - `year`:
+          - 西暦4桁: その整備年度のデータ
+          - `latest`: 利用可能な最新整備年度のデータ
+
+        例:
+
+        - `/datacatalog/citygml/13101-2025/citygml.zip`
+        - `/datacatalog/citygml/13101-latest/citygml.zip`
+      parameters:
+        - in: path
+          name: spec
+          required: true
+          schema:
+            type: string
+          example: 13101-latest
+      responses:
+        "302":
+          description: PLATEAU CMS 上の zip ファイル URL へリダイレクト
+        "400":
+          description: spec の書式が不正
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: 該当する CityGML データセットが見つからない
           content:
             application/json:
               schema:

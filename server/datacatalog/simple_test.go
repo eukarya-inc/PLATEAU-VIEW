@@ -74,6 +74,24 @@ func TestBuildDatasetCompositeURL(t *testing.T) {
 	})
 }
 
+func TestBuildCityGMLCompositeURL(t *testing.T) {
+	host := "http://api.example.com"
+
+	t.Run("ok", func(t *testing.T) {
+		u := buildCityGMLCompositeURL(host, &SimpleCityGMLDataset{CityCode: "13101", Year: 2025})
+		assert.Equal(t, "http://api.example.com/datacatalog/citygml/13101-2025/citygml.zip", u)
+	})
+
+	t.Run("missing host", func(t *testing.T) {
+		assert.Empty(t, buildCityGMLCompositeURL("", &SimpleCityGMLDataset{CityCode: "13101", Year: 2025}))
+	})
+
+	t.Run("missing prerequisites", func(t *testing.T) {
+		assert.Empty(t, buildCityGMLCompositeURL(host, &SimpleCityGMLDataset{CityCode: "", Year: 2025}))
+		assert.Empty(t, buildCityGMLCompositeURL(host, &SimpleCityGMLDataset{CityCode: "13101", Year: 0}))
+	})
+}
+
 func TestBuildCompositeTilesets(t *testing.T) {
 	host := "http://api.example.com"
 	lod1 := "1"
