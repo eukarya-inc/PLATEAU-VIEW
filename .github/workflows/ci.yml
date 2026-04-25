@@ -40,12 +40,12 @@ jobs:
       cms-web: ${{ steps.cms-web.outputs.any_changed }}
       build: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name == 'main' }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
       - name: changed files for extension
         id: extension
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           files: |
             extension/**
@@ -54,7 +54,7 @@ jobs:
             .github/workflows/deploy-extension-*.yml
       - name: changed files for server
         id: server
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           files: |
             server/**
@@ -63,14 +63,14 @@ jobs:
             .github/workflows/deploy-server-*.yml
       - name: changed files for tools
         id: tools
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           files: |
             tools/**
             .github/workflows/ci-tools.yml
       - name: changed files for geo
         id: geo
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           files: |
             geo/**
@@ -79,7 +79,7 @@ jobs:
             .github/workflows/deploy-geo-*.yml
       - name: changed files for worker
         id: worker
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -89,7 +89,7 @@ jobs:
             .github/workflows/deploy-worker-*.yml
       - name: changed files for tile
         id: tile
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -99,7 +99,7 @@ jobs:
             .github/workflows/deploy-tile-*.yml
       - name: changed files for editor - core
         id: editor-core
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -109,7 +109,7 @@ jobs:
             .github/workflows/deploy-editor-*.yml
       - name: changed files for editor - server
         id: editor-server
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -119,7 +119,7 @@ jobs:
             .github/workflows/deploy-editor-*.yml
       - name: changed files for editor - web
         id: editor-web
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -129,7 +129,7 @@ jobs:
             .github/workflows/deploy-editor-*.yml
       - name: changed files for cms - server
         id: cms-server
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -140,7 +140,7 @@ jobs:
             .github/workflows/deploy-cms-*.yml
       - name: changed files for cms - worker
         id: cms-worker
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -151,7 +151,7 @@ jobs:
             .github/workflows/deploy-cms-*.yml
       - name: changed files for cms - web
         id: cms-web
-        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45.0.1
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
         with:
           since_last_remote_commit: true
           files: |
@@ -270,7 +270,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-extension-dev
 
@@ -293,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-geo-dev
 
@@ -316,7 +316,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-server-dev
 
@@ -339,7 +339,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-worker-dev
 
@@ -362,7 +362,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-tile-dev
 
@@ -374,7 +374,8 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       core: 'true'
-    secrets: inherit
+    secrets:
+      GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
   build-editor-server:
     needs:
@@ -384,14 +385,13 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       server: 'true'
-    secrets: inherit
 
   deploy-editor-server-dev:
     needs: build-editor-server
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-editor-server-dev
 
@@ -403,14 +403,13 @@ jobs:
     uses: ./.github/workflows/build-editor.yml
     with:
       web: 'true'
-    secrets: inherit
 
   deploy-editor-web-dev:
     needs: build-editor-web
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-editor-web-dev
 
@@ -422,7 +421,6 @@ jobs:
     uses: ./.github/workflows/build-cms-server.yml
     with:
       server: 'true'
-    secrets: inherit
 
   build-cms-worker:
     needs:
@@ -432,7 +430,6 @@ jobs:
     uses: ./.github/workflows/build-cms-worker.yml
     with:
       worker: 'true'
-    secrets: inherit
 
   build-cms-web:
     needs:
@@ -442,7 +439,6 @@ jobs:
     uses: ./.github/workflows/build-cms-web.yml
     with:
       web: 'true'
-    secrets: inherit
 
   deploy-cms-dev:
     needs:
@@ -453,6 +449,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           event-type: deploy-cms-dev

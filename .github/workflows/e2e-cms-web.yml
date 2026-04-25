@@ -15,7 +15,7 @@ on:
         required: true
 jobs:
   call-workflow:
-    uses: reearth/reearth-cms/.github/workflows/e2e_web.yml@main
+    uses: reearth/reearth-cms/.github/workflows/e2e_web.yml@9e3979a910f0c8b2d339850f7f3d7299606c22ff # main
     with:
       api_url: ${{ inputs.api_url }}
       base_url: ${{ inputs.base_url }}
