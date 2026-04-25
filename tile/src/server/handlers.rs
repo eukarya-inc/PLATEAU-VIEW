@@ -31,17 +31,90 @@ pub async fn health() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
+/// `GET /tiles/sources.json` — list every configured source with its layers'
+/// metadata (bounds + zoom range when known). Drives both the viewer's
+/// source dropdown and the inspector overlay; external tools can consume it
+/// to build their own UIs.
+#[derive(Serialize)]
+struct SourcesResponse {
+    sources: Vec<SourceEntry>,
+}
+
+#[derive(Serialize)]
+struct SourceEntry {
+    name: String,
+    layers: Vec<LayerEntry>,
+}
+
+#[derive(Serialize)]
+struct LayerEntry {
+    layer_index: usize,
+    layer_type: &'static str,
+    url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
+    /// `[west, south, east, north]` in degrees, when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bounds: Option<[f64; 4]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_zoom: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_zoom: Option<u8>,
+}
+
+pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    use crate::server::state::LayerEntryKind;
+    use std::collections::BTreeMap;
+
+    let entries = state.inventory_snapshot().await;
+    let mut grouped: BTreeMap<String, Vec<LayerEntry>> = BTreeMap::new();
+    for e in entries {
+        let (bounds, min_zoom, max_zoom) = match &e.kind {
+            LayerEntryKind::Raster(s) => {
+                let b = s.bounds().await.map(|b| [b.west, b.south, b.east, b.north]);
+                let (mn, mx) = s.zoom_range();
+                (b, mn, mx)
+            }
+            LayerEntryKind::Dem(p) => {
+                let b = p.bounds().map(|b| [b.west, b.south, b.east, b.north]);
+                (b, None, Some(p.max_zoom()))
+            }
+        };
+        grouped.entry(e.source_name).or_default().push(LayerEntry {
+            layer_index: e.layer_idx,
+            layer_type: e.layer_type,
+            url: e.url,
+            version: e.version,
+            bounds,
+            min_zoom,
+            max_zoom,
+        });
+    }
+
+    // Stable order: sort layers by their original index, sources alphabetically.
+    let mut sources: Vec<SourceEntry> = grouped
+        .into_iter()
+        .map(|(name, mut layers)| {
+            layers.sort_by_key(|l| l.layer_index);
+            SourceEntry { name, layers }
+        })
+        .collect();
+    sources.sort_by(|a, b| a.name.cmp(&b.name));
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&SourcesResponse { sources }).unwrap_or_else(|_| "{}".to_string()),
+    )
+}
+
 /// Viewer HTML template.
 const VIEWER_HTML: &str = include_str!("viewer.html");
 
-/// Viewer HTML for debugging tiles.
-pub async fn viewer(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let sources = state.list_sources().await;
-    let sources_json = serde_json::to_string(&sources).unwrap_or_else(|_| "[]".to_string());
-    // Escape </script> to prevent breaking out of the JSON script block
-    let sources_json_safe = sources_json.replace("</", "<\\/");
-
-    Html(VIEWER_HTML.replace("{{SOURCES_JSON}}", &sources_json_safe))
+/// Viewer HTML for debugging tiles. The page fetches `/tiles/sources.json`
+/// on load to populate its source dropdown and inspector.
+pub async fn viewer() -> impl IntoResponse {
+    Html(VIEWER_HTML)
 }
 
 /// Generate tile bytes from source (used in single-flight closure).

@@ -26,12 +26,37 @@ pub struct AppState {
     pub cache: Arc<TileCache>,
     /// Cached tile sources (rebuilt on config reload)
     sources: Arc<RwLock<HashMap<String, Arc<dyn TileSource>>>>,
+    /// Per-layer inventory used by `/tiles/bounds.json` (name → entries).
+    inventory: Arc<RwLock<Vec<LayerEntry>>>,
     /// Secret for reload endpoint authorization
     pub reload_secret: Option<String>,
     /// Cache-Control header value (optional)
     pub cache_control: Option<String>,
     /// Terrain endpoint state.
     pub terrain: Arc<super::terrain::TerrainState>,
+}
+
+/// One layer described in the config, with a live source instance for
+/// metadata queries (`bounds()`, `zoom_range()`).
+#[derive(Clone)]
+pub struct LayerEntry {
+    /// Owning source name in the config (or `"dem"` for DEM overlays).
+    pub source_name: String,
+    /// Position within the owning source's `layers` array.
+    pub layer_idx: usize,
+    /// `xyz` | `cog` | `pmtiles` | `maplibre`.
+    pub layer_type: &'static str,
+    pub url: String,
+    pub version: Option<String>,
+    /// Either a raster TileSource or a DEM provider — we only need bounds
+    /// from one of them, and we record which kind produced the entry.
+    pub kind: LayerEntryKind,
+}
+
+#[derive(Clone)]
+pub enum LayerEntryKind {
+    Raster(Arc<dyn TileSource>),
+    Dem(Arc<dyn crate::terrain::DemProvider>),
 }
 
 impl AppState {
@@ -56,7 +81,8 @@ impl AppState {
             object_cache_control,
         ));
 
-        let sources = Self::build_sources(&config.sources);
+        let mut inventory = Vec::new();
+        let sources = Self::build_sources(&config.sources, &mut inventory);
 
         // Preload sources based on mode
         match preload_mode {
@@ -77,12 +103,15 @@ impl AppState {
             }
         }
 
-        let terrain = Self::build_terrain(&terrain_settings, &config.sources).await;
+        let (terrain, dem_inventory) =
+            Self::build_terrain(&terrain_settings, &config.sources).await;
+        inventory.extend(dem_inventory);
 
         Self {
             config_manager,
             cache,
             sources: Arc::new(RwLock::new(sources)),
+            inventory: Arc::new(RwLock::new(inventory)),
             reload_secret,
             cache_control,
             terrain,
@@ -97,8 +126,9 @@ impl AppState {
     async fn build_terrain(
         settings: &TerrainSettings,
         sources: &HashMap<String, SourceConfig>,
-    ) -> Arc<super::terrain::TerrainState> {
+    ) -> (Arc<super::terrain::TerrainState>, Vec<LayerEntry>) {
         let base = settings.build_dem();
+        let mut dem_inventory: Vec<LayerEntry> = Vec::new();
 
         let dem: Arc<dyn DemProvider> = match sources.get(DEM_SOURCE_KEY) {
             None => base,
@@ -108,7 +138,18 @@ impl AppState {
                     .layers
                     .iter()
                     .enumerate()
-                    .filter_map(|(i, layer)| build_dem_overlay(i, layer))
+                    .filter_map(|(i, layer)| {
+                        let provider = build_dem_overlay(i, layer)?;
+                        dem_inventory.push(LayerEntry {
+                            source_name: DEM_SOURCE_KEY.to_string(),
+                            layer_idx: i,
+                            layer_type: layer.layer_type_static(),
+                            url: layer.url().to_string(),
+                            version: layer.version().map(|s| s.to_string()),
+                            kind: LayerEntryKind::Dem(provider.clone()),
+                        });
+                        Some(provider)
+                    })
                     .collect();
                 tracing::info!(
                     "Building composite DEM: 1 base + {} overlays",
@@ -118,13 +159,16 @@ impl AppState {
             }
         };
 
-        Arc::new(super::terrain::TerrainState {
-            dem,
-            tile_size: settings.tile_size,
-            default_geoid: settings.default_geoid,
-            max_zoom: settings.max_zoom,
-            max_error: settings.max_error,
-        })
+        (
+            Arc::new(super::terrain::TerrainState {
+                dem,
+                tile_size: settings.tile_size,
+                default_geoid: settings.default_geoid,
+                max_zoom: settings.max_zoom,
+                max_error: settings.max_error,
+            }),
+            dem_inventory,
+        )
     }
 
     /// Preload all sources in parallel (e.g., COG metadata).
@@ -150,6 +194,7 @@ impl AppState {
 
     fn build_sources(
         source_configs: &HashMap<String, SourceConfig>,
+        inventory: &mut Vec<LayerEntry>,
     ) -> HashMap<String, Arc<dyn TileSource>> {
         let mut sources = HashMap::new();
 
@@ -172,52 +217,64 @@ impl AppState {
                 }
             }
 
-            let source = Self::build_source(config);
+            let source = Self::build_source(name, config, inventory);
             sources.insert(name.clone(), source);
         }
 
         sources
     }
 
-    fn build_source(config: &SourceConfig) -> Arc<dyn TileSource> {
-        // Separate layers by type
-        let mut xyz_layers: Vec<&LayerConfig> = Vec::new();
-        let mut cog_layers: Vec<(&LayerConfig, i32)> = Vec::new();
-        let mut maplibre_layers: Vec<&LayerConfig> = Vec::new();
-        let mut pmtiles_layers: Vec<&LayerConfig> = Vec::new();
+    fn build_source(
+        source_name: &str,
+        config: &SourceConfig,
+        inventory: &mut Vec<LayerEntry>,
+    ) -> Arc<dyn TileSource> {
+        // Separate layers by type, preserving original index for inventory.
+        let mut xyz_layers: Vec<(usize, &LayerConfig)> = Vec::new();
+        let mut cog_layers: Vec<(usize, &LayerConfig, i32)> = Vec::new();
+        let mut maplibre_layers: Vec<(usize, &LayerConfig)> = Vec::new();
+        let mut pmtiles_layers: Vec<(usize, &LayerConfig)> = Vec::new();
 
-        for layer in &config.layers {
+        for (i, layer) in config.layers.iter().enumerate() {
             match layer {
-                LayerConfig::Xyz { .. } => {
-                    xyz_layers.push(layer);
-                }
-                LayerConfig::Cog { order, .. } => {
-                    cog_layers.push((layer, *order));
-                }
-                LayerConfig::MapLibre { .. } => {
-                    maplibre_layers.push(layer);
-                }
-                LayerConfig::Pmtiles { .. } => {
-                    pmtiles_layers.push(layer);
-                }
+                LayerConfig::Xyz { .. } => xyz_layers.push((i, layer)),
+                LayerConfig::Cog { order, .. } => cog_layers.push((i, layer, *order)),
+                LayerConfig::MapLibre { .. } => maplibre_layers.push((i, layer)),
+                LayerConfig::Pmtiles { .. } => pmtiles_layers.push((i, layer)),
             }
         }
 
         // Sort COG layers by order
-        cog_layers.sort_by_key(|(_, order)| *order);
+        cog_layers.sort_by_key(|(_, _, order)| *order);
+
+        // Helper to record a layer entry for the inspector inventory.
+        let mut push_entry = |idx: usize, layer: &LayerConfig, src: Arc<dyn TileSource>| {
+            inventory.push(LayerEntry {
+                source_name: source_name.to_string(),
+                layer_idx: idx,
+                layer_type: layer.layer_type_static(),
+                url: layer.url().to_string(),
+                version: layer.version().map(|s| s.to_string()),
+                kind: LayerEntryKind::Raster(src),
+            });
+        };
 
         // Build composite source
         let mut composite = CompositeTileSource::new();
 
         // Add MapLibre as base if present (takes priority over XYZ)
-        if let Some(LayerConfig::MapLibre { url, version, .. }) = maplibre_layers.first() {
-            let maplibre_source =
-                MaplibreTileSource::with_version(url.clone(), None, version.as_deref());
-            composite = composite.with_base(Box::new(maplibre_source));
+        if let Some((idx, LayerConfig::MapLibre { url, version, .. })) = maplibre_layers.first() {
+            let maplibre_source: Arc<dyn TileSource> = Arc::new(MaplibreTileSource::with_version(
+                url.clone(),
+                None,
+                version.as_deref(),
+            ));
+            push_entry(*idx, maplibre_layers[0].1, maplibre_source.clone());
+            composite = composite.with_base(maplibre_source);
         }
 
-        // Add all XYZ layers as overlays (they have range filters so will only render when in range)
-        for layer in &xyz_layers {
+        // Add all XYZ layers as overlays.
+        for (idx, layer) in &xyz_layers {
             if let LayerConfig::Xyz {
                 url,
                 range,
@@ -225,14 +282,18 @@ impl AppState {
                 ..
             } = layer
             {
-                let xyz_source =
-                    XyzTileSource::with_version(url.clone(), range.clone(), version.as_deref());
-                composite = composite.with_overlay(Box::new(xyz_source));
+                let src: Arc<dyn TileSource> = Arc::new(XyzTileSource::with_version(
+                    url.clone(),
+                    range.clone(),
+                    version.as_deref(),
+                ));
+                push_entry(*idx, layer, src.clone());
+                composite = composite.with_overlay(src);
             }
         }
 
-        // Add COG overlays
-        for (layer, _) in cog_layers {
+        // Add COG overlays.
+        for (idx, layer, _) in &cog_layers {
             if let LayerConfig::Cog {
                 url,
                 nodata,
@@ -240,14 +301,18 @@ impl AppState {
                 ..
             } = layer
             {
-                let cog_source =
-                    CogTileSource::with_version(url.clone(), nodata.clone(), version.as_deref());
-                composite = composite.with_overlay(Box::new(cog_source));
+                let src: Arc<dyn TileSource> = Arc::new(CogTileSource::with_version(
+                    url.clone(),
+                    nodata.clone(),
+                    version.as_deref(),
+                ));
+                push_entry(*idx, layer, src.clone());
+                composite = composite.with_overlay(src);
             }
         }
 
-        // Add PMTiles overlays
-        for layer in &pmtiles_layers {
+        // Add PMTiles overlays.
+        for (idx, layer) in &pmtiles_layers {
             if let LayerConfig::Pmtiles {
                 url,
                 range,
@@ -255,12 +320,14 @@ impl AppState {
                 ..
             } = layer
             {
-                let src = crate::tile::PmtilesTileSource::with_version(
-                    url.clone(),
-                    range.clone(),
-                    version.as_deref(),
-                );
-                composite = composite.with_overlay(Box::new(src));
+                let src: Arc<dyn TileSource> =
+                    Arc::new(crate::tile::PmtilesTileSource::with_version(
+                        url.clone(),
+                        range.clone(),
+                        version.as_deref(),
+                    ));
+                push_entry(*idx, layer, src.clone());
+                composite = composite.with_overlay(src);
             }
         }
 
@@ -290,14 +357,22 @@ impl AppState {
     /// Reload sources from config.
     pub async fn reload_sources(&self) {
         let config = self.config_manager.get().await;
-        let new_sources = Self::build_sources(&config.sources);
+        let mut new_inventory = Vec::new();
+        let new_sources = Self::build_sources(&config.sources, &mut new_inventory);
 
         // Preload new sources in parallel
         Self::preload_sources(&new_sources).await;
 
         let mut sources = self.sources.write().await;
         *sources = new_sources;
+        let mut inv = self.inventory.write().await;
+        *inv = new_inventory;
         tracing::info!("Rebuilt {} tile sources", sources.len());
+    }
+
+    /// Snapshot the per-layer inventory (for `/tiles/bounds.json`).
+    pub async fn inventory_snapshot(&self) -> Vec<LayerEntry> {
+        self.inventory.read().await.clone()
     }
 
     /// List available source names (sorted alphabetically).

@@ -193,7 +193,16 @@
         </select>
         <button id="copyUrl" title="Copy tile URL template">URL</button>
         <button id="gsiToggle" class="active">地理院</button>
-        <a href="/terrain-viewer" class="terrain-link" title="3D terrain view">Terrain →</a>
+        <select id="geoid" title="Geoid model used by /mapbox/ DEM">
+            <option value="gsigeo2011">GSIGEO2011</option>
+            <option value="jpgeo2024">JPGEO2024</option>
+            <option value="jpgeo2024-hrefconv">JPGEO2024+Hrefconv</option>
+            <option value="none">No geoid</option>
+        </select>
+        <button id="terrain3dToggle" title="3D terrain (Mapbox Terrain-RGB)">3D</button>
+        <button id="hillshadeToggle" title="Hillshade overlay">Hillshade</button>
+        <button id="inspectorToggle" title="Show source bounds on the map">Inspector</button>
+        <a href="/terrain-viewer" class="terrain-link" title="Cesium 3D viewer">Terrain →</a>
         <span class="spacer"></span>
         <span class="info" id="coords"></span>
         <button class="help-btn" id="helpBtn">?</button>
@@ -224,10 +233,8 @@
             </div>
         </div>
     </div>
-    <script id="sources-data" type="application/json">{{SOURCES_JSON}}</script>
 
     <script>
-        const sources = JSON.parse(document.getElementById('sources-data').textContent);
         const sourceSelect = document.getElementById('source');
         const formatSelect = document.getElementById('format');
         const copyUrlBtn = document.getElementById('copyUrl');
@@ -238,12 +245,26 @@
         const modalClose = document.getElementById('modalClose');
         let gsiEnabled = true;
 
-        // Populate source dropdown
-        sources.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            sourceSelect.appendChild(option);
+        // Cache of /tiles/sources.json (populated lazily; shared by the
+        // dropdown and the inspector overlay).
+        let sourcesPromise = null;
+        function loadSources() {
+            if (!sourcesPromise) {
+                sourcesPromise = fetch('/tiles/sources.json')
+                    .then((r) => (r.ok ? r.json() : { sources: [] }))
+                    .catch(() => ({ sources: [] }));
+            }
+            return sourcesPromise;
+        }
+
+        // Populate source dropdown.
+        loadSources().then((data) => {
+            for (const src of data.sources || []) {
+                const option = document.createElement('option');
+                option.value = src.name;
+                option.textContent = src.name;
+                sourceSelect.appendChild(option);
+            }
         });
 
         // Initialize map with GSI (国土地理院) base
@@ -345,6 +366,220 @@
             const zoom = map.getZoom().toFixed(1);
             coordsEl.textContent = `z${zoom} ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
         });
+
+        // ── Mapbox Terrain-RGB DEM (3D terrain + hillshade) ────────────
+        const geoidSelect = document.getElementById('geoid');
+        const terrain3dToggle = document.getElementById('terrain3dToggle');
+        const hillshadeToggle = document.getElementById('hillshadeToggle');
+        const inspectorToggle = document.getElementById('inspectorToggle');
+
+        let terrain3dEnabled = false;
+        let hillshadeEnabled = false;
+        let inspectorEnabled = false;
+
+        function demTilesUrl() {
+            const g = encodeURIComponent(geoidSelect.value);
+            return `${window.location.origin}/mapbox/{z}/{x}/{y}.png?geoid=${g}`;
+        }
+
+        function ensureDemSource() {
+            // (Re)create the raster-dem source so the URL reflects the
+            // current geoid selection.
+            if (map.getSource('dem-rgb')) {
+                if (terrain3dEnabled) map.setTerrain(null);
+                if (map.getLayer('hillshade')) map.removeLayer('hillshade');
+                map.removeSource('dem-rgb');
+            }
+            map.addSource('dem-rgb', {
+                type: 'raster-dem',
+                tiles: [demTilesUrl()],
+                encoding: 'mapbox',
+                tileSize: 512,
+                maxzoom: 15,
+                attribution:
+                    '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>',
+            });
+        }
+
+        function applyTerrain3d() {
+            if (!terrain3dEnabled) {
+                map.setTerrain(null);
+                terrain3dToggle.classList.remove('active');
+                return;
+            }
+            terrain3dToggle.classList.add('active');
+            map.setTerrain({ source: 'dem-rgb', exaggeration: 1.0 });
+        }
+
+        function applyHillshade() {
+            if (!hillshadeEnabled) {
+                if (map.getLayer('hillshade')) map.removeLayer('hillshade');
+                hillshadeToggle.classList.remove('active');
+                return;
+            }
+            hillshadeToggle.classList.add('active');
+            if (map.getLayer('hillshade')) return;
+            // Insert below the user-selected raster `tiles` layer if present
+            // so the hillshade reads as terrain shading.
+            const beforeId = map.getLayer('tiles') ? 'tiles' : undefined;
+            map.addLayer(
+                {
+                    id: 'hillshade',
+                    type: 'hillshade',
+                    source: 'dem-rgb',
+                    paint: {
+                        'hillshade-shadow-color': '#000',
+                        'hillshade-exaggeration': 0.5,
+                    },
+                },
+                beforeId,
+            );
+        }
+
+        function refreshDemFeatures() {
+            ensureDemSource();
+            applyTerrain3d();
+            applyHillshade();
+        }
+
+        terrain3dToggle.addEventListener('click', () => {
+            terrain3dEnabled = !terrain3dEnabled;
+            if (terrain3dEnabled || hillshadeEnabled) ensureDemSource();
+            applyTerrain3d();
+        });
+        hillshadeToggle.addEventListener('click', () => {
+            hillshadeEnabled = !hillshadeEnabled;
+            if (terrain3dEnabled || hillshadeEnabled) ensureDemSource();
+            applyHillshade();
+        });
+        geoidSelect.addEventListener('change', () => {
+            if (terrain3dEnabled || hillshadeEnabled) refreshDemFeatures();
+        });
+
+        // ── Inspector: bounds.json overlay ─────────────────────────────
+        const inspectorPalette = [
+            '#e6194b', '#3cb44b', '#ffe119', '#4363d8',
+            '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+            '#bcf60c', '#fabebe', '#008080', '#e6beff',
+            '#9a6324', '#fffac8', '#800000', '#aaffc3',
+        ];
+
+        async function loadInspector() {
+            // Force refresh — the user may have hit /reload between toggles.
+            sourcesPromise = null;
+            const data = await loadSources();
+            const features = [];
+            let colorIdx = 0;
+            for (const src of data.sources || []) {
+                for (const layer of src.layers || []) {
+                    if (!layer.bounds) continue; // skip layers with unknown bounds
+                    const [w, s, ee, n] = layer.bounds;
+                    const label = `${src.name}[${layer.layer_index}] ${layer.layer_type}`;
+                    const zoom =
+                        layer.min_zoom != null && layer.max_zoom != null
+                            ? `z${layer.min_zoom}-${layer.max_zoom}`
+                            : '';
+                    features.push({
+                        type: 'Feature',
+                        properties: {
+                            label,
+                            url: layer.url,
+                            zoom,
+                            version: layer.version || '',
+                            color: inspectorPalette[colorIdx % inspectorPalette.length],
+                        },
+                        geometry: {
+                            type: 'Polygon',
+                            coordinates: [[
+                                [w, s], [ee, s], [ee, n], [w, n], [w, s],
+                            ]],
+                        },
+                    });
+                    colorIdx += 1;
+                }
+            }
+            const collection = { type: 'FeatureCollection', features };
+
+            if (map.getSource('inspector')) {
+                map.getSource('inspector').setData(collection);
+            } else {
+                map.addSource('inspector', { type: 'geojson', data: collection });
+                map.addLayer({
+                    id: 'inspector-fill',
+                    type: 'fill',
+                    source: 'inspector',
+                    paint: {
+                        'fill-color': ['get', 'color'],
+                        'fill-opacity': 0.12,
+                    },
+                });
+                map.addLayer({
+                    id: 'inspector-outline',
+                    type: 'line',
+                    source: 'inspector',
+                    paint: {
+                        'line-color': ['get', 'color'],
+                        'line-width': 2,
+                    },
+                });
+                map.addLayer({
+                    id: 'inspector-label',
+                    type: 'symbol',
+                    source: 'inspector',
+                    layout: {
+                        'symbol-placement': 'point',
+                        'text-field': ['get', 'label'],
+                        'text-size': 12,
+                        'text-anchor': 'top-left',
+                        'text-offset': [0.5, 0.5],
+                        'text-allow-overlap': true,
+                    },
+                    paint: {
+                        'text-color': ['get', 'color'],
+                        'text-halo-color': '#fff',
+                        'text-halo-width': 1.5,
+                    },
+                });
+                map.on('click', 'inspector-fill', (ev) => {
+                    const f = ev.features?.[0];
+                    if (!f) return;
+                    const p = f.properties;
+                    new maplibregl.Popup()
+                        .setLngLat(ev.lngLat)
+                        .setHTML(
+                            `<strong>${escapeHtml(p.label)}</strong><br>`
+                                + `<small>${escapeHtml(p.zoom || '')} ${escapeHtml(p.version || '')}</small><br>`
+                                + `<a href="${encodeURI(p.url)}" target="_blank">${escapeHtml(p.url)}</a>`,
+                        )
+                        .addTo(map);
+                });
+            }
+        }
+
+        function setInspectorVisibility(on) {
+            ['inspector-fill', 'inspector-outline', 'inspector-label'].forEach((id) => {
+                if (map.getLayer(id)) {
+                    map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+                }
+            });
+        }
+
+        inspectorToggle.addEventListener('click', async () => {
+            inspectorEnabled = !inspectorEnabled;
+            inspectorToggle.classList.toggle('active', inspectorEnabled);
+            if (inspectorEnabled) {
+                await loadInspector();
+                setInspectorVisibility(true);
+            } else {
+                setInspectorVisibility(false);
+            }
+        });
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, (c) => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
 
         // Event listeners
         gsiToggle.addEventListener('click', toggleGsi);

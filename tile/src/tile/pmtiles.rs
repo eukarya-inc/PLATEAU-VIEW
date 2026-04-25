@@ -13,12 +13,15 @@ use tokio::sync::OnceCell;
 
 use super::source::{TileError, TileSource, single_etag_key};
 use crate::config::RangeConfig;
+use crate::terrain::GeoBounds;
 
 pub struct PmtilesTileSource {
     url: String,
     range: Option<RangeConfig>,
     etag_key: String,
     reader: OnceCell<Arc<AsyncPmTilesReader<ObjectStoreBackend>>>,
+    bounds_cell: OnceCell<Option<GeoBounds>>,
+    zoom_range_cell: OnceCell<(u8, u8)>,
 }
 
 impl PmtilesTileSource {
@@ -29,6 +32,8 @@ impl PmtilesTileSource {
             range,
             etag_key,
             reader: OnceCell::new(),
+            bounds_cell: OnceCell::new(),
+            zoom_range_cell: OnceCell::new(),
         }
     }
 
@@ -42,6 +47,8 @@ impl PmtilesTileSource {
             range,
             etag_key,
             reader: OnceCell::new(),
+            bounds_cell: OnceCell::new(),
+            zoom_range_cell: OnceCell::new(),
         }
     }
 
@@ -63,8 +70,27 @@ impl PmtilesTileSource {
 #[async_trait]
 impl TileSource for PmtilesTileSource {
     async fn preload(&self) -> Result<(), TileError> {
-        let _ = self.reader().await?;
+        let reader = self.reader().await?;
+        let header = reader.get_header();
+        let _ = self.bounds_cell.set(Some(GeoBounds::new(
+            header.min_longitude,
+            header.min_latitude,
+            header.max_longitude,
+            header.max_latitude,
+        )));
+        let _ = self.zoom_range_cell.set((header.min_zoom, header.max_zoom));
         Ok(())
+    }
+
+    async fn bounds(&self) -> Option<GeoBounds> {
+        self.bounds_cell.get().and_then(|b| *b)
+    }
+
+    fn zoom_range(&self) -> (Option<u8>, Option<u8>) {
+        match self.zoom_range_cell.get() {
+            Some((min, max)) => (Some(*min), Some(*max)),
+            None => (None, None),
+        }
     }
 
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError> {

@@ -71,4 +71,17 @@ pub trait TileSource: Send + Sync {
     /// Returns a list of unique keys (e.g., "xyz:url:version") for ETag calculation.
     /// Only includes layers that actually cover the specified tile coordinates.
     fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String>;
+
+    /// Geographic coverage in degrees, populated after `preload()`.
+    /// `None` means global / unknown — the inspector skips drawing such
+    /// layers on the map.
+    async fn bounds(&self) -> Option<crate::terrain::GeoBounds> {
+        None
+    }
+
+    /// Native zoom range, if known. PMTiles archives carry this in their
+    /// header; XYZ / COG sources usually don't have a declared range.
+    fn zoom_range(&self) -> (Option<u8>, Option<u8>) {
+        (None, None)
+    }
 }

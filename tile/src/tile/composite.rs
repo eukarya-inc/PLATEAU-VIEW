@@ -9,9 +9,9 @@ use super::source::{TileError, TileSource};
 /// Composite tile source that overlays multiple sources.
 pub struct CompositeTileSource {
     /// Base layer (bottom)
-    base: Option<Box<dyn TileSource>>,
+    base: Option<std::sync::Arc<dyn TileSource>>,
     /// Overlay layers (sorted by order, lower index = bottom)
-    overlays: Vec<Box<dyn TileSource>>,
+    overlays: Vec<std::sync::Arc<dyn TileSource>>,
     /// Tile size
     tile_size: u32,
 }
@@ -25,17 +25,17 @@ impl CompositeTileSource {
         }
     }
 
-    pub fn with_base(mut self, base: Box<dyn TileSource>) -> Self {
+    pub fn with_base(mut self, base: std::sync::Arc<dyn TileSource>) -> Self {
         self.base = Some(base);
         self
     }
 
-    pub fn with_overlay(mut self, overlay: Box<dyn TileSource>) -> Self {
+    pub fn with_overlay(mut self, overlay: std::sync::Arc<dyn TileSource>) -> Self {
         self.overlays.push(overlay);
         self
     }
 
-    pub fn with_overlays(mut self, overlays: Vec<Box<dyn TileSource>>) -> Self {
+    pub fn with_overlays(mut self, overlays: Vec<std::sync::Arc<dyn TileSource>>) -> Self {
         self.overlays.extend(overlays);
         self
     }

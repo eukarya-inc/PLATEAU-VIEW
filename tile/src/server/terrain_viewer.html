@@ -38,48 +38,38 @@
     <button id="flyChiyoda">千代田区へ</button>
   </div>
   <div id="cesium"></div>
-  <script id="sources-data" type="application/json">{{SOURCES_JSON}}</script>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
   <script>
     Cesium.Ion.defaultAccessToken = null;
 
     // ── Imagery options ────────────────────────────────────────────────
-    // Configured /tiles/<name>/ sources are listed first. If none exist,
-    // we fall back to OSM purely as a debug default so the globe still has
-    // something on it.
-    const sources = JSON.parse(document.getElementById('sources-data').textContent);
+    // OSM is always available as a debug base. If `/tiles/sources.json`
+    // returns any configured sources, those are inserted before OSM and the
+    // first one is auto-selected.
     const imagerySelect = document.getElementById('imagery');
 
-    const options = sources.map((name) => ({
-      id: `tiles:${name}`,
-      label: name,
+    const osmOption = {
+      id: 'osm',
+      label: 'OSM (debug)',
       build: () =>
-        new Cesium.UrlTemplateImageryProvider({
-          url: `/tiles/${name}/{z}/{x}/{y}.png`,
+        new Cesium.OpenStreetMapImageryProvider({
+          url: 'https://tile.openstreetmap.org/',
           credit:
-            '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>',
+            '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
         }),
-    }));
+    };
+    const options = [osmOption];
 
-    if (options.length === 0) {
-      options.push({
-        id: 'osm',
-        label: 'OSM (debug)',
-        build: () =>
-          new Cesium.OpenStreetMapImageryProvider({
-            url: 'https://tile.openstreetmap.org/',
-            credit:
-              '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
-          }),
-      });
+    function rebuildImagerySelect() {
+      imagerySelect.innerHTML = '';
+      for (const opt of options) {
+        const el = document.createElement('option');
+        el.value = opt.id;
+        el.textContent = opt.label;
+        imagerySelect.appendChild(el);
+      }
     }
-
-    for (const opt of options) {
-      const el = document.createElement('option');
-      el.value = opt.id;
-      el.textContent = opt.label;
-      imagerySelect.appendChild(el);
-    }
+    rebuildImagerySelect();
 
     // ── Cesium init ────────────────────────────────────────────────────
     const initialOption = options[0];
@@ -110,6 +100,28 @@
     viewer.shadows = true;
     viewer.scene.globe.shadows = Cesium.ShadowMode.RECEIVE_ONLY;
     viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    // Once /tiles/sources.json arrives, prepend each configured source as
+    // an imagery option and switch to the first one.
+    fetch('/tiles/sources.json')
+      .then((r) => (r.ok ? r.json() : { sources: [] }))
+      .catch(() => ({ sources: [] }))
+      .then((data) => {
+        const tilesOptions = (data.sources || []).map((src) => ({
+          id: `tiles:${src.name}`,
+          label: src.name,
+          build: () =>
+            new Cesium.UrlTemplateImageryProvider({
+              url: `/tiles/${src.name}/{z}/{x}/{y}.png`,
+              credit:
+                '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>',
+            }),
+        }));
+        if (tilesOptions.length === 0) return;
+        options.splice(0, 0, ...tilesOptions);
+        rebuildImagerySelect();
+        setImagery(tilesOptions[0].id);
+      });
 
     function setImagery(id) {
       const opt = options.find((o) => o.id === id) || options[0];

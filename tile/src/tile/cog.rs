@@ -73,6 +73,14 @@ impl CogTileSource {
         *self.bounds.read().await
     }
 
+    /// Get cached bounds as a `terrain::GeoBounds` (after `preload()`).
+    pub async fn cached_geo_bounds(&self) -> Option<crate::terrain::GeoBounds> {
+        let b = self.get_bounds().await?;
+        Some(crate::terrain::GeoBounds::new(
+            b.west, b.south, b.east, b.north,
+        ))
+    }
+
     /// Initialize the COG reader if not already done.
     async fn ensure_reader(&self) -> Result<(), TileError> {
         let mut reader_guard = self.reader.write().await;
@@ -278,5 +286,9 @@ impl TileSource for CogTileSource {
 
     fn etag_keys(&self, z: u32, x: u32, y: u32) -> Vec<String> {
         single_etag_key(&self.etag_key, self.covers(z, x, y))
+    }
+
+    async fn bounds(&self) -> Option<crate::terrain::GeoBounds> {
+        self.cached_geo_bounds().await
     }
 }

@@ -120,6 +120,11 @@ pub enum LayerConfig {
 impl LayerConfig {
     /// Get the layer type as a string.
     pub fn layer_type(&self) -> &'static str {
+        self.layer_type_static()
+    }
+
+    /// Same as `layer_type`, lifetimed for use in `'static` contexts.
+    pub fn layer_type_static(&self) -> &'static str {
         match self {
             LayerConfig::Xyz { .. } => "xyz",
             LayerConfig::Cog { .. } => "cog",

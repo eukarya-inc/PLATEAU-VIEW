@@ -160,11 +160,8 @@ fn digest(s: &str) -> String {
 const VIEWER_HTML: &str = include_str!("terrain_viewer.html");
 
 /// GET /terrain-viewer
-pub async fn terrain_viewer(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let sources = state.list_sources().await;
-    let sources_json = serde_json::to_string(&sources).unwrap_or_else(|_| "[]".to_string());
-    let sources_json_safe = sources_json.replace("</", "<\\/");
-    Html(VIEWER_HTML.replace("{{SOURCES_JSON}}", &sources_json_safe))
+pub async fn terrain_viewer() -> impl IntoResponse {
+    Html(VIEWER_HTML)
 }
 
 /// GET /terrain/layer.json
