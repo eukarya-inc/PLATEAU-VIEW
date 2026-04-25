@@ -170,17 +170,17 @@
       setTerrain(e.target.value).catch(console.error);
     });
 
-    // ── 3D Tiles LOD1 of Chiyoda-ku for grounding sanity check ─────────
-    const CHIYODA_LOD1_URL =
-      'https://assets.cms.plateau.reearth.io/assets/3f/e07412-5455-40c0-9f64-2ac43086a209/13101_chiyoda-ku_pref_2025_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json';
+    // ── 3D Tiles LOD1 (all cities) for grounding sanity check ─────────
+    const ALL_LOD1_URL =
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tileset.json';
     (async () => {
       try {
-        const tileset = await Cesium.Cesium3DTileset.fromUrl(CHIYODA_LOD1_URL, {
+        const tileset = await Cesium.Cesium3DTileset.fromUrl(ALL_LOD1_URL, {
           shadows: Cesium.ShadowMode.ENABLED,
         });
         viewer.scene.primitives.add(tileset);
       } catch (err) {
-        console.error('Failed to load Chiyoda LOD1 tileset:', err);
+        console.error('Failed to load LOD1 tileset:', err);
       }
     })();
 

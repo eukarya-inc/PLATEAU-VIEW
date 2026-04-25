@@ -16,8 +16,8 @@ use super::mapterhorn::{
 };
 use super::pmtiles::{PmtilesEncoding, PmtilesSource};
 
-const DEFAULT_TERRAIN_TILE_SIZE: u32 = 512;
-const DEFAULT_TERRAIN_MAX_ZOOM: u8 = 15;
+const DEFAULT_TERRAIN_TILE_SIZE: u32 = 256;
+const DEFAULT_TERRAIN_MAX_ZOOM: u8 = 18;
 const DEFAULT_TERRAIN_MAX_ERROR: f64 = 5.0;
 const DEFAULT_DEM_VERSION: &str = "v1";
 

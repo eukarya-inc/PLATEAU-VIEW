@@ -391,14 +391,15 @@
         let hillshadeEnabled = false;
         let inspectorEnabled = false;
 
-        function demTilesUrl() {
+        function demTilejsonUrl() {
             const g = encodeURIComponent(geoidSelect.value);
-            return `${window.location.origin}/mapbox/{z}/{x}/{y}.png?geoid=${g}`;
+            return `${window.location.origin}/mapbox/tilejson.json?geoid=${g}&format=png`;
         }
 
         function ensureDemSource() {
             // (Re)create the raster-dem source so the URL reflects the
-            // current geoid selection.
+            // current geoid selection. Source pulls `tiles`, `minzoom`,
+            // `maxzoom`, and `bounds` from the tilejson endpoint.
             if (map.getSource('dem-rgb')) {
                 if (terrain3dEnabled) map.setTerrain(null);
                 if (map.getLayer('hillshade')) map.removeLayer('hillshade');
@@ -406,12 +407,9 @@
             }
             map.addSource('dem-rgb', {
                 type: 'raster-dem',
-                tiles: [demTilesUrl()],
+                url: demTilejsonUrl(),
                 encoding: 'mapbox',
-                tileSize: 512,
-                maxzoom: 15,
-                attribution:
-                    '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>',
+                tileSize: 256,
             });
         }
 

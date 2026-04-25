@@ -35,6 +35,39 @@ pub use pmtiles::{PmtilesEncoding, PmtilesSource};
 pub use settings::TerrainSettings;
 pub use xyz_dem::{XyzDemEncoding, XyzDemSource};
 
+/// Extract a `(tile_size / 2^zoom_diff)`-wide sub-region of `parent` and
+/// bilinear-upsample it back to `tile_size × tile_size`. Used to serve
+/// raster-DEM tiles at zoom levels above the upstream DEM's `max_zoom`:
+/// the requested child `(z, x, y)` is mapped to a parent tile at
+/// `dem_max_zoom`, the relevant quadrant is extracted, and the missing
+/// detail is filled in by bilinear interpolation.
+///
+/// Per stralift's per-source upsampling. The interpolation is independent
+/// per child tile, so adjacent children may differ by sub-pixel amounts
+/// at their shared edge — acceptable for terrain rendering.
+pub(crate) fn extract_and_upsample(
+    parent: &[f64],
+    tile_size: u32,
+    zoom_diff: u8,
+    sub_x: u32,
+    sub_y: u32,
+) -> Vec<f64> {
+    let factor = 1u32 << zoom_diff;
+    let sub_size = (tile_size / factor).max(1);
+    let off_x = sub_x * sub_size;
+    let off_y = sub_y * sub_size;
+
+    let mut sub = Vec::with_capacity((sub_size * sub_size) as usize);
+    for py in 0..sub_size {
+        let row = ((off_y + py) * tile_size) as usize;
+        for px in 0..sub_size {
+            sub.push(parent[row + (off_x + px) as usize]);
+        }
+    }
+
+    resample_bilinear(&sub, sub_size, sub_size, tile_size, tile_size)
+}
+
 /// Bilinear resample a row-major grid. Shared between DEM sources.
 pub(crate) fn resample_bilinear(
     src: &[f64],
@@ -69,12 +102,41 @@ pub(crate) fn resample_bilinear(
 
 #[cfg(test)]
 mod tests {
-    use super::resample_bilinear;
+    use super::{extract_and_upsample, resample_bilinear};
 
     #[test]
     fn resample_identity() {
         let src: Vec<f64> = (0..9).map(|v| v as f64).collect();
         let out = resample_bilinear(&src, 3, 3, 3, 3);
         assert_eq!(out, src);
+    }
+
+    #[test]
+    fn upsample_extracts_correct_quadrant() {
+        // 4x4 parent: each row 100*y + x.
+        let parent: Vec<f64> = (0..16)
+            .map(|i| {
+                let y = (i / 4) as f64;
+                let x = (i % 4) as f64;
+                y * 100.0 + x
+            })
+            .collect();
+        // zoom_diff=1, so each child is 2x2 within a 4x4 parent.
+        // Top-left child (sub=0,0) should cover parent[0..2, 0..2] = [0,1,100,101].
+        let tl = extract_and_upsample(&parent, 4, 1, 0, 0);
+        assert_eq!(tl.len(), 16);
+        assert!((tl[0] - 0.0).abs() < 1e-9);
+        assert!((tl[15] - 101.0).abs() < 1e-9);
+        // Bottom-right child (sub=1,1) should cover parent[2..4, 2..4] = [202,203,302,303].
+        let br = extract_and_upsample(&parent, 4, 1, 1, 1);
+        assert!((br[0] - 202.0).abs() < 1e-9);
+        assert!((br[15] - 303.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn upsample_factor_one_is_passthrough() {
+        let parent: Vec<f64> = (0..16).map(|v| v as f64).collect();
+        let out = extract_and_upsample(&parent, 4, 0, 0, 0);
+        assert_eq!(out, parent);
     }
 }

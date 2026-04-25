@@ -30,6 +30,7 @@ use crate::cache::CacheObjectMeta;
 use crate::terrain::{
     DemProvider, Geoid, GeoidModel,
     ellipsoid::{apply_geoid_to_grid, apply_geoid_to_xyz_grid},
+    extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations, geodetic_tms_bounds},
     layer_json::TileAvailability,
     mapbox::encode_mapbox,
@@ -487,11 +488,25 @@ async fn raster_tile(
     }
 
     // Fetch DEM at the requested XYZ tile directly — no reprojection.
+    // For zooms above the upstream DEM's max, fall back to the parent tile
+    // and upsample the relevant sub-region (per stralift's behavior).
     let tile_size = terrain.tile_size;
-    let dem_zoom = z.min(terrain.dem.max_zoom());
+    let dem_max = terrain.dem.max_zoom();
+    let (fetch_z, fetch_x, fetch_y, upsample_info) = if z > dem_max {
+        let zoom_diff = z - dem_max;
+        let factor = 1u32 << zoom_diff;
+        (
+            dem_max,
+            x / factor,
+            y / factor,
+            Some((zoom_diff, x % factor, y % factor)),
+        )
+    } else {
+        (z, x, y, None)
+    };
     let dem_tile = match terrain
         .dem
-        .get_tile_elevations(dem_zoom, x, y, tile_size)
+        .get_tile_elevations(fetch_z, fetch_x, fetch_y, tile_size)
         .await
     {
         Ok(t) => t,
@@ -509,12 +524,16 @@ async fn raster_tile(
 
     let source_etag = dem_tile.etag.unwrap_or_default();
     let upstream_etag_digest = digest(&source_etag);
+    let upsample_marker = upsample_info
+        .map(|(d, _, _)| format!("upsample:{d}"))
+        .unwrap_or_else(|| "upsample:0".to_string());
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
         format!("dem-etag:{}", upstream_etag_digest),
         format!("geoid:{}", geoid_model.slug()),
         format!("size:{}", tile_size),
         format!("proj:webmercator"),
+        upsample_marker,
     ];
     let etag = compute_etag(&etag_keys, encoding.cache_prefix(), format, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
@@ -543,7 +562,11 @@ async fn raster_tile(
         etag: Some(etag.clone()),
     };
 
-    let mut elevations = dem_tile.elevations;
+    let mut elevations = if let Some((zoom_diff, sub_x, sub_y)) = upsample_info {
+        extract_and_upsample(&dem_tile.elevations, tile_size, zoom_diff, sub_x, sub_y)
+    } else {
+        dem_tile.elevations
+    };
     let geoid_for_gen = geoid_model;
 
     let result = state
@@ -626,6 +649,8 @@ async fn raster_tilejson(
         scheme: &'a str,
         minzoom: u8,
         maxzoom: u8,
+        bounds: [f64; 4],
+        encoding: &'a str,
     }
 
     Json(TileJson {
@@ -637,6 +662,13 @@ async fn raster_tilejson(
         scheme: "xyz",
         minzoom: 0,
         maxzoom: terrain.max_zoom,
+        bounds: [
+            JAPAN_BOUNDS_WEST,
+            JAPAN_BOUNDS_SOUTH,
+            JAPAN_BOUNDS_EAST,
+            JAPAN_BOUNDS_NORTH,
+        ],
+        encoding: encoding.slug(),
     })
     .into_response()
 }

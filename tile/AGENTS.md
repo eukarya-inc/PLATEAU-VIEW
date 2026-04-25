@@ -83,12 +83,12 @@ Available layer types in config JSON:
 
 ## Terrain
 
-`/terrain/` (quantized-mesh-1.0, **TMS Geodetic** for Cesium), plus `/terrarium/` (Mapzen Terrarium) and `/mapbox/` (Mapbox Terrain-RGB) endpoints are built-in. The two raster endpoints serve **Web Mercator XYZ** tiles per their respective specs — same projection as a normal MapLibre/Mapbox raster source. DEM defaults to Mapterhorn (512 px Terrarium WebP) and is composed with a `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv) to produce **ellipsoidal heights**. Tiles outside the configured geoid coverage respond 404. Default geoid is `gsigeo2011`, overridable per-request via `?geoid=...`.
+`/terrain/` (quantized-mesh-1.0, **TMS Geodetic** for Cesium), plus `/terrarium/` (Mapzen Terrarium) and `/mapbox/` (Mapbox Terrain-RGB) endpoints are built-in. Each raster endpoint also exposes a `/tilejson.json` for use as a MapLibre `raster-dem` source. They serve **Web Mercator XYZ** tiles per their respective specs — same projection as a normal MapLibre/Mapbox raster source — at `TERRAIN_TILE_SIZE` (default 256) per side. DEM defaults to Mapterhorn (512 px Terrarium WebP) and is composed with a `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv) to produce **ellipsoidal heights**. For zooms above the upstream `DEM_MAX_ZOOM`, the raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region (per stralift's behavior), so MapLibre's terrain mesh stays dense at high camera zooms. Tiles outside the configured geoid coverage respond 404. Default geoid is `gsigeo2011`, overridable per-request via `?geoid=...`.
 
 Configured via env vars (the config JSON only describes `/tiles/...` overlay sources):
 - `DEM_URL` — base DEM URL. `*.pmtiles` selects the PMTiles backend; supports `https://`, `gs://`, `s3://`, `r2://`, `file://`. Anything else is read as a Mapterhorn-style `{z}/{x}/{y}` template.
 - `DEM_VERSION`, `DEM_MAX_ZOOM`, `DEM_NATIVE_TILE_SIZE`
-- `TERRAIN_TILE_SIZE`, `TERRAIN_DEFAULT_GEOID`, `TERRAIN_MAX_ZOOM`, `TERRAIN_MAX_ERROR`
+- `TERRAIN_TILE_SIZE` (default 256), `TERRAIN_DEFAULT_GEOID`, `TERRAIN_MAX_ZOOM` (default 18; raster endpoints upsample beyond `DEM_MAX_ZOOM`), `TERRAIN_MAX_ERROR`
 
 Cache keys include the DEM version, upstream ETag digest, geoid slug, and (for Terrarium) output size. Switching geoid at request time does **not** require a CDN purge — each model lives at a separate key.
 
