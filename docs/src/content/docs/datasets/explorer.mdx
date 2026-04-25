@@ -98,10 +98,13 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     flex: 1 1 auto;
     min-width: 0;
     padding-left: 2.1rem;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
     background-repeat: no-repeat;
     background-position: 0.65rem center;
     background-size: 0.95rem auto;
+  }
+  :root[data-theme="dark"] .explorer-controls input[type="search"] {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23bbb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
   }
   .explorer-controls select {
     flex: 0 0 auto;
@@ -407,11 +410,23 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       }
     });
 
-    [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureSel, rawUrlChk, search].forEach(el => {
+    [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureSel, rawUrlChk].forEach(el => {
       el.addEventListener('input', () => {
         if (el === prefSel) refreshCityOptions();
         render();
       });
+    });
+
+    // 検索入力は IME 変換中の中間状態で render しないように合成イベントを見る
+    let composing = false;
+    search.addEventListener('compositionstart', () => { composing = true; });
+    search.addEventListener('compositionend', () => {
+      composing = false;
+      render();
+    });
+    search.addEventListener('input', () => {
+      if (composing) return;
+      render();
     });
 
     resetBtn.addEventListener('click', () => {
