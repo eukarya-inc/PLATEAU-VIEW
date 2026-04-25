@@ -212,8 +212,15 @@ pub async fn fetch_geodetic_tile_elevations(
     xyz_tile_size: u32,
 ) -> Result<GeodeticFetchResult, DemError> {
     let bounds = geodetic_tms_bounds(z, geo_x, geo_y);
+    // For zooms above the upstream DEM's max, fall back to parent XYZ
+    // tiles at `dem_max` and let the bilinear sampler in
+    // `resample_to_geodetic_grid` upsample the relevant sub-region (per
+    // stralift's per-source upsampling). The geodetic bounds stay at the
+    // requested output `z` so the output 65×65 grid still covers exactly
+    // the requested geodetic tile.
+    let fetch_z = z.min(provider.max_zoom());
     // Include adjacent tiles for seamless boundaries
-    let xyz_tiles = xyz_tiles_for_bounds(z, &bounds, true);
+    let xyz_tiles = xyz_tiles_for_bounds(fetch_z, &bounds, true);
 
     if xyz_tiles.is_empty() {
         // No XYZ tiles cover this geodetic tile (e.g., polar regions)
@@ -226,7 +233,8 @@ pub async fn fetch_geodetic_tile_elevations(
 
     let tiles_fetched = xyz_tiles.len() as u32;
 
-    // Fetch all XYZ tiles in parallel
+    // Fetch all XYZ tiles in parallel (already at `fetch_z` per the
+    // upsample fallback above)
     let fetch_start = Instant::now();
     let fetch_futures: Vec<_> = xyz_tiles
         .iter()
@@ -255,9 +263,10 @@ pub async fn fetch_geodetic_tile_elevations(
     source_etags.sort();
     source_etags.dedup();
 
-    // Resample to geodetic grid
+    // Resample to geodetic grid using `fetch_z` since the tile_data keys
+    // and lookups are at that zoom (parent tiles when upsampling).
     let resample_start = Instant::now();
-    let elevations = resample_to_geodetic_grid(&bounds, &tile_data, xyz_tile_size, z)?;
+    let elevations = resample_to_geodetic_grid(&bounds, &tile_data, xyz_tile_size, fetch_z)?;
     let resample_ms = resample_start.elapsed().as_secs_f64() * 1000.0;
 
     Ok(GeodeticFetchResult {

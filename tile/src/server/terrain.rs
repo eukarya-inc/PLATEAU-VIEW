@@ -238,13 +238,6 @@ pub async fn terrain_layer_json(
     let _ = geoid_model;
     let tiles_template = "{z}/{x}/{y}.terrain".to_string();
 
-    // Cesium quantized-mesh has no per-tile upsample fallback — clamp the
-    // advertised max zoom to the upstream DEM's max so Cesium never asks
-    // for a z > DEM_MAX_ZOOM tile (which would be served from a wrong
-    // parent and lose the geoid offset). The raster `/mapbox` and
-    // `/terrarium` endpoints upsample beyond DEM_MAX_ZOOM, so their
-    // tilejson advertises the full `terrain.max_zoom`.
-    let qm_max_zoom = terrain.max_zoom.min(terrain.dem.max_zoom());
     let config = crate::terrain::layer_json::LayerJsonConfig {
         tiles_template,
         version: terrain.dem.version().to_string(),
@@ -252,9 +245,9 @@ pub async fn terrain_layer_json(
             r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#
                 .to_string(),
         ),
-        available: japan_availability(qm_max_zoom),
+        available: japan_availability(terrain.max_zoom),
         min_zoom: Some(0),
-        max_zoom: Some(qm_max_zoom),
+        max_zoom: Some(terrain.max_zoom),
         scheme: "tms".to_string(),
         bounds: Some([
             JAPAN_BOUNDS_WEST,
@@ -322,10 +315,12 @@ pub async fn terrain_tile(
     }
 
     // Fetch Mercator DEM tiles + resample to 65×65 geodetic grid.
-    let dem_zoom = z.min(terrain.dem.max_zoom());
+    // `fetch_geodetic_tile_elevations` internally clamps to the DEM's max
+    // zoom and bilinear-upsamples from the parent XYZ tile when z exceeds
+    // it (per stralift's per-source upsampling).
     let fetch = match fetch_geodetic_tile_elevations(
         terrain.dem.as_ref(),
-        dem_zoom,
+        z,
         x,
         y,
         terrain.dem.native_tile_size(),

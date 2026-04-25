@@ -119,7 +119,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
 | `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/` |
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Default geoid model when `?geoid=` is not specified. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`, `none` |
-| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` the server falls back to the parent DEM tile and bilinear-upsamples the relevant sub-region. |
+| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
 
 ```bash
