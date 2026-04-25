@@ -396,21 +396,29 @@
             return `${window.location.origin}/mapbox/tilejson.json?geoid=${g}&format=png`;
         }
 
-        function ensureDemSource() {
-            // (Re)create the raster-dem source so the URL reflects the
-            // current geoid selection. Source pulls `tiles`, `minzoom`,
-            // `maxzoom`, and `bounds` from the tilejson endpoint.
-            if (map.getSource('dem-rgb')) {
-                if (terrain3dEnabled) map.setTerrain(null);
-                if (map.getLayer('hillshade')) map.removeLayer('hillshade');
-                map.removeSource('dem-rgb');
-            }
+        function addDemSource() {
             map.addSource('dem-rgb', {
                 type: 'raster-dem',
                 url: demTilejsonUrl(),
                 encoding: 'mapbox',
                 tileSize: 256,
             });
+        }
+
+        function ensureDemSource() {
+            // Idempotent: only adds the source if it doesn't already exist.
+            // Toggling one feature (e.g. hillshade) must NOT disturb the
+            // other (e.g. 3D terrain), so we never tear down here.
+            if (!map.getSource('dem-rgb')) addDemSource();
+        }
+
+        function rebuildDemSource() {
+            // Used when the source URL changes (e.g. geoid switch). Tear
+            // both features down, swap the source, then re-apply both.
+            if (terrain3dEnabled) map.setTerrain(null);
+            if (map.getLayer('hillshade')) map.removeLayer('hillshade');
+            if (map.getSource('dem-rgb')) map.removeSource('dem-rgb');
+            addDemSource();
         }
 
         function applyTerrain3d() {
@@ -448,12 +456,6 @@
             );
         }
 
-        function refreshDemFeatures() {
-            ensureDemSource();
-            applyTerrain3d();
-            applyHillshade();
-        }
-
         terrain3dToggle.addEventListener('click', () => {
             terrain3dEnabled = !terrain3dEnabled;
             if (terrain3dEnabled || hillshadeEnabled) ensureDemSource();
@@ -465,7 +467,11 @@
             applyHillshade();
         });
         geoidSelect.addEventListener('change', () => {
-            if (terrain3dEnabled || hillshadeEnabled) refreshDemFeatures();
+            if (terrain3dEnabled || hillshadeEnabled) {
+                rebuildDemSource();
+                applyTerrain3d();
+                applyHillshade();
+            }
         });
 
         // ── Inspector: bounds.json overlay ─────────────────────────────
