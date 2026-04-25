@@ -260,8 +260,8 @@ func TestFilterPlateauByPriority(t *testing.T) {
 			name: "mixed public and non-public cities",
 			input: map[string][]*PlateauFeatureItem{
 				"bldg": {
-					{ID: "item1", City: "city1", Priority: 0, Status: nil},         // public city
-					{ID: "item2", City: "city2", Priority: 0, Status: nil},         // non-public city, no status -> skipped
+					{ID: "item1", City: "city1", Priority: 0, Status: nil},           // public city
+					{ID: "item2", City: "city2", Priority: 0, Status: nil},           // non-public city, no status -> skipped
 					{ID: "item3", City: "city3", Priority: 0, Status: readyStatus()}, // non-public city but ready
 				},
 			},

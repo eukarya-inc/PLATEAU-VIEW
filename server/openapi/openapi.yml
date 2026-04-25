@@ -174,6 +174,13 @@ paths:
                         texture:
                           type: boolean
                           description: 3D Tilesでテクスチャがある場合は `true`。テクスチャがない場合やMVTの場合は `false`。
+                        composite_url:
+                          type: string
+                          format: uri
+                          nullable: true
+                          description: |
+                            このデータセットに対応する複合 tileset.json の URL。3D Tiles の場合のみ設定され、
+                            MVT の場合は `null`。詳細は `/datacatalog/3dtiles/{spec}/tileset.json` を参照。
                       required:
                         - id
                         - name
@@ -190,8 +197,120 @@ paths:
                         - format
                         - lod
                         - texture
+                  composite_tilesets:
+                    type: array
+                    description: |
+                      実データから派生して列挙された複合 tileset.json のリスト。
+                      全国（`area: "all"`）と都道府県別（`area: "pref"`）を含みます。
+                      テクスチャ別のバリエーション（`-texture`/`-notexture`）は、同一の
+                      `(area, type, lod, year)` に対して両方のデータが存在する場合のみ列挙されます。
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: spec 文字列。例 `all-bldg-lod1-2025`
+                        url:
+                          type: string
+                          format: uri
+                          description: 複合 tileset.json の完全な URL
+                        area:
+                          type: string
+                          enum:
+                            - all
+                            - pref
+                          description: '`all` は全国、`pref` は都道府県単位'
+                        pref_code:
+                          type: string
+                          nullable: true
+                          description: 都道府県コード（`area` が `pref` の場合のみ）
+                        pref:
+                          type: string
+                          nullable: true
+                          description: 都道府県名（`area` が `pref` の場合のみ）
+                        type:
+                          type: string
+                          description: 種別の日本語名
+                        type_en:
+                          type: string
+                          description: 種別の英語コード（例 `bldg`）
+                        lod:
+                          type: integer
+                        texture:
+                          type: boolean
+                          nullable: true
+                          description: |
+                            `null`: 自動（テクスチャ優先、無ければテクスチャなし）。
+                            `true`: テクスチャあり限定。`false`: テクスチャなし限定。
+                        year:
+                          type: integer
+                      required:
+                        - id
+                        - url
+                        - area
+                        - type
+                        - type_en
+                        - lod
+                        - year
                 required:
                   - datasets
+                  - composite_tilesets
+
+  /datacatalog/3dtiles/{spec}/tileset.json:
+    get:
+      summary: 複合 3D Tiles tileset.json
+      tags:
+        - Data Catalog API
+      description: |
+        都市別の 3D Tiles を `content.uri` で間接参照する単一の `tileset.json` を動的生成します。
+        Cesium に URL を渡すだけで、対象範囲の全都市の 3D Tiles をまとめて表示できます。
+
+        パスパラメータ `spec` の書式は次の通りです：
+
+        ```
+        <area>-<type>-<lod>[-<texture>]-<year>
+        ```
+
+        - `area`:
+          - `all`: 全国
+          - 2桁の数字: 都道府県コード（例: `13` = 東京都）
+          - 5桁の数字: 市区町村コード（区がある場合は区コード、無ければ市コード）
+        - `type`: データセットの種別コード（例: `bldg`）
+        - `lod`:
+          - `lod<N>`: LOD が `<N>` と完全一致するデータのみ
+          - `maxlod<N>`: LOD が `<N>` 以下で、各エリアごとに利用可能な最高 LOD を採用
+        - `texture` (省略可):
+          - 省略時: テクスチャありを優先、無ければテクスチャなしを採用
+          - `texture`: テクスチャありのデータのみ
+          - `notexture`: テクスチャなしのデータのみ
+        - `year`: データの整備年度（西暦4桁）
+
+        例:
+
+        - `/datacatalog/3dtiles/all-bldg-lod1-2025/tileset.json`
+        - `/datacatalog/3dtiles/all-bldg-maxlod2-2025/tileset.json`
+        - `/datacatalog/3dtiles/13-bldg-lod2-texture-2025/tileset.json`
+        - `/datacatalog/3dtiles/13101-bldg-lod2-notexture-2025/tileset.json`
+      parameters:
+        - in: path
+          name: spec
+          required: true
+          schema:
+            type: string
+          example: all-bldg-lod1-2025
+      responses:
+        "200":
+          description: 3D Tiles 1.1 形式の tileset.json
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: spec の書式が不正
+          content:
+            application/json:
+              schema:
+                type: object
 
   /datacatalog/citygml/{conditions}:
     get:

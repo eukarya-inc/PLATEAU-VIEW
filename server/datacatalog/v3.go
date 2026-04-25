@@ -46,6 +46,10 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	// Simple PLATEAU dataset API
 	plateauapig.GET("/plateau-datasets", h.SimplePlateauDatasetsAPI())
 
+	// Composite 3D Tiles tileset.json API
+	plateauapig.GET("/3dtiles/:spec/tileset.json", h.CompositeTilesetAPI())
+	plateauapig.GET("/:pid/3dtiles/:spec/tileset.json", h.CompositeTilesetAPI())
+
 	// warning API
 	plateauapig.GET("/:pid/warnings", h.WarningHandler)
 

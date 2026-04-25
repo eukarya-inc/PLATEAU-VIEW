@@ -3,6 +3,8 @@ package datacatalog
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
@@ -10,7 +12,8 @@ import (
 )
 
 type SimpleDatasetsResponse struct {
-	Datasets []*SimpleDatasetsResponseDataset `json:"datasets"`
+	Datasets          []*SimpleDatasetsResponseDataset `json:"datasets"`
+	CompositeTilesets []*SimpleCompositeTileset        `json:"composite_tilesets"`
 }
 
 type SimpleDatasetsResponseDataset struct {
@@ -25,6 +28,7 @@ type SimpleDatasetsResponseDataset struct {
 	Type             string   `json:"type"`
 	TypeCode         string   `json:"type_en"`
 	URL              string   `json:"url"`
+	CompositeURL     *string  `json:"composite_url"`
 	Layers           []string `json:"layers"`
 	Year             int      `json:"year"`
 	RegistrationYear int      `json:"registration_year"`
@@ -34,7 +38,22 @@ type SimpleDatasetsResponseDataset struct {
 	Texture          *bool    `json:"texture"`
 }
 
-func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo) (*SimpleDatasetsResponse, error) {
+// SimpleCompositeTileset describes a virtual tileset.json that aggregates
+// multiple per-area 3D Tiles datasets into a single URL.
+type SimpleCompositeTileset struct {
+	ID       string  `json:"id"`
+	URL      string  `json:"url"`
+	Area     string  `json:"area"` // "all" / "pref"
+	PrefCode *string `json:"pref_code"`
+	Pref     *string `json:"pref"`
+	TypeCode string  `json:"type_en"`
+	Type     string  `json:"type"`
+	LOD      int     `json:"lod"`
+	Texture  *bool   `json:"texture"` // nil=auto; true/false when explicitly filtered
+	Year     int     `json:"year"`
+}
+
+func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host string) (*SimpleDatasetsResponse, error) {
 	ds, err := r.Datasets(ctx, &plateauapi.DatasetsInput{
 		IncludeTypes: []string{"plateau"},
 	})
@@ -149,11 +168,176 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo) (*Simple
 				c.LOD = lo.ToPtr(fmt.Sprintf("%d", *di.Lod))
 			}
 
+			if f == "3D Tiles" {
+				if u := buildDatasetCompositeURL(host, &c); u != "" {
+					c.CompositeURL = lo.ToPtr(u)
+				}
+			}
+
 			res.Datasets = append(res.Datasets, &c)
 		}
 	}
 
+	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
 	return res, nil
+}
+
+// buildDatasetCompositeURL returns the composite tileset URL that maps to a
+// single dataset row (ward or city). Empty when prerequisites are missing.
+func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) string {
+	if host == "" {
+		return ""
+	}
+	if d.LOD == nil || *d.LOD == "" {
+		return ""
+	}
+	if d.TypeCode == "" || d.Year == 0 {
+		return ""
+	}
+
+	areaCode := ""
+	if d.WardCode != nil && *d.WardCode != "" {
+		areaCode = *d.WardCode
+	} else if d.CityCode != nil && *d.CityCode != "" {
+		areaCode = *d.CityCode
+	}
+	if areaCode == "" {
+		return ""
+	}
+
+	return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, d.Year) + "/tileset.json"
+}
+
+// buildSpec assembles the path segment used by the composite tileset endpoint.
+// The lod argument is expected to be a numeric string ("1", "2", ...).
+func buildSpec(area, typeCode, lod string, texture *bool, year int) string {
+	parts := []string{area, typeCode, "lod" + lod}
+	if texture != nil {
+		if *texture {
+			parts = append(parts, "texture")
+		} else {
+			parts = append(parts, "notexture")
+		}
+	}
+	parts = append(parts, strconv.Itoa(year))
+	return strings.Join(parts, "-")
+}
+
+// buildCompositeTilesets enumerates virtual tileset entries derived from the
+// 3D Tiles datasets that exist. The "all" form covers Japan; "pref" is per
+// prefecture. Texture-specific variants are emitted only when both textured
+// and non-textured data coexist for the same (area, type, lod, year) group;
+// otherwise the auto variant is the only useful URL.
+func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDataset) []*SimpleCompositeTileset {
+	if host == "" {
+		return nil
+	}
+
+	type groupKey struct {
+		area     string // "all" or pref code
+		prefCode string // empty when area == "all"
+		prefName string
+		typeCode string
+		typeName string
+		lod      int
+		year     int
+	}
+	type groupAgg struct {
+		hasTextured    bool
+		hasNonTextured bool
+	}
+
+	groups := map[groupKey]*groupAgg{}
+
+	add := func(k groupKey, texture *bool) {
+		g, ok := groups[k]
+		if !ok {
+			g = &groupAgg{}
+			groups[k] = g
+		}
+		if texture != nil {
+			if *texture {
+				g.hasTextured = true
+			} else {
+				g.hasNonTextured = true
+			}
+		}
+	}
+
+	for _, d := range datasets {
+		if d == nil || d.Format != "3D Tiles" {
+			continue
+		}
+		if d.LOD == nil || *d.LOD == "" {
+			continue
+		}
+		lod, err := strconv.Atoi(*d.LOD)
+		if err != nil {
+			continue
+		}
+		if d.TypeCode == "" || d.Year == 0 {
+			continue
+		}
+
+		// all-Japan
+		add(groupKey{
+			area:     "all",
+			typeCode: d.TypeCode,
+			typeName: d.Type,
+			lod:      lod,
+			year:     d.Year,
+		}, d.Texture)
+
+		// per prefecture
+		if d.PrefCode != "" {
+			add(groupKey{
+				area:     "pref",
+				prefCode: d.PrefCode,
+				prefName: d.Pref,
+				typeCode: d.TypeCode,
+				typeName: d.Type,
+				lod:      lod,
+				year:     d.Year,
+			}, d.Texture)
+		}
+	}
+
+	var out []*SimpleCompositeTileset
+	for k, agg := range groups {
+		areaCode := "all"
+		if k.area == "pref" {
+			areaCode = k.prefCode
+		}
+		base := func(textureSuffix *bool) *SimpleCompositeTileset {
+			spec := buildSpec(areaCode, k.typeCode, strconv.Itoa(k.lod), textureSuffix, k.year)
+			ent := &SimpleCompositeTileset{
+				ID:       spec,
+				URL:      host + "/datacatalog/3dtiles/" + spec + "/tileset.json",
+				Area:     k.area,
+				TypeCode: k.typeCode,
+				Type:     k.typeName,
+				LOD:      k.lod,
+				Texture:  textureSuffix,
+				Year:     k.year,
+			}
+			if k.area == "pref" {
+				ent.PrefCode = lo.ToPtr(k.prefCode)
+				ent.Pref = lo.ToPtr(k.prefName)
+			}
+			return ent
+		}
+
+		// auto (no texture suffix)
+		out = append(out, base(nil))
+		// texture-specific only when both kinds coexist
+		if agg.hasTextured && agg.hasNonTextured {
+			out = append(out, base(lo.ToPtr(true)))
+			out = append(out, base(lo.ToPtr(false)))
+		}
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 func simpleFormatName(f plateauapi.DatasetFormat) string {

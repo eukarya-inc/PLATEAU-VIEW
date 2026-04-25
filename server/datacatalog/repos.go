@@ -39,6 +39,7 @@ type ReposHandler struct {
 	geocodingAppID     string
 	cityConcurrency    int
 	cacheURL           string
+	host               string
 
 	qt *govpolygon.Quadtree
 }
@@ -84,6 +85,7 @@ func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 		geocodingAppID:     conf.GeocodingAppID,
 		cityConcurrency:    conf.CityConcurrency,
 		cacheURL:           conf.CacheURL,
+		host:               conf.Host,
 		qt:                 qt,
 	}, nil
 }
@@ -119,7 +121,7 @@ func (h *ReposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context()
-		res, err := FetchSimplePlateauDatasets(ctx, merged)
+		res, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
 			return err
 		}

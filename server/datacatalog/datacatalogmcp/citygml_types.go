@@ -22,9 +22,9 @@ type GetCityGMLFeaturesInput struct {
 
 // GetCityGMLFeaturesResponse represents response from plateau_citygml_get_features tool
 type GetCityGMLFeaturesResponse struct {
-	FeatureIDs []string                   `json:"feature_ids"`
-	Reason     string                     `json:"reason,omitempty"`
-	Hint       *GetCityGMLFeaturesHint    `json:"hint,omitempty"`
+	FeatureIDs []string                `json:"feature_ids"`
+	Reason     string                  `json:"reason,omitempty"`
+	Hint       *GetCityGMLFeaturesHint `json:"hint,omitempty"`
 }
 
 // GetCityGMLFeaturesHint provides guidance when results are empty
