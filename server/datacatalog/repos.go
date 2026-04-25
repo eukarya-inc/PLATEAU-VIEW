@@ -194,13 +194,13 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 			cityIDs = lo.Uniq(expanded)
 		}
 
-		// Pre-fetch DatasetTypes once to share across all cities
-		datasetTypes, err := merged.DatasetTypes(ctx, &plateauapi.DatasetTypesInput{
-			Category: lo.ToPtr(plateauapi.DatasetTypeCategoryPlateau),
-		})
+		// Pre-fetch feature type names from CMS (unfiltered, includes types like dem
+		// that have CityGML files but no 3D Tiles datasets).
+		plateauFeatureTypes, err := h.pcms.PlateauFeatureTypes(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get dataset types: %w", err)
+			return fmt.Errorf("failed to get feature types: %w", err)
 		}
+		featureTypeNames := plateauFeatureTypes.CodeNameMap()
 
 		// Fetch cities concurrently
 		results := make([]*CityGMLFilesCity, len(cityIDs))
@@ -212,7 +212,7 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 			cid := cid // Capture loop variable
 			errg.Go(func() error {
 				start := time.Now()
-				cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid, datasetTypes)
+				cityGMLFiles, err := FetchCityGMLFiles(ctx, merged, cid, featureTypeNames)
 				duration := time.Since(start)
 
 				if err != nil {
