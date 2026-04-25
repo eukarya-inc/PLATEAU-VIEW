@@ -1,41 +1,14 @@
 ---
-import { Image } from "astro:assets";
 import { LinkButton } from "@astrojs/starlight/components";
 import { GITHUB_URL, PLATEAU_VIEW_URL } from "../site.js";
 
 const { data } = Astro.locals.starlightRoute.entry;
-const { title = data.title, tagline, image, actions = [] } = data.hero || {};
-
-const imageAttrs = {
-  loading: "eager" as const,
-  decoding: "async" as const,
-  width: 400,
-  height: 400,
-  alt: image?.alt || "",
-};
-
-let darkImage: ImageMetadata | undefined;
-let lightImage: ImageMetadata | undefined;
-if (image && "file" in image) {
-  darkImage = image.file;
-} else if (image && "dark" in image) {
-  darkImage = image.dark;
-  lightImage = image.light;
-}
+const { title = data.title, tagline, actions = [] } = data.hero || {};
 ---
 
 <div class="hero">
-  {
-    darkImage && (
-      <Image
-        src={darkImage}
-        {...imageAttrs}
-        class:list={{ "light:sl-hidden": Boolean(lightImage) }}
-      />
-    )
-  }
-  {lightImage && <Image src={lightImage} {...imageAttrs} class="dark:sl-hidden" />}
-  <div class="sl-flex stack">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-inner sl-flex stack">
     <div class="sl-flex copy">
       <h1 id="_top" data-page-title set:html={title} />
       {tagline && <div class="tagline" set:html={tagline} />}
@@ -76,27 +49,59 @@ if (image && "file" in image) {
 
 <style>
   .hero {
-    display: grid;
-    grid-template-columns: 100%;
+    position: relative;
+    isolation: isolate;
+    margin-inline: calc(50% - 50vw);
+    margin-top: calc(-1 * var(--sl-content-pad-y, 1.5rem));
+    padding-inline: max(1.5rem, calc(50vw - 50%));
+    padding-block: clamp(3rem, calc(2rem + 10vmin), 9rem);
+    display: flex;
     align-items: center;
-    gap: 1rem;
-    padding-bottom: 1rem;
+    justify-content: flex-start;
+    min-height: clamp(20rem, 55vh, 34rem);
+    overflow: hidden;
   }
-  .hero > img {
-    object-fit: contain;
-    width: min(70%, 20rem);
-    height: auto;
-    margin-inline: auto;
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.75) 0%,
+        rgba(0, 0, 0, 0.55) 35%,
+        rgba(0, 0, 0, 0.25) 70%,
+        rgba(0, 0, 0, 0.1) 100%
+      ),
+      url("/image.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  :global([data-theme="light"]) .hero-bg {
+    background-image:
+      linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.85) 0%,
+        rgba(255, 255, 255, 0.65) 35%,
+        rgba(255, 255, 255, 0.35) 70%,
+        rgba(255, 255, 255, 0.15) 100%
+      ),
+      url("/image.webp");
+  }
+  .hero-inner {
+    width: 100%;
+    max-width: 60rem;
   }
   .stack {
     flex-direction: column;
     gap: clamp(1.5rem, calc(1.5rem + 1vw), 2rem);
-    text-align: center;
+    text-align: start;
   }
   .copy {
     flex-direction: column;
     gap: 1rem;
-    align-items: center;
+    align-items: flex-start;
   }
   .copy > * {
     max-width: 50ch;
@@ -114,28 +119,6 @@ if (image && "file" in image) {
   .actions {
     gap: 1rem 1.5rem;
     flex-wrap: wrap;
-    justify-content: center;
-  }
-
-
-  @media (min-width: 50rem) {
-    .hero {
-      grid-template-columns: 7fr 4fr;
-      gap: 3%;
-      padding-block: clamp(2.5rem, calc(1rem + 10vmin), 10rem);
-    }
-    .hero > img {
-      order: 2;
-      width: min(100%, 25rem);
-    }
-    .stack {
-      text-align: start;
-    }
-    .copy {
-      align-items: flex-start;
-    }
-    .actions {
-      justify-content: flex-start;
-    }
+    justify-content: flex-start;
   }
 </style>

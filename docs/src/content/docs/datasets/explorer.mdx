@@ -10,12 +10,12 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
 <div id="explorer-root">
   <div class="explorer-controls">
     <div class="explorer-search-row">
-      <input id="explorer-search" type="search" placeholder="名称・市区町村・種別を検索…" autocomplete="off" />
+      <input id="explorer-search" type="search" placeholder="名称・市区町村・地物型を検索…" autocomplete="off" />
       <button id="explorer-reset" type="button">リセット</button>
     </div>
     <select id="explorer-pref"><option value="">都道府県（すべて）</option></select>
     <select id="explorer-city"><option value="">市区町村（すべて）</option></select>
-    <select id="explorer-type"><option value="">種別（すべて）</option></select>
+    <select id="explorer-type"><option value="">地物型（すべて）</option></select>
     <select id="explorer-format">
       <option value="">形式（すべて）</option>
       <option value="3D Tiles">3D Tiles</option>
@@ -23,7 +23,12 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     </select>
     <select id="explorer-lod"><option value="">LOD（すべて）</option></select>
     <select id="explorer-year"><option value="">整備年度（すべて）</option></select>
-    <label class="explorer-checkbox"><input id="explorer-texture" type="checkbox" />テクスチャありのみ</label>
+    <select id="explorer-texture">
+      <option value="">テクスチャ（すべて）</option>
+      <option value="true">テクスチャありのみ</option>
+      <option value="false">テクスチャなしのみ</option>
+    </select>
+    <label class="explorer-checkbox"><input id="explorer-rawurl" type="checkbox" />Raw URL を表示</label>
   </div>
 
   <div class="explorer-status" id="explorer-status"></div>
@@ -39,7 +44,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           <th>都道府県</th>
           <th>市区町村</th>
           <th>区</th>
-          <th>種別</th>
+          <th>地物型</th>
           <th>形式</th>
           <th>LOD</th>
           <th>テクスチャ</th>
@@ -105,6 +110,9 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     align-items: center;
     gap: 0.35rem;
     font-size: 0.9rem;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: pointer;
   }
   .explorer-controls button {
     padding: 0.4rem 0.9rem;
@@ -226,7 +234,10 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     const formatSel = $('explorer-format');
     const lodSel = $('explorer-lod');
     const yearSel = $('explorer-year');
-    const textureChk = $('explorer-texture');
+    const textureSel = $('explorer-texture');
+    const rawUrlChk = $('explorer-rawurl');
+    const ALL_JAPAN = '__all_japan__';
+    const PREF_WHOLE = '__pref_whole__';
     const resetBtn = $('explorer-reset');
 
     let datasets = [];
@@ -252,23 +263,75 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       return [...set].sort(cmp || ((a, b) => String(a).localeCompare(String(b), 'ja')));
     };
 
+    // labelKey と codeKey のペアをコード順で重複排除して取得
+    const uniqPairsByCode = (items, codeKey, labelKey) => {
+      const map = new Map();
+      for (const it of items) {
+        const code = it[codeKey];
+        const label = it[labelKey];
+        if (!code || !label) continue;
+        if (!map.has(code)) map.set(code, label);
+      }
+      return [...map.entries()]
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+        .map(([code, label]) => ({ code, label }));
+    };
+
     const refreshCityOptions = () => {
       const pref = prefSel.value;
-      const filtered = pref ? datasets.filter(d => d.pref === pref) : datasets;
-      const cities = uniqSorted(filtered, 'city');
       const prev = citySel.value;
-      fillSelect(citySel, cities);
-      if (cities.includes(prev)) citySel.value = prev;
+      citySel.innerHTML = '';
+      const first = document.createElement('option');
+      first.value = '';
+      first.textContent = '市区町村（すべて）';
+      citySel.appendChild(first);
+      if (pref === ALL_JAPAN) {
+        // 全国（複合）選択時は市区町村の概念がないので無効化
+        citySel.disabled = true;
+        citySel.value = '';
+        return;
+      }
+      citySel.disabled = false;
+      // 都道府県全体（複合）オプション：選択された都道府県、または全体
+      const hasPrefWhole = datasets.some(d => d._area === 'pref' && (!pref || d.pref === pref));
+      if (hasPrefWhole) {
+        const opt = document.createElement('option');
+        opt.value = PREF_WHOLE;
+        opt.textContent = '— 都道府県全体（複合）';
+        citySel.appendChild(opt);
+      }
+      const filtered = pref ? datasets.filter(d => d.pref === pref) : datasets;
+      const cities = uniqPairsByCode(filtered, 'city_code', 'city');
+      for (const { code, label } of cities) {
+        const opt = document.createElement('option');
+        opt.value = label;
+        opt.textContent = label;
+        citySel.appendChild(opt);
+      }
+      const cityNames = cities.map(c => c.label);
+      if (prev === PREF_WHOLE && hasPrefWhole) citySel.value = PREF_WHOLE;
+      else if (cityNames.includes(prev)) citySel.value = prev;
     };
 
     const matches = (d) => {
-      if (prefSel.value && d.pref !== prefSel.value) return false;
-      if (citySel.value && d.city !== citySel.value) return false;
+      const prefV = prefSel.value;
+      if (prefV === ALL_JAPAN) {
+        if (d._area !== 'all') return false;
+      } else if (prefV) {
+        if (d.pref !== prefV) return false;
+      }
+      const cityV = citySel.value;
+      if (cityV === PREF_WHOLE) {
+        if (d._area !== 'pref') return false;
+      } else if (cityV) {
+        if (d.city !== cityV) return false;
+      }
       if (typeSel.value && d.type !== typeSel.value) return false;
       if (formatSel.value && d.format !== formatSel.value) return false;
       if (lodSel.value && String(d.lod ?? '') !== lodSel.value) return false;
       if (yearSel.value && String(d.year ?? '') !== yearSel.value) return false;
-      if (textureChk.checked && !d.texture) return false;
+      if (textureSel.value === 'true' && d.texture !== true) return false;
+      if (textureSel.value === 'false' && d.texture !== false) return false;
       const q = search.value.trim().toLowerCase();
       if (q) {
         const hay = [d.name, d.pref, d.city, d.ward, d.type, d.type_en].filter(Boolean).join(' ').toLowerCase();
@@ -281,18 +344,23 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
 
     const render = () => {
       const filtered = datasets.filter(matches);
+      const compositeCount = filtered.filter(d => d._area).length;
+      const realCount = filtered.length - compositeCount;
+      const fmt = (n) => n.toLocaleString();
+      const breakdown = \`実データセット \${fmt(realCount)} 件・複合タイルセット \${fmt(compositeCount)} 件\`;
       status.removeAttribute('data-state');
       status.textContent = filtered.length === datasets.length
-        ? \`全 \${datasets.length} 件\`
-        : \`\${filtered.length.toLocaleString()} / \${datasets.length.toLocaleString()} 件\`;
+        ? \`全 \${fmt(datasets.length)} 件（\${breakdown}）\`
+        : \`\${fmt(filtered.length)} / \${fmt(datasets.length)} 件（\${breakdown}）\`;
 
       if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="explorer-empty">該当するデータセットがありません</td></tr>';
         return;
       }
 
+      const useRaw = rawUrlChk.checked;
       const rows = filtered.map(d => {
-        const url = d.url || '';
+        const url = (useRaw ? d.url : (d.composite_url || d.url)) || '';
         const escUrl = escapeHtml(url);
         return \`<tr>
           <td>\${escapeHtml(d.name)}</td>
@@ -302,7 +370,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           <td>\${escapeHtml(d.type ?? '')}</td>
           <td>\${escapeHtml(d.format ?? '')}</td>
           <td>\${escapeHtml(d.lod ?? '')}</td>
-          <td>\${d.texture ? '○' : ''}</td>
+          <td>\${d.texture === true ? '○' : d.texture === false ? '' : '—'}</td>
           <td>\${escapeHtml(d.year ?? '')}</td>
           <td><div class="url-cell"><code title="\${escUrl}">\${escUrl}</code><button class="copy-btn" type="button" data-url="\${escUrl}">コピー</button></div></td>
         </tr>\`;
@@ -325,7 +393,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       }
     });
 
-    [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureChk, search].forEach(el => {
+    [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureSel, rawUrlChk, search].forEach(el => {
       el.addEventListener('input', () => {
         if (el === prefSel) refreshCityOptions();
         render();
@@ -334,8 +402,8 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
 
     resetBtn.addEventListener('click', () => {
       search.value = '';
-      [prefSel, citySel, typeSel, formatSel, lodSel, yearSel].forEach(s => s.value = '');
-      textureChk.checked = false;
+      [prefSel, citySel, typeSel, formatSel, lodSel, yearSel, textureSel].forEach(s => s.value = '');
+      rawUrlChk.checked = false;
       refreshCityOptions();
       render();
     });
@@ -346,9 +414,89 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
         return r.json();
       })
       .then(data => {
-        datasets = (data && data.datasets) || [];
-        fillSelect(prefSel, uniqSorted(datasets, 'pref'));
-        fillSelect(typeSel, uniqSorted(datasets, 'type'));
+        const baseDatasets = (data && data.datasets) || [];
+        const composites = ((data && data.composite_tilesets) || []).map(c => ({
+          id: c.id,
+          name: c.area === 'all'
+            ? \`\${c.type ?? ''}（全国・複合）\`
+            : \`\${c.type ?? ''}（\${c.pref ?? ''}全域・複合）\`,
+          pref: c.pref ?? '',
+          pref_code: c.pref_code ?? '',
+          city: '',
+          city_code: '',
+          ward: null,
+          ward_code: null,
+          type: c.type,
+          type_en: c.type_en,
+          url: c.url,
+          composite_url: c.url,
+          layers: null,
+          year: c.year,
+          registration_year: c.year,
+          spec: '',
+          format: '3D Tiles',
+          lod: c.lod != null ? String(c.lod) : '',
+          texture: c.texture,
+          _area: c.area,
+        }));
+        datasets = baseDatasets.concat(composites);
+
+        // 都道府県セレクト: コード順 + 「日本全国（複合）」を先頭に
+        prefSel.innerHTML = '';
+        const prefFirst = document.createElement('option');
+        prefFirst.value = '';
+        prefFirst.textContent = '都道府県（すべて）';
+        prefSel.appendChild(prefFirst);
+        if (datasets.some(d => d._area === 'all')) {
+          const opt = document.createElement('option');
+          opt.value = ALL_JAPAN;
+          opt.textContent = '— 日本全国（複合）';
+          prefSel.appendChild(opt);
+        }
+        for (const { label } of uniqPairsByCode(datasets, 'pref_code', 'pref')) {
+          const opt = document.createElement('option');
+          opt.value = label;
+          opt.textContent = label;
+          prefSel.appendChild(opt);
+        }
+        // 地物型: 各都市内の出現順 (= API側の標準順) の中央値で並べる
+        {
+          // 都市ごとの type_en 出現順を作る
+          const cityToTypes = new Map();
+          const typeName = new Map();
+          for (const d of baseDatasets) {
+            if (!d.type_en || !d.city_code) continue;
+            if (d.type) typeName.set(d.type_en, d.type);
+            let arr = cityToTypes.get(d.city_code);
+            if (!arr) { arr = []; cityToTypes.set(d.city_code, arr); }
+            if (!arr.includes(d.type_en)) arr.push(d.type_en);
+          }
+          const indices = new Map();
+          for (const arr of cityToTypes.values()) {
+            arr.forEach((t, i) => {
+              if (!indices.has(t)) indices.set(t, []);
+              indices.get(t).push(i);
+            });
+          }
+          const median = (xs) => {
+            const s = [...xs].sort((a, b) => a - b);
+            return s.length % 2 ? s[(s.length - 1) >> 1] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+          };
+          const types = [...typeName.entries()]
+            .map(([en, name]) => ({ en, name, key: median(indices.get(en) || [Infinity]) }))
+            .sort((a, b) => a.key - b.key || a.en.localeCompare(b.en));
+          typeSel.innerHTML = '';
+          const first = document.createElement('option');
+          first.value = '';
+          first.textContent = '地物型（すべて）';
+          typeSel.appendChild(first);
+          for (const { name } of types) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            typeSel.appendChild(opt);
+          }
+        }
         fillSelect(lodSel, uniqSorted(datasets, 'lod', (a, b) => String(a).localeCompare(String(b), 'ja', { numeric: true })));
         fillSelect(yearSel, uniqSorted(datasets, 'year', (a, b) => Number(b) - Number(a)));
         refreshCityOptions();

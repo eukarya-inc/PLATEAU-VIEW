@@ -1,3 +1,15 @@
+/* PLATEAU ロゴカラー (#00BEBE) をアクセントカラーに */
+:root {
+  --sl-color-accent-low: #002828;
+  --sl-color-accent: #009b9b;
+  --sl-color-accent-high: #00bebe;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #b3ecec;
+  --sl-color-accent: #00bebe;
+  --sl-color-accent-high: #003434;
+}
+
 /* データセットエクスプローラと GraphQL プレイグラウンドは横幅いっぱいに広げる */
 body:has(#explorer-root),
 body:has(#embedded-sandbox) {
@@ -6,6 +18,14 @@ body:has(#embedded-sandbox) {
 body:has(#explorer-root) .main-pane .sl-container,
 body:has(#embedded-sandbox) .main-pane .sl-container {
   max-width: none;
+}
+/* Mac のトラックパッドで微小に横スクロールしてしまう挙動を抑制 */
+html:has(#explorer-root),
+body:has(#explorer-root),
+html:has(#embedded-sandbox),
+body:has(#embedded-sandbox) {
+  overflow-x: clip;
+  overscroll-behavior-x: none;
 }
 
 /* トップページのドキュメントカードを 3 列固定 */
