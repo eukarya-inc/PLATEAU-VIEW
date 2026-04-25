@@ -84,9 +84,11 @@ type ComplexityRoot struct {
 		City                 func(childComplexity int) int
 		CityCode             func(childComplexity int) int
 		CityID               func(childComplexity int) int
+		CompositeURL         func(childComplexity int) int
 		FeatureTypes         func(childComplexity int) int
 		GspatialjpDatasetURL func(childComplexity int) int
 		ID                   func(childComplexity int) int
+		LatestURL            func(childComplexity int) int
 		MetadataZipUrls      func(childComplexity int) int
 		PlateauSpecMinor     func(childComplexity int) int
 		PlateauSpecMinorID   func(childComplexity int) int
@@ -185,10 +187,12 @@ type ComplexityRoot struct {
 	}
 
 	PlateauDatasetItem struct {
+		CompositeURL        func(childComplexity int) int
 		FloodingScale       func(childComplexity int) int
 		FloodingScaleSuffix func(childComplexity int) int
 		Format              func(childComplexity int) int
 		ID                  func(childComplexity int) int
+		LatestURL           func(childComplexity int) int
 		Layers              func(childComplexity int) int
 		Lod                 func(childComplexity int) int
 		LodEx               func(childComplexity int) int
@@ -335,6 +339,9 @@ type CityResolver interface {
 	Children(ctx context.Context, obj *City) ([]Area, error)
 }
 type CityGMLDatasetResolver interface {
+	CompositeURL(ctx context.Context, obj *CityGMLDataset) (*string, error)
+	LatestURL(ctx context.Context, obj *CityGMLDataset) (*string, error)
+
 	Prefecture(ctx context.Context, obj *CityGMLDataset) (*Prefecture, error)
 	City(ctx context.Context, obj *CityGMLDataset) (*City, error)
 	PlateauSpecMinor(ctx context.Context, obj *CityGMLDataset) (*PlateauSpecMinor, error)
@@ -366,6 +373,9 @@ type PlateauDatasetResolver interface {
 	PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error)
 }
 type PlateauDatasetItemResolver interface {
+	CompositeURL(ctx context.Context, obj *PlateauDatasetItem) (*string, error)
+	LatestURL(ctx context.Context, obj *PlateauDatasetItem) (*string, error)
+
 	Parent(ctx context.Context, obj *PlateauDatasetItem) (*PlateauDataset, error)
 }
 type PlateauDatasetTypeResolver interface {
@@ -576,6 +586,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.CityGMLDataset.CityID(childComplexity), true
 
+	case "CityGMLDataset.compositeUrl":
+		if e.complexity.CityGMLDataset.CompositeURL == nil {
+			break
+		}
+
+		return e.complexity.CityGMLDataset.CompositeURL(childComplexity), true
+
 	case "CityGMLDataset.featureTypes":
 		if e.complexity.CityGMLDataset.FeatureTypes == nil {
 			break
@@ -596,6 +613,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.CityGMLDataset.ID(childComplexity), true
+
+	case "CityGMLDataset.latestUrl":
+		if e.complexity.CityGMLDataset.LatestURL == nil {
+			break
+		}
+
+		return e.complexity.CityGMLDataset.LatestURL(childComplexity), true
 
 	case "CityGMLDataset.metadataZipUrls":
 		if e.complexity.CityGMLDataset.MetadataZipUrls == nil {
@@ -1167,6 +1191,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.PlateauDataset.Year(childComplexity), true
 
+	case "PlateauDatasetItem.compositeUrl":
+		if e.complexity.PlateauDatasetItem.CompositeURL == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.CompositeURL(childComplexity), true
+
 	case "PlateauDatasetItem.floodingScale":
 		if e.complexity.PlateauDatasetItem.FloodingScale == nil {
 			break
@@ -1194,6 +1225,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PlateauDatasetItem.ID(childComplexity), true
+
+	case "PlateauDatasetItem.latestUrl":
+		if e.complexity.PlateauDatasetItem.LatestURL == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.LatestURL(childComplexity), true
 
 	case "PlateauDatasetItem.layers":
 		if e.complexity.PlateauDatasetItem.Layers == nil {
@@ -3345,6 +3383,10 @@ func (ec *executionContext) fieldContext_City_citygml(_ context.Context, field g
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "compositeUrl":
+				return ec.fieldContext_CityGMLDataset_compositeUrl(ctx, field)
+			case "latestUrl":
+				return ec.fieldContext_CityGMLDataset_latestUrl(ctx, field)
 			case "gspatialjpDatasetUrl":
 				return ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
 			case "prefecture":
@@ -3799,6 +3841,88 @@ func (ec *executionContext) fieldContext_CityGMLDataset_url(_ context.Context, f
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CityGMLDataset_compositeUrl(ctx context.Context, field graphql.CollectedField, obj *CityGMLDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CityGMLDataset_compositeUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.CityGMLDataset().CompositeURL(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CityGMLDataset_compositeUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CityGMLDataset",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CityGMLDataset_latestUrl(ctx context.Context, field graphql.CollectedField, obj *CityGMLDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CityGMLDataset_latestUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.CityGMLDataset().LatestURL(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CityGMLDataset_latestUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CityGMLDataset",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
 		},
@@ -7321,6 +7445,10 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context,
 				return ec.fieldContext_PlateauDatasetItem_url(ctx, field)
 			case "layers":
 				return ec.fieldContext_PlateauDatasetItem_layers(ctx, field)
+			case "compositeUrl":
+				return ec.fieldContext_PlateauDatasetItem_compositeUrl(ctx, field)
+			case "latestUrl":
+				return ec.fieldContext_PlateauDatasetItem_latestUrl(ctx, field)
 			case "parentId":
 				return ec.fieldContext_PlateauDatasetItem_parentId(ctx, field)
 			case "parent":
@@ -7790,6 +7918,88 @@ func (ec *executionContext) fieldContext_PlateauDatasetItem_layers(_ context.Con
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_compositeUrl(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_compositeUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.PlateauDatasetItem().CompositeURL(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_compositeUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_latestUrl(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_latestUrl(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.PlateauDatasetItem().LatestURL(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_latestUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
 		},
@@ -10112,6 +10322,10 @@ func (ec *executionContext) fieldContext_Query_citygmlDatasets(ctx context.Conte
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "compositeUrl":
+				return ec.fieldContext_CityGMLDataset_compositeUrl(ctx, field)
+			case "latestUrl":
+				return ec.fieldContext_CityGMLDataset_latestUrl(ctx, field)
 			case "gspatialjpDatasetUrl":
 				return ec.fieldContext_CityGMLDataset_gspatialjpDatasetUrl(ctx, field)
 			case "prefecture":
@@ -15772,6 +15986,72 @@ func (ec *executionContext) _CityGMLDataset(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "compositeUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._CityGMLDataset_compositeUrl(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "latestUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._CityGMLDataset_latestUrl(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "gspatialjpDatasetUrl":
 			out.Values[i] = ec._CityGMLDataset_gspatialjpDatasetUrl(ctx, field, obj)
 		case "prefecture":
@@ -16807,6 +17087,72 @@ func (ec *executionContext) _PlateauDatasetItem(ctx context.Context, sel ast.Sel
 			}
 		case "layers":
 			out.Values[i] = ec._PlateauDatasetItem_layers(ctx, field, obj)
+		case "compositeUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PlateauDatasetItem_compositeUrl(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "latestUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PlateauDatasetItem_latestUrl(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "parentId":
 			out.Values[i] = ec._PlateauDatasetItem_parentId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

@@ -110,6 +110,10 @@ models:
     fields:
       parent:
         resolver: true
+      compositeUrl:
+        resolver: true
+      latestUrl:
+        resolver: true
   PlateauFloodingDataset:
     fields:
       prefecture:
@@ -185,6 +189,10 @@ models:
       city:
         resolver: true
       plateauSpecMinor:
+        resolver: true
+      compositeUrl:
+        resolver: true
+      latestUrl:
         resolver: true
   GlobalArea:
     fields:

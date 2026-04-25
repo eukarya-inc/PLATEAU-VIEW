@@ -249,6 +249,13 @@ type CityGMLDataset struct {
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// CityGMLのzip形式のファイルのURL。
 	URL string `json:"url"`
+	// 自治体・整備年度を指定して zip にリダイレクトする安定 URL
+	// (`/datacatalog/citygml/{cityCode}-{year}/citygml.zip`)。
+	// CMS のアセットパスが変わってもアプリケーション側の URL を維持できます。
+	CompositeURL *string `json:"compositeUrl,omitempty"`
+	// compositeUrl と同じ書式で整備年度を `latest` に置き換えた URL。
+	// 自治体について利用可能な最新整備年度の zip に自動的に追従します。
+	LatestURL *string `json:"latestUrl,omitempty"`
 	// G空間情報センターへのURL。
 	GspatialjpDatasetURL *string `json:"gspatialjpDatasetUrl,omitempty"`
 	// データセットが属する都道府県。
@@ -777,6 +784,14 @@ type PlateauDatasetItem struct {
 	// データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 	// レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
 	Layers []string `json:"layers,omitempty"`
+	// 自治体・整備年度・LOD・テクスチャを spec として動的に解決するエンドポイントの URL。
+	// - 3D Tiles: 複合 tileset.json (`/datacatalog/3dtiles/{spec}/tileset.json`)
+	// - MVT:      自治体単位の TileJSON (`/datacatalog/mvt/{spec}/tilejson.json`)
+	// 自治体コードや整備年度が揃っていない場合は null。
+	CompositeURL *string `json:"compositeUrl,omitempty"`
+	// compositeUrl と同じ書式で、整備年度を `latest` に置き換えた URL。
+	// 各自治体について利用可能な最新整備年度のデータに自動的に追従します。
+	LatestURL *string `json:"latestUrl,omitempty"`
 	// データセットのアイテムが属するデータセットのID。
 	ParentID ID `json:"parentId"`
 	// データセットのアイテムが属するデータセット。

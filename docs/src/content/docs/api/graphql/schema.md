@@ -108,6 +108,20 @@ PLATEAU GraphQL API のクエリルート。
 <td></td>
 </tr>
 <tr>
+<td colspan="2" valign="top"><strong id="query.citygmldatasets">citygmlDatasets</strong></td>
+<td valign="top">[<a href="#citygmldataset">CityGMLDataset</a>!]!</td>
+<td>
+
+CityGMLデータセットを検索します。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" align="right" valign="top">input</td>
+<td valign="top"><a href="#citygmldatasetsinput">CityGMLDatasetsInput</a></td>
+<td></td>
+</tr>
+<tr>
 <td colspan="2" valign="top"><strong id="query.plateauspecs">plateauSpecs</strong></td>
 <td valign="top">[<a href="#plateauspec">PlateauSpec</a>!]!</td>
 <td>
@@ -371,6 +385,27 @@ PLATEAU標準製品仕様書に基づくCityGMLのデータセット。
 <td>
 
 CityGMLのzip形式のファイルのURL。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="citygmldataset.compositeurl">compositeUrl</strong></td>
+<td valign="top"><a href="#string">String</a></td>
+<td>
+
+自治体・整備年度を指定して zip にリダイレクトする安定 URL
+(`/datacatalog/citygml/{cityCode}-{year}/citygml.zip`)。
+CMS のアセットパスが変わってもアプリケーション側の URL を維持できます。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="citygmldataset.latesturl">latestUrl</strong></td>
+<td valign="top"><a href="#string">String</a></td>
+<td>
+
+compositeUrl と同じ書式で整備年度を `latest` に置き換えた URL。
+自治体について利用可能な最新整備年度の zip に自動的に追従します。
 
 </td>
 </tr>
@@ -1208,6 +1243,28 @@ PLATEAU都市モデルのデータセットのアイテム。
 
 データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.compositeurl">compositeUrl</strong></td>
+<td valign="top"><a href="#string">String</a></td>
+<td>
+
+自治体・整備年度・LOD・テクスチャを spec として動的に解決するエンドポイントの URL。
+- 3D Tiles: 複合 tileset.json (`/datacatalog/3dtiles/{spec}/tileset.json`)
+- MVT:      自治体単位の TileJSON (`/datacatalog/mvt/{spec}/tilejson.json`)
+自治体コードや整備年度が揃っていない場合は null。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.latesturl">latestUrl</strong></td>
+<td valign="top"><a href="#string">String</a></td>
+<td>
+
+compositeUrl と同じ書式で、整備年度を `latest` に置き換えた URL。
+各自治体について利用可能な最新整備年度のデータに自動的に追従します。
 
 </td>
 </tr>
@@ -2285,6 +2342,49 @@ parentCode が指定された場合に、その地域に間接的に属してい
 </tbody>
 </table>
 
+#### CityGMLDatasetsInput
+
+CityGMLデータセットを検索するためのクエリ。
+
+<table>
+<thead>
+<tr>
+<th colspan="2" align="left">Field</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td colspan="2" valign="top"><strong id="citygmldatasetsinput.prefecturecodes">prefectureCodes</strong></td>
+<td valign="top">[<a href="#areacode">AreaCode</a>!]</td>
+<td>
+
+データセットの都道府県コード。複数指定するとOR条件で検索を行います。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="citygmldatasetsinput.citycodes">cityCodes</strong></td>
+<td valign="top">[<a href="#areacode">AreaCode</a>!]</td>
+<td>
+
+データセットの市区町村コード。複数指定するとOR条件で検索を行います。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="citygmldatasetsinput.years">years</strong></td>
+<td valign="top">[<a href="#int">Int</a>!]</td>
+<td>
+
+データの整備年度（西暦）。複数指定するとOR条件で検索を行います。
+
+</td>
+</tr>
+</tbody>
+</table>
+
 #### DatasetTypesInput
 
 データセットの種類を検索するためのクエリ。
@@ -2834,7 +2934,7 @@ The `String` scalar type represents textual data, represented as UTF-8 character
 </tbody>
 </table>
 
-**Possible Types:** [City](#city), [GlobalArea](#globalarea), [Prefecture](#prefecture), [Ward](#ward)
+**Possible Types:** [Prefecture](#prefecture), [City](#city), [Ward](#ward), [GlobalArea](#globalarea)
 
 #### Dataset
 
@@ -3047,7 +3147,7 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 </tbody>
 </table>
 
-**Possible Types:** [GenericDataset](#genericdataset), [PlateauDataset](#plateaudataset), [RelatedDataset](#relateddataset)
+**Possible Types:** [PlateauDataset](#plateaudataset), [RelatedDataset](#relateddataset), [GenericDataset](#genericdataset)
 
 #### DatasetItem
 
@@ -3126,7 +3226,7 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 </tbody>
 </table>
 
-**Possible Types:** [GenericDatasetItem](#genericdatasetitem), [PlateauDatasetItem](#plateaudatasetitem), [RelatedDatasetItem](#relateddatasetitem)
+**Possible Types:** [PlateauDatasetItem](#plateaudatasetitem), [RelatedDatasetItem](#relateddatasetitem), [GenericDatasetItem](#genericdatasetitem)
 
 #### DatasetType
 
@@ -3200,7 +3300,7 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 </tbody>
 </table>
 
-**Possible Types:** [GenericDatasetType](#genericdatasettype), [PlateauDatasetType](#plateaudatasettype), [RelatedDatasetType](#relateddatasettype)
+**Possible Types:** [PlateauDatasetType](#plateaudatasettype), [RelatedDatasetType](#relateddatasettype), [GenericDatasetType](#genericdatasettype)
 
 #### Node
 
@@ -3228,4 +3328,4 @@ IDを持つオブジェクト。nodeまたはnodesクエリでIDを指定して�
 </tbody>
 </table>
 
-**Possible Types:** [City](#city), [CityGMLDataset](#citygmldataset), [GenericDataset](#genericdataset), [GenericDatasetItem](#genericdatasetitem), [GenericDatasetType](#genericdatasettype), [GlobalArea](#globalarea), [PlateauDataset](#plateaudataset), [PlateauDatasetItem](#plateaudatasetitem), [PlateauDatasetType](#plateaudatasettype), [PlateauSpec](#plateauspec), [PlateauSpecMinor](#plateauspecminor), [Prefecture](#prefecture), [RelatedDataset](#relateddataset), [RelatedDatasetItem](#relateddatasetitem), [RelatedDatasetType](#relateddatasettype), [Ward](#ward)
+**Possible Types:** [Prefecture](#prefecture), [City](#city), [Ward](#ward), [GlobalArea](#globalarea), [PlateauSpec](#plateauspec), [PlateauSpecMinor](#plateauspecminor), [PlateauDataset](#plateaudataset), [PlateauDatasetItem](#plateaudatasetitem), [PlateauDatasetType](#plateaudatasettype), [RelatedDataset](#relateddataset), [RelatedDatasetItem](#relateddatasetitem), [RelatedDatasetType](#relateddatasettype), [GenericDataset](#genericdataset), [GenericDatasetItem](#genericdatasetitem), [GenericDatasetType](#genericdatasettype), [CityGMLDataset](#citygmldataset)

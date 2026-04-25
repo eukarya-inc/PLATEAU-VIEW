@@ -43,12 +43,16 @@ type Repo interface {
 
 type Resolver struct {
 	Repo Repo
+	// Host is the externally reachable origin (scheme + host) of the API,
+	// used to build absolute composite/latest URLs. Empty disables those
+	// fields (they resolve to null).
+	Host string
 }
 
 type Option func(*handler.Server)
 
-func NewService(repo Repo, opts ...Option) *handler.Server {
-	srv := handler.New(NewSchema(repo))
+func NewService(repo Repo, host string, opts ...Option) *handler.Server {
+	srv := handler.New(NewSchema(repo, host))
 
 	srv.AddTransport(transport.Options{})
 	srv.AddTransport(transport.GET{})
@@ -67,8 +71,8 @@ func NewService(repo Repo, opts ...Option) *handler.Server {
 	return srv
 }
 
-func NewSchema(repo Repo) graphql.ExecutableSchema {
-	return NewExecutableSchema(Config{Resolvers: &Resolver{Repo: repo}})
+func NewSchema(repo Repo, host string) graphql.ExecutableSchema {
+	return NewExecutableSchema(Config{Resolvers: &Resolver{Repo: repo, Host: host}})
 }
 
 func FixedComplexityLimit(limit int) Option {

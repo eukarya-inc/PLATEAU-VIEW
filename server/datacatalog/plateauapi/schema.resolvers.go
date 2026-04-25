@@ -62,6 +62,22 @@ func (r *cityResolver) Children(ctx context.Context, obj *City) ([]Area, error) 
 	})
 }
 
+// CompositeURL is the resolver for the compositeUrl field.
+func (r *cityGMLDatasetResolver) CompositeURL(ctx context.Context, obj *CityGMLDataset) (*string, error) {
+	if u := buildCityGMLDynamicURL(r.Host, obj, false); u != "" {
+		return &u, nil
+	}
+	return nil, nil
+}
+
+// LatestURL is the resolver for the latestUrl field.
+func (r *cityGMLDatasetResolver) LatestURL(ctx context.Context, obj *CityGMLDataset) (*string, error) {
+	if u := buildCityGMLDynamicURL(r.Host, obj, true); u != "" {
+		return &u, nil
+	}
+	return nil, nil
+}
+
 // Prefecture is the resolver for the prefecture field.
 func (r *cityGMLDatasetResolver) Prefecture(ctx context.Context, obj *CityGMLDataset) (*Prefecture, error) {
 	return to[*Prefecture](r.Repo.Node(ctx, obj.PrefectureID))
@@ -185,6 +201,30 @@ func (r *plateauDatasetResolver) Type(ctx context.Context, obj *PlateauDataset) 
 // PlateauSpecMinor is the resolver for the plateauSpecMinor field.
 func (r *plateauDatasetResolver) PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error) {
 	return to[*PlateauSpecMinor](r.Repo.Node(ctx, obj.PlateauSpecMinorID))
+}
+
+// CompositeURL is the resolver for the compositeUrl field.
+func (r *plateauDatasetItemResolver) CompositeURL(ctx context.Context, obj *PlateauDatasetItem) (*string, error) {
+	parent, err := to[*PlateauDataset](r.Repo.Node(ctx, obj.ParentID))
+	if err != nil || parent == nil {
+		return nil, err
+	}
+	if u := buildPlateauItemDynamicURL(r.Host, obj, parent, false); u != "" {
+		return &u, nil
+	}
+	return nil, nil
+}
+
+// LatestURL is the resolver for the latestUrl field.
+func (r *plateauDatasetItemResolver) LatestURL(ctx context.Context, obj *PlateauDatasetItem) (*string, error) {
+	parent, err := to[*PlateauDataset](r.Repo.Node(ctx, obj.ParentID))
+	if err != nil || parent == nil {
+		return nil, err
+	}
+	if u := buildPlateauItemDynamicURL(r.Host, obj, parent, true); u != "" {
+		return &u, nil
+	}
+	return nil, nil
 }
 
 // Parent is the resolver for the parent field.

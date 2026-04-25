@@ -105,7 +105,7 @@ func (h *ReposHandler) Handler(admin bool) echo.HandlerFunc {
 			return err
 		}
 
-		srv := plateauapi.NewService(merged, plateauapi.FixedComplexityLimit(h.gqlComplexityLimit))
+		srv := plateauapi.NewService(merged, h.host, plateauapi.FixedComplexityLimit(h.gqlComplexityLimit))
 
 		adminContext(c, admin, admin, admin && isAlpha(c))
 		srv.ServeHTTP(c.Response(), c.Request())
