@@ -49,6 +49,16 @@ func TestParseSpec(t *testing.T) {
 			want: Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 3, LODMode: LODMax, Texture: TextureNone, Year: 2025},
 		},
 		{
+			name: "latest year",
+			in:   "all-bldg-lod2-latest",
+			want: Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, YearMode: YearLatest},
+		},
+		{
+			name: "latest year with notexture",
+			in:   "13-bldg-maxlod2-notexture-latest",
+			want: Spec{Area: Area{Kind: AreaPref, Code: "13"}, Type: "bldg", LOD: 2, LODMode: LODMax, Texture: TextureNone, YearMode: YearLatest},
+		},
+		{
 			name:    "missing year",
 			in:      "all-bldg-lod2",
 			wantErr: true,

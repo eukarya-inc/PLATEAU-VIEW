@@ -162,7 +162,8 @@ https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tilese
 | `texture` | （省略） | テクスチャありを優先、無ければテクスチャなしを採用 |
 | | `texture` | テクスチャありのデータのみ |
 | | `notexture` | テクスチャなしのデータのみ |
-| `year` | 4 桁の西暦 | データの整備年度 |
+| `year` | 4 桁の西暦 | その整備年度のデータのみを採用 |
+| | `latest` | 整備年度のフィルタを行わず、各自治体について利用可能な最新整備年度のデータを採用 |
 
 例:
 
@@ -172,6 +173,7 @@ https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tilese
 | `all-bldg-maxlod2-2025` | 全国の建築物モデル、各都市で LOD2 まで取れるなら LOD2、無ければ LOD1 |
 | `13-bldg-lod2-texture-2025` | 東京都の建築物モデル LOD2、テクスチャあり限定 |
 | `13101-bldg-lod2-2025` | 千代田区の建築物モデル LOD2 |
+| `all-bldg-lod2-latest` | 全国の建築物モデル LOD2、各自治体ごとに最新整備年度を採用 |
 
 #### CesiumJS での利用例
 

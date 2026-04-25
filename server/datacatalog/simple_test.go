@@ -9,10 +9,11 @@ import (
 )
 
 func TestBuildSpec(t *testing.T) {
-	assert.Equal(t, "13101-bldg-lod1-2025", buildSpec("13101", "bldg", "1", nil, 2025))
-	assert.Equal(t, "13101-bldg-lod2-texture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(true), 2025))
-	assert.Equal(t, "13101-bldg-lod2-notexture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(false), 2025))
-	assert.Equal(t, "all-bldg-lod1-2025", buildSpec("all", "bldg", "1", nil, 2025))
+	assert.Equal(t, "13101-bldg-lod1-2025", buildSpec("13101", "bldg", "1", nil, "2025"))
+	assert.Equal(t, "13101-bldg-lod2-texture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(true), "2025"))
+	assert.Equal(t, "13101-bldg-lod2-notexture-2025", buildSpec("13101", "bldg", "2", lo.ToPtr(false), "2025"))
+	assert.Equal(t, "all-bldg-lod1-2025", buildSpec("all", "bldg", "1", nil, "2025"))
+	assert.Equal(t, "all-bldg-lod1-latest", buildSpec("all", "bldg", "1", nil, "latest"))
 }
 
 func TestBuildDatasetCompositeURL(t *testing.T) {
@@ -89,14 +90,23 @@ func TestBuildCompositeTilesets(t *testing.T) {
 	//           27-bldg-lod1-2025
 	assert.Equal(t, []string{
 		"13-bldg-lod1-2025",
+		"13-bldg-lod1-latest",
 		"13-bldg-lod2-2025",
+		"13-bldg-lod2-latest",
 		"13-bldg-lod2-notexture-2025",
+		"13-bldg-lod2-notexture-latest",
 		"13-bldg-lod2-texture-2025",
+		"13-bldg-lod2-texture-latest",
 		"27-bldg-lod1-2025",
+		"27-bldg-lod1-latest",
 		"all-bldg-lod1-2025",
+		"all-bldg-lod1-latest",
 		"all-bldg-lod2-2025",
+		"all-bldg-lod2-latest",
 		"all-bldg-lod2-notexture-2025",
+		"all-bldg-lod2-notexture-latest",
 		"all-bldg-lod2-texture-2025",
+		"all-bldg-lod2-texture-latest",
 	}, ids)
 
 	// spot check pref entry has prefCode populated

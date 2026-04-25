@@ -66,7 +66,9 @@ type SimpleCompositeTileset struct {
 	Type     string  `json:"type"`
 	LOD      int     `json:"lod"`
 	Texture  *bool   `json:"texture"` // nil=auto; true/false when explicitly filtered
-	Year     int     `json:"year"`
+	// Year is a 4-digit year string (e.g. "2025") for year-specific entries,
+	// or "latest" for entries that resolve to the newest year per area.
+	Year string `json:"year"`
 }
 
 func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host string) (*SimpleDatasetsResponse, error) {
@@ -293,12 +295,13 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 		return ""
 	}
 
-	return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, d.Year) + "/tileset.json"
+	return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
 }
 
 // buildSpec assembles the path segment used by the composite tileset endpoint.
 // The lod argument is expected to be a numeric string ("1", "2", ...).
-func buildSpec(area, typeCode, lod string, texture *bool, year int) string {
+// The year argument is a 4-digit string ("2025") or the literal "latest".
+func buildSpec(area, typeCode, lod string, texture *bool, year string) string {
 	parts := []string{area, typeCode, "lod" + lod}
 	if texture != nil {
 		if *texture {
@@ -307,28 +310,30 @@ func buildSpec(area, typeCode, lod string, texture *bool, year int) string {
 			parts = append(parts, "notexture")
 		}
 	}
-	parts = append(parts, strconv.Itoa(year))
+	parts = append(parts, year)
 	return strings.Join(parts, "-")
 }
 
 // buildCompositeTilesets enumerates virtual tileset entries derived from the
 // 3D Tiles datasets that exist. The "all" form covers Japan; "pref" is per
-// prefecture. Texture-specific variants are emitted only when both textured
-// and non-textured data coexist for the same (area, type, lod, year) group;
-// otherwise the auto variant is the only useful URL.
+// prefecture. For each (area, type, lod) bucket, both year-specific entries
+// and a "latest" entry (which resolves to the newest year per municipality)
+// are emitted. Texture-specific variants are emitted only when both textured
+// and non-textured data coexist within that bucket; otherwise the auto
+// variant is the only useful URL.
 func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDataset) []*SimpleCompositeTileset {
 	if host == "" {
 		return nil
 	}
 
 	type groupKey struct {
-		area     string // "all" or pref code
+		area     string // "all" or "pref"
 		prefCode string // empty when area == "all"
 		prefName string
 		typeCode string
 		typeName string
 		lod      int
-		year     int
+		year     string // 4-digit year or "latest"
 	}
 	type groupAgg struct {
 		hasTextured    bool
@@ -367,26 +372,29 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 			continue
 		}
 
-		// all-Japan
-		add(groupKey{
-			area:     "all",
-			typeCode: d.TypeCode,
-			typeName: d.Type,
-			lod:      lod,
-			year:     d.Year,
-		}, d.Texture)
-
-		// per prefecture
-		if d.PrefCode != "" {
+		years := []string{strconv.Itoa(d.Year), "latest"}
+		for _, y := range years {
+			// all-Japan
 			add(groupKey{
-				area:     "pref",
-				prefCode: d.PrefCode,
-				prefName: d.Pref,
+				area:     "all",
 				typeCode: d.TypeCode,
 				typeName: d.Type,
 				lod:      lod,
-				year:     d.Year,
+				year:     y,
 			}, d.Texture)
+
+			// per prefecture
+			if d.PrefCode != "" {
+				add(groupKey{
+					area:     "pref",
+					prefCode: d.PrefCode,
+					prefName: d.Pref,
+					typeCode: d.TypeCode,
+					typeName: d.Type,
+					lod:      lod,
+					year:     y,
+				}, d.Texture)
+			}
 		}
 	}
 

@@ -37,6 +37,17 @@ const (
 	LODMax
 )
 
+// YearMode controls how the year constraint is interpreted.
+type YearMode int
+
+const (
+	// YearExact matches datasets whose year equals Spec.Year.
+	YearExact YearMode = iota
+	// YearLatest ignores the year filter and, per area, picks the dataset
+	// with the newest year. Spec.Year is ignored in this mode.
+	YearLatest
+)
+
 // TextureMode controls how the texture variant is selected.
 type TextureMode int
 
@@ -56,13 +67,15 @@ const (
 //   - "13101-bldg-lod2-2025"           (Chiyoda ward)
 //   - "all-bldg-lod2-texture-2025"     (textured only)
 //   - "all-bldg-lod2-notexture-2025"   (non-textured only)
+//   - "all-bldg-lod2-latest"           (newest year per area)
 type Spec struct {
-	Area    Area
-	Type    string // dataset type code (e.g. "bldg")
-	LOD     int    // 1, 2, 3, ...
-	LODMode LODMode
-	Texture TextureMode
-	Year    int // 4-digit year
+	Area     Area
+	Type     string // dataset type code (e.g. "bldg")
+	LOD      int    // 1, 2, 3, ...
+	LODMode  LODMode
+	Texture  TextureMode
+	Year     int // 4-digit year; ignored when YearMode is YearLatest
+	YearMode YearMode
 }
 
 func parseArea(s string) (Area, error) {
@@ -132,17 +145,26 @@ func ParseSpec(s string) (Spec, error) {
 		return Spec{}, fmt.Errorf("invalid spec %q: unexpected trailing segments", s)
 	}
 
-	year, err := strconv.Atoi(parts[yearIdx])
-	if err != nil || year < 1900 || year > 9999 {
-		return Spec{}, fmt.Errorf("invalid spec %q: invalid year", s)
+	yearStr := parts[yearIdx]
+	yearMode := YearExact
+	year := 0
+	if yearStr == "latest" {
+		yearMode = YearLatest
+	} else {
+		y, err := strconv.Atoi(yearStr)
+		if err != nil || y < 1900 || y > 9999 {
+			return Spec{}, fmt.Errorf("invalid spec %q: invalid year", s)
+		}
+		year = y
 	}
 
 	return Spec{
-		Area:    area,
-		Type:    typeCode,
-		LOD:     lod,
-		LODMode: lodMode,
-		Texture: texture,
-		Year:    year,
+		Area:     area,
+		Type:     typeCode,
+		LOD:      lod,
+		LODMode:  lodMode,
+		Texture:  texture,
+		Year:     year,
+		YearMode: yearMode,
 	}, nil
 }

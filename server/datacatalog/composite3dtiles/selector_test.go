@@ -84,6 +84,41 @@ func TestSelect(t *testing.T) {
 	})
 }
 
+func TestSelectLatestYear(t *testing.T) {
+	lod2 := "2"
+	tex := lo.ToPtr(true)
+	noTex := lo.ToPtr(false)
+	cityA := lo.ToPtr("13101")
+	cityB := lo.ToPtr("13102")
+	cityC := lo.ToPtr("13103")
+
+	datasets := []Input{
+		// area A: 2023 and 2025 → 2025 wins
+		{URL: "a23", Format: "3D Tiles", TypeCode: "bldg", Year: 2023, LOD: &lod2, Texture: tex, PrefCode: "13", CityCode: cityA},
+		{URL: "a25", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Texture: tex, PrefCode: "13", CityCode: cityA},
+		// area B: only 2024
+		{URL: "b24", Format: "3D Tiles", TypeCode: "bldg", Year: 2024, LOD: &lod2, Texture: tex, PrefCode: "13", CityCode: cityB},
+		// area C: 2025 textured + 2025 non-textured → texture tiebreak
+		{URL: "c25t", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Texture: tex, PrefCode: "13", CityCode: cityC},
+		{URL: "c25n", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Texture: noTex, PrefCode: "13", CityCode: cityC},
+	}
+
+	t.Run("latest picks newest year per area", func(t *testing.T) {
+		got := Select(datasets, Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, YearMode: YearLatest})
+		sort.Slice(got, func(i, j int) bool { return got[i].AreaCode < got[j].AreaCode })
+		assert.Equal(t, []Candidate{
+			{URL: "a25", AreaCode: "13101"},
+			{URL: "b24", AreaCode: "13102"},
+			{URL: "c25t", AreaCode: "13103"},
+		}, got)
+	})
+
+	t.Run("latest with notexture filter", func(t *testing.T) {
+		got := Select(datasets, Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, Texture: TextureNone, YearMode: YearLatest})
+		assert.Equal(t, []Candidate{{URL: "c25n", AreaCode: "13103"}}, got)
+	})
+}
+
 func TestSelectMaxLOD(t *testing.T) {
 	lod1 := "1"
 	lod2 := "2"

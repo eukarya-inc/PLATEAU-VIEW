@@ -39,6 +39,7 @@ type Candidate struct {
 func Select(datasets []Input, spec Spec) []Candidate {
 	type entry struct {
 		url     string
+		year    int
 		lod     int
 		texture int // 2: textured, 1: non-textured, 0: unspecified
 	}
@@ -52,7 +53,7 @@ func Select(datasets []Input, spec Spec) []Candidate {
 		if d.TypeCode != spec.Type {
 			continue
 		}
-		if d.Year != spec.Year {
+		if spec.YearMode == YearExact && d.Year != spec.Year {
 			continue
 		}
 		if d.LOD == nil {
@@ -107,7 +108,7 @@ func Select(datasets []Input, spec Spec) []Candidate {
 			}
 		}
 
-		next := entry{url: d.URL, lod: lod, texture: texRank}
+		next := entry{url: d.URL, year: d.Year, lod: lod, texture: texRank}
 		cur, ok := picked[areaCode]
 		if !ok || better(next, cur) {
 			picked[areaCode] = next
@@ -121,14 +122,17 @@ func Select(datasets []Input, spec Spec) []Candidate {
 	return out
 }
 
-// better reports whether a should replace b. LOD wins; texture rank breaks
-// ties. When LODMode is LODExact all candidates share the same LOD, so this
-// degrades to texture-only comparison.
+// better reports whether a should replace b. Year wins first (for YearLatest;
+// no-op when years are equal as in YearExact), then LOD, then texture rank.
 func better(a, b struct {
 	url     string
+	year    int
 	lod     int
 	texture int
 }) bool {
+	if a.year != b.year {
+		return a.year > b.year
+	}
 	if a.lod != b.lod {
 		return a.lod > b.lod
 	}

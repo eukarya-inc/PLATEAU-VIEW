@@ -376,7 +376,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           <td>\${escapeHtml(d.format ?? '')}</td>
           <td>\${escapeHtml(d.lod ?? '')}</td>
           <td>\${d.texture === true ? '○' : d.texture === false ? '' : '—'}</td>
-          <td>\${escapeHtml(d.year ?? '')}</td>
+          <td>\${escapeHtml(d.year === 'latest' ? '最新（自治体別）' : (d.year ?? ''))}</td>
           <td><div class="url-cell"><code title="\${escUrl}">\${escUrl}</code><button class="copy-btn" type="button" data-url="\${escUrl}">コピー</button></div></td>
         </tr>\`;
       });
@@ -444,9 +444,11 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
         }));
         const composites = ((data && data.composite_tilesets) || []).map(c => ({
           id: c.id,
-          name: c.area === 'all'
-            ? \`\${c.type ?? ''}（全国・複合）\`
-            : \`\${c.type ?? ''}（\${c.pref ?? ''}全域・複合）\`,
+          name: (() => {
+            const scope = c.area === 'all' ? '全国' : \`\${c.pref ?? ''}全域\`;
+            const suffix = c.year === 'latest' ? '・複合・最新' : '・複合';
+            return \`\${c.type ?? ''}（\${scope}\${suffix}）\`;
+          })(),
           pref: c.pref ?? '',
           pref_code: c.pref_code ?? '',
           city: '',
@@ -525,7 +527,29 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           }
         }
         fillSelect(lodSel, uniqSorted(datasets, 'lod', (a, b) => String(a).localeCompare(String(b), 'ja', { numeric: true })));
-        fillSelect(yearSel, uniqSorted(datasets, 'year', (a, b) => Number(b) - Number(a)));
+        {
+          // year: composites は文字列、baseDatasets は数値で来るので String 化して dedup。
+          // "latest" を先頭、その後は数値降順。
+          const set = new Set();
+          for (const d of datasets) {
+            if (d.year != null && d.year !== '') set.add(String(d.year));
+          }
+          const years = [...set].sort((a, b) => {
+            if (a === 'latest' && b !== 'latest') return -1;
+            if (a !== 'latest' && b === 'latest') return 1;
+            if (a === 'latest' && b === 'latest') return 0;
+            return Number(b) - Number(a);
+          });
+          const first = yearSel.options[0];
+          yearSel.innerHTML = '';
+          yearSel.appendChild(first);
+          for (const v of years) {
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = v === 'latest' ? '最新（自治体別）' : v;
+            yearSel.appendChild(opt);
+          }
+        }
         refreshCityOptions();
         loading.hidden = true;
         tableWrap.hidden = false;

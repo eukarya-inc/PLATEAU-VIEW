@@ -202,6 +202,9 @@ paths:
                     description: |
                       実データから派生して列挙された複合 tileset.json のリスト。
                       全国（`area: "all"`）と都道府県別（`area: "pref"`）を含みます。
+                      各 `(area, type, lod)` の組について、整備年度ごとのエントリ
+                      （`year` が西暦4桁文字列）に加えて、各自治体の最新整備年度を
+                      自動採用する `year: "latest"` のエントリも列挙されます。
                       テクスチャ別のバリエーション（`-texture`/`-notexture`）は、同一の
                       `(area, type, lod, year)` に対して両方のデータが存在する場合のみ列挙されます。
                     items:
@@ -243,7 +246,10 @@ paths:
                             `null`: 自動（テクスチャ優先、無ければテクスチャなし）。
                             `true`: テクスチャあり限定。`false`: テクスチャなし限定。
                         year:
-                          type: integer
+                          type: string
+                          description: |
+                            整備年度（西暦4桁文字列、例 `"2025"`）または `"latest"`。
+                            `"latest"` の場合、URL は各自治体の最新整備年度の 3D Tiles を採用する複合 tileset.json を返します。
                       required:
                         - id
                         - url
@@ -344,7 +350,9 @@ paths:
           - 省略時: テクスチャありを優先、無ければテクスチャなしを採用
           - `texture`: テクスチャありのデータのみ
           - `notexture`: テクスチャなしのデータのみ
-        - `year`: データの整備年度（西暦4桁）
+        - `year`:
+          - 西暦4桁: その整備年度のデータのみを採用
+          - `latest`: 整備年度のフィルタを行わず、各自治体について利用可能な最新整備年度のデータを採用
 
         例:
 
@@ -352,6 +360,7 @@ paths:
         - `/datacatalog/3dtiles/all-bldg-maxlod2-2025/tileset.json`
         - `/datacatalog/3dtiles/13-bldg-lod2-texture-2025/tileset.json`
         - `/datacatalog/3dtiles/13101-bldg-lod2-notexture-2025/tileset.json`
+        - `/datacatalog/3dtiles/all-bldg-lod2-latest/tileset.json`
       parameters:
         - in: path
           name: spec
