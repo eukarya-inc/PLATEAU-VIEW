@@ -633,9 +633,13 @@ async fn raster_tilejson(
     if !["png", "webp", "avif"].contains(&fmt) {
         return (StatusCode::BAD_REQUEST, "format must be png, webp, or avif").into_response();
     }
-    let (scheme, host) = external_origin(&headers);
+    // Use an origin-relative URL so MapLibre resolves it against the
+    // tilejson location. Avoids any reliance on `Host` / `X-Forwarded-Host`,
+    // which fronting load balancers (Cloud Run / Cloudflare) sometimes
+    // rewrite to `localhost` — same fix as `/terrain/layer.json`.
+    let _ = &headers;
     let tile_url = format!(
-        "{scheme}://{host}/{slug}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
+        "/{slug}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
         slug = encoding.slug(),
         geoid = geoid_model.slug(),
     );
