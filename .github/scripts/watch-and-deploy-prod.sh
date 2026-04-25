@@ -126,39 +126,51 @@ fi
 echo ""
 
 # ===== Step 3: 本番デプロイのトリガーと監視 =====
+# `workflow_dispatch` で起動された run の `headSha` は dispatch 時点の
+# `$TARGET_BRANCH` の HEAD に解決される（= 我々が CI 通過させた SHA とは
+# 限らない: 直後に他コミットが main に乗ると一致しなくなる）。
+# よって SHA で照合せず、dispatch 直前のラン ID をベースラインに、
+# それより新しいランが現れたら「我々が起こしたラン」とみなして直接追跡する。
 echo "Step 3: Triggering production deployment..."
 echo ""
 
-# 本番デプロイが既に成功しているかチェック
-PROD_RUN_JSON=$(gh run list \
+# Dispatch 直前の最新ランをベースラインとして記録。
+BASELINE_RUN_ID=$(gh run list \
   --workflow "$DISPATCH_WORKFLOW_FILE" \
-  --branch "$TARGET_BRANCH" \
-  -L 5 \
-  --json databaseId,headSha,status,conclusion,url \
-  --jq ".[] | select(.headSha == \"$LATEST_COMMIT_SHA\")" | head -1)
+  -L 1 \
+  --json databaseId \
+  --jq '.[0].databaseId // 0')
+echo "Baseline run before dispatch: $BASELINE_RUN_ID"
 
-if [[ -n "$PROD_RUN_JSON" && "$PROD_RUN_JSON" != "null" ]]; then
-  PROD_STATUS=$(echo "$PROD_RUN_JSON" | jq -r '.status')
-  PROD_CONCLUSION=$(echo "$PROD_RUN_JSON" | jq -r '.conclusion // ""')
-  PROD_URL=$(echo "$PROD_RUN_JSON" | jq -r '.url')
-
-  if [[ "$PROD_STATUS" == "completed" && "$PROD_CONCLUSION" == "success" ]]; then
-    echo "Production deployment is already completed for this commit!"
-    echo "  $PROD_URL"
-    exit 0
-  fi
-fi
-
-# 本番デプロイをトリガー
+# 本番デプロイをトリガー。
 BUILD_TAG="build-$LATEST_COMMIT_SHA"
 echo "Dispatching '$DISPATCH_WORKFLOW_FILE' with image_tag=$BUILD_TAG..."
 gh workflow run "$DISPATCH_WORKFLOW_FILE" --ref "$TARGET_BRANCH" -f "image_tag=$BUILD_TAG"
 
 echo ""
 echo "Waiting for production deployment run to appear..."
-sleep 5
 
-PROD_RUN_ID=$(wait_for_run "$DISPATCH_WORKFLOW_FILE" "$LATEST_COMMIT_SHA" "Production")
+# ベースラインより databaseId が大きい最新ランが我々の dispatch によるもの。
+PROD_RUN_ID=""
+for i in $(seq 1 "$MAX_CHECKS"); do
+  CANDIDATE=$(gh run list \
+    --workflow "$DISPATCH_WORKFLOW_FILE" \
+    -L 1 \
+    --json databaseId \
+    --jq '.[0].databaseId // 0')
+  if [[ "$CANDIDATE" -gt "$BASELINE_RUN_ID" ]]; then
+    PROD_RUN_ID="$CANDIDATE"
+    break
+  fi
+  echo "  [$i/$MAX_CHECKS] Waiting for new Production run to appear (baseline=$BASELINE_RUN_ID)..." >&2
+  sleep "$POLL_INTERVAL"
+done
+
+if [[ -z "$PROD_RUN_ID" ]]; then
+  echo "Timeout: Production run did not appear after dispatch" >&2
+  exit 1
+fi
+
 echo "Found Production run: $PROD_RUN_ID"
 gh run watch "$PROD_RUN_ID" --exit-status
 
