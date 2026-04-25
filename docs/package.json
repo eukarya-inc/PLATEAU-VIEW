@@ -11,10 +11,13 @@
     "astro": "astro",
     "check": "astro check",
     "api:fetch": "curl -fsSL https://api.plateauview.mlit.go.jp/openapi.json -o src/openapi/plateau-api.json",
+    "api:gen": "node scripts/build-openapi-snapshot.mjs",
     "gql:fetch": "node scripts/build-graphql-docs.mjs fetch",
     "gql:gen": "node scripts/build-graphql-docs.mjs gen",
     "gql:build": "node scripts/build-graphql-docs.mjs all",
-    "schema:update": "npm run api:fetch && npm run gql:build"
+    "gql:local": "node scripts/build-graphql-docs.mjs local",
+    "schema:update": "npm run api:fetch && npm run gql:build",
+    "schema:local": "npm run api:gen && npm run gql:local"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.38.0",
@@ -27,6 +30,7 @@
     "@astrojs/check": "^0.9.8",
     "graphql": "^16.13.2",
     "graphql-markdown": "^7.3.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "yaml": "^2.6.1"
   }
 }

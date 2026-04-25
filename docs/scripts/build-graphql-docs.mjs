@@ -22,6 +22,20 @@ const ROOT = resolve(__dirname, "..");
 const ENDPOINT = "https://api.plateauview.mlit.go.jp/datacatalog/graphql";
 const SDL_PATH = resolve(ROOT, "src/graphql/schema.graphql");
 const MD_PATH = resolve(ROOT, "src/content/docs/api/graphql/schema.md");
+const LOCAL_SDL_PATH = resolve(
+  ROOT,
+  "..",
+  "server",
+  "datacatalog/plateauapi/schema.graphql",
+);
+
+function loadLocalSchema() {
+  console.log(`[gql] Reading local SDL from ${LOCAL_SDL_PATH}`);
+  const sdl = readFileSync(LOCAL_SDL_PATH, "utf8");
+  // Re-print through buildSchema to canonicalize formatting (matches the
+  // shape we get from introspection).
+  return printSchema(buildSchema(sdl));
+}
 
 async function fetchSchema() {
   console.log(`[gql] Fetching introspection from ${ENDPOINT}`);
@@ -83,6 +97,11 @@ if (cmd === "fetch" || cmd === "all") {
   saveSdl(sdl);
   // sanity check: ensure SDL parses
   buildSchema(sdl);
+}
+if (cmd === "local") {
+  // 本番反映を待たずにローカル schema.graphql から SDL+MD を生成する。
+  saveSdl(loadLocalSchema());
+  generateMarkdown();
 }
 if (cmd === "gen" || cmd === "all") {
   // SDL must exist by now

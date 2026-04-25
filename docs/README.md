@@ -47,6 +47,15 @@ npm run gql:build     # GraphQL スキーマ取得 + Markdown 生成
 npm run schema:update # 上記をまとめて実行
 ```
 
+本番反映を待たずにリポジトリ内のローカル定義から再生成したい場合は次を使う。
+リリース前にスキーマ変更を docs に同梱したいときに便利。
+
+```bash
+npm run api:gen       # server/openapi/openapi.yml → src/openapi/plateau-api.json
+npm run gql:local     # server/.../schema.graphql → SDL + Markdown 生成
+npm run schema:local  # 上記をまとめて実行
+```
+
 ## デプロイ
 
 Docker イメージは `nginxinc/nginx-unprivileged:alpine` ベースの静的サイト配信で、Cloud Run に単独デプロイされている。`main` への push で GitHub Actions が自動ビルド・デプロイする。
