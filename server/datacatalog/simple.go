@@ -13,8 +13,46 @@ import (
 
 type SimpleDatasetsResponse struct {
 	Datasets          []*SimpleDatasetsResponseDataset `json:"datasets"`
+	LatestDatasets    []*SimpleLatestDataset           `json:"latest_datasets"`
 	CompositeTilesets []*SimpleCompositeTileset        `json:"composite_tilesets"`
 	CityGML           []*SimpleCityGMLDataset          `json:"citygml"`
+	LatestCityGML     []*SimpleLatestCityGMLDataset    `json:"latest_citygml"`
+}
+
+// SimpleLatestDataset is a per-city 3D Tiles or MVT entry whose URL resolves
+// to the dataset of the newest available year for that (city, type, lod)
+// bucket. The URL changes content when a new maintenance year is published,
+// without requiring clients to update the URL itself.
+type SimpleLatestDataset struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Pref     string   `json:"pref"`
+	PrefCode string   `json:"pref_code"`
+	City     *string  `json:"city"`
+	CityCode *string  `json:"city_code"`
+	Ward     *string  `json:"ward"`
+	WardCode *string  `json:"ward_code"`
+	Type     string   `json:"type"`
+	TypeCode string   `json:"type_en"`
+	URL      string   `json:"url"`
+	Layers   []string `json:"layers"`
+	Year     string   `json:"year"` // always "latest"
+	Format   string   `json:"format"`
+	LOD      *string  `json:"lod"`
+	Texture  *bool    `json:"texture"`
+}
+
+// SimpleLatestCityGMLDataset is a per-city CityGML entry whose URL redirects
+// to the zip of the newest available year for that city.
+type SimpleLatestCityGMLDataset struct {
+	ID           string   `json:"id"`
+	Pref         string   `json:"pref"`
+	PrefCode     string   `json:"pref_code"`
+	City         string   `json:"city"`
+	CityCode     string   `json:"city_code"`
+	URL          string   `json:"url"`
+	FeatureTypes []string `json:"feature_types"`
+	Year         string   `json:"year"` // always "latest"
 }
 
 // SimpleCityGMLDataset describes a per-city CityGML merged.zip dataset
@@ -196,14 +234,153 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 	}
 
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
+	res.LatestDatasets = buildLatestDatasets(host, res.Datasets)
 
 	citygml, err := fetchSimpleCityGMLDatasets(ctx, r, host)
 	if err != nil {
 		return nil, err
 	}
 	res.CityGML = citygml
+	res.LatestCityGML = buildLatestCityGMLDatasets(host, citygml)
 
 	return res, nil
+}
+
+// buildLatestDatasets enumerates per-city `-latest` 3D Tiles/MVT entries by
+// selecting, within each (areaCode, typeCode, lod, format, texture) bucket,
+// the row with the newest year and rewriting its URL to the dynamic
+// `-latest` endpoint.
+func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset) []*SimpleLatestDataset {
+	if host == "" {
+		return nil
+	}
+
+	type bucketKey struct {
+		areaCode string
+		typeCode string
+		lod      string // "" when LOD is absent
+		format   string
+		// Texture variants are kept separate so non-textured rows do not
+		// shadow textured rows of the same year.
+		texture string // "true"/"false"/""
+	}
+
+	type entry struct {
+		row *SimpleDatasetsResponseDataset
+	}
+
+	picked := map[bucketKey]*entry{}
+
+	for _, d := range datasets {
+		if d == nil {
+			continue
+		}
+		areaCode := ""
+		if d.WardCode != nil && *d.WardCode != "" {
+			areaCode = *d.WardCode
+		} else if d.CityCode != nil && *d.CityCode != "" {
+			areaCode = *d.CityCode
+		}
+		if areaCode == "" || d.TypeCode == "" || d.Year == 0 {
+			continue
+		}
+		if d.Format != "3D Tiles" && d.Format != "MVT" {
+			continue
+		}
+		lod := ""
+		if d.LOD != nil {
+			lod = *d.LOD
+		}
+		tex := ""
+		if d.Texture != nil {
+			if *d.Texture {
+				tex = "true"
+			} else {
+				tex = "false"
+			}
+		}
+		k := bucketKey{areaCode: areaCode, typeCode: d.TypeCode, lod: lod, format: d.Format, texture: tex}
+		if e := picked[k]; e == nil || d.Year > e.row.Year {
+			picked[k] = &entry{row: d}
+		}
+	}
+
+	out := make([]*SimpleLatestDataset, 0, len(picked))
+	for _, e := range picked {
+		d := e.row
+		areaCode := ""
+		if d.WardCode != nil && *d.WardCode != "" {
+			areaCode = *d.WardCode
+		} else if d.CityCode != nil && *d.CityCode != "" {
+			areaCode = *d.CityCode
+		}
+		var url string
+		switch d.Format {
+		case "3D Tiles":
+			if d.LOD == nil || *d.LOD == "" {
+				continue
+			}
+			url = host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, "latest") + "/tileset.json"
+		case "MVT":
+			url = host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, "latest") + "/tilejson.json"
+		default:
+			continue
+		}
+		out = append(out, &SimpleLatestDataset{
+			ID:       d.ID,
+			Name:     d.Name,
+			Pref:     d.Pref,
+			PrefCode: d.PrefCode,
+			City:     d.City,
+			CityCode: d.CityCode,
+			Ward:     d.Ward,
+			WardCode: d.WardCode,
+			Type:     d.Type,
+			TypeCode: d.TypeCode,
+			URL:      url,
+			Layers:   d.Layers,
+			Year:     "latest",
+			Format:   d.Format,
+			LOD:      d.LOD,
+			Texture:  d.Texture,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
+	return out
+}
+
+// buildLatestCityGMLDatasets enumerates per-city `-latest` CityGML redirect
+// entries: one per cityCode, using the newest-year row.
+func buildLatestCityGMLDatasets(host string, datasets []*SimpleCityGMLDataset) []*SimpleLatestCityGMLDataset {
+	if host == "" {
+		return nil
+	}
+
+	picked := map[string]*SimpleCityGMLDataset{}
+	for _, d := range datasets {
+		if d == nil || d.CityCode == "" || d.Year == 0 {
+			continue
+		}
+		if cur, ok := picked[d.CityCode]; !ok || d.Year > cur.Year {
+			picked[d.CityCode] = d
+		}
+	}
+
+	out := make([]*SimpleLatestCityGMLDataset, 0, len(picked))
+	for _, d := range picked {
+		out = append(out, &SimpleLatestCityGMLDataset{
+			ID:           d.ID,
+			Pref:         d.Pref,
+			PrefCode:     d.PrefCode,
+			City:         d.City,
+			CityCode:     d.CityCode,
+			URL:          host + "/datacatalog/citygml/" + d.CityCode + "-latest/citygml.zip",
+			FeatureTypes: append([]string(nil), d.FeatureTypes...),
+			Year:         "latest",
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CityCode < out[j].CityCode })
+	return out
 }
 
 func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo, host string) ([]*SimpleCityGMLDataset, error) {

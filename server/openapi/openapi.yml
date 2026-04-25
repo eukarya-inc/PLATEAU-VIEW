@@ -328,10 +328,107 @@ paths:
                         - year
                         - registration_year
                         - spec
+                  latest_datasets:
+                    type: array
+                    description: |
+                      自治体単位の `-latest` 3D Tiles / MVT エントリのリスト。
+                      `(自治体, 種別, LOD, 形式)` の組ごとに最新整備年度の行から派生し、
+                      `url` には `-latest` で解決される動的エンドポイントが入ります。
+                      新しい整備年度のデータが公開されるとレスポンス内容が自動的に追従するため、
+                      アプリケーション側で URL を書き換える必要がありません。
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        pref: { type: string }
+                        pref_code: { type: string }
+                        city:
+                          type: string
+                          nullable: true
+                        city_code:
+                          type: string
+                          nullable: true
+                        ward:
+                          type: string
+                          nullable: true
+                        ward_code:
+                          type: string
+                          nullable: true
+                        type: { type: string }
+                        type_en: { type: string }
+                        url:
+                          type: string
+                          format: uri
+                          description: |
+                            `-latest` で解決される動的 URL。
+                            - 3D Tiles: `/datacatalog/3dtiles/{spec}/tileset.json`
+                            - MVT:      `/datacatalog/mvt/{spec}/tilejson.json`
+                        layers:
+                          type: array
+                          nullable: true
+                          items: { type: string }
+                        year:
+                          type: string
+                          enum: ["latest"]
+                        format:
+                          type: string
+                          enum: ["3D Tiles", "MVT"]
+                        lod:
+                          type: string
+                          nullable: true
+                        texture:
+                          type: boolean
+                          nullable: true
+                      required:
+                        - id
+                        - name
+                        - pref
+                        - pref_code
+                        - type
+                        - type_en
+                        - url
+                        - year
+                        - format
+                  latest_citygml:
+                    type: array
+                    description: |
+                      自治体単位の `-latest` CityGML エントリのリスト。
+                      自治体ごとに最新整備年度の zip にリダイレクトする URL を提供し、
+                      新しいデータ公開時にも URL の変更が不要です。
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        pref: { type: string }
+                        pref_code: { type: string }
+                        city: { type: string }
+                        city_code: { type: string }
+                        url:
+                          type: string
+                          format: uri
+                          description: '`/datacatalog/citygml/{cityCode}-latest/citygml.zip`'
+                        feature_types:
+                          type: array
+                          items: { type: string }
+                        year:
+                          type: string
+                          enum: ["latest"]
+                      required:
+                        - id
+                        - pref
+                        - pref_code
+                        - city
+                        - city_code
+                        - url
+                        - feature_types
+                        - year
                 required:
                   - datasets
+                  - latest_datasets
                   - composite_tilesets
                   - citygml
+                  - latest_citygml
 
   /datacatalog/3dtiles/{spec}/tileset.json:
     get:

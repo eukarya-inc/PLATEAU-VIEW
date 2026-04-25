@@ -477,7 +477,54 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           texture: c.texture,
           _area: c.area,
         }));
-        datasets = baseDatasets.concat(citygmls).concat(composites);
+        const latestDatasets = ((data && data.latest_datasets) || []).map(d => ({
+          id: \`latest-\${d.id}\`,
+          name: \`\${d.name ?? ''}（最新）\`,
+          pref: d.pref ?? '',
+          pref_code: d.pref_code ?? '',
+          city: d.city ?? '',
+          city_code: d.city_code ?? '',
+          ward: d.ward ?? null,
+          ward_code: d.ward_code ?? null,
+          type: d.type,
+          type_en: d.type_en,
+          url: d.url,
+          composite_url: d.url,
+          layers: d.layers || null,
+          year: d.year,
+          registration_year: null,
+          spec: '',
+          format: d.format,
+          lod: d.lod != null ? String(d.lod) : '',
+          texture: d.texture,
+        }));
+        const latestCitygmls = ((data && data.latest_citygml) || []).map(c => ({
+          id: \`latest-citygml-\${c.id}\`,
+          name: \`\${c.city ?? ''}（CityGML 全地物型・最新）\`,
+          pref: c.pref ?? '',
+          pref_code: c.pref_code ?? '',
+          city: c.city ?? '',
+          city_code: c.city_code ?? '',
+          ward: null,
+          ward_code: null,
+          type: '',
+          type_en: '',
+          url: c.url,
+          composite_url: c.url,
+          layers: null,
+          year: c.year,
+          registration_year: null,
+          spec: '',
+          format: 'CityGML',
+          lod: '',
+          texture: null,
+          feature_types: c.feature_types || [],
+        }));
+        datasets = baseDatasets
+          .concat(citygmls)
+          .concat(composites)
+          .concat(latestDatasets)
+          .concat(latestCitygmls);
 
         // 都道府県セレクト: コード順 + 「日本全国（複合）」を先頭に
         prefSel.innerHTML = '';
