@@ -396,8 +396,14 @@
             return `${window.location.origin}/mapbox/tilejson.json?geoid=${g}&format=png`;
         }
 
-        function addDemSource() {
-            map.addSource('dem-rgb', {
+        // MapLibre warns (and degrades rendering) when the same raster-dem
+        // source backs both the hillshade layer and 3D terrain, so we keep
+        // two parallel sources with the same URL.
+        const TERRAIN_SOURCE = 'dem-rgb-terrain';
+        const HILLSHADE_SOURCE = 'dem-rgb-hillshade';
+
+        function addDemSource(id) {
+            map.addSource(id, {
                 type: 'raster-dem',
                 url: demTilejsonUrl(),
                 encoding: 'mapbox',
@@ -405,20 +411,19 @@
             });
         }
 
-        function ensureDemSource() {
-            // Idempotent: only adds the source if it doesn't already exist.
-            // Toggling one feature (e.g. hillshade) must NOT disturb the
-            // other (e.g. 3D terrain), so we never tear down here.
-            if (!map.getSource('dem-rgb')) addDemSource();
+        function ensureSource(id) {
+            // Idempotent. Toggling one feature must NOT disturb the other,
+            // so we never tear sources down here.
+            if (!map.getSource(id)) addDemSource(id);
         }
 
-        function rebuildDemSource() {
+        function rebuildSource(id, onTearDown, onRestore) {
             // Used when the source URL changes (e.g. geoid switch). Tear
-            // both features down, swap the source, then re-apply both.
-            if (terrain3dEnabled) map.setTerrain(null);
-            if (map.getLayer('hillshade')) map.removeLayer('hillshade');
-            if (map.getSource('dem-rgb')) map.removeSource('dem-rgb');
-            addDemSource();
+            // dependents down, swap the source, then re-apply.
+            if (onTearDown) onTearDown();
+            if (map.getSource(id)) map.removeSource(id);
+            addDemSource(id);
+            if (onRestore) onRestore();
         }
 
         function applyTerrain3d() {
@@ -428,7 +433,7 @@
                 return;
             }
             terrain3dToggle.classList.add('active');
-            map.setTerrain({ source: 'dem-rgb', exaggeration: 1.0 });
+            map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: 1.0 });
         }
 
         function applyHillshade() {
@@ -446,7 +451,7 @@
                 {
                     id: 'hillshade',
                     type: 'hillshade',
-                    source: 'dem-rgb',
+                    source: HILLSHADE_SOURCE,
                     paint: {
                         'hillshade-shadow-color': '#000',
                         'hillshade-exaggeration': 0.5,
@@ -458,19 +463,24 @@
 
         terrain3dToggle.addEventListener('click', () => {
             terrain3dEnabled = !terrain3dEnabled;
-            if (terrain3dEnabled || hillshadeEnabled) ensureDemSource();
+            if (terrain3dEnabled) ensureSource(TERRAIN_SOURCE);
             applyTerrain3d();
         });
         hillshadeToggle.addEventListener('click', () => {
             hillshadeEnabled = !hillshadeEnabled;
-            if (terrain3dEnabled || hillshadeEnabled) ensureDemSource();
+            if (hillshadeEnabled) ensureSource(HILLSHADE_SOURCE);
             applyHillshade();
         });
         geoidSelect.addEventListener('change', () => {
-            if (terrain3dEnabled || hillshadeEnabled) {
-                rebuildDemSource();
-                applyTerrain3d();
-                applyHillshade();
+            if (terrain3dEnabled) {
+                rebuildSource(TERRAIN_SOURCE,
+                    () => map.setTerrain(null),
+                    () => applyTerrain3d());
+            }
+            if (hillshadeEnabled) {
+                rebuildSource(HILLSHADE_SOURCE,
+                    () => { if (map.getLayer('hillshade')) map.removeLayer('hillshade'); },
+                    () => applyHillshade());
             }
         });
 
