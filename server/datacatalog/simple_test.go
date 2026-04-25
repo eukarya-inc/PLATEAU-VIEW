@@ -58,6 +58,20 @@ func TestBuildDatasetCompositeURL(t *testing.T) {
 		})
 		assert.Empty(t, u)
 	})
+
+	t.Run("MVT without LOD", func(t *testing.T) {
+		u := buildDatasetCompositeURL(host, &SimpleDatasetsResponseDataset{
+			Format: "MVT", TypeCode: "luse", CityCode: lo.ToPtr("13101"), Year: 2025,
+		})
+		assert.Equal(t, "http://api.example.com/datacatalog/mvt/13101-luse-2025/tilejson.json", u)
+	})
+
+	t.Run("MVT with LOD", func(t *testing.T) {
+		u := buildDatasetCompositeURL(host, &SimpleDatasetsResponseDataset{
+			Format: "MVT", TypeCode: "fld", LOD: &lod1, CityCode: lo.ToPtr("13101"), Year: 2025,
+		})
+		assert.Equal(t, "http://api.example.com/datacatalog/mvt/13101-fld-lod1-2025/tilejson.json", u)
+	})
 }
 
 func TestBuildCompositeTilesets(t *testing.T) {

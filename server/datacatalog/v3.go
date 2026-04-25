@@ -50,6 +50,10 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	plateauapig.GET("/3dtiles/:spec/tileset.json", h.CompositeTilesetAPI())
 	plateauapig.GET("/:pid/3dtiles/:spec/tileset.json", h.CompositeTilesetAPI())
 
+	// Per-city MVT tilejson.json API (dynamic TileJSON for a single dataset)
+	plateauapig.GET("/mvt/:spec/tilejson.json", h.MVTTileJSONAPI())
+	plateauapig.GET("/:pid/mvt/:spec/tilejson.json", h.MVTTileJSONAPI())
+
 	// warning API
 	plateauapig.GET("/:pid/warnings", h.WarningHandler)
 

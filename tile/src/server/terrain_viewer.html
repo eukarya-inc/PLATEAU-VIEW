@@ -172,7 +172,7 @@
 
     // ── 3D Tiles LOD1 (all cities) for grounding sanity check ─────────
     const ALL_LOD1_URL =
-      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-2025/tileset.json';
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/all-bldg-lod1-latest/tileset.json';
     (async () => {
       try {
         const tileset = await Cesium.Cesium3DTileset.fromUrl(ALL_LOD1_URL, {

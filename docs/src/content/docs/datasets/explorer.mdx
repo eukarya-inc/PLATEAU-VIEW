@@ -29,10 +29,12 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
       <option value="true">テクスチャありのみ</option>
       <option value="false">テクスチャなしのみ</option>
     </select>
-    <label class="explorer-checkbox"><input id="explorer-rawurl" type="checkbox" />Raw URL を表示</label>
   </div>
 
-  <div class="explorer-status" id="explorer-status"></div>
+  <div class="explorer-status-row">
+    <div class="explorer-status" id="explorer-status"></div>
+    <label class="explorer-checkbox"><input id="explorer-rawurl" type="checkbox" />Raw URL を表示</label>
+  </div>
   <div class="explorer-loading" id="explorer-loading" role="status" aria-live="polite">
     <span class="explorer-spinner" aria-hidden="true"></span>
     <span>データを読み込んでいます…</span>
@@ -126,10 +128,17 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
   }
   .explorer-controls button:hover { background: var(--sl-color-gray-6); }
 
+  .explorer-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
   .explorer-status {
     font-size: 0.85rem;
     color: var(--sl-color-gray-3);
-    margin-bottom: 0.5rem;
   }
   .explorer-status[data-state="error"] { color: var(--sl-color-red); }
 

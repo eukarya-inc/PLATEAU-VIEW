@@ -179,8 +179,10 @@ paths:
                           format: uri
                           nullable: true
                           description: |
-                            このデータセットに対応する複合 tileset.json の URL。3D Tiles の場合のみ設定され、
-                            MVT の場合は `null`。詳細は `/datacatalog/3dtiles/{spec}/tileset.json` を参照。
+                            このデータセットを単独で利用するための動的生成 URL。
+                            - `3D Tiles`: 複合 `tileset.json` (`/datacatalog/3dtiles/{spec}/tileset.json`)
+                            - `MVT`:      自治体単位の TileJSON (`/datacatalog/mvt/{spec}/tilejson.json`)
+                            データの市区町村コードや整備年度などが揃っていない行は `null`。
                       required:
                         - id
                         - name
@@ -377,6 +379,62 @@ paths:
                 type: object
         "400":
           description: spec の書式が不正
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /datacatalog/mvt/{spec}/tilejson.json:
+    get:
+      summary: 自治体単位の MVT TileJSON
+      tags:
+        - Data Catalog API
+      description: |
+        自治体単位の MVT データセットに対する TileJSON 3.0 ドキュメントを動的生成します。
+        MapLibre GL JS / Mapbox GL JS など TileJSON を扱うクライアントから 1 つの URL で利用できます。
+
+        パスパラメータ `spec` の書式は次の通りです：
+
+        ```
+        <cityCode>-<type>[-lod<N>]-<year>
+        ```
+
+        - `cityCode`: 5桁の市区町村コード（区がある場合は区コード、無ければ市コード）
+        - `type`: データセットの種別コード（例: `luse`、`fld`）
+        - `lod<N>` (省略可):
+          - 省略時: LOD が指定されていないデータセットを採用
+          - `lod<N>`: LOD が `<N>` のデータセットを採用
+        - `year`:
+          - 西暦4桁: その整備年度のデータのみを採用
+          - `latest`: 利用可能な最新整備年度のデータを採用
+
+        例:
+
+        - `/datacatalog/mvt/13101-luse-2025/tilejson.json`
+        - `/datacatalog/mvt/13101-luse-latest/tilejson.json`
+        - `/datacatalog/mvt/13101-fld-lod1-2025/tilejson.json`
+      parameters:
+        - in: path
+          name: spec
+          required: true
+          schema:
+            type: string
+          example: 13101-luse-2025
+      responses:
+        "200":
+          description: TileJSON 3.0 形式のドキュメント
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: spec の書式が不正
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: 該当する MVT データセットが見つからない
           content:
             application/json:
               schema:

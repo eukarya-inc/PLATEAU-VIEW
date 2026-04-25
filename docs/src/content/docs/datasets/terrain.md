@@ -287,7 +287,7 @@ CesiumJS 上で PLATEAU-Terrain (Cesium ion) を利用するためのサンプ�
     );
 
     Cesium.Cesium3DTileset.fromUrl(
-      'https://assets.cms.plateau.reearth.io/assets/0e/e5948a-e95c-4e31-be85-1f8c066ed996/13101_chiyoda-ku_pref_2023_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json'
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13101-bldg-lod1-latest/tileset.json'
     ).then((tileset) => viewer.scene.primitives.add(tileset));
 
     viewer.camera.setView({

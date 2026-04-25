@@ -28,7 +28,17 @@ curl -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
 
 ## 2. 配信 URL を取得する
 
-レスポンスの `url` フィールドが配信 URL です。例えば 3D Tiles なら `tileset.json` の URL、MVT なら `{z}/{x}/{y}.mvt` 形式の URL です。
+レスポンスの `composite_url` フィールドが、CesiumJS や MapLibre などのクライアントから利用しやすい配信 URL です。
+- 3D Tiles の場合: 自治体単位の `tileset.json` を動的生成した URL（[複合 tileset.json API](/datasets/3d-tiles/#42-複合-tilesetjson複数都市の-3d-tiles-を-1-つの-url-でまとめて取得)）
+- MVT の場合: 自治体単位の TileJSON 3.0 を動的生成した URL（[MVT TileJSON API](/datasets/3d-tiles/#43-自治体単位の-mvt-tilejsonmaplibre-などから利用)）
+
+`url` フィールドは原典となる配信 URL（3D Tiles なら `tileset.json`、MVT なら `{z}/{x}/{y}.mvt` 形式）で、PLATEAU CMS から直接配信されます。
+
+:::tip[`composite_url` を強く推奨します]
+PLATEAU の都市データは毎年更新され、新しい整備年度のデータが公開されます。`url`（CMS 直リンク）を埋め込むと、新しい年度が公開されたときにアプリケーション側のコード書き換えが必要になります。
+
+`composite_url` は API サーバ側でデータを動的に解決するため、**特に整備年度を `latest` で指定した形**（例: `13101-bldg-lod2-latest`）を使えば、新しいデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。広域用の `composite_tilesets` 配列の `-latest` エントリも同様です。
+:::
 
 ## 3. 表示する
 
@@ -48,7 +58,7 @@ curl -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
   <script>
     const viewer = new Cesium.Viewer("cesiumContainer", {});
     Cesium.Cesium3DTileset.fromUrl(
-      'https://assets.cms.plateau.reearth.io/assets/0e/e5948a-e95c-4e31-be85-1f8c066ed996/13101_chiyoda-ku_pref_2023_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json'
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13101-bldg-lod1-latest/tileset.json'
     ).then(tileset => {
       viewer.scene.primitives.add(tileset);
       viewer.zoomTo(tileset);

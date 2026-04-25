@@ -74,20 +74,24 @@ PLATEAU-3DTiles / MVT の配信サービスを利用することで、独自に�
     });
     viewer.scene.imageryLayers.addImageryProvider(imageProvider);
 
-    // 東京都千代田区の建築物モデル（3D Tiles）
+    // 東京都千代田区の建築物モデル（3D Tiles, 複合 tileset.json）
     Cesium.Cesium3DTileset.fromUrl(
-      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13101-bldg-lod2-2025/tileset.json'
+      'https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13101-bldg-lod2-latest/tileset.json'
     ).then((tileset) => {
       viewer.scene.primitives.add(tileset);
     });
 
-    // 東京都の土地利用モデル（MVT）
-    const yourMvt = new CesiumMVTImageryProvider.CesiumMVTImageryProvider({
-      urlTemplate: "https://assets.cms.plateau.reearth.io/assets/4c/efcbfe-f523-4a59-92f8-f6af80882333/13_tokyo_pref_2023_citygml_1_op_luse_mvt/{z}/{x}/{y}.mvt",
-      layerName: "luse",
-      style: feature => ({ fillStyle: "white" }),
-    });
-    viewer.scene.imageryLayers.addImageryProvider(yourMvt);
+    // 東京都千代田区の土地利用モデル（MVT, TileJSON 経由）
+    fetch('https://api.plateauview.mlit.go.jp/datacatalog/mvt/13101-luse-latest/tilejson.json')
+      .then(r => r.json())
+      .then(tj => {
+        const yourMvt = new CesiumMVTImageryProvider.CesiumMVTImageryProvider({
+          urlTemplate: tj.tiles[0],
+          layerName: tj.vector_layers[0].id,
+          style: feature => ({ fillStyle: "white" }),
+        });
+        viewer.scene.imageryLayers.addImageryProvider(yourMvt);
+      });
 
     // カメラの初期位置の指定
     viewer.camera.setView({
@@ -121,7 +125,13 @@ Project PLATEAU が [G空間情報センター](https://www.geospatial.jp/ckan/d
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets
 ```
 
-主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles のみ。後述の複合 tileset.json への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles の場合は複合 `tileset.json`、MVT の場合は自治体単位の `tilejson.json` への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+
+:::tip[`url` ではなく `composite_url` の利用を推奨します]
+PLATEAU の都市データは毎年更新され、新しい整備年度のデータが公開されます。`url` フィールドは CMS 上の特定アセットへの直リンクのため、新しい年度のデータが公開されてもアプリケーション側で URL を書き換えない限り古いデータを参照し続けます。
+
+`composite_url` は API サーバ側でデータセットを動的に解決して `tileset.json` / `tilejson.json` を返すため、URL がより安定しています。さらに、後述の [複合 tileset.json](#42-複合-tilesetjson複数都市の-3d-tiles-を-1-つの-url-でまとめて取得) や [MVT TileJSON](#43-自治体単位の-mvt-tilejsonmaplibre-などから利用) で **整備年度を `latest` に指定した形**（例: `13101-bldg-lod2-latest`、`13101-luse-latest`）を使えば、新しい整備年度のデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
+:::
 
 レスポンスにはさらに `composite_tilesets` 配列が含まれます。これは全国（`all-...`）と都道府県別（`13-...` など）の複合 tileset.json を実データから派生して列挙したリストで、CesiumJS で広域をまとめて表示したい場合の入口として利用できます。
 
@@ -189,7 +199,40 @@ viewer.scene.primitives.add(tileset);
 - API は試験運用中であり、URL の書式やレスポンスは予告なく変更されることがあります。
 :::
 
-### 4.3. GraphQL API
+### 4.3. 自治体単位の MVT TileJSON（MapLibre などから利用）
+
+MVT データセットを MapLibre GL JS / Mapbox GL JS のような TileJSON ベースのクライアントから扱うために、自治体単位の **TileJSON 3.0** を動的生成するエンドポイントを提供しています。
+
+```
+GET /datacatalog/mvt/{spec}/tilejson.json
+```
+
+`{spec}` の書式：
+
+```
+<cityCode>-<type>[-lod<N>]-<year>
+```
+
+| セグメント | 値 | 意味 |
+| --- | --- | --- |
+| `cityCode` | 5 桁数字 | 市区町村コード（区がある場合は区コード、無ければ市コード） |
+| `type` | `luse` / `fld` など | データセットの種別コード |
+| `lod<N>` | （省略） | LOD が指定されていないデータセットを採用 |
+| | `lod<N>` | LOD が `<N>` のデータセットを採用 |
+| `year` | 4 桁の西暦 | その整備年度のデータのみを採用 |
+| | `latest` | 利用可能な最新整備年度のデータを採用 |
+
+例:
+
+| URL | 意味 |
+| --- | --- |
+| `13101-luse-2025` | 千代田区の土地利用 MVT（2025年度整備） |
+| `13101-luse-latest` | 千代田区の土地利用 MVT、最新整備年度 |
+| `13101-fld-lod1-2025` | 千代田区の洪水浸水想定区域 MVT（LOD1） |
+
+[シンプル API](#41-シンプル-api) のレスポンスでも、各 MVT 行の `composite_url` フィールドにこの TileJSON URL が入ります。
+
+### 4.4. GraphQL API
 
 [GraphQL](https://graphql.org/) API では、必要な型・フィールドだけを 1 リクエストで取得できます。エンドポイント:
 

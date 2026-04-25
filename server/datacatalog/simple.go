@@ -186,10 +186,8 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 				c.LOD = lo.ToPtr(fmt.Sprintf("%d", *di.Lod))
 			}
 
-			if f == "3D Tiles" {
-				if u := buildDatasetCompositeURL(host, &c); u != "" {
-					c.CompositeURL = lo.ToPtr(u)
-				}
+			if u := buildDatasetCompositeURL(host, &c); u != "" {
+				c.CompositeURL = lo.ToPtr(u)
 			}
 
 			res.Datasets = append(res.Datasets, &c)
@@ -272,13 +270,14 @@ func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo) ([]*Simp
 	return res, nil
 }
 
-// buildDatasetCompositeURL returns the composite tileset URL that maps to a
-// single dataset row (ward or city). Empty when prerequisites are missing.
+// buildDatasetCompositeURL returns the dynamic tileset URL that maps to a
+// single dataset row (ward or city):
+//   - 3D Tiles: composite tileset.json that defers to the underlying dataset
+//   - MVT:      per-city TileJSON 3.0 wrapping the underlying dataset
+//
+// Empty when prerequisites are missing.
 func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) string {
 	if host == "" {
-		return ""
-	}
-	if d.LOD == nil || *d.LOD == "" {
 		return ""
 	}
 	if d.TypeCode == "" || d.Year == 0 {
@@ -295,7 +294,28 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 		return ""
 	}
 
-	return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
+	switch d.Format {
+	case "3D Tiles":
+		if d.LOD == nil || *d.LOD == "" {
+			return ""
+		}
+		return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
+	case "MVT":
+		return host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, strconv.Itoa(d.Year)) + "/tilejson.json"
+	}
+	return ""
+}
+
+// buildMVTSpec assembles the path segment used by the MVT TileJSON endpoint.
+// LOD is included only when the dataset specifies one; the year argument is
+// either a 4-digit string or "latest".
+func buildMVTSpec(area, typeCode string, lod *string, year string) string {
+	parts := []string{area, typeCode}
+	if lod != nil && *lod != "" {
+		parts = append(parts, "lod"+*lod)
+	}
+	parts = append(parts, year)
+	return strings.Join(parts, "-")
 }
 
 // buildSpec assembles the path segment used by the composite tileset endpoint.
