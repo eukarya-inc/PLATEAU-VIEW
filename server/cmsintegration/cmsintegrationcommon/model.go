@@ -211,7 +211,7 @@ type FeatureItem struct {
 	SkipConvert bool `json:"skip_conv,omitempty" cms:"skip_conv,bool,metadata"`
 
 	// Flow fields for cancellation
-	FlowRunID    string `json:"flow_run_id,omitempty" cms:"flow_run_id,text,metadata"`
+	FlowRunID     string `json:"flow_run_id,omitempty" cms:"flow_run_id,text,metadata"`
 	FlowTriggerID string `json:"flow_trigger_id,omitempty" cms:"flow_trigger_id,text,metadata"`
 }
 
