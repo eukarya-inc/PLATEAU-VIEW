@@ -777,6 +777,10 @@ type PlateauDatasetItem struct {
 	ID ID `json:"id"`
 	// データセットのアイテムのフォーマット。
 	Format DatasetFormat `json:"format"`
+	// データセットのアイテムのフォーマットのバージョン。3D Tiles の場合に `1.0` または `1.1` のいずれかが入ります。
+	// 2025年度以降に Flow で変換された 3D Tiles は `1.1`、それ以外（従来の FME 等で変換されたもの）は `1.0` です。
+	// MVT など 3D Tiles 以外のフォーマットでは null になります。
+	FormatVersion *string `json:"formatVersion,omitempty"`
 	// データセットのアイテム名。
 	Name string `json:"name"`
 	// データセットのアイテムのURL。

@@ -191,6 +191,7 @@ type ComplexityRoot struct {
 		FloodingScale       func(childComplexity int) int
 		FloodingScaleSuffix func(childComplexity int) int
 		Format              func(childComplexity int) int
+		FormatVersion       func(childComplexity int) int
 		ID                  func(childComplexity int) int
 		LatestURL           func(childComplexity int) int
 		Layers              func(childComplexity int) int
@@ -1218,6 +1219,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PlateauDatasetItem.Format(childComplexity), true
+
+	case "PlateauDatasetItem.formatVersion":
+		if e.complexity.PlateauDatasetItem.FormatVersion == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.FormatVersion(childComplexity), true
 
 	case "PlateauDatasetItem.id":
 		if e.complexity.PlateauDatasetItem.ID == nil {
@@ -7439,6 +7447,8 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context,
 				return ec.fieldContext_PlateauDatasetItem_id(ctx, field)
 			case "format":
 				return ec.fieldContext_PlateauDatasetItem_format(ctx, field)
+			case "formatVersion":
+				return ec.fieldContext_PlateauDatasetItem_formatVersion(ctx, field)
 			case "name":
 				return ec.fieldContext_PlateauDatasetItem_name(ctx, field)
 			case "url":
@@ -7791,6 +7801,47 @@ func (ec *executionContext) fieldContext_PlateauDatasetItem_format(_ context.Con
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type DatasetFormat does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_formatVersion(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_formatVersion(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FormatVersion, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_formatVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -17075,6 +17126,8 @@ func (ec *executionContext) _PlateauDatasetItem(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "formatVersion":
+			out.Values[i] = ec._PlateauDatasetItem_formatVersion(ctx, field, obj)
 		case "name":
 			out.Values[i] = ec._PlateauDatasetItem_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

@@ -5,7 +5,7 @@ description: 3D Tiles および MVT 形式での建築物モデル等の配信�
 
 ## 1. PLATEAU-3DTiles / MVT の概要
 
-Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルのデータを 3D Tiles 1.0 および MVT（Mapbox Vector Tiles）形式に変換し、それぞれ配信を行っています。
+Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルのデータを 3D Tiles および MVT（Mapbox Vector Tiles）形式に変換し、それぞれ配信を行っています。3D Tiles の形式バージョンは従来 1.0 ですが、2025 年度以降に整備されたデータの一部は 1.1 で配信されます。
 
 本チュートリアルでは、3D Tiles および MVT の利用方法について解説します。
 
@@ -125,7 +125,7 @@ Project PLATEAU が [G空間情報センター](https://www.geospatial.jp/ckan/d
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets
 ```
 
-主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles の場合は複合 `tileset.json`、MVT の場合は自治体単位の `tilejson.json` への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles の場合は複合 `tileset.json`、MVT の場合は自治体単位の `tilejson.json` への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `format_version`（3D Tiles の場合のみ。`1.0` または `1.1`。2025年度以降に Flow で変換されたデータは `1.1`、それ以外は `1.0`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
 
 :::tip[`url` ではなく `composite_url` の利用を推奨します]
 PLATEAU の都市データは毎年更新され、新しい整備年度のデータが公開されます。`url` フィールドは CMS 上の特定アセットへの直リンクのため、新しい年度のデータが公開されてもアプリケーション側で URL を書き換えない限り古いデータを参照し続けます。

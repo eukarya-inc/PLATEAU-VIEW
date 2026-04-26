@@ -36,16 +36,17 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 				continue
 			}
 			inputs = append(inputs, composite3dtiles.Input{
-				URL:      d.URL,
-				Format:   d.Format,
-				TypeCode: d.TypeCode,
-				Year:     d.Year,
-				LOD:      d.LOD,
-				Interior: d.Interior,
-				Texture:  d.Texture,
-				PrefCode: d.PrefCode,
-				CityCode: d.CityCode,
-				WardCode: d.WardCode,
+				URL:           d.URL,
+				Format:        d.Format,
+				FormatVersion: d.FormatVersion,
+				TypeCode:      d.TypeCode,
+				Year:          d.Year,
+				LOD:           d.LOD,
+				Interior:      d.Interior,
+				Texture:       d.Texture,
+				PrefCode:      d.PrefCode,
+				CityCode:      d.CityCode,
+				WardCode:      d.WardCode,
 			})
 		}
 

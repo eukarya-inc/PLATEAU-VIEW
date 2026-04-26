@@ -167,6 +167,14 @@ paths:
                           enum:
                             - "3D Tiles"
                             - "MVT"
+                        format_version:
+                          type: string
+                          nullable: true
+                          enum: ["1.0", "1.1"]
+                          description: |
+                            3D Tiles のフォーマットバージョン。3D Tiles の場合のみ `"1.0"` または `"1.1"` が入ります。
+                            2025年度以降に Flow で変換されたデータは `"1.1"`、それ以外（従来の FME 等で変換されたもの）は `"1.0"` です。
+                            MVT など 3D Tiles 以外のフォーマットでは省略されます。
                         lod:
                           type: string
                           description: データのLOD
@@ -266,6 +274,13 @@ paths:
                           description: |
                             整備年度（西暦4桁文字列、例 `"2025"`）または `"latest"`。
                             `"latest"` の場合、URL は各自治体の最新整備年度の 3D Tiles を採用する複合 tileset.json を返します。
+                        format_version:
+                          type: string
+                          enum: ["1.0", "1.1"]
+                          description: |
+                            複合 `tileset.json` の wrapper の `asset.version`。
+                            wrapper が参照する各子 `tileset.json` のうち、判明しているフォーマットバージョンの最大値を採用し、
+                            すべて不明な場合は `"1.0"` にフォールバックします。子のうちひとつでも 1.1 があれば wrapper も 1.1 になります。
                       required:
                         - id
                         - url
@@ -274,6 +289,7 @@ paths:
                         - type_en
                         - lod
                         - year
+                        - format_version
                   citygml:
                     type: array
                     description: |
@@ -388,6 +404,13 @@ paths:
                         format:
                           type: string
                           enum: ["3D Tiles", "MVT"]
+                        format_version:
+                          type: string
+                          nullable: true
+                          enum: ["1.0", "1.1"]
+                          description: |
+                            3D Tiles のフォーマットバージョン。3D Tiles の場合のみ `"1.0"` または `"1.1"` が入ります。
+                            MVT など 3D Tiles 以外のフォーマットでは省略されます。
                         lod:
                           type: string
                           nullable: true

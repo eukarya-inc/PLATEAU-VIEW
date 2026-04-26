@@ -8,21 +8,23 @@ const format3DTiles = "3D Tiles"
 // package converts its SimpleDatasetsResponseDataset to this type to avoid an
 // import cycle.
 type Input struct {
-	URL      string
-	Format   string
-	TypeCode string
-	Year     int
-	LOD      *string
-	Interior *bool // nil/false = non-interior; true = interior (CityGML 3.0)
-	Texture  *bool
-	PrefCode string
-	CityCode *string
-	WardCode *string
+	URL           string
+	Format        string
+	FormatVersion *string // 3D Tiles version ("1.0" / "1.1"); nil when unknown
+	TypeCode      string
+	Year          int
+	LOD           *string
+	Interior      *bool // nil/false = non-interior; true = interior (CityGML 3.0)
+	Texture       *bool
+	PrefCode      string
+	CityCode      *string
+	WardCode      *string
 }
 
 type Candidate struct {
-	URL      string
-	AreaCode string // ward code preferred, otherwise city code
+	URL           string
+	AreaCode      string  // ward code preferred, otherwise city code
+	FormatVersion *string // propagated from Input for wrapper version selection
 }
 
 // Select filters datasets by spec and returns one URL per area.
@@ -39,10 +41,11 @@ type Candidate struct {
 //   - TextureNone: only datasets marked non-textured are kept.
 func Select(datasets []Input, spec Spec) []Candidate {
 	type entry struct {
-		url     string
-		year    int
-		lod     int
-		texture int // 2: textured, 1: non-textured, 0: unspecified
+		url           string
+		year          int
+		lod           int
+		texture       int // 2: textured, 1: non-textured, 0: unspecified
+		formatVersion *string
 	}
 
 	picked := map[string]entry{}
@@ -121,7 +124,7 @@ func Select(datasets []Input, spec Spec) []Candidate {
 			}
 		}
 
-		next := entry{url: d.URL, year: d.Year, lod: lod, texture: texRank}
+		next := entry{url: d.URL, year: d.Year, lod: lod, texture: texRank, formatVersion: d.FormatVersion}
 		cur, ok := picked[areaCode]
 		if !ok || better(next, cur) {
 			picked[areaCode] = next
@@ -130,7 +133,7 @@ func Select(datasets []Input, spec Spec) []Candidate {
 
 	out := make([]Candidate, 0, len(picked))
 	for area, v := range picked {
-		out = append(out, Candidate{URL: v.url, AreaCode: area})
+		out = append(out, Candidate{URL: v.url, AreaCode: area, FormatVersion: v.formatVersion})
 	}
 	return out
 }
@@ -138,10 +141,11 @@ func Select(datasets []Input, spec Spec) []Candidate {
 // better reports whether a should replace b. Year wins first (for YearLatest;
 // no-op when years are equal as in YearExact), then LOD, then texture rank.
 func better(a, b struct {
-	url     string
-	year    int
-	lod     int
-	texture int
+	url           string
+	year          int
+	lod           int
+	texture       int
+	formatVersion *string
 }) bool {
 	if a.year != b.year {
 		return a.year > b.year

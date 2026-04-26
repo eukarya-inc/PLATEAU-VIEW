@@ -38,9 +38,12 @@ type SimpleLatestDataset struct {
 	Layers   []string `json:"layers"`
 	Year     string   `json:"year"` // always "latest"
 	Format   string   `json:"format"`
-	LOD      *string  `json:"lod"`
-	Texture  *bool    `json:"texture"`
-	Interior *bool    `json:"interior,omitempty"`
+	// FormatVersion is the 3D Tiles format version ("1.0" or "1.1") for
+	// 3D Tiles rows; nil for MVT and other formats. See SimpleDatasetsResponseDataset.FormatVersion.
+	FormatVersion *string `json:"format_version,omitempty"`
+	LOD           *string `json:"lod"`
+	Texture       *bool   `json:"texture"`
+	Interior      *bool   `json:"interior,omitempty"`
 }
 
 // SimpleLatestCityGMLDataset is a per-city CityGML entry whose URL redirects
@@ -90,8 +93,11 @@ type SimpleDatasetsResponseDataset struct {
 	RegistrationYear int      `json:"registration_year"`
 	Spec             string   `json:"spec"`
 	Format           string   `json:"format"`
-	LOD              *string  `json:"lod"`
-	Texture          *bool    `json:"texture"`
+	// FormatVersion is the 3D Tiles format version ("1.0" or "1.1") for
+	// 3D Tiles rows; nil for MVT. Flow-converted 3D Tiles (FY2025+) are 1.1.
+	FormatVersion *string `json:"format_version,omitempty"`
+	LOD           *string `json:"lod"`
+	Texture       *bool   `json:"texture"`
 	// Interior は CityGML 3.0 の屋内モデル区分を表す。`true` の行は
 	// interior 専用データセットを指し、`false` は明示的な非 interior、
 	// `null` は interior 区分がそもそも存在しないデータ（LOD1 や MVT 等）。
@@ -114,6 +120,10 @@ type SimpleCompositeTileset struct {
 	// Year is a 4-digit year string (e.g. "2025") for year-specific entries,
 	// or "latest" for entries that resolve to the newest year per area.
 	Year string `json:"year"`
+	// FormatVersion is the wrapper Asset.version that the composite tileset.json
+	// will report — the maximum version among the underlying children, or "1.0"
+	// when none of them is known to be 1.1.
+	FormatVersion string `json:"format_version"`
 }
 
 func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host string) (*SimpleDatasetsResponse, error) {
@@ -236,6 +246,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			c.URL = di.GetURL()
 			c.Layers = di.GetLayers()
 			c.Format = f
+			c.FormatVersion = di.FormatVersion
 			c.Texture = simpleTexture(di.Texture)
 			if di.Lod != nil {
 				c.LOD = lo.ToPtr(fmt.Sprintf("%d", *di.Lod))
@@ -346,23 +357,24 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 			continue
 		}
 		out = append(out, &SimpleLatestDataset{
-			ID:       d.ID,
-			Name:     d.Name,
-			Pref:     d.Pref,
-			PrefCode: d.PrefCode,
-			City:     d.City,
-			CityCode: d.CityCode,
-			Ward:     d.Ward,
-			WardCode: d.WardCode,
-			Type:     d.Type,
-			TypeCode: d.TypeCode,
-			URL:      url,
-			Layers:   d.Layers,
-			Year:     "latest",
-			Format:   d.Format,
-			LOD:      d.LOD,
-			Texture:  d.Texture,
-			Interior: d.Interior,
+			ID:            d.ID,
+			Name:          d.Name,
+			Pref:          d.Pref,
+			PrefCode:      d.PrefCode,
+			City:          d.City,
+			CityCode:      d.CityCode,
+			Ward:          d.Ward,
+			WardCode:      d.WardCode,
+			Type:          d.Type,
+			TypeCode:      d.TypeCode,
+			URL:           url,
+			Layers:        d.Layers,
+			Year:          "latest",
+			Format:        d.Format,
+			FormatVersion: d.FormatVersion,
+			LOD:           d.LOD,
+			Texture:       d.Texture,
+			Interior:      d.Interior,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
@@ -582,11 +594,27 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 	type groupAgg struct {
 		hasTextured    bool
 		hasNonTextured bool
+		// Wrapper version per texture-variant: the auto variant sees every
+		// child, while -texture / -notexture filter to one texture rank, so
+		// each may resolve to a different max format version.
+		maxVersionAny         string
+		maxVersionTextured    string
+		maxVersionNonTextured string
 	}
 
 	groups := map[groupKey]*groupAgg{}
 
-	add := func(k groupKey, texture *bool) {
+	bumpVersion := func(cur, v string) string {
+		if v == "" {
+			return cur
+		}
+		if v > cur {
+			return v
+		}
+		return cur
+	}
+
+	add := func(k groupKey, texture *bool, version string) {
 		g, ok := groups[k]
 		if !ok {
 			g = &groupAgg{}
@@ -595,10 +623,13 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 		if texture != nil {
 			if *texture {
 				g.hasTextured = true
+				g.maxVersionTextured = bumpVersion(g.maxVersionTextured, version)
 			} else {
 				g.hasNonTextured = true
+				g.maxVersionNonTextured = bumpVersion(g.maxVersionNonTextured, version)
 			}
 		}
+		g.maxVersionAny = bumpVersion(g.maxVersionAny, version)
 	}
 
 	for _, d := range datasets {
@@ -617,6 +648,10 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 		}
 
 		interior := isTrue(d.Interior)
+		version := ""
+		if d.FormatVersion != nil {
+			version = *d.FormatVersion
+		}
 		years := []string{strconv.Itoa(d.Year), "latest"}
 		for _, y := range years {
 			// all-Japan
@@ -627,7 +662,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 				lod:      lod,
 				interior: interior,
 				year:     y,
-			}, d.Texture)
+			}, d.Texture, version)
 
 			// per prefecture
 			if d.PrefCode != "" {
@@ -640,7 +675,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 					lod:      lod,
 					interior: interior,
 					year:     y,
-				}, d.Texture)
+				}, d.Texture, version)
 			}
 		}
 	}
@@ -651,19 +686,37 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 		if k.area == "pref" {
 			areaCode = k.prefCode
 		}
+		pickVersion := func(textureSuffix *bool) string {
+			var v string
+			switch {
+			case textureSuffix == nil:
+				v = agg.maxVersionAny
+			case *textureSuffix:
+				v = agg.maxVersionTextured
+			default:
+				v = agg.maxVersionNonTextured
+			}
+			if v == "" {
+				// Default to 1.0 to match the wrapper Build() emits when no
+				// child reports a known version.
+				return "1.0"
+			}
+			return v
+		}
 		base := func(textureSuffix *bool) *SimpleCompositeTileset {
 			spec := buildSpec(areaCode, k.typeCode, strconv.Itoa(k.lod), k.interior, textureSuffix, k.year)
 			interior := k.interior
 			ent := &SimpleCompositeTileset{
-				ID:       spec,
-				URL:      host + "/datacatalog/3dtiles/" + spec + "/tileset.json",
-				Area:     k.area,
-				TypeCode: k.typeCode,
-				Type:     k.typeName,
-				LOD:      k.lod,
-				Interior: lo.If(interior, lo.ToPtr(true)).Else(nil),
-				Texture:  textureSuffix,
-				Year:     k.year,
+				ID:            spec,
+				URL:           host + "/datacatalog/3dtiles/" + spec + "/tileset.json",
+				Area:          k.area,
+				TypeCode:      k.typeCode,
+				Type:          k.typeName,
+				LOD:           k.lod,
+				Interior:      lo.If(interior, lo.ToPtr(true)).Else(nil),
+				Texture:       textureSuffix,
+				Year:          k.year,
+				FormatVersion: pickVersion(textureSuffix),
 			}
 			if k.area == "pref" {
 				ent.PrefCode = lo.ToPtr(k.prefCode)

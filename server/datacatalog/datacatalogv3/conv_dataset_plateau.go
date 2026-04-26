@@ -108,7 +108,7 @@ func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, war
 	seeds, w := plateauDatasetItemSeedFrom(seed)
 	warning = append(warning, w...)
 	items := lo.FilterMap(seeds, func(s plateauDatasetItemSeed, i int) (*plateauapi.PlateauDatasetItem, bool) {
-		item := seedToDatasetItem(s, sid)
+		item := seedToDatasetItem(s, sid, seed.IsFlow)
 		if item == nil {
 			warning = append(warning, fmt.Sprintf("plateau %s %s[%d]: unknown dataset format: %s", seed.TargetArea.GetCode(), seed.DatasetType.Code, i, s.URL))
 		}
@@ -176,13 +176,14 @@ func seedToDataset(seed plateauDatasetSeed) (res *plateauapi.PlateauDataset, war
 	return
 }
 
-func seedToDatasetItem(i plateauDatasetItemSeed, parentID string) *plateauapi.PlateauDatasetItem {
+func seedToDatasetItem(i plateauDatasetItemSeed, parentID string, isFlow bool) *plateauapi.PlateauDatasetItem {
 	return &plateauapi.PlateauDatasetItem{
 		ID:                  plateauapi.NewID(i.GetID(parentID), plateauapi.TypeDatasetItem),
 		Name:                i.GetName(),
 		URL:                 i.URL,
 		Layers:              i.Layers,
 		Format:              i.Format,
+		FormatVersion:       formatVersionFor(i.Format, isFlow),
 		Lod:                 i.LOD,
 		LodEx:               i.LODEx,
 		Texture:             textureFrom(i.NoTexture),
@@ -190,4 +191,17 @@ func seedToDatasetItem(i plateauDatasetItemSeed, parentID string) *plateauapi.Pl
 		FloodingScale:       i.FloodingScale,
 		FloodingScaleSuffix: i.FloodingScaleSuffix,
 	}
+}
+
+// formatVersionFor returns the format version string for a dataset item.
+// Flow-converted 3D Tiles (FY2025+) are 1.1; legacy converters produce 1.0.
+// Non–3D Tiles formats have no notion of format version.
+func formatVersionFor(f plateauapi.DatasetFormat, isFlow bool) *string {
+	if f != plateauapi.DatasetFormatCesium3dtiles {
+		return nil
+	}
+	if isFlow {
+		return lo.ToPtr("1.1")
+	}
+	return lo.ToPtr("1.0")
 }

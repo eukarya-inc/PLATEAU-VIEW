@@ -37,8 +37,13 @@ const (
 // area code is missing from govpolygon are silently skipped. The root
 // boundingVolume.region is the union of selected children, falling back to
 // the whole-Japan extent when there are no children.
+//
+// The wrapper Asset.version is the maximum of the children's known versions
+// (defaulting to "1.0" when none are known), so a wrapper is upgraded to 1.1
+// only when at least one referenced tileset is 1.1.
 func Build(candidates []Candidate, typeCode string) Tileset {
 	children := make([]Tile, 0, len(candidates))
+	kept := make([]Candidate, 0, len(candidates))
 	for _, c := range candidates {
 		region, ok := RegionFor(c.AreaCode, typeCode)
 		if !ok {
@@ -49,6 +54,7 @@ func Build(candidates []Candidate, typeCode string) Tileset {
 			GeometricError: childGeometricError,
 			Content:        &Content{URI: c.URL},
 		})
+		kept = append(kept, c)
 	}
 
 	sort.Slice(children, func(i, j int) bool {
@@ -64,7 +70,7 @@ func Build(candidates []Candidate, typeCode string) Tileset {
 	}
 
 	return Tileset{
-		Asset:          Asset{Version: "1.1"},
+		Asset:          Asset{Version: MaxVersion(kept)},
 		GeometricError: rootGeometricError,
 		Root: Tile{
 			BoundingVolume: BoundingVolume{Region: rootRegion},
@@ -73,6 +79,23 @@ func Build(candidates []Candidate, typeCode string) Tileset {
 			Children:       children,
 		},
 	}
+}
+
+// MaxVersion returns the highest 3D Tiles format version among the
+// candidates, defaulting to "1.0" when none have a known version. It is
+// exported so callers (e.g. simple API aggregators) can label composite
+// entries with the same version the wrapper would carry.
+func MaxVersion(candidates []Candidate) string {
+	max := "1.0"
+	for _, c := range candidates {
+		if c.FormatVersion == nil {
+			continue
+		}
+		if *c.FormatVersion > max {
+			max = *c.FormatVersion
+		}
+	}
+	return max
 }
 
 func unionRegion(a, b [6]float64) [6]float64 {

@@ -1219,6 +1219,17 @@ PLATEAU都市モデルのデータセットのアイテム。
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.formatversion">formatVersion</strong></td>
+<td valign="top"><a href="#string">String</a></td>
+<td>
+
+データセットのアイテムのフォーマットのバージョン。3D Tiles の場合に `1.0` または `1.1` のいずれかが入ります。
+2025年度以降に Flow で変換された 3D Tiles は `1.1`、それ以外（従来の FME 等で変換されたもの）は `1.0` です。
+MVT など 3D Tiles 以外のフォーマットでは null になります。
+
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top"><strong id="plateaudatasetitem.name">name</strong></td>
 <td valign="top"><a href="#string">String</a>!</td>
 <td>

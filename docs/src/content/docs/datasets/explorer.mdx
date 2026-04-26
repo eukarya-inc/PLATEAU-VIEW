@@ -18,9 +18,6 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
     <select id="explorer-type"><option value="">地物型（すべて）</option></select>
     <select id="explorer-format">
       <option value="">形式（すべて）</option>
-      <option value="CityGML">CityGML</option>
-      <option value="3D Tiles">3D Tiles</option>
-      <option value="MVT">MVT</option>
     </select>
     <select id="explorer-lod"><option value="">LOD（すべて）</option></select>
     <select id="explorer-year"><option value="">整備年度（すべて）</option></select>
@@ -340,7 +337,16 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
         if (d.city !== cityV) return false;
       }
       if (typeSel.value && d.type !== typeSel.value) return false;
-      if (formatSel.value && d.format !== formatSel.value) return false;
+      if (formatSel.value) {
+        // Format select values: "CityGML" / "3D Tiles" (any) / "3D Tiles 1.0" / "3D Tiles 1.1" / "MVT".
+        // Versioned 3D Tiles options match only rows whose format_version is known.
+        const m = formatSel.value.match(/^3D Tiles (\\d+\\.\\d+)$/);
+        if (m) {
+          if (d.format !== '3D Tiles' || d.format_version !== m[1]) return false;
+        } else if (d.format !== formatSel.value) {
+          return false;
+        }
+      }
       if (lodSel.value) {
         // value 形式: "<lod>" または "<lod>:interior"。空 lod も許容（""、":interior"）
         const [wantLod, wantTag] = lodSel.value.split(':');
@@ -391,7 +397,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           <td>\${escapeHtml(d.city ?? '')}</td>
           <td>\${escapeHtml(d.ward ?? '')}</td>
           <td>\${escapeHtml(typeCell)}</td>
-          <td>\${escapeHtml(d.format ?? '')}</td>
+          <td>\${escapeHtml(d.format === '3D Tiles' && d.format_version ? \`3D Tiles \${d.format_version}\` : (d.format ?? ''))}</td>
           <td>\${escapeHtml(d.lod ?? '')}</td>
           <td>\${d.texture === true ? '○' : d.texture === false ? '' : '—'}</td>
           <td>\${escapeHtml(d.year === 'latest' ? '最新（自治体別）' : (d.year ?? ''))}</td>
@@ -494,6 +500,10 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           registration_year: c.year,
           spec: '',
           format: '3D Tiles',
+          // The server now reports the wrapper Asset.version per composite
+          // entry (max of underlying children, defaulting to "1.0"). Use it
+          // as-is so the version filter reflects what Cesium will see.
+          format_version: c.format_version || null,
           lod: c.lod != null ? String(c.lod) : '',
           texture: c.texture,
           interior: c.interior === true ? true : null,
@@ -517,6 +527,7 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
           registration_year: null,
           spec: '',
           format: d.format,
+          format_version: d.format_version || null,
           lod: d.lod != null ? String(d.lod) : '',
           texture: d.texture,
           interior: d.interior === true ? true : null,
@@ -654,6 +665,40 @@ PLATEAU 配信サービスで現在配信されているすべてのデータセ
             opt.value = v;
             opt.textContent = v === 'latest' ? '最新（自治体別）' : v;
             yearSel.appendChild(opt);
+          }
+        }
+        {
+          // Format select options derived from data. "3D Tiles" matches all
+          // 3D Tiles regardless of version; versioned variants are added only
+          // when rows with that format_version actually exist.
+          const baseFormats = new Set();
+          const tilesVersions = new Set();
+          for (const d of datasets) {
+            if (!d.format) continue;
+            baseFormats.add(d.format);
+            if (d.format === '3D Tiles' && d.format_version) {
+              tilesVersions.add(d.format_version);
+            }
+          }
+          const order = ['CityGML', '3D Tiles', 'MVT'];
+          const opts = [];
+          for (const f of order) {
+            if (!baseFormats.has(f)) continue;
+            opts.push({ value: f, label: f });
+            if (f === '3D Tiles') {
+              for (const v of [...tilesVersions].sort()) {
+                opts.push({ value: \`3D Tiles \${v}\`, label: \`3D Tiles \${v}\` });
+              }
+            }
+          }
+          const first = formatSel.options[0];
+          formatSel.innerHTML = '';
+          formatSel.appendChild(first);
+          for (const o of opts) {
+            const opt = document.createElement('option');
+            opt.value = o.value;
+            opt.textContent = o.label;
+            formatSel.appendChild(opt);
           }
         }
         refreshCityOptions();

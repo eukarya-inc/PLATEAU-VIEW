@@ -7,8 +7,9 @@ import (
 )
 
 func TestBuild(t *testing.T) {
+	v11 := "1.1"
 	candidates := []Candidate{
-		{URL: "https://example.com/b/tileset.json", AreaCode: "13101"},
+		{URL: "https://example.com/b/tileset.json", AreaCode: "13101", FormatVersion: &v11},
 		{URL: "https://example.com/a/tileset.json", AreaCode: "13102"},
 		{URL: "https://example.com/x/tileset.json", AreaCode: "99999"}, // not in govpolygon
 	}
@@ -42,4 +43,31 @@ func TestBuildHeightDefaultForOtherTypes(t *testing.T) {
 			assert.Equal(t, float64(500), ts.Root.Children[0].BoundingVolume.Region[5], typeCode)
 		}
 	}
+}
+
+func TestBuildVersionDefault(t *testing.T) {
+	// All children unknown -> wrapper defaults to 1.0
+	ts := Build([]Candidate{{URL: "u", AreaCode: "13101"}}, "bldg")
+	assert.Equal(t, "1.0", ts.Asset.Version)
+}
+
+func TestBuildVersionMaxFromKept(t *testing.T) {
+	v10, v11 := "1.0", "1.1"
+	// Mixed: one child is 1.1 -> wrapper is 1.1 (kept-only)
+	ts := Build([]Candidate{
+		{URL: "a", AreaCode: "13101", FormatVersion: &v10},
+		{URL: "b", AreaCode: "13102", FormatVersion: &v11},
+		{URL: "c", AreaCode: "99999", FormatVersion: &v11}, // dropped by govpolygon
+	}, "bldg")
+	assert.Equal(t, "1.1", ts.Asset.Version)
+}
+
+func TestBuildVersionDroppedDoesNotUpgrade(t *testing.T) {
+	v10, v11 := "1.0", "1.1"
+	// The only 1.1 candidate is dropped by govpolygon -> wrapper stays 1.0
+	ts := Build([]Candidate{
+		{URL: "a", AreaCode: "13101", FormatVersion: &v10},
+		{URL: "b", AreaCode: "99999", FormatVersion: &v11},
+	}, "bldg")
+	assert.Equal(t, "1.0", ts.Asset.Version)
 }

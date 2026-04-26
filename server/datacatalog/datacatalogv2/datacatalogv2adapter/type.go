@@ -214,11 +214,17 @@ func plateauDatasetItemFrom(c datacatalogutil.DataCatalogItemConfigItem, parentI
 		id = "l1"
 	}
 
+	var formatVersion *string
+	if format == plateauapi.DatasetFormatCesium3dtiles {
+		formatVersion = lo.ToPtr("1.0")
+	}
+
 	return &plateauapi.PlateauDatasetItem{
 		ID:            plateauapi.NewID(fmt.Sprintf("%s_%s", parentID.ID(), id), plateauapi.TypeDatasetItem),
 		Name:          c.Name,
 		URL:           c.URL,
 		Format:        format,
+		FormatVersion: formatVersion,
 		Layers:        c.Layers,
 		ParentID:      parentID,
 		Lod:           lod,
