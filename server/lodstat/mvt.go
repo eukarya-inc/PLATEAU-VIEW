@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"sort"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/geo"
 	"github.com/paulmach/orb"
@@ -26,7 +27,13 @@ func renderMVT(ctx context.Context, apiClient *APIClient, featureType string, le
 
 	// create GeoJSON
 	lodLayer := geojson.NewFeatureCollection()
-	for code, m := range lc.Codes {
+	codes := make([]string, 0, len(lc.Codes))
+	for code := range lc.Codes {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		m := lc.Codes[code]
 		properties := lc.Properties(code, featureType)
 		if properties == nil {
 			continue

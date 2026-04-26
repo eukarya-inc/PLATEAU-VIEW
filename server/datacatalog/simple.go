@@ -249,6 +249,8 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 		}
 	}
 
+	sort.Slice(res.Datasets, func(i, j int) bool { return res.Datasets[i].ID < res.Datasets[j].ID })
+
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
 	res.LatestDatasets = buildLatestDatasets(host, res.Datasets)
 
