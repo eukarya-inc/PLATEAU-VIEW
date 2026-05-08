@@ -225,13 +225,20 @@
       const data = await fetch('/tiles/sources.json')
         .then((r) => (r.ok ? r.json() : { sources: [] }))
         .catch(() => ({ sources: [] }));
-      let colorIdx = 0;
+      // Color is assigned per source (not per layer), so dem[0]/dem[1]/…
+      // share one color and the eye groups them as a single source.
+      const colorBySource = new Map();
       for (const src of data.sources || []) {
+        if (!colorBySource.has(src.name)) {
+          colorBySource.set(
+            src.name,
+            inspectorPalette[colorBySource.size % inspectorPalette.length],
+          );
+        }
+        const color = colorBySource.get(src.name);
         for (const layer of src.layers || []) {
           if (!layer.bounds) continue;
           const [w, s, e, n] = layer.bounds;
-          const color = inspectorPalette[colorIdx % inspectorPalette.length];
-          colorIdx += 1;
           const css = Cesium.Color.fromCssColorString(color);
           const zoom = (layer.min_zoom != null && layer.max_zoom != null)
             ? `z${layer.min_zoom}-${layer.max_zoom}`

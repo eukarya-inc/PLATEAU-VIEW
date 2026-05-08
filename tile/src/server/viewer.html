@@ -492,13 +492,25 @@
             '#9a6324', '#fffac8', '#800000', '#aaffc3',
         ];
 
+        // Color palette is keyed by source name so every layer under the
+        // same source (e.g. all dem[*] overlays, all plateau-ortho-2024
+        // tiles) shares one color — easier to scan visually than the per-
+        // layer rainbow it used to be.
+        function pickSourceColor(name, assignments) {
+            if (assignments.has(name)) return assignments.get(name);
+            const c = inspectorPalette[assignments.size % inspectorPalette.length];
+            assignments.set(name, c);
+            return c;
+        }
+
         async function loadInspector() {
             // Force refresh — the user may have hit /reload between toggles.
             sourcesPromise = null;
             const data = await loadSources();
             const features = [];
-            let colorIdx = 0;
+            const colorBySource = new Map();
             for (const src of data.sources || []) {
+                const color = pickSourceColor(src.name, colorBySource);
                 for (const layer of src.layers || []) {
                     if (!layer.bounds) continue; // skip layers with unknown bounds
                     const [w, s, ee, n] = layer.bounds;
@@ -514,7 +526,7 @@
                             url: layer.url,
                             zoom,
                             version: layer.version || '',
-                            color: inspectorPalette[colorIdx % inspectorPalette.length],
+                            color,
                         },
                         geometry: {
                             type: 'Polygon',
@@ -523,7 +535,6 @@
                             ]],
                         },
                     });
-                    colorIdx += 1;
                 }
             }
             const collection = { type: 'FeatureCollection', features };
