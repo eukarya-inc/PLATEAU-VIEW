@@ -13,6 +13,7 @@ export default defineConfig({
       components: {
         Header: "./src/components/Header.astro",
         Hero: "./src/components/Hero.astro",
+        Footer: "./src/components/Footer.astro",
       },
       description:
         "PLATEAU 3D都市モデル配信サービスの利用ガイド・APIリファレンス",

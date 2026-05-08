@@ -1,0 +1,30 @@
+---
+import Default from "@astrojs/starlight/components/Footer.astro";
+---
+
+<Default><slot /></Default>
+
+<div class="copyright">
+  &copy; {new Date().getFullYear()}{" "}
+  <a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener noreferrer">
+    Project PLATEAU
+  </a>
+</div>
+
+<style>
+  .copyright {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    text-align: center;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .copyright a {
+    color: inherit;
+    text-decoration: underline;
+  }
+  .copyright a:hover {
+    color: var(--sl-color-white);
+  }
+</style>
