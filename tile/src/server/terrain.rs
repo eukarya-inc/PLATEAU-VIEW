@@ -221,7 +221,7 @@ pub async fn terrain_layer_json(
     headers: HeaderMap,
     Query(q): Query<GeoidQuery>,
 ) -> Response {
-    let terrain = state.terrain.clone();
+    let terrain = state.current_terrain().await;
     let geoid_model = match resolve_geoid(&terrain, &q) {
         Ok(g) => g,
         Err(r) => return r,
@@ -292,7 +292,7 @@ pub async fn terrain_tile(
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
     Query(q): Query<GeoidQuery>,
 ) -> Response {
-    let terrain = state.terrain.clone();
+    let terrain = state.current_terrain().await;
 
     // Parse y and validate extension.
     let y: u32 = match y_ext.strip_suffix(".terrain").and_then(|s| s.parse().ok()) {
@@ -464,7 +464,7 @@ async fn raster_tile(
     Query(q): Query<GeoidQuery>,
     encoding: RasterEncoding,
 ) -> Response {
-    let terrain = state.terrain.clone();
+    let terrain = state.current_terrain().await;
 
     let (y, format) = match parse_y_and_format(&y_ext) {
         Some(parsed) => parsed,
@@ -626,7 +626,7 @@ async fn raster_tilejson(
     Query(q): Query<GeoidQuery>,
     encoding: RasterEncoding,
 ) -> Response {
-    let terrain = state.terrain.clone();
+    let terrain = state.current_terrain().await;
     let geoid_model = match resolve_geoid(&terrain, &q) {
         Ok(g) => g,
         Err(r) => return r,

@@ -26,14 +26,22 @@ pub struct AppState {
     pub cache: Arc<TileCache>,
     /// Cached tile sources (rebuilt on config reload)
     sources: Arc<RwLock<HashMap<String, Arc<dyn TileSource>>>>,
-    /// Per-layer inventory used by `/tiles/bounds.json` (name → entries).
+    /// Per-layer inventory for raster sources, rebuilt on config reload.
     inventory: Arc<RwLock<Vec<LayerEntry>>>,
+    /// Per-layer inventory for DEM overlays, rebuilt alongside `terrain` on
+    /// config reload (so adding/removing COG overlays in CMS reflects in
+    /// `/tiles/sources.json` after the next reload).
+    dem_inventory: Arc<RwLock<Vec<LayerEntry>>>,
     /// Secret for reload endpoint authorization
     pub reload_secret: Option<String>,
     /// Cache-Control header value (optional)
     pub cache_control: Option<String>,
-    /// Terrain endpoint state.
-    pub terrain: Arc<super::terrain::TerrainState>,
+    /// Terrain endpoint state. Wrapped in a lock so config reload can swap in
+    /// a freshly built `TerrainState` (DEM overlay set may change in CMS).
+    terrain: Arc<RwLock<Arc<super::terrain::TerrainState>>>,
+    /// Cached env-derived terrain settings, needed at reload time to rebuild
+    /// the base DEM with the same configuration.
+    terrain_settings: TerrainSettings,
 }
 
 /// One layer described in the config, with a live source instance for
@@ -105,17 +113,25 @@ impl AppState {
 
         let (terrain, dem_inventory) =
             Self::build_terrain(&terrain_settings, &config.sources).await;
-        inventory.extend(dem_inventory);
 
         Self {
             config_manager,
             cache,
             sources: Arc::new(RwLock::new(sources)),
             inventory: Arc::new(RwLock::new(inventory)),
+            dem_inventory: Arc::new(RwLock::new(dem_inventory)),
             reload_secret,
             cache_control,
-            terrain,
+            terrain: Arc::new(RwLock::new(terrain)),
+            terrain_settings,
         }
+    }
+
+    /// Current terrain state. Cheap (Arc clone) and lock-free for callers
+    /// after the read lock is dropped — handlers cache the returned `Arc` for
+    /// the lifetime of one request.
+    pub async fn current_terrain(&self) -> Arc<super::terrain::TerrainState> {
+        self.terrain.read().await.clone()
     }
 
     /// Construct the terrain state. Base DEM comes from `terrain_settings`
@@ -354,25 +370,44 @@ impl AppState {
         Some(source.etag_keys(z, x, y))
     }
 
-    /// Reload sources from config.
+    /// Reload sources from config. Rebuilds raster sources, DEM terrain, and
+    /// both inventories so adding/removing/replacing entries in CMS — for
+    /// either `/tiles/...` rasters or `sources.dem` overlays — reflects in
+    /// the live server after the next `/reload`.
     pub async fn reload_sources(&self) {
         let config = self.config_manager.get().await;
+
         let mut new_inventory = Vec::new();
         let new_sources = Self::build_sources(&config.sources, &mut new_inventory);
-
-        // Preload new sources in parallel
         Self::preload_sources(&new_sources).await;
+
+        let (new_terrain, new_dem_inventory) =
+            Self::build_terrain(&self.terrain_settings, &config.sources).await;
 
         let mut sources = self.sources.write().await;
         *sources = new_sources;
         let mut inv = self.inventory.write().await;
         *inv = new_inventory;
-        tracing::info!("Rebuilt {} tile sources", sources.len());
+        let mut dem_inv = self.dem_inventory.write().await;
+        *dem_inv = new_dem_inventory;
+        let mut terrain = self.terrain.write().await;
+        *terrain = new_terrain;
+        tracing::info!(
+            "Rebuilt {} tile sources and DEM terrain on reload",
+            sources.len()
+        );
     }
 
-    /// Snapshot the per-layer inventory (for `/tiles/bounds.json`).
+    /// Snapshot the per-layer inventory (for `/tiles/bounds.json`). Combines
+    /// the raster inventory with the DEM-overlay inventory. Both are rebuilt
+    /// on `/reload`.
     pub async fn inventory_snapshot(&self) -> Vec<LayerEntry> {
-        self.inventory.read().await.clone()
+        let raster = self.inventory.read().await.clone();
+        let dem = self.dem_inventory.read().await.clone();
+        let mut all = Vec::with_capacity(raster.len() + dem.len());
+        all.extend(raster);
+        all.extend(dem);
+        all
     }
 
     /// List available source names (sorted alphabetically).
