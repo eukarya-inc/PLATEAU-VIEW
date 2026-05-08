@@ -169,25 +169,31 @@
     const terrainCompareBtn = document.getElementById('terrainCompare');
     let usingLegacyTerrain = false;
 
-    async function applyTerrain() {
+    function applyTerrain() {
+      // Use scene.setTerrain(new Terrain(promise)) for both providers.
+      // Direct `viewer.terrainProvider = await provider` worked one-way
+      // but didn't reliably restore PLATEAU terrain after switching to
+      // the Ion legacy asset — the wrapped Terrain swap is the modern,
+      // idempotent API and handles cleanup of the previous provider.
+      let providerPromise;
       if (usingLegacyTerrain) {
-        viewer.terrainProvider =
-          await Cesium.CesiumTerrainProvider.fromIonAssetId(LEGACY_ASSET_ID);
+        providerPromise = Cesium.CesiumTerrainProvider.fromIonAssetId(
+          LEGACY_ASSET_ID,
+        );
       } else {
         const resource = new Cesium.Resource({
           url: '/terrain',
           queryParameters: { geoid: geoidSelect.value },
         });
-        viewer.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
-          resource,
-          { requestVertexNormals: true, requestWaterMask: false },
-        );
+        providerPromise = Cesium.CesiumTerrainProvider.fromUrl(resource, {
+          requestVertexNormals: true,
+          requestWaterMask: false,
+        });
       }
+      viewer.scene.setTerrain(new Cesium.Terrain(providerPromise));
     }
-    applyTerrain().catch(console.error);
-    geoidSelect.addEventListener('change', () => {
-      applyTerrain().catch(console.error);
-    });
+    applyTerrain();
+    geoidSelect.addEventListener('change', () => applyTerrain());
     terrainCompareBtn.addEventListener('click', () => {
       usingLegacyTerrain = !usingLegacyTerrain;
       terrainCompareBtn.classList.toggle('active', usingLegacyTerrain);
@@ -197,7 +203,7 @@
       // Geoid is irrelevant for the legacy tileset — it bakes its own
       // height model. Disable the dropdown to avoid confusion.
       geoidSelect.disabled = usingLegacyTerrain;
-      applyTerrain().catch(console.error);
+      applyTerrain();
     });
 
     // ── 3D Tiles LOD1 (all cities) for grounding sanity check ─────────
