@@ -38,6 +38,7 @@
     </select>
     <button id="flyChiyoda">千代田区へ</button>
     <span class="sep">|</span>
+    <button id="terrainCompare" title="Toggle between PLATEAU terrain (default) and the older Cesium Ion-hosted tileset for visual A/B comparison">旧テラインと比較</button>
     <button id="inspectorToggle" title="Show source bounds (incl. DEM overlays) on the globe">Inspector</button>
   </div>
   <div id="cesium"></div>
@@ -46,10 +47,11 @@
     Cesium.Ion.defaultAccessToken = null;
 
     // ── Imagery options ────────────────────────────────────────────────
-    // GSI (国土地理院) is the default base map. OSM is exposed only as a
-    // fallback when no PLATEAU sources are configured. Configured
-    // `/tiles/<name>/...` sources, when available, are inserted before
-    // GSI and the first one is auto-selected.
+    // GSI (国土地理院) is the default base map and stays default — the
+    // outline-style tiles are easier to read against 3D terrain than
+    // imagery overlays. Configured `/tiles/<name>/...` sources are added
+    // to the dropdown after fetch but the selection stays on GSI; the
+    // user picks one explicitly when they want it.
     const imagerySelect = document.getElementById('imagery');
 
     const gsiOption = {
@@ -121,21 +123,18 @@
     function setImagery(id) {
       const opt = options.find((o) => o.id === id) || options[0];
       const layers = viewer.imageryLayers;
-      // Add the new provider first so there's no blank flash, then drop
-      // every prior layer. `addImageryProvider` is synchronous for these
-      // providers, so the new layer is queryable immediately.
-      const newLayer = layers.addImageryProvider(opt.build());
-      // Remove anything below the new top layer.
-      while (layers.length > 1) {
-        layers.remove(layers.get(0), true);
-      }
-      void newLayer;
+      // Drop everything first, then add the new provider. The previous
+      // implementation added-then-removed to avoid a blank-frame flash
+      // but that left stale layers around when switching back-and-forth
+      // between GSI and a /tiles source — subsequent imagery picks
+      // wouldn't re-render. The brief flash is fine for a debug viewer.
+      layers.removeAll(true);
+      layers.addImageryProvider(opt.build());
     }
     setImagery(gsiOption.id);
     imagerySelect.addEventListener('change', (e) => setImagery(e.target.value));
 
-    // Once /tiles/sources.json arrives, prepend each configured source as
-    // an imagery option and switch to the first one.
+    // Append /tiles/<name> sources to the dropdown but keep GSI selected.
     fetch('/tiles/sources.json')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .catch(() => ({ sources: [] }))
@@ -151,26 +150,54 @@
             }),
         }));
         if (tilesOptions.length === 0) return;
-        options.splice(0, 0, ...tilesOptions);
-        const firstId = tilesOptions[0].id;
-        rebuildImagerySelect(firstId);
-        setImagery(firstId);
+        // Insert after GSI so GSI stays at the top and selected.
+        options.splice(1, 0, ...tilesOptions);
+        rebuildImagerySelect(gsiOption.id);
       });
 
     // ── Terrain ────────────────────────────────────────────────────────
-    async function setTerrain(geoid) {
-      const resource = new Cesium.Resource({
-        url: '/terrain',
-        queryParameters: { geoid },
-      });
-      viewer.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
-        resource,
-        { requestVertexNormals: true, requestWaterMask: false },
-      );
+    // Two providers: the live PLATEAU `/terrain` endpoint and a frozen
+    // legacy tileset on Cesium Ion. The compare button toggles between
+    // them so visual regressions in the new pipeline are easy to spot
+    // (e.g. nodata pits, coverage gaps, edge artifacts).
+    const CESIUM_ION_TOKEN =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY';
+    const LEGACY_ASSET_ID = 3258112;
+    Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
+
+    const geoidSelect = document.getElementById('geoid');
+    const terrainCompareBtn = document.getElementById('terrainCompare');
+    let usingLegacyTerrain = false;
+
+    async function applyTerrain() {
+      if (usingLegacyTerrain) {
+        viewer.terrainProvider =
+          await Cesium.CesiumTerrainProvider.fromIonAssetId(LEGACY_ASSET_ID);
+      } else {
+        const resource = new Cesium.Resource({
+          url: '/terrain',
+          queryParameters: { geoid: geoidSelect.value },
+        });
+        viewer.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(
+          resource,
+          { requestVertexNormals: true, requestWaterMask: false },
+        );
+      }
     }
-    setTerrain(document.getElementById('geoid').value);
-    document.getElementById('geoid').addEventListener('change', (e) => {
-      setTerrain(e.target.value).catch(console.error);
+    applyTerrain().catch(console.error);
+    geoidSelect.addEventListener('change', () => {
+      applyTerrain().catch(console.error);
+    });
+    terrainCompareBtn.addEventListener('click', () => {
+      usingLegacyTerrain = !usingLegacyTerrain;
+      terrainCompareBtn.classList.toggle('active', usingLegacyTerrain);
+      terrainCompareBtn.textContent = usingLegacyTerrain
+        ? 'PLATEAUに戻す'
+        : '旧テラインと比較';
+      // Geoid is irrelevant for the legacy tileset — it bakes its own
+      // height model. Disable the dropdown to avoid confusion.
+      geoidSelect.disabled = usingLegacyTerrain;
+      applyTerrain().catch(console.error);
     });
 
     // ── 3D Tiles LOD1 (all cities) for grounding sanity check ─────────
