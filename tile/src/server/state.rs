@@ -469,7 +469,7 @@ impl AppState {
 /// invalidate downstream tile caches whose etag composition includes this
 /// value. Format is a compact timestamp so multiple bumps per day are easy
 /// to read at a glance.
-const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2030";
+const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2145";
 
 fn build_dem_overlay(idx: usize, layer: &LayerConfig) -> Option<Arc<dyn DemProvider>> {
     let slug = format!("dem{idx}");

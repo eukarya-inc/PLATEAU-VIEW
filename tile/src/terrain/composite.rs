@@ -88,6 +88,52 @@ impl CompositeDemProvider {
         }
     }
 
+    /// Try to fetch the base at the requested zoom, falling back to a
+    /// parent tile (with bilinear upsampling) when the base returns
+    /// `OutOfRange` or `NotFound`. Walks down one zoom level at a time so
+    /// partial-coverage upstreams (Mapterhorn over Japan tops out at
+    /// different zooms in different areas) still feed the composite.
+    async fn fetch_base_upsampled(
+        &self,
+        z: u8,
+        x: u32,
+        y: u32,
+        tile_size: u32,
+    ) -> Result<DemTile, DemError> {
+        let mut try_z = z.min(self.base.max_zoom());
+        loop {
+            let factor = 1u32 << (z - try_z);
+            let parent_x = x / factor;
+            let parent_y = y / factor;
+            match self
+                .base
+                .get_tile_elevations(try_z, parent_x, parent_y, tile_size)
+                .await
+            {
+                Ok(parent) => {
+                    if factor == 1 {
+                        return Ok(parent);
+                    }
+                    let elevations = upsample_subregion(
+                        &parent.elevations,
+                        tile_size,
+                        factor,
+                        x % factor,
+                        y % factor,
+                    );
+                    return Ok(DemTile {
+                        elevations,
+                        etag: parent.etag,
+                    });
+                }
+                Err(DemError::NotFound | DemError::OutOfRange) if try_z > 0 => {
+                    try_z -= 1;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     /// Pick overlay indices whose bbox intersects the tile bbox, plus all
     /// unbounded overlays. Returns indices in original config order.
     fn select_overlays(&self, tile: &GeoBounds) -> Vec<usize> {
@@ -113,37 +159,15 @@ impl DemProvider for CompositeDemProvider {
         y: u32,
         tile_size: u32,
     ) -> Result<DemTile, DemError> {
-        // 1. Base. If z exceeds base.max_zoom but a high-res overlay is
-        //    advertised at this zoom, fetch the base's parent tile and
-        //    bilinear-upsample the relevant sub-region. Without this
-        //    fallback, an `OutOfRange` from the base would short-circuit
-        //    the whole composite and the overlay's high-res data would
-        //    never reach the renderer — leaving Cesium with an all-zero
-        //    tile and visible "pits" at high zoom over COG-covered areas.
-        let base_max = self.base.max_zoom();
-        let mut base_tile = if z <= base_max {
-            self.base.get_tile_elevations(z, x, y, tile_size).await?
-        } else {
-            let zoom_diff = z - base_max;
-            let factor = 1u32 << zoom_diff;
-            let parent_x = x / factor;
-            let parent_y = y / factor;
-            let parent = self
-                .base
-                .get_tile_elevations(base_max, parent_x, parent_y, tile_size)
-                .await?;
-            let elevations = upsample_subregion(
-                &parent.elevations,
-                tile_size,
-                factor,
-                x % factor,
-                y % factor,
-            );
-            DemTile {
-                elevations,
-                etag: parent.etag,
-            }
-        };
+        // 1. Base, with parent-upsample fallback. We try the requested
+        //    zoom first, then walk up parent tiles on `OutOfRange` (z
+        //    exceeds advertised max_zoom) or `NotFound` (advertised
+        //    max_zoom over-promises actual coverage — Mapterhorn for
+        //    Japan claims z=15 but 404s on parts of Kisarazu, etc.) and
+        //    bilinear-upsample the relevant sub-region. Without this,
+        //    the COG overlays never reach the renderer at high zoom and
+        //    Cesium ends up with all-zero tiles.
+        let mut base_tile = self.fetch_base_upsampled(z, x, y, tile_size).await?;
 
         // 2. Compute the geographic bbox of this Web-Mercator tile for R-tree
         // pruning. (We re-derive the formula here to avoid a circular dep.)
