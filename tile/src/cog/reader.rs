@@ -9,6 +9,7 @@ use async_tiff::{
     reader::ObjectReader,
     tags::SampleFormat,
 };
+use async_tiff::{TagValue, tags::Tag};
 use object_store::{ObjectStore, path::Path as ObjectPath};
 
 use super::{
@@ -165,6 +166,22 @@ impl CogReader {
     /// Get the geographic bounds of the COG.
     pub fn bounds(&self) -> Option<&TileBounds> {
         self.bounds.as_ref()
+    }
+
+    /// Read the `GDAL_NODATA` tag (TIFF tag 42113) from the first IFD.
+    ///
+    /// GDAL writes the tag as ASCII (e.g. `"-9999\0"`), which is the convention
+    /// for COG DEMs from QGIS / `gdal_translate`. Returning the parsed numeric
+    /// value lets the elevation reader treat those pixels as NaN without the
+    /// caller having to know the per-file sentinel — which matters for DEM
+    /// overlays added via CMS where no explicit `nodata` config is supplied.
+    pub fn nodata_from_metadata(&self) -> Option<f64> {
+        let ifd = self.tiff.ifds().first()?;
+        let value = ifd.other_tags().get(&Tag::GdalNodata)?;
+        match value {
+            TagValue::Ascii(s) => s.trim_end_matches('\0').trim().parse::<f64>().ok(),
+            _ => None,
+        }
     }
 
     /// Get the image dimensions (width, height).

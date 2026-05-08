@@ -17,7 +17,6 @@ use url::Url;
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
 use crate::cog::{CogReader, TileBounds};
-use crate::config::NoDataConfig;
 
 pub struct CogDemSource {
     url: String,
@@ -97,16 +96,14 @@ impl DemProvider for CogDemSource {
             }
         }
 
-        let nodata = self.nodata.map(NoDataConfig::Single);
+        // Prefer the explicit `nodata` from config, but fall back to the
+        // COG's own `GDAL_NODATA` tag. Without this fallback, sentinel pixels
+        // (e.g. -9999 from gdal_translate) leak through as real elevations,
+        // creating Cesium-visible "pits" along COG edges and outside the
+        // valid raster footprint.
+        let nodata_value = self.nodata.or_else(|| reader.nodata_from_metadata());
         let elevations = reader
-            .read_tile_elevation(
-                &bounds,
-                tile_size,
-                nodata.as_ref().and_then(|n| match n {
-                    NoDataConfig::Single(v) => Some(*v),
-                    _ => None,
-                }),
-            )
+            .read_tile_elevation(&bounds, tile_size, nodata_value)
             .await
             .map_err(|e| DemError::Decode(format!("cog read: {e}")))?;
 
