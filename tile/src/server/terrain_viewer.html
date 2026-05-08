@@ -19,6 +19,7 @@
     .toolbar a { color: #6cf; text-decoration: none; }
     .toolbar a:hover { text-decoration: underline; }
     .toolbar select, .toolbar button { font-size: 12px; }
+    .toolbar button.active { background: #6cf; color: #000; }
     .sep { opacity: 0.4; }
   </style>
 </head>
@@ -36,6 +37,8 @@
       <option value="none">なし（オルソ高のまま）</option>
     </select>
     <button id="flyChiyoda">千代田区へ</button>
+    <span class="sep">|</span>
+    <button id="inspectorToggle" title="Show source bounds (incl. DEM overlays) on the globe">Inspector</button>
   </div>
   <div id="cesium"></div>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
@@ -202,6 +205,98 @@
           roll: 0.0,
         },
       });
+    });
+
+    // ── Inspector: source bounds overlay ──────────────────────────────
+    // Draws each configured source's `bounds` (from /tiles/sources.json)
+    // as a translucent rectangle on the globe so DEM overlay coverage —
+    // which otherwise only manifests as terrain elevation — is visible.
+    const inspectorPalette = [
+      '#e6194b', '#3cb44b', '#ffe119', '#4363d8',
+      '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+      '#bcf60c', '#fabebe', '#008080', '#e6beff',
+      '#9a6324', '#fffac8', '#800000', '#aaffc3',
+    ];
+    const inspectorEntities = [];
+    const inspectorBtn = document.getElementById('inspectorToggle');
+    let inspectorEnabled = false;
+
+    async function buildInspector() {
+      const data = await fetch('/tiles/sources.json')
+        .then((r) => (r.ok ? r.json() : { sources: [] }))
+        .catch(() => ({ sources: [] }));
+      let colorIdx = 0;
+      for (const src of data.sources || []) {
+        for (const layer of src.layers || []) {
+          if (!layer.bounds) continue;
+          const [w, s, e, n] = layer.bounds;
+          const color = inspectorPalette[colorIdx % inspectorPalette.length];
+          colorIdx += 1;
+          const css = Cesium.Color.fromCssColorString(color);
+          const zoom = (layer.min_zoom != null && layer.max_zoom != null)
+            ? `z${layer.min_zoom}-${layer.max_zoom}`
+            : (layer.max_zoom != null ? `z≤${layer.max_zoom}` : '');
+          const label = `${src.name}[${layer.layer_index}] ${layer.layer_type}${zoom ? ' ' + zoom : ''}`;
+          // Translucent fill. Cannot clamp to terrain (Cesium rectangles
+          // sit at fixed `height`); the polyline outline below handles the
+          // terrain-following silhouette.
+          const rect = viewer.entities.add({
+            name: label,
+            rectangle: {
+              coordinates: Cesium.Rectangle.fromDegrees(w, s, e, n),
+              material: css.withAlpha(0.15),
+              height: 0,
+              outline: false,
+            },
+          });
+          inspectorEntities.push(rect);
+          // Outline as a polyline clamped to ground so it follows terrain.
+          const outline = viewer.entities.add({
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray([
+                w, s, e, s, e, n, w, n, w, s,
+              ]),
+              width: 2,
+              material: css,
+              clampToGround: true,
+            },
+          });
+          inspectorEntities.push(outline);
+          // Label at the NW corner of the bbox.
+          const labelEntity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(w, n),
+            label: {
+              text: label,
+              font: '12px sans-serif',
+              fillColor: css,
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+              pixelOffset: new Cesium.Cartesian2(4, -4),
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          });
+          inspectorEntities.push(labelEntity);
+        }
+      }
+    }
+
+    function clearInspector() {
+      for (const e of inspectorEntities) viewer.entities.remove(e);
+      inspectorEntities.length = 0;
+    }
+
+    inspectorBtn.addEventListener('click', async () => {
+      inspectorEnabled = !inspectorEnabled;
+      inspectorBtn.classList.toggle('active', inspectorEnabled);
+      if (inspectorEnabled) {
+        await buildInspector();
+      } else {
+        clearInspector();
+      }
     });
   </script>
 </body>
