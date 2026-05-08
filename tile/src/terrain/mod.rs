@@ -8,6 +8,7 @@
 
 #![allow(dead_code)]
 
+pub mod cached_dem;
 pub mod cog_dem;
 pub mod composite;
 pub mod dem;
@@ -26,6 +27,7 @@ pub mod terrarium;
 pub mod webmercator;
 pub mod xyz_dem;
 
+pub use cached_dem::CachedDemProvider;
 pub use cog_dem::CogDemSource;
 pub use composite::{CompositeDemProvider, build as build_composite_dem};
 pub use dem::{DemError, DemProvider, DemTile, GeoBounds};

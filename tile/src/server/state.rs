@@ -143,7 +143,16 @@ impl AppState {
         settings: &TerrainSettings,
         sources: &HashMap<String, SourceConfig>,
     ) -> (Arc<super::terrain::TerrainState>, Vec<LayerEntry>) {
-        let base = settings.build_dem();
+        // Wrap the base DEM in an LRU so the parent-tile fallback in
+        // `CompositeDemProvider::fetch_base_upsampled` doesn't re-fetch +
+        // re-decode the same Mapterhorn parent for every child request.
+        // 200 entries × ~2 MiB ≈ 400 MiB upper bound — well within the
+        // Cloud Run memory budget and dramatically cuts per-request
+        // memory pressure under concurrent quantized-mesh load.
+        let base: Arc<dyn DemProvider> = Arc::new(crate::terrain::CachedDemProvider::new(
+            settings.build_dem(),
+            200,
+        ));
         let mut dem_inventory: Vec<LayerEntry> = Vec::new();
 
         let dem: Arc<dyn DemProvider> = match sources.get(DEM_SOURCE_KEY) {
@@ -469,7 +478,7 @@ impl AppState {
 /// invalidate downstream tile caches whose etag composition includes this
 /// value. Format is a compact timestamp so multiple bumps per day are easy
 /// to read at a glance.
-const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2145";
+const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2230";
 
 fn build_dem_overlay(idx: usize, layer: &LayerConfig) -> Option<Arc<dyn DemProvider>> {
     let slug = format!("dem{idx}");
