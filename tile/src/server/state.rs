@@ -464,9 +464,19 @@ impl AppState {
 /// Build a single DEM overlay from a `LayerConfig` entry inside the
 /// `sources.dem.layers` list. Returns `None` for unsupported variants
 /// (e.g. `maplibre`).
+/// Default version string baked into DEM overlay providers when the config
+/// doesn't supply one. Bump (e.g. on every behavior-changing deploy) to
+/// invalidate downstream tile caches whose etag composition includes this
+/// value. Format is a compact timestamp so multiple bumps per day are easy
+/// to read at a glance.
+const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2030";
+
 fn build_dem_overlay(idx: usize, layer: &LayerConfig) -> Option<Arc<dyn DemProvider>> {
     let slug = format!("dem{idx}");
-    let version = layer.version().unwrap_or("v1").to_string();
+    let version = layer
+        .version()
+        .unwrap_or(DEM_OVERLAY_DEFAULT_VERSION)
+        .to_string();
     match layer {
         LayerConfig::Pmtiles {
             url,

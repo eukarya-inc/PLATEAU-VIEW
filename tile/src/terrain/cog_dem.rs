@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use object_store::{
-    ObjectStore, client::ClientConfigKey, http::HttpBuilder, path::Path as ObjectPath,
+    GetOptions, ObjectStore, client::ClientConfigKey, http::HttpBuilder, path::Path as ObjectPath,
 };
 use tokio::sync::OnceCell;
 use url::Url;
@@ -27,6 +27,11 @@ pub struct CogDemSource {
     native_tile_size: u32,
     reader: OnceCell<Arc<CogReader>>,
     bounds_cell: OnceCell<Option<GeoBounds>>,
+    /// Upstream object ETag, fetched once via HEAD on preload. Mixed into
+    /// the per-tile etag so a CMS-side COG swap (same URL pattern, new
+    /// content) busts downstream tile caches without requiring a manual
+    /// version bump in config.
+    upstream_etag: OnceCell<Option<String>>,
 }
 
 impl CogDemSource {
@@ -47,7 +52,40 @@ impl CogDemSource {
             native_tile_size,
             reader: OnceCell::new(),
             bounds_cell: OnceCell::new(),
+            upstream_etag: OnceCell::new(),
         }
+    }
+
+    /// Resolve and cache the upstream object ETag via a HEAD request. Falls
+    /// back to `None` when the backend doesn't surface one (e.g. file://).
+    async fn upstream_etag(&self) -> &Option<String> {
+        self.upstream_etag
+            .get_or_init(|| async {
+                let (store, path) = match build_object_store(&self.url) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::warn!(error=%e, "cog HEAD: build_object_store failed");
+                        return None;
+                    }
+                };
+                let opts = GetOptions {
+                    head: true,
+                    ..Default::default()
+                };
+                match store.get_opts(&path, opts).await {
+                    Ok(result) => result
+                        .meta
+                        .e_tag
+                        .as_ref()
+                        .map(|s: &String| s.trim_start_matches("W/").trim_matches('"').to_string())
+                        .filter(|s| !s.is_empty()),
+                    Err(e) => {
+                        tracing::warn!(error=%e, "cog HEAD failed; ETag unavailable");
+                        None
+                    }
+                }
+            })
+            .await
     }
 
     async fn reader(&self) -> Result<Arc<CogReader>, DemError> {
@@ -107,10 +145,13 @@ impl DemProvider for CogDemSource {
             .await
             .map_err(|e| DemError::Decode(format!("cog read: {e}")))?;
 
-        Ok(DemTile {
-            elevations,
-            etag: Some(self.version.clone()),
-        })
+        // Mix the upstream ETag (when available) into the per-tile etag so
+        // any change to the underlying COG file flips downstream cache keys.
+        let etag = match self.upstream_etag().await.as_ref() {
+            Some(e) => Some(format!("{}:{e}", self.version)),
+            None => Some(self.version.clone()),
+        };
+        Ok(DemTile { elevations, etag })
     }
 
     fn native_tile_size(&self) -> u32 {
@@ -133,6 +174,9 @@ impl DemProvider for CogDemSource {
                 .bounds_cell
                 .set(Some(GeoBounds::new(b.west, b.south, b.east, b.north)));
         }
+        // Warm the upstream ETag cell so the first tile request doesn't
+        // pay the HEAD round-trip.
+        let _ = self.upstream_etag().await;
         Ok(())
     }
 
