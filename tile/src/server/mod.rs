@@ -5,6 +5,7 @@ mod handlers;
 mod response;
 mod routes;
 mod state;
+mod static_assets;
 mod terrain;
 mod tracing;
 

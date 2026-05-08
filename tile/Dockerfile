@@ -90,6 +90,11 @@ RUN chmod +x /app/docker-entrypoint.sh
 RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
+# Viewer HTML assets. Placed last so HTML-only edits invalidate just this
+# layer — the binary copy, apt-get installs, and user setup above stay
+# cached, turning a 5-10 minute full rebuild into a ~30 second image push.
+COPY --chown=appuser:appuser static /app/static
+
 # Environment variables for headless rendering
 ENV PORT=8080
 ENV RUST_LOG=info

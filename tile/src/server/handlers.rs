@@ -5,7 +5,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse, Json, Response},
+    response::{IntoResponse, Json, Response},
 };
 use serde::Serialize;
 use xxhash_rust::xxh64::xxh64;
@@ -108,13 +108,11 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
     )
 }
 
-/// Viewer HTML template.
-const VIEWER_HTML: &str = include_str!("viewer.html");
-
 /// Viewer HTML for debugging tiles. The page fetches `/tiles/sources.json`
-/// on load to populate its source dropdown and inspector.
-pub async fn viewer() -> impl IntoResponse {
-    Html(VIEWER_HTML)
+/// on load to populate its source dropdown and inspector. Source HTML is
+/// loaded from disk at request time — see [`super::static_assets`].
+pub async fn viewer() -> Response {
+    super::static_assets::serve_html("viewer.html")
 }
 
 /// Generate tile bytes from source (used in single-flight closure).

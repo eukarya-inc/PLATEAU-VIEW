@@ -18,7 +18,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse, Json, Response},
+    response::{IntoResponse, Json, Response},
 };
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh64::xxh64;
@@ -207,12 +207,12 @@ pub fn external_origin(headers: &HeaderMap) -> (String, String) {
 
 // ─────────────────────────────── Handlers ───────────────────────────────
 
-/// Embedded Cesium viewer for quick eyeballing of terrain output.
-const VIEWER_HTML: &str = include_str!("terrain_viewer.html");
-
+/// Cesium viewer for quick eyeballing of terrain output. Source HTML is
+/// loaded from disk at request time — see [`super::static_assets`].
+///
 /// GET /terrain-viewer
-pub async fn terrain_viewer() -> impl IntoResponse {
-    Html(VIEWER_HTML)
+pub async fn terrain_viewer() -> axum::response::Response {
+    super::static_assets::serve_html("terrain_viewer.html")
 }
 
 /// GET /terrain/layer.json
