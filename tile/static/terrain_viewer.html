@@ -103,8 +103,11 @@
       homeButton: false,
       navigationHelpButton: false,
       sceneModePicker: false,
-      infoBox: false,
-      selectionIndicator: false,
+      // Enable infoBox + selectionIndicator so clicking a 3D Tiles
+      // feature (LOD1 building) opens its attribute table — handy when
+      // sanity-checking PLATEAU data in this debug viewer.
+      infoBox: true,
+      selectionIndicator: true,
     });
 
     // Fixed clock at 10:00 JST so lighting & shadows are consistent.
