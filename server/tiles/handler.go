@@ -8,13 +8,17 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
 )
 
-const modelKey = "tiles"
+const (
+	modelKey = "tiles"
+	tilesTTL = 3 * time.Minute
+)
 
 //go:embed darkStyle.json
 var darkStyle []byte
@@ -34,11 +38,14 @@ type Config struct {
 }
 
 type Handler struct {
-	pcms    *plateaucms.CMS
-	lock    sync.RWMutex
-	host    *url.URL
-	tileURL *url.URL
-	tiles   Tiles
+	pcms        *plateaucms.CMS
+	lock        sync.RWMutex
+	host        *url.URL
+	tileURL     *url.URL
+	tiles       Tiles
+	fetchedAt   time.Time
+	refreshLock sync.Mutex
+	now         func() time.Time // overridable for tests
 }
 
 func New(ctx context.Context, conf Config) (*Handler, error) {
@@ -67,26 +74,67 @@ func New(ctx context.Context, conf Config) (*Handler, error) {
 		pcms:    pcms,
 		host:    host,
 		tileURL: tileURL,
+		now:     time.Now,
 	}, nil
 }
 
 func (h *Handler) Init(ctx context.Context) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+	if _, err := h.refresh(ctx); err != nil {
+		log.Errorfc(ctx, "tiles: failed to init tiles: %v", err)
+	}
+}
+
+// getTiles returns the cached tiles, refreshing from the CMS if the cache has
+// expired. On refresh failure it logs and serves the stale cache so a
+// transient CMS hiccup doesn't blank out /tiles/config.json.
+func (h *Handler) getTiles(ctx context.Context) Tiles {
+	h.lock.RLock()
+	cached, fetchedAt := h.tiles, h.fetchedAt
+	h.lock.RUnlock()
+
+	if !fetchedAt.IsZero() && h.now().Sub(fetchedAt) < tilesTTL {
+		return cached
+	}
+
+	tiles, err := h.refresh(ctx)
+	if err != nil {
+		log.Errorfc(ctx, "tiles: failed to refresh tiles: %v", err)
+		return cached
+	}
+	return tiles
+}
+
+// refresh fetches tiles from the CMS, deduplicating concurrent callers via
+// refreshLock so a stampede of /tiles/config.json requests after the TTL
+// expires only fans out to the CMS once.
+func (h *Handler) refresh(ctx context.Context) (Tiles, error) {
+	h.refreshLock.Lock()
+	defer h.refreshLock.Unlock()
+
+	h.lock.RLock()
+	fetchedAt := h.fetchedAt
+	cached := h.tiles
+	h.lock.RUnlock()
+	if !fetchedAt.IsZero() && h.now().Sub(fetchedAt) < tilesTTL {
+		return cached, nil
+	}
 
 	tiles, err := initTiles(ctx, h.pcms)
 	if err != nil {
-		log.Errorfc(ctx, "tiles: failed to init tiles: %v", err)
-		return
+		return nil, err
 	}
 
+	h.lock.Lock()
 	h.tiles = tiles
-	if len(h.tiles) == 0 {
-		log.Debugfc(ctx, "tiles: no tiles found")
-		return
-	}
+	h.fetchedAt = h.now()
+	h.lock.Unlock()
 
-	log.Debugfc(ctx, "tiles: initialized: \n%s", h.tiles)
+	if len(tiles) == 0 {
+		log.Debugfc(ctx, "tiles: no tiles found")
+	} else {
+		log.Debugfc(ctx, "tiles: refreshed: \n%s", tiles)
+	}
+	return tiles, nil
 }
 
 func (h *Handler) Route(g *echo.Group) {
@@ -114,17 +162,14 @@ func (h *Handler) redirectToTileServer(c echo.Context) error {
 
 // GetConfig returns the tile server configuration in JSON format
 func (h *Handler) GetConfig(c echo.Context) error {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
+	tiles := h.getTiles(c.Request().Context())
 	baseURL := h.getBaseURL(c)
 
-	if h.tiles == nil {
+	if tiles == nil {
 		return c.JSON(http.StatusOK, Tiles{}.ToTileServerConfig(baseURL))
 	}
 
-	config := h.tiles.ToTileServerConfig(baseURL)
-	return c.JSON(http.StatusOK, config)
+	return c.JSON(http.StatusOK, tiles.ToTileServerConfig(baseURL))
 }
 
 // GetStyle returns the MapLibre style JSON for the specified style
