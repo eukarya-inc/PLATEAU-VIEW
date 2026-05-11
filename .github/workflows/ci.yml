@@ -486,7 +486,7 @@ jobs:
       - build-cms-server
       - build-cms-worker
       - build-cms-web
-    if: ${{ !failure() && needs.build-cms-server.result == 'success' && needs.build-cms-worker.result == 'success' && needs.build-cms-web.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && (needs.build-cms-server.result == 'success' || needs.build-cms-worker.result == 'success' || needs.build-cms-web.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deployment
