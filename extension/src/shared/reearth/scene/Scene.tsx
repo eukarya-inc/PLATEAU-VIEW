@@ -2,6 +2,7 @@
 
 import { FC, useEffect } from "react";
 
+import { useTerrainNormal, useTerrainUrl } from "../../states/environmentVariables";
 import { AmbientOcclusion, Antialias, CameraPosition, Tile, TileLabels } from "../types";
 import { isReEarthAPIv2 } from "../utils/reearth";
 
@@ -105,6 +106,8 @@ export const Scene: FC<SceneProps> = ({
   antialias,
   initialCamera,
 }) => {
+  const [terrainUrl] = useTerrainUrl();
+  const [terrainNormal] = useTerrainNormal();
   useEffect(() => {
     if (isReEarthAPIv2(window?.reearth)) {
       window.reearth?.viewer?.overrideProperty?.({
@@ -179,8 +182,9 @@ export const Scene: FC<SceneProps> = ({
         tileLabels,
         terrain: {
           enabled: true,
-          type: "cesiumion",
-          normal: true,
+          type: terrainUrl ? "cesium" : "cesiumion",
+          ...(terrainUrl ? { url: terrainUrl } : {}),
+          normal: terrainNormal ?? true,
           ...(terrainHeatmap
             ? {
                 elevationHeatMap: {
@@ -204,11 +208,13 @@ export const Scene: FC<SceneProps> = ({
         },
         assets: {
           cesium: {
-            terrain: {
-              ionAccessToken:
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
-              ionAsset: "4195264",
-            },
+            terrain: terrainUrl
+              ? {}
+              : {
+                  ionAccessToken:
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
+                  ionAsset: "4195264",
+                },
           },
         },
       });
@@ -269,12 +275,16 @@ export const Scene: FC<SceneProps> = ({
         tileLabels,
         terrain: {
           terrain: true,
-          terrainType: "cesiumion",
+          terrainType: terrainUrl ? "cesium" : "cesiumion",
           depthTestAgainstTerrain: hideUnderground,
-          terrainCesiumIonAccessToken:
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
-          terrainCesiumIonAsset: "4195264",
-          terrainNormal: true,
+          ...(terrainUrl
+            ? { terrainUrl }
+            : {
+                terrainCesiumIonAccessToken:
+                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
+                terrainCesiumIonAsset: "4195264",
+              }),
+          terrainNormal: terrainNormal ?? true,
           ...(terrainHeatmap
             ? {
                 heatmapType: "custom",
@@ -325,6 +335,8 @@ export const Scene: FC<SceneProps> = ({
     initialCamera,
     enterUnderground,
     hideUnderground,
+    terrainUrl,
+    terrainNormal,
   ]);
 
   useEffect(() => {

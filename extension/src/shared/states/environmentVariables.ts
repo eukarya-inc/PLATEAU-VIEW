@@ -56,6 +56,12 @@ export const usePlateauGeojsonUrl = () => useAtom(plateauGeojsonUrl);
 const datasetAttributesURL = atom<string | undefined>(undefined);
 export const useDatasetAttributesURL = () => useAtom(datasetAttributesURL);
 
+const terrainUrl = atom<string | undefined>(undefined);
+export const useTerrainUrl = () => useAtom(terrainUrl);
+
+const terrainNormal = atom<boolean | undefined>(undefined);
+export const useTerrainNormal = () => useAtom(terrainNormal);
+
 // notification setting
 export const isEnableAtom = atom(false);
 export const useIsEnable = () => useAtom(isEnableAtom);

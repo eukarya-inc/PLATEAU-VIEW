@@ -36,6 +36,8 @@ import {
   useFinishTime,
   useDatasetAttributesURL,
   useCityGMLApiUrl,
+  useTerrainUrl,
+  useTerrainNormal,
 } from "../states/environmentVariables";
 
 type Props = {
@@ -63,6 +65,8 @@ type Props = {
   customMenuLogo?: string;
   customPedestrian?: CameraPosition;
   customSiteUrl?: string;
+  terrainUrl?: string;
+  terrainNormal?: boolean;
   // Notification setting
   isEnable?: boolean;
   content?: string;
@@ -93,6 +97,8 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   customMenuLogo,
   customPedestrian,
   customSiteUrl,
+  terrainUrl,
+  terrainNormal,
   geojsonURL,
   isEnable,
   content,
@@ -211,6 +217,20 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
       setPlateauGeojsonUrlState(geojsonURL);
     }
   }, [geojsonURL, geojsonURLState, setPlateauGeojsonUrlState]);
+
+  const [terrainUrlState, setTerrainUrlState] = useTerrainUrl();
+  useEffect(() => {
+    if (terrainUrl !== terrainUrlState) {
+      setTerrainUrlState(terrainUrl);
+    }
+  }, [terrainUrl, terrainUrlState, setTerrainUrlState]);
+
+  const [terrainNormalState, setTerrainNormalState] = useTerrainNormal();
+  useEffect(() => {
+    if (terrainNormal !== terrainNormalState) {
+      setTerrainNormalState(terrainNormal);
+    }
+  }, [terrainNormal, terrainNormalState, setTerrainNormalState]);
 
   const [datasetAttributesURLState, setDatasetAttributesURLState] = useDatasetAttributesURL();
   useEffect(() => {
