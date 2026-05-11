@@ -34,7 +34,8 @@ jobs:
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         id: build-push-image
         with:
-          context: ./cms/worker
+          context: ./cms
+          file: ./cms/worker/Dockerfile
           platforms: linux/amd64
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
@@ -68,7 +69,7 @@ jobs:
         id: build-push-image
         with:
           context: ./cms/worker
-          file: decompressor.Dockerfile
+          file: ./cms/worker/decompressor.Dockerfile
           platforms: linux/amd64
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
@@ -101,8 +102,8 @@ jobs:
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         id: build-push-image
         with:
-          context: ./cms/worker
-          file: copier.Dockerfile
+          context: ./cms
+          file: ./cms/worker/copier.Dockerfile
           platforms: linux/amd64
           tags: ${{ env.IMAGE_NAME }}
           cache-from: type=gha
