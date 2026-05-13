@@ -39,6 +39,11 @@ var ErrDatacatalogUnavailable = errors.New("datacatalog is currently unavailable
 type Repo interface {
 	QueryResolver
 	Name() string
+	// Revision returns an opaque token that changes whenever the repository's
+	// underlying data changes. Stable across requests that observe the same
+	// data, so callers can derive cheap HTTP ETags from it instead of
+	// hashing the full response body.
+	Revision() string
 }
 
 type Resolver struct {

@@ -24,6 +24,10 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 			return err
 		}
 
+		if _, matched := setRevisionETag(c, merged.Revision()); matched {
+			return c.NoContent(http.StatusNotModified)
+		}
+
 		ctx := c.Request().Context()
 		simple, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
@@ -53,6 +57,6 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 		candidates := composite3dtiles.Select(inputs, spec)
 		tileset := composite3dtiles.Build(candidates, spec.Type)
 
-		return writeJSONWithETag(c, tileset)
+		return c.JSON(http.StatusOK, tileset)
 	}
 }

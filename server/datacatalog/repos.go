@@ -120,6 +120,10 @@ func (h *ReposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
 			return err
 		}
 
+		if _, matched := setRevisionETag(c, merged.Revision()); matched {
+			return c.NoContent(http.StatusNotModified)
+		}
+
 		ctx := c.Request().Context()
 		res, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {

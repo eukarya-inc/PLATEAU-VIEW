@@ -2,6 +2,8 @@ package plateauapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 
@@ -25,6 +27,7 @@ type InMemoryRepo struct {
 	ctx                 *InMemoryRepoContext
 	areasForDataTypes   map[string]map[AreaCode]bool
 	areasWithoutDataset map[ID]struct{}
+	revision            string
 }
 
 var _ Repo = (*InMemoryRepo)(nil)
@@ -42,10 +45,64 @@ func (c *InMemoryRepo) Name() string {
 	return fmt.Sprintf("inmemory(%s)", c.ctx.Name)
 }
 
+func (c *InMemoryRepo) Revision() string {
+	return c.revision
+}
+
 func (c *InMemoryRepo) SetContext(ctx *InMemoryRepoContext) {
 	c.ctx = ctx
 	c.areasForDataTypes = areasForDatasetTypes(ctx.Datasets.All())
 	c.areasWithoutDataset = areasWithoutDataset(ctx.Datasets, ctx.Areas)
+	c.revision = computeContextRevision(ctx)
+}
+
+// computeContextRevision returns a deterministic short token that summarizes
+// the data observable through the context. Two contexts that resolve to the
+// same data (across processes, across cache reloads) produce the same token,
+// while any change to the dataset set, the CityGML index, or the available
+// years flips it — exactly the granularity needed for an HTTP ETag.
+//
+// We hash only identity-level signals (IDs, counts, years) rather than the
+// full payload so the cost stays O(N) in number of entries with a small
+// constant, even for the largest repo. The result is hex-truncated to keep
+// downstream ETag headers compact.
+func computeContextRevision(ctx *InMemoryRepoContext) string {
+	if ctx == nil {
+		return ""
+	}
+	h := sha256.New()
+	fmt.Fprintf(h, "n=%s|", ctx.Name)
+
+	years := append([]int(nil), ctx.Years...)
+	slices.Sort(years)
+	fmt.Fprintf(h, "y=%d:", len(years))
+	for _, y := range years {
+		fmt.Fprintf(h, "%d,", y)
+	}
+
+	allDatasets := ctx.Datasets.All()
+	dsIDs := make([]string, 0, len(allDatasets))
+	for _, d := range allDatasets {
+		dsIDs = append(dsIDs, string(d.GetID()))
+	}
+	slices.Sort(dsIDs)
+	fmt.Fprintf(h, "|d=%d:", len(dsIDs))
+	for _, id := range dsIDs {
+		fmt.Fprintf(h, "%s,", id)
+	}
+
+	cgIDs := make([]string, 0, len(ctx.CityGML))
+	for id := range ctx.CityGML {
+		cgIDs = append(cgIDs, string(id))
+	}
+	slices.Sort(cgIDs)
+	fmt.Fprintf(h, "|c=%d:", len(cgIDs))
+	for _, id := range cgIDs {
+		fmt.Fprintf(h, "%s,", id)
+	}
+
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum[:16])
 }
 
 func (c *InMemoryRepo) Node(ctx context.Context, id ID) (Node, error) {

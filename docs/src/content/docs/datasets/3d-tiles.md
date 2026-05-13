@@ -207,7 +207,7 @@ viewer.scene.primitives.add(tileset);
 
 #### HTTP キャッシュ
 
-`/datacatalog/3dtiles/{spec}/tileset.json`、`/datacatalog/mvt/{spec}/tilejson.json`、`/datacatalog/citygml/{spec}/citygml.zip` の各エンドポイントは、レスポンス内容（CityGML リダイレクトは転送先 URL）から導出した **弱 ETag** (`W/"..."`) と `Cache-Control: no-cache, must-revalidate` を返します。クライアントが `If-None-Match` ヘッダを付けて再リクエストすれば、内容が変わっていなければ `304 Not Modified` で短絡し、ボディは送信されません。CMS 側でデータが差し替わると ETag も変わるため、`-latest` URL を使っていても安全に最新データへ追従できます。
+`/datacatalog/plateau-datasets`、`/datacatalog/3dtiles/{spec}/tileset.json`、`/datacatalog/mvt/{spec}/tilejson.json`、`/datacatalog/citygml/{spec}/citygml.zip` の各エンドポイントは、データカタログのリポジトリリビジョンと URL から導出した **弱 ETag** (`W/"..."`) と `Cache-Control: no-cache, must-revalidate` を返します。クライアントが `If-None-Match` ヘッダを付けて再リクエストすれば、データが変わっていなければ `304 Not Modified` で短絡し、ボディは送信されません（サーバ側でも本処理をスキップするため高速）。CMS 側でデータが差し替わると ETag も変わるため、`-latest` URL を使っていても安全に最新データへ追従できます。
 
 ### 4.3. 自治体単位の MVT TileJSON（MapLibre などから利用）
 

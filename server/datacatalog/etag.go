@@ -3,8 +3,7 @@ package datacatalog
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"net/http"
+	"fmt"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -16,50 +15,26 @@ import (
 // allow caches to serve responses without a conditional GET.
 const stableURLCacheControl = "no-cache, must-revalidate"
 
-// writeJSONWithETag serializes v to JSON, attaches a weak ETag derived from
-// the payload, sets Cache-Control for stable composite URLs, and either
-// returns 304 when If-None-Match matches or writes the JSON body.
-func writeJSONWithETag(c echo.Context, v any) error {
-	body, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return writeBytesWithETag(c, echo.MIMEApplicationJSON, body)
-}
+// setRevisionETag attaches a weak ETag derived from the repo revision, request
+// host, and URL path, plus the standard stable-URL Cache-Control header. The
+// returned bool reports whether the client's If-None-Match already matches —
+// when true the caller should return 304 without producing a body, skipping
+// any expensive downstream computation.
+//
+// Using the repo revision instead of hashing the response body lets the
+// 304 fast path fire before we serialize multi-megabyte responses, and keeps
+// ETags stable across replicas that share the same underlying data.
+func setRevisionETag(c echo.Context, revision string) (etag string, matched bool) {
+	req := c.Request()
+	h := sha256.New()
+	fmt.Fprintf(h, "%s|%s|%s", revision, req.Host, req.URL.Path)
+	etag = `W/"` + hex.EncodeToString(h.Sum(nil)[:16]) + `"`
 
-// writeBytesWithETag is the bytes-oriented variant of writeJSONWithETag.
-func writeBytesWithETag(c echo.Context, contentType string, body []byte) error {
-	etag := weakETag(body)
-	h := c.Response().Header()
-	h.Set("ETag", etag)
-	h.Set(echo.HeaderCacheControl, stableURLCacheControl)
+	resp := c.Response().Header()
+	resp.Set("ETag", etag)
+	resp.Set(echo.HeaderCacheControl, stableURLCacheControl)
 
-	if matchesIfNoneMatch(c.Request().Header.Get("If-None-Match"), etag) {
-		return c.NoContent(http.StatusNotModified)
-	}
-	return c.Blob(http.StatusOK, contentType, body)
-}
-
-// redirectWithETag emits a 302 to target while attaching a weak ETag derived
-// from the target URL. The redirect target itself can change (e.g.
-// -latest rolling to a newer year, or an asset being re-uploaded), so we
-// require revalidation and short-circuit to 304 when the client already
-// holds the same target.
-func redirectWithETag(c echo.Context, target string) error {
-	etag := weakETag([]byte(target))
-	h := c.Response().Header()
-	h.Set("ETag", etag)
-	h.Set(echo.HeaderCacheControl, stableURLCacheControl)
-
-	if matchesIfNoneMatch(c.Request().Header.Get("If-None-Match"), etag) {
-		return c.NoContent(http.StatusNotModified)
-	}
-	return c.Redirect(http.StatusFound, target)
-}
-
-func weakETag(body []byte) string {
-	sum := sha256.Sum256(body)
-	return `W/"` + hex.EncodeToString(sum[:16]) + `"`
+	return etag, matchesIfNoneMatch(req.Header.Get("If-None-Match"), etag)
 }
 
 // matchesIfNoneMatch reports whether the If-None-Match header value selects

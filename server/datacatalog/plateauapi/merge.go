@@ -48,6 +48,19 @@ func (m *Merger) Name() string {
 	return fmt.Sprintf("merger(%s)", strings.Join(names, ","))
 }
 
+// Revision joins each child's revision so the merged token changes whenever
+// any child's data changes. Order-sensitive on purpose: a different repo
+// composition is a different revision even if the underlying data overlaps.
+func (m *Merger) Revision() string {
+	revs := lo.Map(m.repos, func(r Repo, _ int) string {
+		if r == nil {
+			return ""
+		}
+		return r.Revision()
+	})
+	return strings.Join(revs, "|")
+}
+
 func (m *Merger) Node(ctx context.Context, id ID) (Node, error) {
 	nodes, err := getRepoResults(m.repos, func(r Repo) (Node, error) {
 		return r.Node(ctx, id)

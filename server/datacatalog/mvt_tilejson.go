@@ -24,6 +24,10 @@ func (h *ReposHandler) MVTTileJSONAPI() echo.HandlerFunc {
 			return err
 		}
 
+		if _, matched := setRevisionETag(c, merged.Revision()); matched {
+			return c.NoContent(http.StatusNotModified)
+		}
+
 		ctx := c.Request().Context()
 		simple, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
@@ -67,6 +71,6 @@ func (h *ReposHandler) MVTTileJSONAPI() echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusNotFound, "no matching MVT dataset")
 		}
 
-		return writeJSONWithETag(c, mvttilejson.Build(*match))
+		return c.JSON(http.StatusOK, mvttilejson.Build(*match))
 	}
 }

@@ -29,6 +29,10 @@ func (h *ReposHandler) CityGMLRedirectAPI() echo.HandlerFunc {
 			return err
 		}
 
+		if _, matched := setRevisionETag(c, merged.Revision()); matched {
+			return c.NoContent(http.StatusNotModified)
+		}
+
 		ctx := c.Request().Context()
 		simple, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
@@ -51,7 +55,7 @@ func (h *ReposHandler) CityGMLRedirectAPI() echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusNotFound, "no matching CityGML dataset")
 		}
 
-		return redirectWithETag(c, match.URL)
+		return c.Redirect(http.StatusFound, match.URL)
 	}
 }
 

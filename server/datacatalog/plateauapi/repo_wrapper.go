@@ -115,6 +115,22 @@ func (a *RepoWrapper) Name() string {
 	return a.repo.Name()
 }
 
+// Revision delegates to the wrapped repo while holding the read lock, so the
+// returned token corresponds to the data observable through the wrapper at
+// this instant. Empty when no repo is set.
+func (a *RepoWrapper) Revision() string {
+	if a == nil {
+		return ""
+	}
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	r := a.GetRepo()
+	if r == nil {
+		return ""
+	}
+	return r.Revision()
+}
+
 func (a *RepoWrapper) Node(ctx context.Context, id ID) (res Node, err error) {
 	err = a.use(func(r Repo) (err error) {
 		res, err = r.Node(ctx, id)
