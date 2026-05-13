@@ -71,6 +71,45 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
 
+### Preparing COG DEM overlays
+
+When you build a COG to use as a `dem` overlay, **how you generate the overviews matters a lot at low zooms**. The default `gdal_translate -of COG` pipeline builds overviews via an averaging step that **does not honor the band's `nodata` value** — so any nodata sentinel falling inside the valid elevation range (e.g. `255` used by PLATEAU's 5 m DEM tiles) is averaged together with real elevations and produces "half-values" like `128` or `64` at every nodata-vs-data boundary pixel in the overview.
+
+When the tile server then reads that overview at low zoom, it can only mask pixels that match the nodata value exactly. The half-values pass through as if they were real elevations, and `CompositeDemProvider` paints them over the base DEM — producing tall thin "spikes" along every shoreline / mask edge at low zooms. (Even nodata values *outside* the elevation range, e.g. `-9999`, benefit from the recipe below because `gdaladdo` skips them properly during averaging.)
+
+The fix is to **build overviews with `gdaladdo` first** (which is nodata-aware) and then **let the COG driver copy them** instead of regenerating:
+
+```bash
+# 1. Translate to a plain tiled GeoTIFF (no overviews yet).
+gdal_translate -of GTiff \
+  -co COMPRESS=ZSTD -co PREDICTOR=3 -co TILED=YES -co BIGTIFF=IF_SAFER \
+  input.tif tmp.tif
+
+# 2. Build nodata-aware overviews with gdaladdo.
+gdaladdo -r average tmp.tif 2 4 8 16 32
+
+# 3. Wrap as COG, copying the (clean) overviews we just built.
+gdal_translate -of COG \
+  -co COMPRESS=ZSTD -co PREDICTOR=3 \
+  -co COPY_SRC_OVERVIEWS=YES -co BIGTIFF=IF_SAFER \
+  tmp.tif output.tif
+
+rm tmp.tif tmp.tif.ovr
+```
+
+Make sure the band's `nodata` value is set on the input before step 2 (`gdal_edit.py -a_nodata <value> input.tif` if it isn't). `gdaladdo` reads it from the band metadata.
+
+> ⚠️ Don't skip step 2 and rely on `-of COG` to build overviews — as of GDAL 3.x its overview averaging path silently ignores nodata, and you'll get the spike artifact even though the file *looks* fine in QGIS (which builds its own preview pyramid).
+
+To re-check after build:
+
+```bash
+gdalinfo -mm output.tif | grep -E "(NoData|Overviews)"
+# Inspect overview values near a coast / mask boundary:
+gdal_translate -of GTiff -outsize 200 200 -srcwin <x> <y> 100 100 \
+  output.tif.ovr boundary-sample.tif
+```
+
 ## Quick Start
 
 ### Build
