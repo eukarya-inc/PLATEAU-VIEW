@@ -97,7 +97,7 @@ type Config struct {
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
 	Tile_URL                           string   `pp:",omitempty"` // If set, redirects /tiles/* to this URL (except config.json and styles)
-	Proxy_AllowedHosts                 []string `pp:",omitempty"` // Allow-list of hostnames the /proxy/* endpoint may forward to. Empty disables the endpoint.
+	Proxy_ODPT_ConsumerKey             string   `pp:",omitempty"` // ODPT API consumerKey injected by /odpt-proxy/*. Empty disables the endpoint.
 }
 
 func NewConfig() (*Config, error) {
@@ -260,7 +260,7 @@ func (c *Config) LodStat() lodstat.Config {
 
 func (c *Config) Proxy() proxy.Config {
 	return proxy.Config{
-		AllowedHosts: c.Proxy_AllowedHosts,
+		ODPTConsumerKey: c.Proxy_ODPT_ConsumerKey,
 	}
 }
 

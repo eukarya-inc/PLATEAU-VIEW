@@ -65,14 +65,14 @@ func Services(conf *Config) (srv []*Service, _ error) {
 
 func Proxy(conf *Config) (*Service, error) {
 	c := conf.Proxy()
-	if len(c.AllowedHosts) == 0 {
+	if c.ODPTConsumerKey == "" {
 		return nil, nil
 	}
 
 	return &Service{
-		Name: "proxy",
+		Name: "odpt-proxy",
 		Echo: func(g *echo.Group) error {
-			proxy.Echo(g.Group("/proxy"), c)
+			proxy.Echo(g.Group("/odpt-proxy"), c)
 			return nil
 		},
 	}, nil
