@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, etc.) when working with code in this repository.
+
+> **NOTE for agents**: `CLAUDE.md` at the repo root is a symlink to this file (`AGENTS.md`). Edit `AGENTS.md` — `CLAUDE.md` will follow automatically. Don't try to edit `CLAUDE.md` as a separate file.
 
 ## Overview
 
@@ -152,6 +154,16 @@ The core provides an engine-agnostic map abstraction:
 - Environment variables configured in `.env` files (not committed)
 - **When investigating or modifying `/server`**: Always read `/server/CLAUDE.md` or `/server/AGENTS.md` first before using the Explore tool or making changes. These files contain critical server-specific architecture, patterns, and development guidelines.
 - **When investigating or modifying `/tile`**: Always read `/tile/CLAUDE.md` first. This contains Rust-specific development guidelines, environment variables, and layer type documentation.
+
+## Agent Skills
+
+`/skills` 配下に AI コーディングエージェント向けの Agent Skills（[agentskills.io](https://agentskills.io/specification)）を開発する。配布は [Project-PLATEAU/skills](https://github.com/Project-PLATEAU/skills) ミラー経由。リリース手順は `/skills/RELEASE.md` 参照。
+
+新しいスキルを追加するときは、`.claude/skills/<name>` から `../../skills/<name>` への相対シンボリックリンクも作って一緒にコミットすること。これでローカルの Claude Code でも自動的にスキルが利用可能になる。
+
+```bash
+ln -s ../../skills/<name> .claude/skills/<name>
+```
 
 ## Deployment Scripts
 

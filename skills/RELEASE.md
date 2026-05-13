@@ -25,6 +25,14 @@ git push git@github.com:Project-PLATEAU/skills.git \
 
 `refs/remotes/...:refs/heads/...` のように両側を完全修飾する必要がある（`origin/skills-dist:main` のような短縮形は git に拒否される）。通常は fast-forward push で済む。両ブランチの履歴が乖離してしまった場合は `--force` を付けて整合させる。
 
+## 新しいスキルを追加するとき
+
+ローカルの Claude Code でも自動的に有効になるよう、`.claude/skills/<name>` から `../../skills/<name>` への相対シンボリックリンクも作って一緒にコミットする。
+
+```bash
+ln -s ../../skills/<name> .claude/skills/<name>
+```
+
 ## バリデーション
 
 PR 時に `ci-skills.yml` が `gh skill publish --dry-run` で agentskills.io 仕様への準拠をチェックする。
