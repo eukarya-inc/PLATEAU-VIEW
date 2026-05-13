@@ -141,12 +141,8 @@ const CATALOG_RASTER_FORMATS: &[&str] = &["png", "webp", "avif"];
 /// catalog (terrain itself appears under the built-in `terrain` entry).
 const DEM_SOURCE_KEY: &str = "dem";
 
-pub async fn get_catalog(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn get_catalog(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let config = state.config_manager.get().await;
-    let (scheme, host) = crate::server::terrain::external_origin(&headers);
 
     let mut tiles: Vec<CatalogEntry> = config
         .sources
@@ -158,7 +154,7 @@ pub async fn get_catalog(
                 .map(|fmt| {
                     (
                         (*fmt).to_string(),
-                        format!("{scheme}://{host}/tiles/{name}/tilejson.json?format={fmt}"),
+                        format!("/tiles/{name}/tilejson.json?format={fmt}"),
                     )
                 })
                 .collect();
@@ -172,13 +168,17 @@ pub async fn get_catalog(
 
     // Built-in terrain endpoints aren't in `config.sources` (they're driven
     // by env vars), so register them by hand. Names match the URL prefixes.
+    // URLs are origin-relative for the same reason as the tilejson handlers:
+    // fronting proxies (Cloud Run / Cloudflare) sometimes rewrite `Host` to
+    // `localhost`, so an absolute URL built from request headers can't be
+    // trusted. Clients resolve these against the catalog's own URL.
     let raster_dem_urls = |slug: &str| -> std::collections::BTreeMap<String, String> {
         CATALOG_RASTER_FORMATS
             .iter()
             .map(|fmt| {
                 (
                     (*fmt).to_string(),
-                    format!("{scheme}://{host}/{slug}/tilejson.json?format={fmt}"),
+                    format!("/{slug}/tilejson.json?format={fmt}"),
                 )
             })
             .collect()
@@ -190,7 +190,7 @@ pub async fn get_catalog(
         ),
         urls: std::iter::once((
             "quantized-mesh".to_string(),
-            format!("{scheme}://{host}/terrain/layer.json"),
+            "/terrain/layer.json".to_string(),
         ))
         .collect(),
     });
@@ -397,7 +397,6 @@ fn default_format() -> String {
 /// Get TileJSON metadata for a source.
 pub async fn get_tilejson(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
     Path(name): Path<String>,
     axum::extract::Query(query): axum::extract::Query<TileJsonQuery>,
 ) -> Response {
@@ -418,10 +417,12 @@ pub async fn get_tilejson(
         }
     };
 
-    // Build tile URL template using the externally-visible origin (front
-    // proxies often rewrite `Host` to `localhost`, so prefer `X-Forwarded-*`).
-    let (scheme, host) = crate::server::terrain::external_origin(&headers);
-    let tile_url = format!("{scheme}://{host}/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
+    // Origin-relative tile URL — fronting proxies (Cloud Run / Cloudflare)
+    // sometimes rewrite `Host` / `X-Forwarded-Host` to `localhost`, so an
+    // absolute URL built from request headers can't be trusted. MapLibre and
+    // Cesium resolve relative URLs against the tilejson location, matching
+    // the behavior of the terrain `raster_tilejson` handler.
+    let tile_url = format!("/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
 
     let tilejson = TileJson {
         tilejson: "3.0.0",

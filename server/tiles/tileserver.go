@@ -73,10 +73,17 @@ func (t Tiles) ToTileServerConfig(baseURL string) TileServerConfig {
 		}
 	}
 
-	// Add MapLibre style sources
+	// Add MapLibre style sources. These are PLATEAU VIEW's default basemaps
+	// — MapLibre-rendered styles built on top of GSI's vector tiles, tuned
+	// so that 3D objects like building models look good on top.
+	maplibreDescriptions := map[string]string{
+		"dark-map":  "国土地理院のベクトルタイルをもとに MapLibre でレンダリングした、PLATEAU VIEW のデフォルトの暗色ベースマップ。建築物モデルなどの 3D オブジェクトが美しく映えるよう、見栄えを重視して調整したスタイルです。",
+		"light-map": "国土地理院のベクトルタイルをもとに MapLibre でレンダリングした、PLATEAU VIEW のデフォルトの明色ベースマップ。建築物モデルなどの 3D オブジェクトが美しく映えるよう、見栄えを重視して調整したスタイルです。",
+	}
 	for _, style := range []string{"dark-map", "light-map"} {
 		styleURL := baseURL + "/tiles/styles/" + style
 		sources[style] = TileServerSourceConfig{
+			Description: maplibreDescriptions[style],
 			Layers: []TileServerLayerConfig{
 				{
 					Type: "maplibre",

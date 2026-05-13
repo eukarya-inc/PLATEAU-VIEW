@@ -169,42 +169,6 @@ fn digest(s: &str) -> String {
     format!("{:x}", xxh64(s.as_bytes(), 0))
 }
 
-/// Resolve the public `(scheme, host)` for URLs we embed in JSON responses.
-/// Front proxies (Cloud Run, Cloudflare) often rewrite the `Host` header to
-/// `localhost`, so we prefer `Forwarded` / `X-Forwarded-Host` /
-/// `X-Forwarded-Proto` when present, and only fall back to the `Host`
-/// header (with a localhost-aware scheme guess) when nothing else is given.
-pub fn external_origin(headers: &HeaderMap) -> (String, String) {
-    let proto = headers
-        .get("x-forwarded-proto")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim().to_string());
-
-    let host = headers
-        .get("x-forwarded-host")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim().to_string())
-        .or_else(|| {
-            headers
-                .get(header::HOST)
-                .and_then(|h| h.to_str().ok())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| "localhost".to_string());
-
-    let scheme = proto.unwrap_or_else(|| {
-        if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-            "http".to_string()
-        } else {
-            "https".to_string()
-        }
-    });
-
-    (scheme, host)
-}
-
 // ─────────────────────────────── Handlers ───────────────────────────────
 
 /// Cesium viewer for quick eyeballing of terrain output. Source HTML is
