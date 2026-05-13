@@ -13,7 +13,7 @@ eukarya-inc/PLATEAU-VIEW (skills-dist)   ← agentskills.io レイアウト
 Project-PLATEAU/skills (main)            ← gh skill install の対象
 ```
 
-`skills/` 配下の変更が `main` に入ると `build-skills-dist` ワークフローが発火し、`skills-dist` ブランチを再生成する。`skills-dist` には `README.md` がルート、各スキルが `skills/<name>/SKILL.md` にある agentskills.io 規約の配置で入る。
+`skills/` 配下の変更が `main` に入ると `build-skills-dist` ワークフローが発火し、`skills-dist` ブランチに新しいコミットを **積み重ねる**。`skills-dist` には `README.md` がルート、各スキルが `skills/<name>/SKILL.md` にある agentskills.io 規約の配置で入る。履歴を残すので、配布リポジトリ側で `git log` を見れば各リリースのソース SHA が辿れる。
 
 ## 公開手順
 
@@ -23,7 +23,7 @@ git push git@github.com:Project-PLATEAU/skills.git \
   refs/remotes/origin/skills-dist:refs/heads/main
 ```
 
-`refs/remotes/...:refs/heads/...` のように両側を完全修飾する必要がある（`origin/skills-dist:main` のような短縮形は git に拒否される）。配布リポジトリは履歴を保たないミラー扱いなので、必要なら `--force` を付けて構わない。
+`refs/remotes/...:refs/heads/...` のように両側を完全修飾する必要がある（`origin/skills-dist:main` のような短縮形は git に拒否される）。通常は fast-forward push で済む。両ブランチの履歴が乖離してしまった場合は `--force` を付けて整合させる。
 
 ## バリデーション
 
