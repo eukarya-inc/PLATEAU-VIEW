@@ -71,13 +71,13 @@ func computeContextRevision(ctx *InMemoryRepoContext) string {
 		return ""
 	}
 	h := sha256.New()
-	fmt.Fprintf(h, "n=%s|", ctx.Name)
+	_, _ = fmt.Fprintf(h, "n=%s|", ctx.Name)
 
 	years := append([]int(nil), ctx.Years...)
 	slices.Sort(years)
-	fmt.Fprintf(h, "y=%d:", len(years))
+	_, _ = fmt.Fprintf(h, "y=%d:", len(years))
 	for _, y := range years {
-		fmt.Fprintf(h, "%d,", y)
+		_, _ = fmt.Fprintf(h, "%d,", y)
 	}
 
 	allDatasets := ctx.Datasets.All()
@@ -86,9 +86,9 @@ func computeContextRevision(ctx *InMemoryRepoContext) string {
 		dsIDs = append(dsIDs, string(d.GetID()))
 	}
 	slices.Sort(dsIDs)
-	fmt.Fprintf(h, "|d=%d:", len(dsIDs))
+	_, _ = fmt.Fprintf(h, "|d=%d:", len(dsIDs))
 	for _, id := range dsIDs {
-		fmt.Fprintf(h, "%s,", id)
+		_, _ = fmt.Fprintf(h, "%s,", id)
 	}
 
 	cgIDs := make([]string, 0, len(ctx.CityGML))
@@ -96,9 +96,9 @@ func computeContextRevision(ctx *InMemoryRepoContext) string {
 		cgIDs = append(cgIDs, string(id))
 	}
 	slices.Sort(cgIDs)
-	fmt.Fprintf(h, "|c=%d:", len(cgIDs))
+	_, _ = fmt.Fprintf(h, "|c=%d:", len(cgIDs))
 	for _, id := range cgIDs {
-		fmt.Fprintf(h, "%s,", id)
+		_, _ = fmt.Fprintf(h, "%s,", id)
 	}
 
 	sum := h.Sum(nil)
