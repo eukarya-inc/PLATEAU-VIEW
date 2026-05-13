@@ -180,10 +180,18 @@ func (i *CityItem) MetadataZipURLs() []string {
 }
 
 type PlateauFeatureItem struct {
-	ID          string                    `json:"id,omitempty" cms:"id"`
-	City        string                    `json:"city,omitempty" cms:"city,reference"`
-	CityGML     string                    `json:"citygml,omitempty" cms:"citygml,-"`
-	Data        []string                  `json:"data,omitempty" cms:"data,-"`
+	ID      string `json:"id,omitempty" cms:"id"`
+	City    string `json:"city,omitempty" cms:"city,reference"`
+	CityGML string `json:"citygml,omitempty" cms:"citygml,-"`
+	// CityGMLSize is the file size of the CityGML asset in bytes, or 0
+	// when unknown. Paired with CityGML.
+	CityGMLSize int64    `json:"citygml_size,omitempty" cms:"-"`
+	Data        []string `json:"data,omitempty" cms:"data,-"`
+	// AssetSizes maps every asset URL referenced from this item (CityGML,
+	// Data, Items[*].Data, MaxLOD) to its CMS totalSize in bytes. Entries
+	// missing from the CMS payload are absent. Lookup is by URL so callers
+	// don't need to keep parallel slices in sync.
+	AssetSizes  map[string]int64          `json:"asset_sizes,omitempty" cms:"-"`
 	Desc        string                    `json:"desc,omitempty" cms:"desc,textarea"`
 	Items       []PlateauFeatureItemDatum `json:"items,omitempty" cms:"items,group"`
 	Dic         string                    `json:"dic,omitempty" cms:"dic,textarea"`
@@ -287,11 +295,43 @@ func PlateauFeatureItemFrom(item *cms.Item, code string) (i *PlateauFeatureItem)
 
 	i.CreatedAt = item.CreatedAt
 	i.UpdatedAt = item.UpdatedAt
-	i.CityGML = valueToAssetURL(item.FieldByKey("citygml").GetValue())
-	i.Data = valueToAssetURLs(item.FieldByKey("data").GetValue())
-	i.MaxLOD = valueToAssetURL(item.FieldByKey("maxlod").GetValue())
+
+	sizes := map[string]int64{}
+	addSizes := func(refs []AssetRef) []string {
+		if len(refs) == 0 {
+			return nil
+		}
+		urls := make([]string, 0, len(refs))
+		for _, r := range refs {
+			urls = append(urls, r.URL)
+			if r.Size > 0 {
+				sizes[r.URL] = r.Size
+			}
+		}
+		return urls
+	}
+
+	cityGMLURL, cityGMLSize := valueToAsset(item.FieldByKey("citygml").GetValue())
+	i.CityGML = cityGMLURL
+	i.CityGMLSize = cityGMLSize
+	if cityGMLURL != "" && cityGMLSize > 0 {
+		sizes[cityGMLURL] = cityGMLSize
+	}
+
+	i.Data = addSizes(valueToAssets(item.FieldByKey("data").GetValue()))
+
+	maxLODURL, maxLODSize := valueToAsset(item.FieldByKey("maxlod").GetValue())
+	i.MaxLOD = maxLODURL
+	if maxLODURL != "" && maxLODSize > 0 {
+		sizes[maxLODURL] = maxLODSize
+	}
+
 	for ind, d := range i.Items {
-		i.Items[ind].Data = valueToAssetURLs(item.FieldByKeyAndGroup("data", d.ID).GetValue())
+		i.Items[ind].Data = addSizes(valueToAssets(item.FieldByKeyAndGroup("data", d.ID).GetValue()))
+	}
+
+	if len(sizes) > 0 {
+		i.AssetSizes = sizes
 	}
 	if i.FeatureType != "" {
 		// e.g. "建築物モデル（bldg）" -> Name="建築物モデル", FeatureType="bldg"
@@ -441,10 +481,33 @@ func RelatedItemFrom(item *cms.Item, featureTypes []FeatureType) (i *RelatedItem
 }
 
 func valueToAssetURL(v *cms.Value) string {
-	return anyToAssetURL(v.Interface())
+	url, _ := valueToAsset(v)
+	return url
 }
 
 func valueToAssetURLs(v *cms.Value) (res []string) {
+	for _, a := range valueToAssets(v) {
+		res = append(res, a.URL)
+	}
+	return
+}
+
+// valueToAsset extracts the URL and totalSize of a single CMS asset value.
+// size is 0 when unknown.
+func valueToAsset(v *cms.Value) (url string, size int64) {
+	return anyToAsset(v.Interface())
+}
+
+// AssetRef captures the URL and file size of a CMS asset. Size is 0 when
+// the CMS did not report a totalSize for the asset.
+type AssetRef struct {
+	URL  string
+	Size int64
+}
+
+// valueToAssets extracts each asset value (URL + totalSize) from a CMS
+// multi-asset field, preserving original order.
+func valueToAssets(v *cms.Value) (res []AssetRef) {
 	i := v.Interface()
 	if i == nil {
 		return
@@ -458,8 +521,8 @@ func valueToAssetURLs(v *cms.Value) (res []string) {
 	}
 
 	for _, v := range values {
-		if url := anyToAssetURL(v); url != "" {
-			res = append(res, url)
+		if url, size := anyToAsset(v); url != "" {
+			res = append(res, AssetRef{URL: url, Size: size})
 		}
 	}
 
@@ -467,15 +530,20 @@ func valueToAssetURLs(v *cms.Value) (res []string) {
 }
 
 func anyToAssetURL(v any) string {
+	url, _ := anyToAsset(v)
+	return url
+}
+
+func anyToAsset(v any) (url string, size int64) {
 	if v == nil {
-		return ""
+		return
 	}
 
 	m, ok := v.(map[string]any)
 	if !ok {
 		m2, ok := v.(map[any]any)
 		if !ok {
-			return ""
+			return
 		}
 
 		m = map[string]interface{}{}
@@ -486,12 +554,29 @@ func anyToAssetURL(v any) string {
 		}
 	}
 
-	url, ok := m["url"].(string)
-	if !ok {
-		return ""
+	url, _ = m["url"].(string)
+	if url == "" {
+		return "", 0
 	}
 
-	return url
+	// totalSize comes from the CMS Asset payload. It may be absent (older
+	// CMS responses), a JSON number that decodes as float64, or already
+	// typed as a numeric kind depending on how the value was serialized.
+	switch s := m["totalSize"].(type) {
+	case float64:
+		size = int64(s)
+	case int64:
+		size = s
+	case int:
+		size = int64(s)
+	case uint64:
+		size = int64(s)
+	case json.Number:
+		if n, err := s.Int64(); err == nil {
+			size = n
+		}
+	}
+	return
 }
 
 func geospatialjpURL(cityCode string, cityName string, year int) string {
@@ -502,11 +587,14 @@ func geospatialjpURL(cityCode string, cityName string, year int) string {
 }
 
 type GeospatialjpDataItem struct {
-	ID       string `json:"id,omitempty" cms:"id"`
-	City     string `json:"city,omitempty" cms:"city,reference"`
-	CityGML  string `json:"citygml,omitempty" cms:"citygml,asset"`
-	MaxLOD   string `json:"maxlod,omitempty" cms:"maxlod,asset"`
-	HasIndex bool   `json:"has_index,omitempty" cms:"-"`
+	ID      string `json:"id,omitempty" cms:"id"`
+	City    string `json:"city,omitempty" cms:"city,reference"`
+	CityGML string `json:"citygml,omitempty" cms:"citygml,asset"`
+	// CityGMLSize is the CMS-reported totalSize of the CityGML zip in
+	// bytes, or 0 when unknown.
+	CityGMLSize int64  `json:"citygml_size,omitempty" cms:"-"`
+	MaxLOD      string `json:"maxlod,omitempty" cms:"maxlod,asset"`
+	HasIndex    bool   `json:"has_index,omitempty" cms:"-"`
 }
 
 func GeospatialjpDataItemFrom(item *cms.Item) *GeospatialjpDataItem {
@@ -521,14 +609,15 @@ func GeospatialjpDataItemFrom(item *cms.Item) *GeospatialjpDataItem {
 	it := itemType{}
 	item.Unmarshal(&it)
 
-	citygml := anyToAssetURL(it.CityGML)
+	citygml, citygmlSize := anyToAsset(it.CityGML)
 	maxlod := anyToAssetURL(it.MaxLOD)
 
 	return &GeospatialjpDataItem{
-		ID:       it.ID,
-		City:     it.City,
-		CityGML:  citygml,
-		MaxLOD:   maxlod,
-		HasIndex: it.Index != "",
+		ID:          it.ID,
+		City:        it.City,
+		CityGML:     citygml,
+		CityGMLSize: citygmlSize,
+		MaxLOD:      maxlod,
+		HasIndex:    it.Index != "",
 	}
 }

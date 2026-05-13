@@ -181,6 +181,7 @@ func seedToDatasetItem(i plateauDatasetItemSeed, parentID string, isFlow bool) *
 		ID:                  plateauapi.NewID(i.GetID(parentID), plateauapi.TypeDatasetItem),
 		Name:                i.GetName(),
 		URL:                 i.URL,
+		FileSize:            int64PtrToIntPtr(i.FileSize),
 		Layers:              i.Layers,
 		Format:              i.Format,
 		FormatVersion:       formatVersionFor(i.Format, isFlow),
@@ -191,6 +192,18 @@ func seedToDatasetItem(i plateauDatasetItemSeed, parentID string, isFlow bool) *
 		FloodingScale:       i.FloodingScale,
 		FloodingScaleSuffix: i.FloodingScaleSuffix,
 	}
+}
+
+// int64PtrToIntPtr narrows a CMS asset size (kept as int64 internally so the
+// arithmetic is unambiguous) into the *int that gqlgen emits for GraphQL Int.
+// On 64-bit platforms — the only ones this server targets — the conversion is
+// lossless for any plausible file size.
+func int64PtrToIntPtr(v *int64) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
 
 // formatVersionFor returns the format version string for a dataset item.

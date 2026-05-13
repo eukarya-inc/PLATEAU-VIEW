@@ -444,6 +444,11 @@ interface DatasetItem implements Node {
   """
   url: String!
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+  """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
   """
@@ -689,6 +694,11 @@ type PlateauDatasetItem implements DatasetItem & Node {
   データセットのアイテムのURL。
   """
   url: String!
+  """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
   """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
@@ -947,6 +957,11 @@ type RelatedDatasetItem implements DatasetItem & Node {
   """
   url: String!
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+  """
   データセットのアイテムの変換前データのフォーマット。
   originalUrlフィールドが存在する場合のみ存在します。
   """
@@ -956,6 +971,11 @@ type RelatedDatasetItem implements DatasetItem & Node {
   鉄道駅情報・ランドマーク情報はurlフィールドではCZML形式で提供されていますが、元となったGeoJSONデータが存在します。
   """
   originalUrl: String
+  """
+  データセットのアイテムの変換前データのファイルサイズ（バイト単位）。
+  originalUrl と同様に、利用可能な場合にのみ提供されます。
+  """
+  originalFileSize: Int
   """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
@@ -1109,6 +1129,11 @@ type GenericDatasetItem implements DatasetItem & Node {
   """
   url: String!
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+  """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
   """
@@ -1187,6 +1212,11 @@ type CityGMLDataset implements Node {
   CityGMLのzip形式のファイルのURL。
   """
   url: String!
+  """
+  CityGML zip（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
   """
   自治体・整備年度を指定して zip にリダイレクトする安定 URL
   (`/datacatalog/citygml/{cityCode}-{year}/citygml.zip`)。

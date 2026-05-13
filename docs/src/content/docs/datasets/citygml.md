@@ -27,15 +27,17 @@ Project PLATEAU では、CityGML 形式で作成された 3D 都市モデルの�
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets | jq '.citygml[0]'
 ```
 
-主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（PLATEAU CMS 上の zip ファイル URL）, `composite_url`（自治体・整備年度を指定して zip にリダイレクトする安定 URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
+主要なフィールド: `id`, `pref` / `pref_code`, `city` / `city_code`, `url`（PLATEAU CMS 上の zip ファイル URL）, `file_size`（zip のファイルサイズ（バイト）。CMS のメタデータが取得できる場合に提供）, `composite_url`（自治体・整備年度を指定して zip にリダイレクトする安定 URL）, `feature_types`（含まれる地物型コードのリスト）, `year`, `registration_year`, `spec`。
 
-レスポンスには加えて `latest_citygml` 配列が含まれます。各自治体について **最新整備年度** の zip にリダイレクトする URL を提供し、`year` は常に `"latest"`。新しいデータが公開されてもアプリケーション側の URL を変更する必要がありません。
+レスポンスには加えて `latest_citygml` 配列が含まれます。各自治体について **最新整備年度** の zip にリダイレクトする URL を提供し、`year` は常に `"latest"`、`file_size` も同梱されます。新しいデータが公開されてもアプリケーション側の URL を変更する必要がありません。
 
 :::tip[`url` ではなく `composite_url` の利用を推奨します]
 PLATEAU の都市データは毎年更新され、`url` フィールドの CMS 直リンクは新しい年度のデータが公開されるとパスが変わる場合があります。`composite_url`（`/datacatalog/citygml/{cityCode}-{year|latest}/citygml.zip`）は API サーバ側で動的に解決するため、URL がより安定しています。さらに整備年度を `latest` に指定すれば、新しいデータが公開されたタイミングで URL を変更しなくても自動的に最新データに追従します。
+
+`composite_url` および `latest_citygml[].url` へのリクエストには **弱 ETag** と `Cache-Control: no-cache, must-revalidate` が付与されます。クライアントが `If-None-Match` を送れば、リダイレクト先が変わっていなければ `304 Not Modified` で短絡します。
 :::
 
-GraphQL からも同じ情報を取得できます。`citygmlDatasets` クエリで都道府県・市区町村・年度によるフィルタが可能です:
+GraphQL からも同じ情報を取得できます。`citygmlDatasets` クエリで都道府県・市区町村・年度によるフィルタが可能です。`fileSize` フィールドは zip のバイト数を返します:
 
 ```graphql
 query {
@@ -43,6 +45,7 @@ query {
     id
     cityCode
     url
+    fileSize
     year
     featureTypes
   }

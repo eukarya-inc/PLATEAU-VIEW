@@ -125,7 +125,7 @@ Project PLATEAU が [G空間情報センター](https://www.geospatial.jp/ckan/d
 curl https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets
 ```
 
-主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `composite_url`（3D Tiles の場合は複合 `tileset.json`、MVT の場合は自治体単位の `tilejson.json` への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `format_version`（3D Tiles の場合のみ。`1.0` または `1.1`。2025年度以降に Flow で変換されたデータは `1.1`、それ以外は `1.0`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
+主要なフィールド: `name`, `pref` / `pref_code`, `city` / `city_code`, `ward` / `ward_code`, `type` / `type_en`, `url`, `file_size`（`url` 先 zip のファイルサイズ（バイト）。CMS のメタデータが取得できる場合に提供）, `composite_url`（3D Tiles の場合は複合 `tileset.json`、MVT の場合は自治体単位の `tilejson.json` への直リンク）, `layers`（MVT のみ）, `year`, `registration_year`, `spec`, `format`（`3D Tiles` または `MVT`）, `format_version`（3D Tiles の場合のみ。`1.0` または `1.1`。2025年度以降に Flow で変換されたデータは `1.1`、それ以外は `1.0`）, `lod`, `texture`。型と意味の一覧は [REST API リファレンス](/api/rest/operations/datacatalogplateau-datasets/) を参照してください。
 
 :::tip[`url` ではなく `composite_url` の利用を推奨します]
 PLATEAU の都市データは毎年更新され、新しい整備年度のデータが公開されます。`url` フィールドは CMS 上の特定アセットへの直リンクのため、新しい年度のデータが公開されてもアプリケーション側で URL を書き換えない限り古いデータを参照し続けます。
@@ -204,6 +204,10 @@ viewer.scene.primitives.add(tileset);
 - 子の `tileset.json` 自体は別ホスト（PLATEAU CMS）から配信されます。CesiumJS は自動でクロスオリジン取得を行いますが、ネットワーク環境によってはまとめて読み込む際に時間がかかる場合があります。
 - API は試験運用中であり、URL の書式やレスポンスは予告なく変更されることがあります。
 :::
+
+#### HTTP キャッシュ
+
+`/datacatalog/3dtiles/{spec}/tileset.json`、`/datacatalog/mvt/{spec}/tilejson.json`、`/datacatalog/citygml/{spec}/citygml.zip` の各エンドポイントは、レスポンス内容（CityGML リダイレクトは転送先 URL）から導出した **弱 ETag** (`W/"..."`) と `Cache-Control: no-cache, must-revalidate` を返します。クライアントが `If-None-Match` ヘッダを付けて再リクエストすれば、内容が変わっていなければ `304 Not Modified` で短絡し、ボディは送信されません。CMS 側でデータが差し替わると ETag も変わるため、`-latest` URL を使っていても安全に最新データへ追従できます。
 
 ### 4.3. 自治体単位の MVT TileJSON（MapLibre などから利用）
 

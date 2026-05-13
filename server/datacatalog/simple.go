@@ -35,6 +35,9 @@ type SimpleLatestDataset struct {
 	Type     string   `json:"type"`
 	TypeCode string   `json:"type_en"`
 	URL      string   `json:"url"`
+	// FileSize is the CMS-reported size of the asset at URL, in bytes.
+	// Mirrors the underlying year-specific dataset chosen as the latest.
+	FileSize *int64   `json:"file_size,omitempty"`
 	Layers   []string `json:"layers"`
 	Year     string   `json:"year"` // always "latest"
 	Format   string   `json:"format"`
@@ -49,12 +52,14 @@ type SimpleLatestDataset struct {
 // SimpleLatestCityGMLDataset is a per-city CityGML entry whose URL redirects
 // to the zip of the newest available year for that city.
 type SimpleLatestCityGMLDataset struct {
-	ID           string   `json:"id"`
-	Pref         string   `json:"pref"`
-	PrefCode     string   `json:"pref_code"`
-	City         string   `json:"city"`
-	CityCode     string   `json:"city_code"`
-	URL          string   `json:"url"`
+	ID       string `json:"id"`
+	Pref     string `json:"pref"`
+	PrefCode string `json:"pref_code"`
+	City     string `json:"city"`
+	CityCode string `json:"city_code"`
+	URL      string `json:"url"`
+	// FileSize mirrors the underlying year-specific CityGML zip size in bytes.
+	FileSize     *int64   `json:"file_size,omitempty"`
 	FeatureTypes []string `json:"feature_types"`
 	Year         string   `json:"year"` // always "latest"
 }
@@ -62,12 +67,13 @@ type SimpleLatestCityGMLDataset struct {
 // SimpleCityGMLDataset describes a per-city CityGML merged.zip dataset
 // derived from the G-Spatial Information Center dataset model.
 type SimpleCityGMLDataset struct {
-	ID               string   `json:"id"`
-	Pref             string   `json:"pref"`
-	PrefCode         string   `json:"pref_code"`
-	City             string   `json:"city"`
-	CityCode         string   `json:"city_code"`
-	URL              string   `json:"url"`
+	ID       string  `json:"id"`
+	Pref     string  `json:"pref"`
+	PrefCode string  `json:"pref_code"`
+	City     string  `json:"city"`
+	CityCode string  `json:"city_code"`
+	URL      string  `json:"url"`
+	FileSize *int64  `json:"file_size,omitempty"`
 	CompositeURL     *string  `json:"composite_url"`
 	FeatureTypes     []string `json:"feature_types"`
 	Year             int      `json:"year"`
@@ -76,17 +82,19 @@ type SimpleCityGMLDataset struct {
 }
 
 type SimpleDatasetsResponseDataset struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Pref             string   `json:"pref"`
-	PrefCode         string   `json:"pref_code"`
-	City             *string  `json:"city"`
-	CityCode         *string  `json:"city_code"`
-	Ward             *string  `json:"ward"`
-	WardCode         *string  `json:"ward_code"`
-	Type             string   `json:"type"`
-	TypeCode         string   `json:"type_en"`
-	URL              string   `json:"url"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Pref     string  `json:"pref"`
+	PrefCode string  `json:"pref_code"`
+	City     *string `json:"city"`
+	CityCode *string `json:"city_code"`
+	Ward     *string `json:"ward"`
+	WardCode *string `json:"ward_code"`
+	Type     string  `json:"type"`
+	TypeCode string  `json:"type_en"`
+	URL      string  `json:"url"`
+	// FileSize is the CMS-reported size of the asset at URL, in bytes.
+	FileSize         *int64   `json:"file_size,omitempty"`
 	CompositeURL     *string  `json:"composite_url"`
 	Layers           []string `json:"layers"`
 	Year             int      `json:"year"`
@@ -244,6 +252,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			c := common
 			c.ID = strings.TrimPrefix(string(di.GetID()), "di_")
 			c.URL = di.GetURL()
+			c.FileSize = intPtrToInt64Ptr(di.GetFileSize())
 			c.Layers = di.GetLayers()
 			c.Format = f
 			c.FormatVersion = di.FormatVersion
@@ -368,6 +377,7 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 			Type:          d.Type,
 			TypeCode:      d.TypeCode,
 			URL:           url,
+			FileSize:      d.FileSize,
 			Layers:        d.Layers,
 			Year:          "latest",
 			Format:        d.Format,
@@ -407,6 +417,7 @@ func buildLatestCityGMLDatasets(host string, datasets []*SimpleCityGMLDataset) [
 			City:         d.City,
 			CityCode:     d.CityCode,
 			URL:          host + "/datacatalog/citygml/" + d.CityCode + "-latest/citygml.zip",
+			FileSize:     d.FileSize,
 			FeatureTypes: append([]string(nil), d.FeatureTypes...),
 			Year:         "latest",
 		})
@@ -469,6 +480,7 @@ func fetchSimpleCityGMLDatasets(ctx context.Context, r plateauapi.Repo, host str
 			City:             cityName,
 			CityCode:         cityCode,
 			URL:              d.URL,
+			FileSize:         intPtrToInt64Ptr(d.FileSize),
 			FeatureTypes:     append([]string(nil), d.FeatureTypes...),
 			Year:             d.Year,
 			RegistrationYear: d.RegistrationYear,
@@ -522,6 +534,17 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 
 // isTrue reports whether b is non-nil and points to true.
 func isTrue(b *bool) bool { return b != nil && *b }
+
+// intPtrToInt64Ptr widens the *int that gqlgen emits for GraphQL Int into the
+// *int64 the simple API exposes, so downstream JSON consumers see a stable
+// numeric type even on 32-bit builds.
+func intPtrToInt64Ptr(v *int) *int64 {
+	if v == nil {
+		return nil
+	}
+	n := int64(*v)
+	return &n
+}
 
 // buildCityGMLCompositeURL returns a stable redirect URL that resolves to the
 // per-city CityGML zip. Empty when prerequisites are missing.

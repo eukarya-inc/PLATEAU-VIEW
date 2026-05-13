@@ -11,7 +11,11 @@ import (
 const bldgCode = "bldg"
 
 type plateauDatasetSeed struct {
-	AssetURLs  []string
+	AssetURLs []string
+	// AssetSizes maps an asset URL to its CMS-reported totalSize in bytes.
+	// Indexed by URL (not slice position) so merge/split operations can
+	// preserve sizes without keeping a parallel array.
+	AssetSizes map[string]int64
 	Assets     []*AssetName
 	Subname    string
 	Subcode    string
@@ -97,6 +101,12 @@ func plateauDatasetSeedsFrom(i *PlateauFeatureItem, opts ToPlateauDatasetsOption
 			warning = append(warning, w...)
 			res = append(res, seed)
 		}
+	}
+
+	// Propagate per-URL asset sizes from the parsed feature item to every
+	// seed. plateauDatasetItemSeedFrom looks these up by URL.
+	for idx := range res {
+		res[idx].AssetSizes = i.AssetSizes
 	}
 
 	// merge seeds with same ID
@@ -362,6 +372,7 @@ type plateauDatasetItemSeed struct {
 	ID                  string
 	Name                string
 	URL                 string
+	FileSize            *int64
 	Format              plateauapi.DatasetFormat
 	LOD                 *int
 	LODEx               *int
@@ -458,6 +469,10 @@ func plateauDatasetItemSeedFrom(seed plateauDatasetSeed) (items []plateauDataset
 
 		if item == nil {
 			continue
+		}
+
+		if size, ok := seed.AssetSizes[url]; ok && size > 0 {
+			item.FileSize = lo.ToPtr(size)
 		}
 
 		warning = append(warning, w...)

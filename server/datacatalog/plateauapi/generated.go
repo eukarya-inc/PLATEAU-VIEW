@@ -86,6 +86,7 @@ type ComplexityRoot struct {
 		CityID               func(childComplexity int) int
 		CompositeURL         func(childComplexity int) int
 		FeatureTypes         func(childComplexity int) int
+		FileSize             func(childComplexity int) int
 		GspatialjpDatasetURL func(childComplexity int) int
 		ID                   func(childComplexity int) int
 		LatestURL            func(childComplexity int) int
@@ -126,6 +127,7 @@ type ComplexityRoot struct {
 	}
 
 	GenericDatasetItem struct {
+		FileSize func(childComplexity int) int
 		Format   func(childComplexity int) int
 		ID       func(childComplexity int) int
 		Layers   func(childComplexity int) int
@@ -188,6 +190,7 @@ type ComplexityRoot struct {
 
 	PlateauDatasetItem struct {
 		CompositeURL        func(childComplexity int) int
+		FileSize            func(childComplexity int) int
 		FloodingScale       func(childComplexity int) int
 		FloodingScaleSuffix func(childComplexity int) int
 		Format              func(childComplexity int) int
@@ -286,15 +289,17 @@ type ComplexityRoot struct {
 	}
 
 	RelatedDatasetItem struct {
-		Format         func(childComplexity int) int
-		ID             func(childComplexity int) int
-		Layers         func(childComplexity int) int
-		Name           func(childComplexity int) int
-		OriginalFormat func(childComplexity int) int
-		OriginalURL    func(childComplexity int) int
-		Parent         func(childComplexity int) int
-		ParentID       func(childComplexity int) int
-		URL            func(childComplexity int) int
+		FileSize         func(childComplexity int) int
+		Format           func(childComplexity int) int
+		ID               func(childComplexity int) int
+		Layers           func(childComplexity int) int
+		Name             func(childComplexity int) int
+		OriginalFileSize func(childComplexity int) int
+		OriginalFormat   func(childComplexity int) int
+		OriginalURL      func(childComplexity int) int
+		Parent           func(childComplexity int) int
+		ParentID         func(childComplexity int) int
+		URL              func(childComplexity int) int
 	}
 
 	RelatedDatasetType struct {
@@ -601,6 +606,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.CityGMLDataset.FeatureTypes(childComplexity), true
 
+	case "CityGMLDataset.fileSize":
+		if e.complexity.CityGMLDataset.FileSize == nil {
+			break
+		}
+
+		return e.complexity.CityGMLDataset.FileSize(childComplexity), true
+
 	case "CityGMLDataset.gspatialjpDatasetUrl":
 		if e.complexity.CityGMLDataset.GspatialjpDatasetURL == nil {
 			break
@@ -838,6 +850,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.GenericDataset.Year(childComplexity), true
+
+	case "GenericDatasetItem.fileSize":
+		if e.complexity.GenericDatasetItem.FileSize == nil {
+			break
+		}
+
+		return e.complexity.GenericDatasetItem.FileSize(childComplexity), true
 
 	case "GenericDatasetItem.format":
 		if e.complexity.GenericDatasetItem.Format == nil {
@@ -1198,6 +1217,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PlateauDatasetItem.CompositeURL(childComplexity), true
+
+	case "PlateauDatasetItem.fileSize":
+		if e.complexity.PlateauDatasetItem.FileSize == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.FileSize(childComplexity), true
 
 	case "PlateauDatasetItem.floodingScale":
 		if e.complexity.PlateauDatasetItem.FloodingScale == nil {
@@ -1788,6 +1814,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.RelatedDataset.Year(childComplexity), true
 
+	case "RelatedDatasetItem.fileSize":
+		if e.complexity.RelatedDatasetItem.FileSize == nil {
+			break
+		}
+
+		return e.complexity.RelatedDatasetItem.FileSize(childComplexity), true
+
 	case "RelatedDatasetItem.format":
 		if e.complexity.RelatedDatasetItem.Format == nil {
 			break
@@ -1815,6 +1848,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.RelatedDatasetItem.Name(childComplexity), true
+
+	case "RelatedDatasetItem.originalFileSize":
+		if e.complexity.RelatedDatasetItem.OriginalFileSize == nil {
+			break
+		}
+
+		return e.complexity.RelatedDatasetItem.OriginalFileSize(childComplexity), true
 
 	case "RelatedDatasetItem.originalFormat":
 		if e.complexity.RelatedDatasetItem.OriginalFormat == nil {
@@ -3391,6 +3431,8 @@ func (ec *executionContext) fieldContext_City_citygml(_ context.Context, field g
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_CityGMLDataset_fileSize(ctx, field)
 			case "compositeUrl":
 				return ec.fieldContext_CityGMLDataset_compositeUrl(ctx, field)
 			case "latestUrl":
@@ -3851,6 +3893,47 @@ func (ec *executionContext) fieldContext_CityGMLDataset_url(_ context.Context, f
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CityGMLDataset_fileSize(ctx context.Context, field graphql.CollectedField, obj *CityGMLDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CityGMLDataset_fileSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FileSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CityGMLDataset_fileSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CityGMLDataset",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5253,6 +5336,8 @@ func (ec *executionContext) fieldContext_GenericDataset_items(_ context.Context,
 				return ec.fieldContext_GenericDatasetItem_name(ctx, field)
 			case "url":
 				return ec.fieldContext_GenericDatasetItem_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_GenericDatasetItem_fileSize(ctx, field)
 			case "layers":
 				return ec.fieldContext_GenericDatasetItem_layers(ctx, field)
 			case "parentId":
@@ -5522,6 +5607,47 @@ func (ec *executionContext) fieldContext_GenericDatasetItem_url(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _GenericDatasetItem_fileSize(ctx context.Context, field graphql.CollectedField, obj *GenericDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_GenericDatasetItem_fileSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FileSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_GenericDatasetItem_fileSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "GenericDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -7453,6 +7579,8 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context,
 				return ec.fieldContext_PlateauDatasetItem_name(ctx, field)
 			case "url":
 				return ec.fieldContext_PlateauDatasetItem_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_PlateauDatasetItem_fileSize(ctx, field)
 			case "layers":
 				return ec.fieldContext_PlateauDatasetItem_layers(ctx, field)
 			case "compositeUrl":
@@ -7930,6 +8058,47 @@ func (ec *executionContext) fieldContext_PlateauDatasetItem_url(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_fileSize(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_fileSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FileSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_fileSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -10373,6 +10542,8 @@ func (ec *executionContext) fieldContext_Query_citygmlDatasets(ctx context.Conte
 				return ec.fieldContext_CityGMLDataset_plateauSpecMinorId(ctx, field)
 			case "url":
 				return ec.fieldContext_CityGMLDataset_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_CityGMLDataset_fileSize(ctx, field)
 			case "compositeUrl":
 				return ec.fieldContext_CityGMLDataset_compositeUrl(ctx, field)
 			case "latestUrl":
@@ -11583,10 +11754,14 @@ func (ec *executionContext) fieldContext_RelatedDataset_items(_ context.Context,
 				return ec.fieldContext_RelatedDatasetItem_name(ctx, field)
 			case "url":
 				return ec.fieldContext_RelatedDatasetItem_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_RelatedDatasetItem_fileSize(ctx, field)
 			case "originalFormat":
 				return ec.fieldContext_RelatedDatasetItem_originalFormat(ctx, field)
 			case "originalUrl":
 				return ec.fieldContext_RelatedDatasetItem_originalUrl(ctx, field)
+			case "originalFileSize":
+				return ec.fieldContext_RelatedDatasetItem_originalFileSize(ctx, field)
 			case "layers":
 				return ec.fieldContext_RelatedDatasetItem_layers(ctx, field)
 			case "parentId":
@@ -11861,6 +12036,47 @@ func (ec *executionContext) fieldContext_RelatedDatasetItem_url(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _RelatedDatasetItem_fileSize(ctx context.Context, field graphql.CollectedField, obj *RelatedDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RelatedDatasetItem_fileSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FileSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RelatedDatasetItem_fileSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RelatedDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RelatedDatasetItem_originalFormat(ctx context.Context, field graphql.CollectedField, obj *RelatedDatasetItem) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_RelatedDatasetItem_originalFormat(ctx, field)
 	if err != nil {
@@ -11938,6 +12154,47 @@ func (ec *executionContext) fieldContext_RelatedDatasetItem_originalUrl(_ contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RelatedDatasetItem_originalFileSize(ctx context.Context, field graphql.CollectedField, obj *RelatedDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RelatedDatasetItem_originalFileSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.OriginalFileSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RelatedDatasetItem_originalFileSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RelatedDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -16037,6 +16294,8 @@ func (ec *executionContext) _CityGMLDataset(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "fileSize":
+			out.Values[i] = ec._CityGMLDataset_fileSize(ctx, field, obj)
 		case "compositeUrl":
 			field := field
 
@@ -16508,6 +16767,8 @@ func (ec *executionContext) _GenericDatasetItem(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "fileSize":
+			out.Values[i] = ec._GenericDatasetItem_fileSize(ctx, field, obj)
 		case "layers":
 			out.Values[i] = ec._GenericDatasetItem_layers(ctx, field, obj)
 		case "parentId":
@@ -17138,6 +17399,8 @@ func (ec *executionContext) _PlateauDatasetItem(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "fileSize":
+			out.Values[i] = ec._PlateauDatasetItem_fileSize(ctx, field, obj)
 		case "layers":
 			out.Values[i] = ec._PlateauDatasetItem_layers(ctx, field, obj)
 		case "compositeUrl":
@@ -18345,10 +18608,14 @@ func (ec *executionContext) _RelatedDatasetItem(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "fileSize":
+			out.Values[i] = ec._RelatedDatasetItem_fileSize(ctx, field, obj)
 		case "originalFormat":
 			out.Values[i] = ec._RelatedDatasetItem_originalFormat(ctx, field, obj)
 		case "originalUrl":
 			out.Values[i] = ec._RelatedDatasetItem_originalUrl(ctx, field, obj)
+		case "originalFileSize":
+			out.Values[i] = ec._RelatedDatasetItem_originalFileSize(ctx, field, obj)
 		case "layers":
 			out.Values[i] = ec._RelatedDatasetItem_layers(ctx, field, obj)
 		case "parentId":

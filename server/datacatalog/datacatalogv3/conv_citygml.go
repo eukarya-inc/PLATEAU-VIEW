@@ -31,9 +31,15 @@ func toCityGMLs(all *AllData, regYear int) (map[plateauapi.ID]*plateauapi.CityGM
 		if gspatialjpURL != "" {
 			gspatialjpURLPtr = &gspatialjpURL
 		}
+		var fileSize *int
+		if data.CityGMLSize > 0 {
+			n := int(data.CityGMLSize)
+			fileSize = &n
+		}
 		d := &plateauapi.CityGMLDataset{
 			ID:                   plateauapi.CityGMLDatasetIDFrom(plateauapi.AreaCode(city.CityCode)),
 			URL:                  data.CityGML,
+			FileSize:             fileSize,
 			GspatialjpDatasetURL: gspatialjpURLPtr,
 			Year:                 city.YearInt(),
 			RegistrationYear:     regYear,

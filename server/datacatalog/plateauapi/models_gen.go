@@ -93,6 +93,9 @@ type DatasetItem interface {
 	GetName() string
 	// データセットのアイテムのURL。
 	GetURL() string
+	// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+	// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+	GetFileSize() *int
 	// データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 	// レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
 	GetLayers() []string
@@ -249,6 +252,9 @@ type CityGMLDataset struct {
 	PlateauSpecMinorID ID `json:"plateauSpecMinorId"`
 	// CityGMLのzip形式のファイルのURL。
 	URL string `json:"url"`
+	// CityGML zip（url の指す実体）のファイルサイズ（バイト単位）。
+	// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+	FileSize *int `json:"fileSize,omitempty"`
 	// 自治体・整備年度を指定して zip にリダイレクトする安定 URL
 	// (`/datacatalog/citygml/{cityCode}-{year}/citygml.zip`)。
 	// CMS のアセットパスが変わってもアプリケーション側の URL を維持できます。
@@ -468,6 +474,9 @@ type GenericDatasetItem struct {
 	Name string `json:"name"`
 	// データセットのアイテムのURL。
 	URL string `json:"url"`
+	// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+	// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+	FileSize *int `json:"fileSize,omitempty"`
 	// データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 	// レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
 	Layers []string `json:"layers,omitempty"`
@@ -488,6 +497,10 @@ func (this GenericDatasetItem) GetName() string { return this.Name }
 
 // データセットのアイテムのURL。
 func (this GenericDatasetItem) GetURL() string { return this.URL }
+
+// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+func (this GenericDatasetItem) GetFileSize() *int { return this.FileSize }
 
 // データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 // レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
@@ -785,6 +798,9 @@ type PlateauDatasetItem struct {
 	Name string `json:"name"`
 	// データセットのアイテムのURL。
 	URL string `json:"url"`
+	// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+	// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+	FileSize *int `json:"fileSize,omitempty"`
 	// データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 	// レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
 	Layers []string `json:"layers,omitempty"`
@@ -823,6 +839,10 @@ func (this PlateauDatasetItem) GetName() string { return this.Name }
 
 // データセットのアイテムのURL。
 func (this PlateauDatasetItem) GetURL() string { return this.URL }
+
+// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+func (this PlateauDatasetItem) GetFileSize() *int { return this.FileSize }
 
 // データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 // レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
@@ -1161,12 +1181,18 @@ type RelatedDatasetItem struct {
 	Name string `json:"name"`
 	// データセットのアイテムのURL。
 	URL string `json:"url"`
+	// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+	// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+	FileSize *int `json:"fileSize,omitempty"`
 	// データセットのアイテムの変換前データのフォーマット。
 	// originalUrlフィールドが存在する場合のみ存在します。
 	OriginalFormat *DatasetFormat `json:"originalFormat,omitempty"`
 	// データセットのアイテムの変換前データのURL。
 	// 鉄道駅情報・ランドマーク情報はurlフィールドではCZML形式で提供されていますが、元となったGeoJSONデータが存在します。
 	OriginalURL *string `json:"originalUrl,omitempty"`
+	// データセットのアイテムの変換前データのファイルサイズ（バイト単位）。
+	// originalUrl と同様に、利用可能な場合にのみ提供されます。
+	OriginalFileSize *int `json:"originalFileSize,omitempty"`
 	// データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 	// レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
 	Layers []string `json:"layers,omitempty"`
@@ -1187,6 +1213,10 @@ func (this RelatedDatasetItem) GetName() string { return this.Name }
 
 // データセットのアイテムのURL。
 func (this RelatedDatasetItem) GetURL() string { return this.URL }
+
+// データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+// CMS のアセットメタデータが取得できる場合にのみ提供されます。
+func (this RelatedDatasetItem) GetFileSize() *int { return this.FileSize }
 
 // データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
 // レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
