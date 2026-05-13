@@ -11,6 +11,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/proxy"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/sdkapi/sdkapiv3"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
@@ -96,6 +97,7 @@ type Config struct {
 	Flow_BaseURL                       string   `pp:",omitempty"`
 	Flow_Token                         string   `pp:",omitempty"`
 	Tile_URL                           string   `pp:",omitempty"` // If set, redirects /tiles/* to this URL (except config.json and styles)
+	Proxy_AllowedHosts                 []string `pp:",omitempty"` // Allow-list of hostnames the /proxy/* endpoint may forward to. Empty disables the endpoint.
 }
 
 func NewConfig() (*Config, error) {
@@ -253,6 +255,12 @@ func (c *Config) LodStat() lodstat.Config {
 	return lodstat.Config{
 		DataCatalogAPIURL:   c.LocalURL("/datacatalog"),
 		DataCatalogAPIToken: c.SDK_Token,
+	}
+}
+
+func (c *Config) Proxy() proxy.Config {
+	return proxy.Config{
+		AllowedHosts: c.Proxy_AllowedHosts,
 	}
 }
 

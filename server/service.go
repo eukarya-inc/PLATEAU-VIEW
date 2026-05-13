@@ -63,11 +63,16 @@ func Services(conf *Config) (srv []*Service, _ error) {
 	return
 }
 
-func Proxy(*Config) (*Service, error) {
+func Proxy(conf *Config) (*Service, error) {
+	c := conf.Proxy()
+	if len(c.AllowedHosts) == 0 {
+		return nil, nil
+	}
+
 	return &Service{
 		Name: "proxy",
 		Echo: func(g *echo.Group) error {
-			proxy.Route(g.Group("/proxy"))
+			proxy.Echo(g.Group("/proxy"), c)
 			return nil
 		},
 	}, nil
