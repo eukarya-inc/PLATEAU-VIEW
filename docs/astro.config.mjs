@@ -105,8 +105,11 @@ export default defineConfig({
           ],
         },
         {
-          label: "MCP Server",
-          items: [{ label: "PLATEAU MCP Server", slug: "mcp/overview" }],
+          label: "AI",
+          items: [
+            { label: "MCP Server", slug: "mcp/overview" },
+            { label: "Agent Skills", slug: "skills/overview" },
+          ],
         },
         {
           label: "仕様",

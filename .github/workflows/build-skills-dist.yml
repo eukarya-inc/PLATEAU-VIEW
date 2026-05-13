@@ -1,0 +1,59 @@
+name: build-skills-dist
+
+# Maintains the `skills-dist` branch with the agentskills.io-compatible layout
+# expected by `gh skill install Project-PLATEAU/skills`.
+#
+# Manual release flow:
+#   git fetch origin skills-dist
+#   git push git@github.com:Project-PLATEAU/skills.git origin/skills-dist:main
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - '.github/workflows/build-skills-dist.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-skills-dist
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Build dist tree
+        run: |
+          set -euo pipefail
+          # agentskills.io convention: skills/<name>/SKILL.md at the dist repo root.
+          mkdir -p dist/skills
+          rsync -a \
+            --exclude='/README.md' \
+            --exclude='/RELEASE.md' \
+            source/skills/ dist/skills/
+          cp source/skills/README.md dist/README.md
+
+      - name: Push to skills-dist branch
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          git init -q -b skills-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          SHA="${GITHUB_SHA}"
+          SHORT="${SHA:0:7}"
+          git commit -q -m "build: skills dist from main@${SHORT}
+
+          Source: https://github.com/${GITHUB_REPOSITORY}/commit/${SHA}"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin skills-dist

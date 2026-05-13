@@ -1,0 +1,24 @@
+name: ci-skills
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+      - '.github/workflows/ci-skills.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - '.github/workflows/ci-skills.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate skills against agentskills.io spec
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh skill publish skills --dry-run
