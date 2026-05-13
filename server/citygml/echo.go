@@ -1,6 +1,7 @@
 package citygml
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -195,20 +196,43 @@ func spatialIDAttributesHandler(dc *dataCatalogAPI) echo.HandlerFunc {
 			rs = append(rs, &urlReader{URL: u, client: httpClient, etagCache: etagCache, skipCodeListFetch: skipCodeListFetch})
 		}
 
-		attributes, err := SpatialIDAttributes(ctx, rs, sids)
-		if err != nil {
-			log.Errorfc(ctx, "citygml: failed to extract attributes: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]any{
-				"error": "failed to extract attributes",
-			})
+		// Stream the JSON array to avoid buffering every matched feature in memory.
+		// Headers are deferred until the first feature so that a "no features" result can still return 404.
+		resp := c.Response()
+		enc := json.NewEncoder(resp)
+		started := false
+		yieldErr := SpatialIDAttributes(ctx, rs, sids, func(attr map[string]any) error {
+			if !started {
+				resp.Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				resp.WriteHeader(http.StatusOK)
+				if _, err := resp.Write([]byte("[")); err != nil {
+					return err
+				}
+				started = true
+			} else {
+				if _, err := resp.Write([]byte(",")); err != nil {
+					return err
+				}
+			}
+			return enc.Encode(attr)
+		})
+		if yieldErr != nil {
+			log.Errorfc(ctx, "citygml: failed to extract attributes: %v", yieldErr)
+			if !started {
+				return c.JSON(http.StatusInternalServerError, map[string]any{
+					"error": "failed to extract attributes",
+				})
+			}
+			// Headers already sent; abort the connection so the client sees a truncated response instead of a malformed JSON array.
+			return yieldErr
 		}
-
-		if attributes == nil {
+		if !started {
 			return c.JSON(http.StatusNotFound, map[string]any{
 				"error": "no features found",
 			})
 		}
-		return c.JSON(http.StatusOK, attributes)
+		_, err = resp.Write([]byte("]"))
+		return err
 	}
 }
 

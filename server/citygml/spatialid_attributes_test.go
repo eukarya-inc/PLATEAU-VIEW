@@ -24,7 +24,11 @@ func TestSpatialIDAttributes(t *testing.T) {
 		r: bytes.NewReader(b),
 	}
 	ctx := context.Background()
-	attributes, err := SpatialIDAttributes(ctx, []Reader{r}, []string{"/18/0/231815/103921"})
+	var attributes []map[string]any
+	err = SpatialIDAttributes(ctx, []Reader{r}, []string{"/18/0/231815/103921"}, func(attr map[string]any) error {
+		attributes = append(attributes, attr)
+		return nil
+	})
 	require.NoError(t, err)
 	expected := []map[string]any{
 		{

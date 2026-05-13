@@ -76,24 +76,23 @@ func (r *urlReader) Resolver() CodeResolver {
 	}
 }
 
-func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) ([]map[string]any, error) {
+func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string, yield func(map[string]any) error) error {
 	var filter lod1SolidFilter
 	for _, sid := range spatialIDs {
 		v, err := spatialid.Parse(sid)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		filter.Bounds = append(filter.Bounds, v.Bounds())
 	}
 
 	if len(filter.Bounds) == 0 {
-		return nil, nil
+		return nil
 	}
 	h := lod1SolidHandler{
 		Filter: filter,
 	}
 
-	var attributes []map[string]any
 	buf := make([]byte, 32*1024)
 	for _, r := range rs {
 		err := func(r Reader) error {
@@ -112,7 +111,7 @@ func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) 
 			fs := &featureScanner{
 				Dec: xmlb.NewDecoder(rc, buf),
 			}
-			count := 0
+			count, matched := 0, 0
 			thCache := map[string]tagHandler{}
 			for fs.Scan() {
 				count++
@@ -153,7 +152,10 @@ func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) 
 							},
 						}
 					}
-					attributes = append(attributes, fah.Val)
+					matched++
+					if err := yield(fah.Val); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -161,12 +163,12 @@ func SpatialIDAttributes(ctx context.Context, rs []Reader, spatialIDs []string) 
 				return err
 			}
 
-			log.Debugfc(ctx, "citygml: %d features scanned and %d intersected", count, len(attributes))
+			log.Debugfc(ctx, "citygml: %d features scanned and %d intersected", count, matched)
 			return nil
 		}(r)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return attributes, nil
+	return nil
 }
