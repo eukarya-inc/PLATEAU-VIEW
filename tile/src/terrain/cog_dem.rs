@@ -7,19 +7,41 @@
 
 use std::f64::consts::PI;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use object_store::{
     GetOptions, ObjectStore, client::ClientConfigKey, http::HttpBuilder, path::Path as ObjectPath,
 };
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell, RwLock};
 use url::Url;
+use xxhash_rust::xxh64::xxh64;
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
 use crate::cog::{CogReader, TileBounds};
 
+/// How long to wait before retrying a failed `upstream_etag` HEAD. A transient
+/// network blip during `preload()` shouldn't poison the per-tile etag for the
+/// pod's lifetime — when the cached value is still `None`, subsequent tile
+/// requests retry past this cooldown until HEAD succeeds. The cooldown keeps
+/// us from hammering a genuinely broken upstream on every tile.
+const UPSTREAM_ETAG_RETRY_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Cached upstream-ETag state. `value` is the parsed HTTP ETag (when HEAD
+/// succeeded); `last_attempt` is the last HEAD wall-clock time regardless of
+/// outcome, used to throttle retries.
+struct UpstreamEtagState {
+    value: Option<String>,
+    last_attempt: Option<Instant>,
+}
+
 pub struct CogDemSource {
     url: String,
+    /// xxh64 of the COG URL, computed once at construction. Mixed into the
+    /// per-tile etag when [`upstream_etag`] is `None` so a HEAD-fetch failure
+    /// doesn't make two different URLs collapse to the same cache key. Hex
+    /// pre-rendered to avoid re-formatting on every tile request.
+    url_hash_hex: String,
     nodata: Option<f64>,
     version: String,
     slug: String,
@@ -27,11 +49,19 @@ pub struct CogDemSource {
     native_tile_size: u32,
     reader: OnceCell<Arc<CogReader>>,
     bounds_cell: OnceCell<Option<GeoBounds>>,
-    /// Upstream object ETag, fetched once via HEAD on preload. Mixed into
-    /// the per-tile etag so a CMS-side COG swap (same URL pattern, new
-    /// content) busts downstream tile caches without requiring a manual
-    /// version bump in config.
-    upstream_etag: OnceCell<Option<String>>,
+    /// Upstream object ETag, lazily fetched via HEAD on first use (or in
+    /// `preload()`). Mixed into the per-tile etag so a CMS-side COG swap
+    /// (same URL pattern, new content) busts downstream tile caches without
+    /// requiring a manual version bump in config. Wrapped in `RwLock` rather
+    /// than `OnceCell` so a failed HEAD can be retried later — see
+    /// [`UPSTREAM_ETAG_RETRY_INTERVAL`].
+    upstream_etag: RwLock<UpstreamEtagState>,
+    /// Single-flight gate around the actual HEAD request. Concurrent tile
+    /// requests that find `upstream_etag.value == None` AND the retry
+    /// cooldown has elapsed `try_lock` this; only the winner does the HEAD,
+    /// losers return the current value (probably still `None`) immediately
+    /// and skip until the winner updates the cell.
+    upstream_etag_retry: Mutex<()>,
 }
 
 impl CogDemSource {
@@ -43,8 +73,11 @@ impl CogDemSource {
         max_zoom: u8,
         native_tile_size: u32,
     ) -> Self {
+        let url = url.into();
+        let url_hash_hex = format!("{:x}", xxh64(url.as_bytes(), 0));
         Self {
-            url: url.into(),
+            url,
+            url_hash_hex,
             nodata,
             version: version.into(),
             slug: slug.into(),
@@ -52,40 +85,60 @@ impl CogDemSource {
             native_tile_size,
             reader: OnceCell::new(),
             bounds_cell: OnceCell::new(),
-            upstream_etag: OnceCell::new(),
+            upstream_etag: RwLock::new(UpstreamEtagState {
+                value: None,
+                last_attempt: None,
+            }),
+            upstream_etag_retry: Mutex::new(()),
         }
     }
 
-    /// Resolve and cache the upstream object ETag via a HEAD request. Falls
-    /// back to `None` when the backend doesn't surface one (e.g. file://).
-    async fn upstream_etag(&self) -> &Option<String> {
-        self.upstream_etag
-            .get_or_init(|| async {
-                let (store, path) = match build_object_store(&self.url) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        tracing::warn!(error=%e, "cog HEAD: build_object_store failed");
-                        return None;
-                    }
-                };
-                let opts = GetOptions {
-                    head: true,
-                    ..Default::default()
-                };
-                match store.get_opts(&path, opts).await {
-                    Ok(result) => result
-                        .meta
-                        .e_tag
-                        .as_ref()
-                        .map(|s: &String| s.trim_start_matches("W/").trim_matches('"').to_string())
-                        .filter(|s| !s.is_empty()),
-                    Err(e) => {
-                        tracing::warn!(error=%e, "cog HEAD failed; ETag unavailable");
-                        None
-                    }
-                }
-            })
-            .await
+    /// Resolve the upstream object ETag, with retry on failure.
+    ///
+    /// Hot path (HEAD already succeeded): single read-lock, return cached
+    /// value. Cooldown path (HEAD failed recently): single read-lock, return
+    /// `None`. Retry path (cooldown elapsed): `try_lock` the retry gate so a
+    /// single concurrent task does the HEAD; losers return the current value
+    /// without blocking.
+    async fn upstream_etag(&self) -> Option<String> {
+        {
+            let state = self.upstream_etag.read().await;
+            if state.value.is_some() {
+                return state.value.clone();
+            }
+            if state
+                .last_attempt
+                .is_some_and(|t| t.elapsed() < UPSTREAM_ETAG_RETRY_INTERVAL)
+            {
+                return None;
+            }
+        }
+        // Claim the retry slot — non-blocking. Losing the race means another
+        // task is already doing the HEAD; we return whatever's cached now
+        // rather than queueing behind it.
+        let _retry = match self.upstream_etag_retry.try_lock() {
+            Ok(g) => g,
+            Err(_) => return self.upstream_etag.read().await.value.clone(),
+        };
+        // Re-check under the retry lock: the winner of a previous race may
+        // have updated the state between our first read and the `try_lock`.
+        {
+            let state = self.upstream_etag.read().await;
+            if state.value.is_some() {
+                return state.value.clone();
+            }
+            if state
+                .last_attempt
+                .is_some_and(|t| t.elapsed() < UPSTREAM_ETAG_RETRY_INTERVAL)
+            {
+                return None;
+            }
+        }
+        let fetched = fetch_upstream_etag(&self.url).await;
+        let mut state = self.upstream_etag.write().await;
+        state.value = fetched.clone();
+        state.last_attempt = Some(Instant::now());
+        fetched
     }
 
     async fn reader(&self) -> Result<Arc<CogReader>, DemError> {
@@ -147,9 +200,15 @@ impl DemProvider for CogDemSource {
 
         // Mix the upstream ETag (when available) into the per-tile etag so
         // any change to the underlying COG file flips downstream cache keys.
-        let etag = match self.upstream_etag().await.as_ref() {
+        // When HEAD fails we fall back to a URL-hash-derived marker rather
+        // than just `version`: two different URLs share the same `version`
+        // constant, so a bare-version fallback would let a stale HEAD cell
+        // serve tiles from the wrong asset URL via the cache. Hashing the
+        // URL keeps swapped assets at distinct cache keys even when HEAD
+        // can't reach the upstream.
+        let etag = match self.upstream_etag().await {
             Some(e) => Some(format!("{}:{e}", self.version)),
-            None => Some(self.version.clone()),
+            None => Some(format!("{}:no-etag:{}", self.version, self.url_hash_hex)),
         };
         Ok(DemTile { elevations, etag })
     }
@@ -182,6 +241,35 @@ impl DemProvider for CogDemSource {
 
     fn bounds(&self) -> Option<GeoBounds> {
         self.bounds_cell.get().and_then(|b| *b)
+    }
+}
+
+/// One-shot HEAD against the upstream COG URL. Returns the parsed ETag with
+/// any `W/` weak-prefix and surrounding quotes stripped, or `None` if the
+/// backend doesn't return one / the request failed. Failures are logged.
+async fn fetch_upstream_etag(url: &str) -> Option<String> {
+    let (store, path) = match build_object_store(url) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error=%e, "cog HEAD: build_object_store failed");
+            return None;
+        }
+    };
+    let opts = GetOptions {
+        head: true,
+        ..Default::default()
+    };
+    match store.get_opts(&path, opts).await {
+        Ok(result) => result
+            .meta
+            .e_tag
+            .as_ref()
+            .map(|s: &String| s.trim_start_matches("W/").trim_matches('"').to_string())
+            .filter(|s| !s.is_empty()),
+        Err(e) => {
+            tracing::warn!(error=%e, "cog HEAD failed; ETag unavailable");
+            None
+        }
     }
 }
 
