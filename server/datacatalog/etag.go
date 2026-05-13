@@ -27,7 +27,7 @@ const stableURLCacheControl = "no-cache, must-revalidate"
 func setRevisionETag(c echo.Context, revision string) (etag string, matched bool) {
 	req := c.Request()
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|%s", revision, req.Host, req.URL.Path)
+	_, _ = fmt.Fprintf(h, "%s|%s|%s", revision, req.Host, req.URL.Path)
 	etag = `W/"` + hex.EncodeToString(h.Sum(nil)[:16]) + `"`
 
 	resp := c.Response().Header()
