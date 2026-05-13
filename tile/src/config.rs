@@ -37,6 +37,10 @@ pub struct SourceConfig {
     /// Per-source version string for ETag calculation (overrides global version)
     #[serde(default)]
     pub version: Option<String>,
+    /// Human-readable description of the source. Surfaced via the public
+    /// `/tiles/catalog.json` endpoint for end-user UIs.
+    #[serde(default)]
+    pub description: Option<String>,
     pub layers: Vec<LayerConfig>,
 }
 

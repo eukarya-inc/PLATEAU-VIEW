@@ -88,20 +88,25 @@ func TestRangeToTileServerRange(t *testing.T) {
 
 func TestTiles_ToTileServerConfig(t *testing.T) {
 	tiles := Tiles{
-		"ortho": []lo.Entry[Range, string]{
-			{
-				Key:   Range{ZMin: 0, ZMax: 10, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
-				Value: "https://example.com/tiles/ortho-low",
-			},
-			{
-				Key:   Range{ZMin: 11, ZMax: 18, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
-				Value: "https://example.com/tiles/ortho-high",
+		"ortho": TileEntry{
+			Description: "正射画像",
+			URLs: []lo.Entry[Range, string]{
+				{
+					Key:   Range{ZMin: 0, ZMax: 10, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
+					Value: "https://example.com/tiles/ortho-low",
+				},
+				{
+					Key:   Range{ZMin: 11, ZMax: 18, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
+					Value: "https://example.com/tiles/ortho-high",
+				},
 			},
 		},
-		"dem": []lo.Entry[Range, string]{
-			{
-				Key:   Range{ZMin: -1, ZMax: -1, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
-				Value: "https://example.com/tiles/dem",
+		"dem": TileEntry{
+			URLs: []lo.Entry[Range, string]{
+				{
+					Key:   Range{ZMin: -1, ZMax: -1, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
+					Value: "https://example.com/tiles/dem",
+				},
 			},
 		},
 	}
@@ -117,6 +122,7 @@ func TestTiles_ToTileServerConfig(t *testing.T) {
 
 	// Check ortho layers
 	ortho := config.Sources["ortho"]
+	assert.Equal(t, "正射画像", ortho.Description)
 	assert.Len(t, ortho.Layers, 2)
 
 	assert.Equal(t, "xyz", ortho.Layers[0].Type)
@@ -184,14 +190,16 @@ func TestIsCOGURL(t *testing.T) {
 
 func TestTiles_ToTileServerConfig_WithCOG(t *testing.T) {
 	tiles := Tiles{
-		"mixed": []lo.Entry[Range, string]{
-			{
-				Key:   Range{ZMin: 0, ZMax: 10, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
-				Value: "https://example.com/tiles/base",
-			},
-			{
-				Key:   Range{ZMin: -1, ZMax: -1, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
-				Value: "https://example.com/cog/overlay.tif",
+		"mixed": TileEntry{
+			URLs: []lo.Entry[Range, string]{
+				{
+					Key:   Range{ZMin: 0, ZMax: 10, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
+					Value: "https://example.com/tiles/base",
+				},
+				{
+					Key:   Range{ZMin: -1, ZMax: -1, XMin: -1, XMax: -1, YMin: -1, YMax: -1},
+					Value: "https://example.com/cog/overlay.tif",
+				},
 			},
 		},
 	}

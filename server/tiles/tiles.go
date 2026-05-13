@@ -26,6 +26,8 @@ func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 			continue
 		}
 
+		description := lo.FromPtr(item.FieldByKey("description").GetValue().String())
+
 		assetsRaw, _ := item.FieldByKey("assets").Value.([]any)
 		urls := []lo.Entry[Range, string]{}
 		for _, assetRaw := range assetsRaw {
@@ -44,7 +46,7 @@ func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 			continue
 		}
 
-		res[name] = urls
+		res[name] = TileEntry{Description: description, URLs: urls}
 	}
 
 	return res, nil
@@ -67,11 +69,18 @@ func assetBaseURL(assetURL string) string {
 	return u.String()
 }
 
-type Tiles map[string][]lo.Entry[Range, string]
+// TileEntry is a single named tile source: a human-readable description plus
+// one or more upstream URLs each scoped to a `Range` of z/x/y tile coords.
+type TileEntry struct {
+	Description string
+	URLs        []lo.Entry[Range, string]
+}
+
+type Tiles map[string]TileEntry
 
 func (t Tiles) Find(name string, z, x, y int) string {
 	if m, ok := t[name]; ok {
-		for _, r := range m {
+		for _, r := range m.URLs {
 			if r.Key.In(z, x, y) {
 				return r.Value
 			}
@@ -82,9 +91,9 @@ func (t Tiles) Find(name string, z, x, y int) string {
 
 func (t Tiles) String() string {
 	res := ""
-	for name, urls := range t {
+	for name, entry := range t {
 		res += name + ":\n"
-		for _, url := range urls {
+		for _, url := range entry.URLs {
 			_, p, ok := strings.Cut(url.Value, "/assets/")
 			if !ok {
 				p = url.Value

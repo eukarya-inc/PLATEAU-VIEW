@@ -46,6 +46,7 @@ CMS のアセットをタイル配信用の設定に変換するパッケージ�
 - `.tif` / `.tiff` → `type: "cog"`、`url` はそのまま、`order` は登録順
 - それ以外 → `type: "xyz"`、`url` は `…/{z}/{x}/{y}.png` テンプレート、ファイル名から拾った範囲を `range` フィールド（`z_min` / `z_max` / `x_min` / `x_max` / `y_min` / `y_max`）に詰める
 - 加えて MapLibre スタイル `dark-map` / `light-map` を `<baseURL>/tiles/styles/<name>` 参照で追加
+- CMS の `description` フィールドが存在すれば、各ソースの `description` フィールドにそのまま転記する（Rust 側の `/tiles/catalog.json` で公開向け一覧 API として配信される）
 
 つまり「ファイル名で範囲指定」は `server/tiles` 側の規約で、Rust 側の `config.json` の `range` フィールドにマッピングされる仕組み。
 

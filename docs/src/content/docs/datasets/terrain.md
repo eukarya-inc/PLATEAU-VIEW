@@ -62,7 +62,46 @@ DEM の元データの最大ズームよりも高いズームレベルが要求�
 https://tile.plateauview.mlit.go.jp
 ```
 
-### 2.1. Cesium 用 quantized-mesh terrain
+### 2.1. 配信中のタイル一覧（カタログ API）
+
+`/tiles/catalog.json` で、現在配信中の全タイルソース（オルソ画像と地形を含む）の一覧をプログラムから取得できます。地形は以下の 3 種類のエントリとして含まれます。
+
+```
+https://tile.plateauview.mlit.go.jp/tiles/catalog.json
+```
+
+| `name` | `urls` のキー | URL |
+| --- | --- | --- |
+| `terrain` | `quantized-mesh` | `/terrain/layer.json` |
+| `terrarium` | `png` / `webp` / `avif` | `/terrarium/tilejson.json?format=...` |
+| `mapbox` | `png` / `webp` / `avif` | `/mapbox/tilejson.json?format=...` |
+
+レスポンス例（地形部分の抜粋）:
+
+```json
+{
+  "tiles": [
+    {
+      "name": "terrain",
+      "description": "Cesium quantized-mesh terrain (ellipsoidal heights, Japan coverage)",
+      "urls": {
+        "quantized-mesh": "https://tile.plateauview.mlit.go.jp/terrain/layer.json"
+      }
+    },
+    {
+      "name": "terrarium",
+      "description": "MapLibre raster-dem source (Terrarium encoding, ellipsoidal heights)",
+      "urls": {
+        "png":  "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=png",
+        "webp": "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=webp",
+        "avif": "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=avif"
+      }
+    }
+  ]
+}
+```
+
+### 2.2. Cesium 用 quantized-mesh terrain
 
 ```
 https://tile.plateauview.mlit.go.jp/terrain/layer.json
@@ -71,7 +110,7 @@ https://tile.plateauview.mlit.go.jp/terrain/{z}/{x}/{y}.terrain
 
 CesiumJS の `CesiumTerrainProvider.fromUrl` に `layer.json` の URL を渡すだけで利用できます。`?geoid=` を付けるとジオイドモデルを切り替えられます（既定は `gsigeo2011`）。
 
-### 2.2. MapLibre / Mapbox GL 用 raster-dem（Terrarium）
+### 2.3. MapLibre / Mapbox GL 用 raster-dem（Terrarium）
 
 ```
 https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json
@@ -80,7 +119,7 @@ https://tile.plateauview.mlit.go.jp/terrarium/{z}/{x}/{y}.{png|webp|avif}
 
 `tilejson.json` を MapLibre の `raster-dem` ソースの `url` に指定し、`encoding: "terrarium"` を併せて指定してください。タイル拡張子は既定で `webp`、`tilejson.json?format=png` のように切り替えできます。
 
-### 2.3. MapLibre / Mapbox GL 用 raster-dem（Mapbox Terrain-RGB v1）
+### 2.4. MapLibre / Mapbox GL 用 raster-dem（Mapbox Terrain-RGB v1）
 
 ```
 https://tile.plateauview.mlit.go.jp/mapbox/tilejson.json

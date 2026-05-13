@@ -9,14 +9,16 @@ import (
 
 func TestTiles_Find(t *testing.T) {
 	tiles := Tiles{
-		"name": []lo.Entry[Range, string]{
-			{
-				Key:   Range{ZMin: 0, ZMax: 0, XMin: -1, XMax: -1, YMin: 10, YMax: 20},
-				Value: "a",
-			},
-			{
-				Key:   Range{ZMin: 1, ZMax: -1, XMin: 1, XMax: 2, YMin: 10, YMax: 20},
-				Value: "b",
+		"name": TileEntry{
+			URLs: []lo.Entry[Range, string]{
+				{
+					Key:   Range{ZMin: 0, ZMax: 0, XMin: -1, XMax: -1, YMin: 10, YMax: 20},
+					Value: "a",
+				},
+				{
+					Key:   Range{ZMin: 1, ZMax: -1, XMin: 1, XMax: 2, YMin: 10, YMax: 20},
+					Value: "b",
+				},
 			},
 		},
 	}

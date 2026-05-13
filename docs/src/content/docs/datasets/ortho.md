@@ -36,7 +36,35 @@ Project PLATEAU で配布しているデータの利用許諾については、�
 本サービスはあくまで試験的な運用であるため、提供期間やサービスレベルについては保証できないことをご了承ください。
 :::
 
-### 2.1. PLATEAU-Ortho（XYZ タイル）
+### 2.1. 配信中のタイル一覧（カタログ API）
+
+`/tiles/catalog.json` で、現在配信中の全タイルソースの一覧をプログラムから取得できます。各エントリには `name`、`description`、フォーマット別の TileJSON URL（`png` / `webp` / `avif`）が含まれます。
+
+```
+https://tile.plateauview.mlit.go.jp/tiles/catalog.json
+```
+
+レスポンス例:
+
+```json
+{
+  "tiles": [
+    {
+      "name": "plateau-ortho-2023",
+      "description": "PLATEAU-Ortho（2023 年度版）",
+      "urls": {
+        "png":  "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/tilejson.json?format=png",
+        "webp": "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/tilejson.json?format=webp",
+        "avif": "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/tilejson.json?format=avif"
+      }
+    }
+  ]
+}
+```
+
+地形（`terrain` / `terrarium` / `mapbox`）も同じカタログに含まれます。詳細は [PLATEAU-Terrain](/datasets/terrain/) を参照してください。
+
+### 2.2. PLATEAU-Ortho（XYZ タイル）
 
 2023 年度に作成されたデータが利用可能です。
 
@@ -142,7 +170,7 @@ https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png
 | 43443 | 熊本県 | 益城町 | 2023 |
 | 47201 | 沖縄県 | 那覇市 | 2020 |
 
-### 2.2. PLATEAU-Ortho（OGC WMS）
+### 2.3. PLATEAU-Ortho（OGC WMS）
 
 2020 年度に作成されたデータが WMS で利用可能です。
 

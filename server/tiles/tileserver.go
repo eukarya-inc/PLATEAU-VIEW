@@ -16,7 +16,8 @@ type TileServerConfig struct {
 
 // TileServerSourceConfig represents a named tile source configuration
 type TileServerSourceConfig struct {
-	Layers []TileServerLayerConfig `json:"layers"`
+	Description string                  `json:"description,omitempty"`
+	Layers      []TileServerLayerConfig `json:"layers"`
 }
 
 // TileServerLayerConfig represents a layer configuration (XYZ or COG)
@@ -47,26 +48,29 @@ type TileServerCacheConfig struct {
 func (t Tiles) ToTileServerConfig(baseURL string) TileServerConfig {
 	sources := make(map[string]TileServerSourceConfig)
 
-	for name, entries := range t {
-		layers := make([]TileServerLayerConfig, 0, len(entries))
-		for i, entry := range entries {
+	for name, entry := range t {
+		layers := make([]TileServerLayerConfig, 0, len(entry.URLs))
+		for i, u := range entry.URLs {
 			var layer TileServerLayerConfig
-			if isCOGURL(entry.Value) {
+			if isCOGURL(u.Value) {
 				layer = TileServerLayerConfig{
 					Type:  "cog",
-					URL:   entry.Value,
+					URL:   u.Value,
 					Order: i,
 				}
 			} else {
 				layer = TileServerLayerConfig{
 					Type:  "xyz",
-					URL:   buildTileURLTemplate(entry.Value),
-					Range: rangeToTileServerRange(entry.Key),
+					URL:   buildTileURLTemplate(u.Value),
+					Range: rangeToTileServerRange(u.Key),
 				}
 			}
 			layers = append(layers, layer)
 		}
-		sources[name] = TileServerSourceConfig{Layers: layers}
+		sources[name] = TileServerSourceConfig{
+			Description: entry.Description,
+			Layers:      layers,
+		}
 	}
 
 	// Add MapLibre style sources

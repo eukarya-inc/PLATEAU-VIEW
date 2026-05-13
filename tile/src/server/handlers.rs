@@ -108,6 +108,117 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
     )
 }
 
+/// `GET /tiles/catalog.json` — public-facing list of available tile sources
+/// with end-user-relevant fields (name, description, per-format TileJSON
+/// URLs). Unlike [`get_sources`], this intentionally omits internal details
+/// like upstream layer URLs, layer indices, versions, or per-layer bounds —
+/// those expose CMS-side implementation and shouldn't be in a consumer
+/// catalog.
+#[derive(Serialize)]
+struct CatalogResponse {
+    tiles: Vec<CatalogEntry>,
+}
+
+#[derive(Serialize)]
+struct CatalogEntry {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    /// TileJSON URLs keyed by format/encoding. For `/tiles/{name}` sources
+    /// this is `png` / `webp` / `avif`; for the built-in terrain endpoints
+    /// it's `quantized-mesh` (Cesium) or `png` / `webp` / `avif` (MapLibre
+    /// raster-dem).
+    urls: std::collections::BTreeMap<String, String>,
+}
+
+/// Raster output formats advertised by the catalog. Kept in sync with the
+/// formats accepted by [`get_tilejson`] and the terrain raster endpoints.
+const CATALOG_RASTER_FORMATS: &[&str] = &["png", "webp", "avif"];
+
+/// Name used by the special DEM-overlay source in `config.json`. Its layers
+/// are folded into the composite DEM provider rather than exposed under
+/// `/tiles/dem/...`, so it's not user-fetchable and we hide it from the
+/// catalog (terrain itself appears under the built-in `terrain` entry).
+const DEM_SOURCE_KEY: &str = "dem";
+
+pub async fn get_catalog(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let config = state.config_manager.get().await;
+    let (scheme, host) = crate::server::terrain::external_origin(&headers);
+
+    let mut tiles: Vec<CatalogEntry> = config
+        .sources
+        .into_iter()
+        .filter(|(name, _)| name != DEM_SOURCE_KEY)
+        .map(|(name, src)| {
+            let urls = CATALOG_RASTER_FORMATS
+                .iter()
+                .map(|fmt| {
+                    (
+                        (*fmt).to_string(),
+                        format!("{scheme}://{host}/tiles/{name}/tilejson.json?format={fmt}"),
+                    )
+                })
+                .collect();
+            CatalogEntry {
+                name,
+                description: src.description,
+                urls,
+            }
+        })
+        .collect();
+
+    // Built-in terrain endpoints aren't in `config.sources` (they're driven
+    // by env vars), so register them by hand. Names match the URL prefixes.
+    let raster_dem_urls = |slug: &str| -> std::collections::BTreeMap<String, String> {
+        CATALOG_RASTER_FORMATS
+            .iter()
+            .map(|fmt| {
+                (
+                    (*fmt).to_string(),
+                    format!("{scheme}://{host}/{slug}/tilejson.json?format={fmt}"),
+                )
+            })
+            .collect()
+    };
+    tiles.push(CatalogEntry {
+        name: "terrain".to_string(),
+        description: Some(
+            "Cesium quantized-mesh terrain (ellipsoidal heights, Japan coverage)".to_string(),
+        ),
+        urls: std::iter::once((
+            "quantized-mesh".to_string(),
+            format!("{scheme}://{host}/terrain/layer.json"),
+        ))
+        .collect(),
+    });
+    tiles.push(CatalogEntry {
+        name: "terrarium".to_string(),
+        description: Some(
+            "MapLibre raster-dem source (Terrarium encoding, ellipsoidal heights)".to_string(),
+        ),
+        urls: raster_dem_urls("terrarium"),
+    });
+    tiles.push(CatalogEntry {
+        name: "mapbox".to_string(),
+        description: Some(
+            "MapLibre raster-dem source (Mapbox Terrain-RGB encoding, ellipsoidal heights)"
+                .to_string(),
+        ),
+        urls: raster_dem_urls("mapbox"),
+    });
+
+    tiles.sort_by(|a, b| a.name.cmp(&b.name));
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&CatalogResponse { tiles }).unwrap_or_else(|_| "{}".to_string()),
+    )
+}
+
 /// Viewer HTML for debugging tiles. The page fetches `/tiles/sources.json`
 /// on load to populate its source dropdown and inspector. Source HTML is
 /// loaded from disk at request time — see [`super::static_assets`].

@@ -48,6 +48,7 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
     Router::new()
         .route("/", get(handlers::viewer))
         .route("/tiles/sources.json", get(handlers::get_sources))
+        .route("/tiles/catalog.json", get(handlers::get_catalog))
         .route("/tiles/{name}/tilejson.json", get(handlers::get_tilejson))
         .route("/tiles/{name}/{z}/{x}/{y}", get(handlers::get_tile))
         .route("/terrain-viewer", get(terrain_handlers::terrain_viewer))
