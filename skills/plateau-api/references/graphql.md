@@ -1,67 +1,51 @@
-# GraphQL API リファレンス
+# GraphQL API
 
-エンドポイント:
+エンドポイント: `https://api.plateauview.mlit.go.jp/datacatalog/graphql`
 
+## スキーマ取得
+
+introspection で動的に取得する。スキーマは予告なく変更されるので、コード生成等の前に都度取得すること。
+
+最小（型名と種別のみ）:
+
+```bash
+curl -fsSL -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{__schema{types{name kind}}}"}'
 ```
-https://api.plateauview.mlit.go.jp/datacatalog/graphql
+
+特定の型のフィールド:
+
+```bash
+curl -fsSL -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"query($n:String!){__type(name:$n){name fields{name type{name kind ofType{name kind}}}}}","variables":{"n":"Area"}}'
 ```
 
-ブラウザで開くと組み込みの **GraphiQL** が起動し、対話的にクエリを試せる。
+完全な introspection は SKILL.md のクエリを参照。
 
-## 特徴
-
-- 必要なフィールドだけ 1 リクエストで取得
-- 都道府県・自治体・年度などでのフィルタリング
-- スキーマは [plateauapi (GitHub)](https://github.com/Project-PLATEAU/PLATEAU-VIEW-5.0/tree/main/server/datacatalog/plateauapi) のソースから生成
-- スキーマリファレンスは <https://docs.plateauview.mlit.go.jp/api/graphql/schema/>
-
-## 基本クエリ例
+## クエリパターン
 
 ### 自治体コードからデータセット一覧
 
-```graphql
-query {
-  area(code: "13101") {
-    id
-    type
-    datasets {
-      id
-      name
-      items {
-        id
-        name
-        url
-      }
-    }
-  }
-}
+```bash
+curl -fsSL -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{ area(code: \"13101\") { id type datasets { id name items { id name url } } } }"}'
 ```
+
+### 都道府県で CityGML データセットを絞る
 
 ```bash
-curl -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
+curl -fsSL -X POST https://api.plateauview.mlit.go.jp/datacatalog/graphql \
   -H 'Content-Type: application/json' \
-  --data '{"query":"{ area(code: \"13101\") { datasets { name items { url } } } }"}'
+  -d '{"query":"{ citygmlDatasets(input: { prefectureCodes: [\"13\"] }) { id cityCode url fileSize year featureTypes } }"}'
 ```
 
-### CityGML データセット検索
+## 主要フィールド
 
-```graphql
-query {
-  citygmlDatasets(input: { prefectureCodes: ["13"] }) {
-    id
-    cityCode
-    url
-    year
-    featureTypes
-  }
-}
-```
-
-## スキーマを調べる方法
-
-1. **公式スキーマリファレンス**: <https://docs.plateauview.mlit.go.jp/api/graphql/schema/>
-2. **GraphiQL の introspection**: エンドポイントをブラウザで開いてドキュメント探索
-3. **生 SDL**: <https://github.com/Project-PLATEAU/PLATEAU-VIEW-5.0/tree/main/server/datacatalog/plateauapi>
+- `fileSize`: `Int`、null あり、CMS 上の zip のバイト数（`DatasetItem` 系（`PlateauDatasetItem` / `GenericDatasetItem` / `RelatedDatasetItem`）にも同名フィールドあり）
+- `RelatedDatasetItem.originalFileSize`: 変換前データのサイズ
 
 ## 制約
 
