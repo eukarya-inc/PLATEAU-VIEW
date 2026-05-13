@@ -53,6 +53,6 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 		candidates := composite3dtiles.Select(inputs, spec)
 		tileset := composite3dtiles.Build(candidates, spec.Type)
 
-		return c.JSON(http.StatusOK, tileset)
+		return writeJSONWithETag(c, tileset)
 	}
 }

@@ -67,6 +67,6 @@ func (h *ReposHandler) MVTTileJSONAPI() echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusNotFound, "no matching MVT dataset")
 		}
 
-		return c.JSON(http.StatusOK, mvttilejson.Build(*match))
+		return writeJSONWithETag(c, mvttilejson.Build(*match))
 	}
 }

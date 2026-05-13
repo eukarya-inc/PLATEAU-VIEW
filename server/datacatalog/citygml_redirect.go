@@ -51,7 +51,7 @@ func (h *ReposHandler) CityGMLRedirectAPI() echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusNotFound, "no matching CityGML dataset")
 		}
 
-		return c.Redirect(http.StatusFound, match.URL)
+		return redirectWithETag(c, match.URL)
 	}
 }
 
