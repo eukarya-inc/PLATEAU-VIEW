@@ -247,6 +247,7 @@ pub async fn get_tile(
     headers: HeaderMap,
     Path((name, z, x, y_ext)): Path<(String, u32, u32, String)>,
 ) -> Response {
+    state.maybe_revalidate().await;
     // Parse y and format from "123.png" format
     let (y, format) = match parse_y_and_format(&y_ext) {
         Some(parsed) => parsed,
@@ -343,8 +344,14 @@ pub async fn reload(
         }
     }
 
+    // Take the reload mutex so this path can't overlap with a lazy
+    // revalidation that's in flight (and vice versa). Manual `/reload` always
+    // rebuilds sources, even when the content hash matches, so the operator
+    // gets a deterministic "force reapply" semantic.
+    let mutex = state.reload_mutex();
+    let _guard = mutex.lock().await;
     match state.config_manager.reload().await {
-        Ok(()) => {
+        Ok(_changed) => {
             state.reload_sources().await;
             (StatusCode::OK, "Configuration reloaded").into_response()
         }

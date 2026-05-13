@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::join_all;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use xxhash_rust::xxh64::xxh64;
 
 use crate::{
@@ -42,6 +42,11 @@ pub struct AppState {
     /// Cached env-derived terrain settings, needed at reload time to rebuild
     /// the base DEM with the same configuration.
     terrain_settings: TerrainSettings,
+    /// Serializes config reload work. Both manual `/reload` and lazy
+    /// revalidation take this — `/reload` blocks (`.lock()`) so the operator
+    /// sees a deterministic outcome, while lazy revalidation uses `try_lock`
+    /// and skips when an operation is already in flight.
+    reload_mutex: Arc<Mutex<()>>,
 }
 
 /// One layer described in the config, with a live source instance for
@@ -124,7 +129,50 @@ impl AppState {
             cache_control,
             terrain: Arc::new(RwLock::new(terrain)),
             terrain_settings,
+            reload_mutex: Arc::new(Mutex::new(())),
         }
+    }
+
+    /// Lazy revalidation hook to call near the start of tile/terrain handlers.
+    ///
+    /// On the hot path (TTL not yet expired) this is a single relaxed atomic
+    /// load. When the TTL window has elapsed, exactly one caller per pod wins
+    /// the CAS, then takes the reload mutex (`try_lock` — skip if `/reload`
+    /// or another revalidation is already in flight) and synchronously
+    /// refetches the config. If the body hash changed, sources are rebuilt
+    /// before this method returns.
+    ///
+    /// Synchronous on purpose: Cloud Run throttles CPU outside the active
+    /// request, so a `tokio::spawn`-ed background task could be paused or
+    /// killed mid-rebuild. The triggering request eats the latency (~hundreds
+    /// of ms once per TTL window per pod); other concurrent requests skip
+    /// via CAS and continue with the current state.
+    pub async fn maybe_revalidate(&self) {
+        if !self.config_manager.claim_check_slot() {
+            return;
+        }
+        let _guard = match self.reload_mutex.try_lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        match self.config_manager.reload().await {
+            Ok(true) => {
+                tracing::info!("Config changed on revalidation; rebuilding sources");
+                self.reload_sources().await;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "Config revalidation fetch failed");
+            }
+        }
+    }
+
+    /// Accessor for the reload mutex so the `/reload` handler can take it
+    /// before invoking `config_manager.reload()` + `reload_sources()`. Using
+    /// the same mutex as [`Self::maybe_revalidate`] guarantees the two
+    /// reload paths never overlap.
+    pub fn reload_mutex(&self) -> Arc<Mutex<()>> {
+        self.reload_mutex.clone()
     }
 
     /// Current terrain state. Cheap (Arc clone) and lock-free for callers

@@ -1,10 +1,25 @@
 //! Configuration management with remote URL loading and auto-reload.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::RwLock;
+use xxhash_rust::xxh64::xxh64;
+
+fn unix_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -277,21 +292,40 @@ pub struct CacheConfig {
     pub gcs_bucket: Option<String>,
 }
 
-/// Configuration manager with auto-reload support
+/// Configuration manager with auto-reload support.
+///
+/// Supports lazy revalidation: callers invoke [`Self::claim_check_slot`] before
+/// the per-request critical section. The first caller after the TTL window has
+/// expired wins via CAS, performs the fetch via [`Self::revalidate`], and the
+/// content-hash check decides whether downstream sources need rebuilding.
+/// Losing callers see the bumped timestamp and skip — they continue serving
+/// from the currently loaded state (eventually consistent).
 pub struct ConfigManager {
     config: Arc<RwLock<Config>>,
     config_url: String,
     client: reqwest::Client,
+    /// Unix-seconds timestamp of the last revalidation attempt. Bumped via CAS
+    /// before fetching so concurrent requests only let one through per TTL
+    /// window. Stays bumped even on fetch failure — preventing retry storms
+    /// against a flaky upstream.
+    last_checked: AtomicU64,
+    /// xxh64 of the raw config-body bytes from the most recent successful
+    /// fetch. Used to skip rebuilding sources when the JSON hasn't changed.
+    /// `0` means "no successful fetch yet".
+    content_hash: AtomicU64,
+    /// Revalidation cadence. `0` disables lazy revalidation (manual `/reload`
+    /// only).
+    revalidate_ttl: Duration,
 }
 
 impl ConfigManager {
-    pub async fn new(config_url: &str) -> Result<Self, ConfigError> {
+    pub async fn new(config_url: &str, revalidate_ttl: Duration) -> Result<Self, ConfigError> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| ConfigError::FetchError(e.to_string()))?;
 
-        let config = Self::fetch_config(&client, config_url).await?;
+        let (config, body_hash) = Self::fetch_config(&client, config_url).await?;
 
         tracing::info!("Loaded configuration with {} sources", config.sources.len());
 
@@ -299,6 +333,9 @@ impl ConfigManager {
             config: Arc::new(RwLock::new(config)),
             config_url: config_url.to_string(),
             client,
+            last_checked: AtomicU64::new(unix_secs()),
+            content_hash: AtomicU64::new(body_hash),
+            revalidate_ttl,
         })
     }
 
@@ -318,6 +355,9 @@ impl ConfigManager {
             })),
             config_url: String::new(),
             client,
+            last_checked: AtomicU64::new(0),
+            content_hash: AtomicU64::new(0),
+            revalidate_ttl: Duration::from_secs(0),
         }
     }
 
@@ -326,7 +366,35 @@ impl ConfigManager {
         !self.config_url.is_empty()
     }
 
-    async fn fetch_config(client: &reqwest::Client, url: &str) -> Result<Config, ConfigError> {
+    /// Whether lazy revalidation is enabled (TTL > 0 and a URL is configured).
+    pub fn revalidation_enabled(&self) -> bool {
+        self.has_url() && !self.revalidate_ttl.is_zero()
+    }
+
+    /// Try to claim the revalidation slot for the current TTL window.
+    ///
+    /// Returns `true` for the single caller per pod that wins the CAS race
+    /// after the window has expired. Callers that return `false` should skip
+    /// revalidation work and continue serving from the current state.
+    pub fn claim_check_slot(&self) -> bool {
+        if !self.revalidation_enabled() {
+            return false;
+        }
+        let now = unix_secs();
+        let ttl = self.revalidate_ttl.as_secs();
+        let last = self.last_checked.load(Ordering::Acquire);
+        if now.saturating_sub(last) < ttl {
+            return false;
+        }
+        self.last_checked
+            .compare_exchange(last, now, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    async fn fetch_config(
+        client: &reqwest::Client,
+        url: &str,
+    ) -> Result<(Config, u64), ConfigError> {
         let text = if let Some(path) = url.strip_prefix("file://") {
             // Read from local file
             tokio::fs::read_to_string(path)
@@ -353,20 +421,38 @@ impl ConfigManager {
                 .map_err(|e| ConfigError::FetchError(e.to_string()))?
         };
 
-        serde_json::from_str(&text).map_err(|e| ConfigError::ParseError(e.to_string()))
+        let hash = xxh64(text.as_bytes(), 0);
+        let cfg =
+            serde_json::from_str(&text).map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        Ok((cfg, hash))
     }
 
-    /// Reload configuration from URL. No-op when running without a CONFIG_URL.
-    pub async fn reload(&self) -> Result<(), ConfigError> {
+    /// Reload configuration from URL unconditionally and swap it in.
+    /// Returns `Ok(true)` if the content hash changed (callers should rebuild
+    /// downstream sources), `Ok(false)` if the body is byte-identical to the
+    /// previous successful fetch. No-op when running without a CONFIG_URL.
+    pub async fn reload(&self) -> Result<bool, ConfigError> {
         if !self.has_url() {
             tracing::info!("Reload requested but no CONFIG_URL is set; nothing to do");
-            return Ok(());
+            return Ok(false);
         }
-        let new_config = Self::fetch_config(&self.client, &self.config_url).await?;
-        let mut config = self.config.write().await;
-        *config = new_config;
-        tracing::info!("Configuration reloaded from {}", self.config_url);
-        Ok(())
+        let (new_config, new_hash) = Self::fetch_config(&self.client, &self.config_url).await?;
+        let prev_hash = self.content_hash.swap(new_hash, Ordering::AcqRel);
+        // Bump the revalidation timestamp so any concurrent lazy check that
+        // arrives within the next TTL window short-circuits.
+        self.last_checked.store(unix_secs(), Ordering::Release);
+        let changed = prev_hash != new_hash;
+        if changed {
+            let mut config = self.config.write().await;
+            *config = new_config;
+            tracing::info!("Configuration reloaded from {}", self.config_url);
+        } else {
+            tracing::debug!(
+                "Config refetched from {} but content is unchanged",
+                self.config_url
+            );
+        }
+        Ok(changed)
     }
 
     /// Get current configuration

@@ -44,7 +44,7 @@ impl TestServer {
         // Create config manager
         let config_url = format!("file://{}", config_path.display());
         let config_manager = Arc::new(
-            ConfigManager::new(&config_url)
+            ConfigManager::new(&config_url, Duration::from_secs(0))
                 .await
                 .expect("Failed to create config manager"),
         );
@@ -130,7 +130,7 @@ impl TestServer {
 
         let config_url = format!("file://{}", config_path.display());
         let config_manager = Arc::new(
-            ConfigManager::new(&config_url)
+            ConfigManager::new(&config_url, Duration::from_secs(0))
                 .await
                 .expect("Failed to create config manager"),
         );
@@ -210,7 +210,7 @@ impl TestServer {
 
         let config_url = format!("file://{}", config_path.display());
         let config_manager = Arc::new(
-            ConfigManager::new(&config_url)
+            ConfigManager::new(&config_url, Duration::from_secs(0))
                 .await
                 .expect("Failed to create config manager"),
         );

@@ -136,6 +136,7 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `CONFIG_URL` | No | - | URL to the configuration JSON file. Omit to run with terrain-only defaults; required only to enable `/tiles/...` sources |
+| `CONFIG_TTL_SECS` | No | `60` | Lazy revalidation TTL. Each tile/terrain request checks whether the config has been re-fetched within this window; on the first miss per pod the request synchronously re-fetches and, if the body hash changed, rebuilds sources before serving. `0` disables (manual `/reload` only). Synchronous on purpose — Cloud Run throttles CPU outside the active request, so a background poller could be paused or killed mid-rebuild |
 | `PORT` | No | `8080` | HTTP server port |
 | `CACHE_SIZE_MB` | No | `512` | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret token for `/reload` endpoint (if set, requires `Authorization: Bearer <token>`) |
@@ -233,7 +234,7 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 | GET | `/mapbox/:z/:x/:y.{format}` | Mapbox Terrain-RGB v1 raster of ellipsoidal heights |
 | GET | `/terrain-viewer` | Embedded Cesium preview of the terrain output |
 | GET | `/health` | Health check |
-| POST | `/reload` | Reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set) |
+| POST | `/reload` | Force-reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set). Always rebuilds sources, even when the config body hash is unchanged. Most operators don't need to call this — see `CONFIG_TTL_SECS` for the lazy-revalidation path that picks up CMS changes automatically |
 
 > See [Terrain](#terrain) above for what these endpoints output and how the geoid query parameter works. To self-host the DEM, see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
 

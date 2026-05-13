@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use opentelemetry::trace::TracerProvider;
@@ -131,10 +131,21 @@ async fn main() -> Result<()> {
     // Cache-Control header for stored objects in persistent cache (optional)
     let object_cache_control = env::var("TILE_CACHE_CONTROL").ok();
 
+    // Lazy revalidation TTL. Each tile/terrain request checks whether at
+    // least this many seconds have elapsed since the last config check; if
+    // so, exactly one in-flight request per pod refetches the config and
+    // rebuilds sources when the content hash differs. `0` disables lazy
+    // revalidation (manual `/reload` only).
+    let config_ttl_secs = env::var("CONFIG_TTL_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(60);
+    let config_ttl = Duration::from_secs(config_ttl_secs);
+
     let config_manager = Arc::new(match config_url.as_deref() {
         Some(url) => {
             tracing::info!("Loading configuration from {}", url);
-            ConfigManager::new(url)
+            ConfigManager::new(url, config_ttl)
                 .await
                 .context("Failed to load configuration")?
         }
@@ -146,6 +157,12 @@ async fn main() -> Result<()> {
             ConfigManager::empty()
         }
     });
+
+    if config_ttl_secs == 0 {
+        tracing::info!("Lazy config revalidation disabled (CONFIG_TTL_SECS=0)");
+    } else {
+        tracing::info!("Lazy config revalidation TTL: {}s", config_ttl_secs);
+    }
 
     // Start server
     let addr = format!("0.0.0.0:{port}");

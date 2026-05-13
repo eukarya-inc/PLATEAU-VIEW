@@ -292,6 +292,7 @@ pub async fn terrain_tile(
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
     Query(q): Query<GeoidQuery>,
 ) -> Response {
+    state.maybe_revalidate().await;
     let terrain = state.current_terrain().await;
 
     // Parse y and validate extension.
@@ -464,6 +465,7 @@ async fn raster_tile(
     Query(q): Query<GeoidQuery>,
     encoding: RasterEncoding,
 ) -> Response {
+    state.maybe_revalidate().await;
     let terrain = state.current_terrain().await;
 
     let (y, format) = match parse_y_and_format(&y_ext) {
