@@ -18,6 +18,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install latest gh CLI
+        # The `gh skill` subcommand requires gh >= 2.91.0 (April 2026).
+        # ubuntu-latest's pre-installed gh may lag, so pin to the latest release.
+        run: |
+          set -euo pipefail
+          version="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r .tag_name | sed 's/^v//')"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_linux_amd64.tar.gz" \
+            | sudo tar xz -C /usr/local --strip-components=1
+          gh --version
+
       - name: Validate skills against agentskills.io spec
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

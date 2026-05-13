@@ -2,8 +2,7 @@
 
 PLATEAU 配信サービスを AI コーディングエージェントから利用するための [Agent Skills](https://agentskills.io/specification)。
 
-開発元: [eukarya-inc/PLATEAU-VIEW](https://github.com/eukarya-inc/PLATEAU-VIEW) の [`skills/`](https://github.com/eukarya-inc/PLATEAU-VIEW/tree/main/skills) ディレクトリ
-このリポジトリ自体は read-only ミラー。Issue / PR は開発元へ。
+詳しくは <https://docs.plateauview.mlit.go.jp/skills/overview/> を参照。
 
 ## 収録スキル
 
