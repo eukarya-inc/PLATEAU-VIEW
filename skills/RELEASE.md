@@ -19,10 +19,11 @@ Project-PLATEAU/skills (main)            ← gh skill install の対象
 
 ```bash
 git fetch origin skills-dist
-git push git@github.com:Project-PLATEAU/skills.git origin/skills-dist:main
+git push git@github.com:Project-PLATEAU/skills.git \
+  refs/remotes/origin/skills-dist:refs/heads/main
 ```
 
-force-push になるが、配布リポジトリはミラー扱いなので問題ない。
+`refs/remotes/...:refs/heads/...` のように両側を完全修飾する必要がある（`origin/skills-dist:main` のような短縮形は git に拒否される）。配布リポジトリは履歴を保たないミラー扱いなので、必要なら `--force` を付けて構わない。
 
 ## バリデーション
 
