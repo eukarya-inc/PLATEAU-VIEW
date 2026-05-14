@@ -57,15 +57,22 @@ impl DemProvider for CachedDemProvider {
         if let Some(cached) = self.cache.get(&key).await {
             return Ok((*cached).clone());
         }
-        // Errors are not cached — a transient upstream failure shouldn't
-        // get pinned for the LRU's lifetime, and `DemError` isn't `Clone`
-        // anyway. Concurrent misses for the same key still race upstream
-        // (we accept that tradeoff for simplicity); successful results
-        // populate the cache and serve any later callers.
-        let tile = self.inner.get_tile_elevations(z, x, y, tile_size).await?;
-        let arc = Arc::new(tile.clone());
-        self.cache.insert(key, arc).await;
-        Ok(tile)
+        // Single-flight via moka's `try_get_with`: concurrent misses for
+        // the same key fan into one upstream fetch. Errors are not
+        // retained — `try_get_with` only caches on success, so a
+        // transient upstream failure won't be pinned for the LRU's
+        // lifetime. `DemError` is `Clone`, so we can propagate the
+        // original variant through `Arc<E>` without losing structure
+        // (`NotFound`, `Http`, `Decode`, …).
+        let arc = self
+            .cache
+            .try_get_with(key, async {
+                let tile = self.inner.get_tile_elevations(z, x, y, tile_size).await?;
+                Ok::<Arc<DemTile>, DemError>(Arc::new(tile))
+            })
+            .await
+            .map_err(|e| (*e).clone())?;
+        Ok((*arc).clone())
     }
 
     fn native_tile_size(&self) -> u32 {
@@ -90,5 +97,79 @@ impl DemProvider for CachedDemProvider {
 
     fn bounds(&self) -> Option<GeoBounds> {
         self.inner.bounds()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    /// DEM provider that counts upstream calls and sleeps to widen the
+    /// window during which concurrent callers can pile onto the same key.
+    struct CountingProvider {
+        calls: AtomicUsize,
+        delay: Duration,
+    }
+
+    #[async_trait]
+    impl DemProvider for CountingProvider {
+        async fn get_tile_elevations(
+            &self,
+            _z: u8,
+            _x: u32,
+            _y: u32,
+            tile_size: u32,
+        ) -> Result<DemTile, DemError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            tokio::time::sleep(self.delay).await;
+            Ok(DemTile {
+                elevations: vec![0.0; (tile_size * tile_size) as usize],
+                etag: None,
+            })
+        }
+
+        fn native_tile_size(&self) -> u32 {
+            256
+        }
+        fn max_zoom(&self) -> u8 {
+            14
+        }
+        fn version(&self) -> &str {
+            "test"
+        }
+        fn slug(&self) -> &str {
+            "test"
+        }
+    }
+
+    /// Regression: a stampede of concurrent callers for the same tile must
+    /// trigger exactly one upstream fetch. Pre-single-flight this would
+    /// race upstream N times.
+    #[tokio::test]
+    async fn test_single_flight_coalesces_concurrent_misses() {
+        let inner = Arc::new(CountingProvider {
+            calls: AtomicUsize::new(0),
+            delay: Duration::from_millis(50),
+        });
+        let provider = Arc::new(CachedDemProvider::new(inner.clone(), 32));
+
+        let mut handles = Vec::new();
+        for _ in 0..16 {
+            let p = provider.clone();
+            handles.push(tokio::spawn(async move {
+                p.get_tile_elevations(5, 1, 2, 256).await.unwrap();
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        assert_eq!(
+            inner.calls.load(Ordering::SeqCst),
+            1,
+            "concurrent misses must coalesce into a single upstream fetch"
+        );
     }
 }
