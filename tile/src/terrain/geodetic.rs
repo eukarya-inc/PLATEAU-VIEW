@@ -280,6 +280,119 @@ pub async fn fetch_geodetic_tile_elevations(
     })
 }
 
+/// Result of a halo-extended fetch — see [`fetch_geodetic_tile_elevations_with_halo`].
+#[derive(Debug)]
+pub struct GeodeticFetchWithHaloResult {
+    /// Tile-sized elevation grid (`CESIUM_TILE_SIZE × CESIUM_TILE_SIZE`) — same
+    /// values that [`fetch_geodetic_tile_elevations`] returns.
+    pub elevations: Vec<f64>,
+    /// Elevation grid extended by `halo_cells` cells on every side. Layout is
+    /// `(CESIUM_TILE_SIZE + 2*halo_cells)²`, north → south, row major. The
+    /// inner `CESIUM_TILE_SIZE × CESIUM_TILE_SIZE` block equals `elevations`
+    /// modulo edge-nudge rounding.
+    pub elevations_with_halo: Vec<f64>,
+    pub halo_cells: u32,
+    pub source_etags: Vec<String>,
+    pub timing: GeodeticFetchTiming,
+}
+
+/// Like [`fetch_geodetic_tile_elevations`] but additionally returns an
+/// elevation grid that extends `halo_cells` cells beyond the tile on every
+/// side. Used by terrain mesh generation to compute DEM-gradient normals
+/// that stay continuous across tile boundaries.
+///
+/// The halo cells are drawn from the same underlying XYZ tiles as the
+/// interior, so adjacent geodetic tiles see byte-identical halo samples at
+/// any shared physical position — which is precisely the condition that
+/// makes the gradient (and therefore the normal) match on both sides.
+pub async fn fetch_geodetic_tile_elevations_with_halo(
+    provider: &dyn DemProvider,
+    z: u8,
+    geo_x: u32,
+    geo_y: u32,
+    xyz_tile_size: u32,
+    halo_cells: u32,
+) -> Result<GeodeticFetchWithHaloResult, DemError> {
+    let bounds = geodetic_tms_bounds(z, geo_x, geo_y);
+    let cell_lon = (bounds.east - bounds.west) / (CESIUM_TILE_SIZE as f64 - 1.0);
+    let cell_lat = (bounds.north - bounds.south) / (CESIUM_TILE_SIZE as f64 - 1.0);
+    let halo_bounds = GeodeticBounds {
+        west: bounds.west - cell_lon * halo_cells as f64,
+        east: bounds.east + cell_lon * halo_cells as f64,
+        south: bounds.south - cell_lat * halo_cells as f64,
+        north: bounds.north + cell_lat * halo_cells as f64,
+    };
+
+    let fetch_z = z.min(provider.max_zoom());
+    // Use halo bounds when picking covering XYZ tiles so any tile that
+    // touches the halo strip is fetched too.
+    let xyz_tiles = xyz_tiles_for_bounds(fetch_z, &halo_bounds, true);
+
+    if xyz_tiles.is_empty() {
+        let inner = (CESIUM_TILE_SIZE * CESIUM_TILE_SIZE) as usize;
+        let halo_size = CESIUM_TILE_SIZE + 2 * halo_cells;
+        let halo_total = (halo_size * halo_size) as usize;
+        return Ok(GeodeticFetchWithHaloResult {
+            elevations: vec![f64::NAN; inner],
+            elevations_with_halo: vec![f64::NAN; halo_total],
+            halo_cells,
+            source_etags: Vec::new(),
+            timing: GeodeticFetchTiming::default(),
+        });
+    }
+
+    let tiles_fetched = xyz_tiles.len() as u32;
+    let fetch_start = Instant::now();
+    let fetch_futures: Vec<_> = xyz_tiles
+        .iter()
+        .map(|tile| async move {
+            let data = provider
+                .get_tile_elevations(tile.z, tile.x, tile.y, xyz_tile_size)
+                .await;
+            (*tile, data)
+        })
+        .collect();
+    let results = futures::future::join_all(fetch_futures).await;
+    let xyz_fetch_ms = fetch_start.elapsed().as_secs_f64() * 1000.0;
+
+    let mut tile_data: HashMap<XyzTile, Vec<f64>> = HashMap::new();
+    let mut source_etags: Vec<String> = Vec::new();
+    for (tile, result) in results {
+        if let Ok(data) = result {
+            if let Some(etag) = data.etag {
+                source_etags.push(etag);
+            }
+            tile_data.insert(tile, data.elevations);
+        }
+    }
+    source_etags.sort();
+    source_etags.dedup();
+
+    let resample_start = Instant::now();
+    let elevations = resample_to_geodetic_grid(&bounds, &tile_data, xyz_tile_size, fetch_z)?;
+    let halo_size = (CESIUM_TILE_SIZE + 2 * halo_cells) as usize;
+    let elevations_with_halo = resample_to_geodetic_grid_sized(
+        &halo_bounds,
+        &tile_data,
+        xyz_tile_size,
+        fetch_z,
+        halo_size,
+    )?;
+    let resample_ms = resample_start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(GeodeticFetchWithHaloResult {
+        elevations,
+        elevations_with_halo,
+        halo_cells,
+        source_etags,
+        timing: GeodeticFetchTiming {
+            tiles_fetched,
+            xyz_fetch_ms,
+            resample_ms,
+        },
+    })
+}
+
 /// Resample XYZ tile data to a geodetic grid (65x65)
 ///
 /// For each pixel in the output grid:
@@ -300,7 +413,20 @@ fn resample_to_geodetic_grid(
     xyz_tile_size: u32,
     z: u8,
 ) -> Result<Vec<f64>, DemError> {
-    let output_size = CESIUM_TILE_SIZE as usize;
+    resample_to_geodetic_grid_sized(bounds, tile_data, xyz_tile_size, z, CESIUM_TILE_SIZE as usize)
+}
+
+/// Like `resample_to_geodetic_grid` but writes an `output_size × output_size`
+/// grid covering exactly `bounds`. Used to produce halo-extended grids for
+/// gradient-based normal computation that needs to read one cell beyond the
+/// tile on every side.
+fn resample_to_geodetic_grid_sized(
+    bounds: &GeodeticBounds,
+    tile_data: &HashMap<XyzTile, Vec<f64>>,
+    xyz_tile_size: u32,
+    z: u8,
+    output_size: usize,
+) -> Result<Vec<f64>, DemError> {
     let mut result = Vec::with_capacity(output_size * output_size);
     let n = 1u32 << z;
 

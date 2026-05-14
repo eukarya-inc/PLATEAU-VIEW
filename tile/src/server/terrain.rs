@@ -29,12 +29,14 @@ use super::state::AppState;
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
     DemProvider, Geoid, GeoidModel,
-    ellipsoid::{apply_geoid_to_grid, apply_geoid_to_xyz_grid},
+    ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
     extract_and_upsample,
-    geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations, geodetic_tms_bounds},
+    geodetic::{
+        GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds,
+    },
     layer_json::TileAvailability,
     mapbox::encode_mapbox,
-    mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
+    mesh_gen::{HaloElevations, QuantizedMeshOptions, generate_quantized_mesh_tile},
     quantized_mesh::TileBounds as QmBounds,
     terrarium::encode_terrarium,
     webmercator::xyz_tile_bounds,
@@ -279,16 +281,21 @@ pub async fn terrain_tile(
         return (StatusCode::NOT_FOUND, "Out of geoid coverage").into_response();
     }
 
-    // Fetch Mercator DEM tiles + resample to 65×65 geodetic grid.
-    // `fetch_geodetic_tile_elevations` internally clamps to the DEM's max
-    // zoom and bilinear-upsamples from the parent XYZ tile when z exceeds
-    // it (per stralift's per-source upsampling).
-    let fetch = match fetch_geodetic_tile_elevations(
+    // Fetch Mercator DEM tiles + resample to 65×65 geodetic grid, plus a
+    // 1-cell halo on every side so the mesh generator can compute DEM-
+    // gradient normals that stay continuous across tile boundaries.
+    //
+    // `fetch_geodetic_tile_elevations_with_halo` internally clamps to the
+    // DEM's max zoom and bilinear-upsamples from the parent XYZ tile when z
+    // exceeds it (per stralift's per-source upsampling).
+    const TERRAIN_NORMAL_HALO: u32 = 1;
+    let fetch = match fetch_geodetic_tile_elevations_with_halo(
         terrain.dem.as_ref(),
         z,
         x,
         y,
         terrain.dem.native_tile_size(),
+        TERRAIN_NORMAL_HALO,
     )
     .await
     {
@@ -339,8 +346,23 @@ pub async fn terrain_tile(
     let max_error = terrain.max_error;
     let max_zoom = terrain.max_zoom;
     let mut elevations = fetch.elevations;
+    let mut elevations_with_halo = fetch.elevations_with_halo;
+    let halo_cells = fetch.halo_cells;
     let bounds_copy = bounds;
     let geoid_for_gen = geoid_model;
+
+    // Halo-extended bounds matching `elevations_with_halo` (one cell beyond
+    // the tile on every side). Used to add the geoid to the halo cells in
+    // the same vertical datum as the tile interior.
+    let cell_lon = (bounds.east - bounds.west) / 64.0;
+    let cell_lat = (bounds.north - bounds.south) / 64.0;
+    let halo_bounds = GeodeticBounds {
+        west: bounds.west - cell_lon * halo_cells as f64,
+        east: bounds.east + cell_lon * halo_cells as f64,
+        south: bounds.south - cell_lat * halo_cells as f64,
+        north: bounds.north + cell_lat * halo_cells as f64,
+    };
+    let halo_grid_size = 65 + 2 * halo_cells as usize;
 
     let result = state
         .cache
@@ -349,9 +371,15 @@ pub async fn terrain_tile(
             Some(&etag_hash),
             Some(meta),
             move || async move {
-                // Apply geoid (ortho → ellipsoid).
+                // Apply geoid (ortho → ellipsoid) to both grids.
                 let g = Geoid::load(geoid_for_gen);
                 apply_geoid_to_grid(&bounds_copy, &mut elevations, &g);
+                apply_geoid_to_grid_sized(
+                    &halo_bounds,
+                    &mut elevations_with_halo,
+                    &g,
+                    halo_grid_size,
+                );
 
                 let qm_bounds = QmBounds::new(
                     bounds_copy.west,
@@ -375,6 +403,10 @@ pub async fn terrain_tile(
                     current_zoom: Some(z),
                     max_zoom: Some(max_zoom),
                     compression_level: 6,
+                    halo_elevations: Some(HaloElevations {
+                        elevations: elevations_with_halo,
+                        halo: halo_cells,
+                    }),
                 };
                 let tile = generate_quantized_mesh_tile(&elevations, &qm_bounds, &opts);
                 Ok::<_, crate::tile::TileError>(tile.data)
