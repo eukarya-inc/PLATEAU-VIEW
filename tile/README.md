@@ -73,41 +73,65 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 
 ### Preparing COG DEM overlays
 
-When you build a COG to use as a `dem` overlay, **how you generate the overviews matters a lot at low zooms**. The default `gdal_translate -of COG` pipeline builds overviews via an averaging step that **does not honor the band's `nodata` value** — so any nodata sentinel falling inside the valid elevation range (e.g. `255` used by PLATEAU's 5 m DEM tiles) is averaged together with real elevations and produces "half-values" like `128` or `64` at every nodata-vs-data boundary pixel in the overview.
+When you build a COG to use as a `dem` overlay, **how you generate the overviews matters a lot at low zooms**. The default `gdal_translate -of COG` pipeline uses `average` resampling for overviews — which, even when nodata-aware, has a footprint-growing behavior: any 2×2 group with *at least one* valid pixel keeps a valid value in the parent. After five levels (×32 downsample) a single 5 m land pixel in the middle of the sea has spread to a ~160 m square block of "land" surrounding it.
 
-When the tile server then reads that overview at low zoom, it can only mask pixels that match the nodata value exactly. The half-values pass through as if they were real elevations, and `CompositeDemProvider` paints them over the base DEM — producing tall thin "spikes" along every shoreline / mask edge at low zooms. (Even nodata values *outside* the elevation range, e.g. `-9999`, benefit from the recipe below because `gdaladdo` skips them properly during averaging.)
+When `CompositeDemProvider` then paints that bloated land block over the base DEM (which correctly reads ~0 m for the surrounding sea), you get **tall thin "spikes" around every small island, harbour, and coastline** at low zooms. The footprint mismatch is the problem, not the elevation values themselves.
 
-The fix is to **build overviews with `gdaladdo` first** (which is nodata-aware) and then **let the COG driver copy them** instead of regenerating:
+The fix is to **build overviews with `gdaladdo -r nearest`** (no footprint growth — small features either survive at their exact position or get dropped, both of which are visually fine) and then **tell the COG driver to use those existing overviews** instead of regenerating with `average`. If you're starting from multiple source tiles, also **mosaic them with `gdalwarp -r near`** — anything else (default `bilinear`, `cubic`, …) blends real elevations with the nodata sentinel at every mask boundary and seeds the same spike pattern at the *source* level, which then leaks into every downstream overview:
 
 ```bash
-# 1. Translate to a plain tiled GeoTIFF (no overviews yet).
+# 0. (Only if you have multiple source tiles.) Mosaic to a single GeoTIFF
+#    with nearest-neighbour resampling so nodata never blends with real
+#    elevations. Set -srcnodata and -dstnodata explicitly to the sentinel.
+gdalwarp -r near -multi \
+  -co COMPRESS=ZSTD -co PREDICTOR=3 -co TILED=YES -co BIGTIFF=IF_SAFER \
+  -srcnodata <SENTINEL> -dstnodata <SENTINEL> \
+  -t_srs EPSG:4326 \
+  source-tiles/*.tif input.tif
+
+# 1. Translate to a plain tiled GeoTIFF (no overviews yet). If you ran
+#    step 0 with the COG-compatible compression options above, you can
+#    skip this step and let gdaladdo write overviews into `input.tif`
+#    directly.
 gdal_translate -of GTiff \
   -co COMPRESS=ZSTD -co PREDICTOR=3 -co TILED=YES -co BIGTIFF=IF_SAFER \
   input.tif tmp.tif
 
-# 2. Build nodata-aware overviews with gdaladdo.
-gdaladdo -r average tmp.tif 2 4 8 16 32
+# 2. Build footprint-preserving overviews with nearest-neighbour.
+gdaladdo -r nearest tmp.tif 2 4 8 16 32
 
-# 3. Wrap as COG, copying the (clean) overviews we just built.
+# 3. Wrap as COG, reusing the overviews we just built.
 gdal_translate -of COG \
   -co COMPRESS=ZSTD -co PREDICTOR=3 \
-  -co COPY_SRC_OVERVIEWS=YES -co BIGTIFF=IF_SAFER \
+  -co OVERVIEWS=FORCE_USE_EXISTING -co BIGTIFF=IF_SAFER \
   tmp.tif output.tif
 
-rm tmp.tif tmp.tif.ovr
+rm tmp.tif
 ```
 
-Make sure the band's `nodata` value is set on the input before step 2 (`gdal_edit.py -a_nodata <value> input.tif` if it isn't). `gdaladdo` reads it from the band metadata.
+Make sure the band's `nodata` value is set on the input before step 2 (`gdal_edit.py -a_nodata <value> input.tif` if it isn't). `gdaladdo` reads it from the band metadata, and `nearest` won't synthesise spurious values that fall outside your real elevation range.
 
-> ⚠️ Don't skip step 2 and rely on `-of COG` to build overviews — as of GDAL 3.x its overview averaging path silently ignores nodata, and you'll get the spike artifact even though the file *looks* fine in QGIS (which builds its own preview pyramid).
+> 🛡️ The tile server applies a **0.5 m tolerance** when matching pixel values against the band's nodata sentinel (see `src/cog/reader.rs`), so any near-but-not-equal sentinels that slip through anyway (e.g. `254.99996` next to a nodata of `255`) are still masked correctly. Mosaicking with `-r near` keeps the data clean for *other* tools (QGIS, downstream processors); the tile server itself is defensive against either case.
+
+> ⚠️ The COG driver-only option for adopting pre-built overviews is **`OVERVIEWS=FORCE_USE_EXISTING`**. The GTiff-driver equivalent `COPY_SRC_OVERVIEWS=YES` is silently ignored by `-of COG` (GDAL only emits a `Warning 6`), and the result is a COG whose overviews were regenerated with `average` — exactly the spike-producing case.
+
+> ℹ️ **Don't reach for `-r average` or `-r mode` to "smooth" things.** Both also keep a pixel valid whenever the 2×2 group contains *any* valid pixel, so they grow the land footprint identically (measured +6 pp valid-pixel ratio at OV4 vs. +0.2 pp for `nearest`). `mode` preserves peak elevations slightly better, but produces the same spike pattern. They are only safe when your dataset has no nodata mask at all.
 
 To re-check after build:
 
 ```bash
-gdalinfo -mm output.tif | grep -E "(NoData|Overviews)"
-# Inspect overview values near a coast / mask boundary:
-gdal_translate -of GTiff -outsize 200 200 -srcwin <x> <y> 100 100 \
-  output.tif.ovr boundary-sample.tif
+# Should print OVERVIEW_RESAMPLING=NEAREST and the per-overview NoData/Min/Max.
+gdalinfo -mm output.tif | grep -E "(OVERVIEW_RESAMPLING|NoData|Overviews|Min/Max)"
+
+# Sanity-check that the valid-pixel ratio is *stable* across overview levels
+# (a level that "grows" the land area is the symptom of averaging spillover):
+python3 -c "
+from osgeo import gdal
+ds = gdal.Open('output.tif'); b = ds.GetRasterBand(1); nd = b.GetNoDataValue()
+for i in range(b.GetOverviewCount()):
+    a = b.GetOverview(i).ReadAsArray()
+    print(f'OV{i}: {100*(a!=nd).sum()/a.size:.1f}% valid')
+"
 ```
 
 ## Quick Start

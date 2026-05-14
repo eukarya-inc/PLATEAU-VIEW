@@ -453,10 +453,24 @@ impl CogReader {
                                 bits_per_sample,
                             );
 
-                            // Apply nodata -> NaN
+                            // Apply nodata -> NaN.
+                            //
+                            // Use a 0.5 m tolerance instead of a strict equality
+                            // check: DEM mosaics that were built with anything
+                            // other than nearest-neighbour (e.g. gdalwarp's
+                            // default bilinear) blend real elevations with the
+                            // nodata sentinel at every mask/data boundary,
+                            // producing near-but-not-equal sentinels like
+                            // `254.99996` next to a nodata of `255.0`. A 1e-6
+                            // check lets those sentinels through as if they
+                            // were real ~255 m elevations, which Cesium then
+                            // renders as needle-thin spikes over the sea.
+                            // 0.5 m is well below any reasonable elevation
+                            // quantisation and safely above the float-32 ULP
+                            // gap around typical sentinels (255, -9999, ...).
                             if let Some(nodata_val) = nodata {
                                 for v in elevations.iter_mut() {
-                                    if (*v - nodata_val).abs() < 1e-6 {
+                                    if (*v - nodata_val).abs() < 0.5 {
                                         *v = f64::NAN;
                                     }
                                 }
