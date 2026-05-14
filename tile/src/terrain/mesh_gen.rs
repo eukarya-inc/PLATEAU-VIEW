@@ -148,8 +148,25 @@ pub fn generate_quantized_mesh_tile(
     // Extract edge indices
     let edge_indices = EdgeIndices::from_vertices(&vertices);
 
-    // Create header
-    let header = QuantizedMeshHeader::from_bounds(bounds, min_height as f32, max_height as f32);
+    // Create header — pass the mesh vertices so the horizon-occlusion point
+    // is tight enough that Cesium doesn't false-cull tiles near the bounding
+    // sphere's "equator" (e.g. anywhere in the eastern hemisphere with a small
+    // ECEF Y component, like Geneva or Amsterdam).
+    let occlusion_vertices: Vec<(f64, f64, f64)> = (0..vertex_count)
+        .map(|i| {
+            (
+                vertices_flat[i * 3] as f64,
+                vertices_flat[i * 3 + 1] as f64,
+                vertices_flat[i * 3 + 2] as f64,
+            )
+        })
+        .collect();
+    let header = QuantizedMeshHeader::from_bounds_with_vertices(
+        bounds,
+        min_height as f32,
+        max_height as f32,
+        &occlusion_vertices,
+    );
 
     // Compute normals if requested
     let normals = if options.include_normals {
