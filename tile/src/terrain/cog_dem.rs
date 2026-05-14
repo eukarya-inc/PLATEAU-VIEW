@@ -27,6 +27,16 @@ use crate::cog::{CogReader, TileBounds};
 /// us from hammering a genuinely broken upstream on every tile.
 const UPSTREAM_ETAG_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
+/// How long a successful `upstream_etag` value stays trusted before we
+/// re-HEAD the upstream. Without this TTL, a pod fetches the COG's ETag once
+/// on first use and then uses that value for the rest of its lifetime, so a
+/// CMS-side COG swap that does *not* bump the config hash (same URL + same
+/// `version` string but new file contents) goes undetected on long-lived
+/// pods. 5 minutes balances "pick up new uploads quickly" against "one extra
+/// HEAD per overlay every 5 minutes" — negligible load even with hundreds of
+/// overlays.
+const UPSTREAM_ETAG_TTL: Duration = Duration::from_secs(300);
+
 /// Cached upstream-ETag state. `value` is the parsed HTTP ETag (when HEAD
 /// succeeded); `last_attempt` is the last HEAD wall-clock time regardless of
 /// outcome, used to throttle retries.
@@ -93,25 +103,23 @@ impl CogDemSource {
         }
     }
 
-    /// Resolve the upstream object ETag, with retry on failure.
+    /// Resolve the upstream object ETag, with TTL refresh on success and
+    /// retry-with-cooldown on failure.
     ///
-    /// Hot path (HEAD already succeeded): single read-lock, return cached
-    /// value. Cooldown path (HEAD failed recently): single read-lock, return
-    /// `None`. Retry path (cooldown elapsed): `try_lock` the retry gate so a
-    /// single concurrent task does the HEAD; losers return the current value
-    /// without blocking.
+    /// - Hot path (cached value still inside `UPSTREAM_ETAG_TTL`): single
+    ///   read-lock, return cached value.
+    /// - Cooldown path (recent failure, inside `UPSTREAM_ETAG_RETRY_INTERVAL`):
+    ///   single read-lock, return the last known value (possibly `None`).
+    /// - Refresh path (TTL or cooldown elapsed): `try_lock` the retry gate so
+    ///   exactly one task does the HEAD; losers return whatever's cached now
+    ///   rather than queueing behind it.
+    ///
+    /// On HEAD failure during a refresh, the previous good value is **kept**
+    /// rather than regressing to `None` — a transient upstream blip mid-TTL
+    /// shouldn't bust every downstream cache key for the next minute.
     async fn upstream_etag(&self) -> Option<String> {
-        {
-            let state = self.upstream_etag.read().await;
-            if state.value.is_some() {
-                return state.value.clone();
-            }
-            if state
-                .last_attempt
-                .is_some_and(|t| t.elapsed() < UPSTREAM_ETAG_RETRY_INTERVAL)
-            {
-                return None;
-            }
+        if let Some(v) = self.read_fresh_etag().await {
+            return v;
         }
         // Claim the retry slot — non-blocking. Losing the race means another
         // task is already doing the HEAD; we return whatever's cached now
@@ -122,23 +130,40 @@ impl CogDemSource {
         };
         // Re-check under the retry lock: the winner of a previous race may
         // have updated the state between our first read and the `try_lock`.
-        {
-            let state = self.upstream_etag.read().await;
-            if state.value.is_some() {
-                return state.value.clone();
-            }
-            if state
-                .last_attempt
-                .is_some_and(|t| t.elapsed() < UPSTREAM_ETAG_RETRY_INTERVAL)
-            {
-                return None;
-            }
+        if let Some(v) = self.read_fresh_etag().await {
+            return v;
         }
         let fetched = fetch_upstream_etag(&self.url).await;
         let mut state = self.upstream_etag.write().await;
-        state.value = fetched.clone();
+        // Only overwrite on success — a failed HEAD shouldn't clobber a
+        // previously known-good ETag (see method doc).
+        if fetched.is_some() {
+            state.value = fetched.clone();
+        }
         state.last_attempt = Some(Instant::now());
-        fetched
+        if fetched.is_some() {
+            fetched
+        } else {
+            state.value.clone()
+        }
+    }
+
+    /// Returns `Some(value)` when the cached `upstream_etag` state is still
+    /// trusted for the current call, or `None` when the caller needs to do a
+    /// fresh HEAD. "Still trusted" means:
+    ///
+    /// - The previous attempt succeeded and `UPSTREAM_ETAG_TTL` has not
+    ///   elapsed yet, OR
+    /// - The previous attempt failed and `UPSTREAM_ETAG_RETRY_INTERVAL` has
+    ///   not elapsed yet (return the last known value, often `None`).
+    async fn read_fresh_etag(&self) -> Option<Option<String>> {
+        let state = self.upstream_etag.read().await;
+        let elapsed = state.last_attempt.map(|t| t.elapsed());
+        match (state.value.is_some(), elapsed) {
+            (true, Some(e)) if e < UPSTREAM_ETAG_TTL => Some(state.value.clone()),
+            (false, Some(e)) if e < UPSTREAM_ETAG_RETRY_INTERVAL => Some(state.value.clone()),
+            _ => None,
+        }
     }
 
     async fn reader(&self) -> Result<Arc<CogReader>, DemError> {

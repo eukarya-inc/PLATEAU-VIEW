@@ -2,6 +2,21 @@
 
 use async_tiff::tags::SampleFormat;
 
+/// Maximum plausible terrain elevation in metres. Anything beyond this magnitude
+/// is not a real Earth elevation (Mt. Everest is ~8.85 km, Mariana Trench
+/// ~−10.9 km), so we treat such samples as nodata regardless of the COG's
+/// declared sentinel.
+///
+/// This guard catches resampling-blended fringe values that a strict nodata
+/// equality check misses — most commonly when a COG was built with a huge
+/// sentinel like `f32::MIN` (≈ −3.4 × 10³⁸) and a non-nearest resampler
+/// (`-r bilinear`, `cubic`, …) blends real elevations with the sentinel at
+/// every mask boundary, leaving values like `−2.7 × 10³⁷` that pass through
+/// any reasonable tolerance check. Even one such pixel in a quantized-mesh
+/// tile collapses the header's `min_height` / bounding-sphere / horizon
+/// occlusion into garbage and false-culls the whole tile in Cesium.
+pub const MAX_PHYSICAL_ELEVATION_M: f64 = 50_000.0;
+
 /// Decode raw bytes to RGBA pixel data.
 ///
 /// Supports various band configurations:
@@ -163,6 +178,14 @@ pub fn decode_elevation(
         elevations.push(f64::NAN);
     }
 
+    // Defense-in-depth: drop any value outside the physically plausible
+    // elevation range. See `MAX_PHYSICAL_ELEVATION_M` for the rationale.
+    for v in elevations.iter_mut() {
+        if !v.is_finite() || v.abs() > MAX_PHYSICAL_ELEVATION_M {
+            *v = f64::NAN;
+        }
+    }
+
     elevations
 }
 
@@ -223,5 +246,35 @@ mod tests {
         assert_eq!(result.len(), 8);
         assert_eq!(&result[0..4], &[255, 0, 0, 128]);
         assert_eq!(&result[4..8], &[0, 255, 0, 64]);
+    }
+
+    /// `f32::MIN` and bilinear-fringe values near it must be sanitised to
+    /// NaN at decode time so they never reach the mesh generator. See
+    /// `MAX_PHYSICAL_ELEVATION_M` for the rationale.
+    #[test]
+    fn test_decode_elevation_rejects_huge_sentinel_and_fringes() {
+        let values: [f32; 4] = [
+            100.0,
+            f32::MIN,   // canonical f32::MIN nodata sentinel
+            -2.748e+37, // bilinear-blended fringe value seen in production
+            200.0,
+        ];
+        let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let result = decode_elevation(&bytes, 4, 1, SampleFormat::IEEEFP, 32);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], 100.0);
+        assert!(result[1].is_nan());
+        assert!(result[2].is_nan());
+        assert_eq!(result[3], 200.0);
+    }
+
+    #[test]
+    fn test_decode_elevation_rejects_infinity() {
+        let values: [f32; 3] = [42.0, f32::INFINITY, f32::NEG_INFINITY];
+        let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let result = decode_elevation(&bytes, 3, 1, SampleFormat::IEEEFP, 32);
+        assert_eq!(result[0], 42.0);
+        assert!(result[1].is_nan());
+        assert!(result[2].is_nan());
     }
 }

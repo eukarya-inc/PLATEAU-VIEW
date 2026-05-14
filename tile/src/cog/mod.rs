@@ -10,5 +10,6 @@ mod reader;
 mod resample;
 
 pub use bounds::TileBounds;
+pub use decode::MAX_PHYSICAL_ELEVATION_M;
 pub use error::CogError;
 pub use reader::CogReader;

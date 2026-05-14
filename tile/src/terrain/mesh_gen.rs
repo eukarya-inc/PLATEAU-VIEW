@@ -125,7 +125,7 @@ pub fn generate_quantized_mesh_tile(
     let tile = martini.create_terrain(|x, y| {
         let idx = y * grid_size + x;
         let h = elevations.get(idx).copied().unwrap_or(0.0);
-        if h.is_nan() { 0.0 } else { h }
+        sanitize_height(h)
     });
 
     // Generate mesh with error threshold
@@ -139,8 +139,7 @@ pub fn generate_quantized_mesh_tile(
             let px = (u * (grid_size - 1) as f64).round() as usize;
             let py = ((1.0 - v) * (grid_size - 1) as f64).round() as usize;
             let idx = py.min(grid_size - 1) * grid_size + px.min(grid_size - 1);
-            let height = elevations.get(idx).copied().unwrap_or(0.0);
-            let height = if height.is_nan() { 0.0 } else { height };
+            let height = sanitize_height(elevations.get(idx).copied().unwrap_or(0.0));
 
             (lon, lat, height)
         });
@@ -243,13 +242,34 @@ pub fn generate_quantized_mesh_tile(
     }
 }
 
+/// Replace NaN, infinite, or physically-impossible elevations with 0.0 so
+/// they don't propagate into the mesh as garbage vertex heights. The same
+/// `MAX_PHYSICAL_ELEVATION_M` threshold used by `find_height_range` is
+/// applied here so a value rejected from the range computation also can't
+/// sneak into a mesh vertex via the martini sample path.
+#[inline]
+fn sanitize_height(h: f64) -> f64 {
+    if h.is_finite() && h.abs() <= crate::cog::MAX_PHYSICAL_ELEVATION_M {
+        h
+    } else {
+        0.0
+    }
+}
+
 /// Find the height range in elevation data, excluding NaN values.
+///
+/// Also rejects any value outside `[-MAX_PHYSICAL_ELEVATION_M,
+/// MAX_PHYSICAL_ELEVATION_M]` as defense-in-depth: a single corrupted pixel
+/// (e.g. a fringe value from a huge-sentinel COG that slipped earlier guards)
+/// would otherwise drag `min_height` to ~−10³⁷, blow up the bounding-sphere
+/// and horizon occlusion in the quantized-mesh header, and Cesium would
+/// false-cull the entire tile.
 fn find_height_range(elevations: &[f64]) -> (f64, f64) {
     let mut min_height = f64::MAX;
     let mut max_height = f64::MIN;
 
     for &h in elevations {
-        if !h.is_nan() {
+        if h.is_finite() && h.abs() <= crate::cog::MAX_PHYSICAL_ELEVATION_M {
             min_height = min_height.min(h);
             max_height = max_height.max(h);
         }
@@ -538,6 +558,69 @@ mod tests {
         assert!(max > min);
     }
 
+    /// Regression for the western-Japan blackout: a single corrupted
+    /// elevation (e.g. `-2.7e+37` from a bilinear-resampled `f32::MIN`
+    /// nodata fringe in a COG overlay) used to drag `min_height` to
+    /// ~−10³⁷, which then collapsed the quantized-mesh header's bounding
+    /// sphere and horizon occlusion into garbage and false-culled the
+    /// whole tile in Cesium.
+    #[test]
+    fn test_find_height_range_rejects_corrupt_outliers() {
+        let elevations = vec![
+            10.0,
+            20.0,
+            -2.7e+37, // fringe value from a huge-sentinel COG
+            30.0,
+            f64::INFINITY,
+            40.0,
+            f64::NAN,
+        ];
+        let (min, max) = find_height_range(&elevations);
+        assert_eq!(min, 10.0);
+        assert_eq!(max, 40.0);
+    }
+
+    #[test]
+    fn test_corrupt_elevation_does_not_break_mesh_header() {
+        use crate::terrain::quantized_mesh::QuantizedMeshHeader;
+        let grid_size = MESH_GRID_SIZE as usize;
+        let mut elevations = vec![100.0; grid_size * grid_size];
+        // Drop the same `f32::MIN`-derived fringe value the production
+        // bug produced into the middle of an otherwise flat grid.
+        elevations[grid_size * grid_size / 2] = -2.748191709909388e+37;
+
+        let bounds = TileBounds::new(123.75, 33.75, 135.0, 45.0);
+        let options = QuantizedMeshOptions {
+            max_error: 0.0,
+            compression_level: 0,
+            ..Default::default()
+        };
+
+        let tile = generate_quantized_mesh_tile(&elevations, &bounds, &options);
+
+        let header = QuantizedMeshHeader::from_bytes(&tile.data).expect("header");
+        // Heights stay in the physical range.
+        assert!(header.min_height.is_finite() && header.min_height.abs() < 50_000.0);
+        assert!(header.max_height.is_finite() && header.max_height.abs() < 50_000.0);
+        // Bounding sphere center is on Earth (not 10³⁶ metres out).
+        let bsc_mag = (header.bounding_sphere_center[0].powi(2)
+            + header.bounding_sphere_center[1].powi(2)
+            + header.bounding_sphere_center[2].powi(2))
+        .sqrt();
+        assert!(bsc_mag < 1e8, "bounding sphere center off Earth: {bsc_mag}");
+        // Horizon occlusion isn't trapped at |P|=1 (the catastrophic
+        // fallback that culled the tile). For a non-hemisphere tile we
+        // expect |P| > 1 from the Cesium occluder formula.
+        let p_mag = (header.horizon_occlusion_point[0].powi(2)
+            + header.horizon_occlusion_point[1].powi(2)
+            + header.horizon_occlusion_point[2].powi(2))
+        .sqrt();
+        assert!(
+            p_mag > 1.0,
+            "horizon occluder collapsed to unit sphere: {p_mag}"
+        );
+    }
+
     #[test]
     fn test_quantize_coordinate() {
         assert_eq!(quantize_coordinate(0.0, 0.0, 100.0), 0);
@@ -725,10 +808,11 @@ mod tests {
         // and check — for now the constructive test above (data length grew
         // for normals) is sufficient; the byte-level decode is covered by
         // `test_oct_encode_normal` in the encoding module.
-        assert!((expected_ecef[0].powi(2) + expected_ecef[1].powi(2) + expected_ecef[2].powi(2)
-            - 1.0)
-            .abs()
-            < 1e-9);
+        assert!(
+            (expected_ecef[0].powi(2) + expected_ecef[1].powi(2) + expected_ecef[2].powi(2) - 1.0)
+                .abs()
+                < 1e-9
+        );
     }
 
     #[test]

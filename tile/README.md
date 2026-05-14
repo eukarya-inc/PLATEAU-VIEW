@@ -70,6 +70,7 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 - Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
+- Each pod refreshes every COG overlay's upstream ETag every **5 minutes** (single HEAD per overlay), so a CMS-side file swap that doesn't bump the config hash is picked up automatically — no `/reload` needed. The pod's own memory and persistent caches invalidate on ETag mismatch; downstream HTTP caches still honour their `Cache-Control: max-age` so end-users see the new tiles after at most one CDN TTL.
 
 ### Preparing COG DEM overlays
 
@@ -111,7 +112,21 @@ rm tmp.tif
 
 Make sure the band's `nodata` value is set on the input before step 2 (`gdal_edit.py -a_nodata <value> input.tif` if it isn't). `gdaladdo` reads it from the band metadata, and `nearest` won't synthesise spurious values that fall outside your real elevation range.
 
-> 🛡️ The tile server applies a **0.5 m tolerance** when matching pixel values against the band's nodata sentinel (see `src/cog/reader.rs`), so any near-but-not-equal sentinels that slip through anyway (e.g. `254.99996` next to a nodata of `255`) are still masked correctly. Mosaicking with `-r near` keeps the data clean for *other* tools (QGIS, downstream processors); the tile server itself is defensive against either case.
+#### Picking a nodata sentinel
+
+Any sentinel works for the tile server, but **small magnitudes are easier on every other tool** in your pipeline. Recommended (in order of preference):
+
+1. **`-9999`** — the de-facto DEM convention. Tiny tolerance gap, never collides with real Japanese elevations (lowest land < −10 m, highest peak < 4000 m), survives 16-bit signed integer formats if you ever downcast.
+2. **`255` / `0`** — fine for tightly-bounded datasets (e.g. an urban DSM that can't physically be near those values).
+3. **`f32::MIN` (`-3.4028235e+38`)** — avoid if you can. `gdalwarp` accepts it but the value is so extreme that *any* non-nearest resampler creates fringe values across many orders of magnitude (we've seen `-2.7e+37` in production), which then have to be caught by the server's defensive guards rather than the strict nodata check. Stick to `-9999` and the data stays clean for QGIS, downstream processors, and statistics tools too.
+
+> 🛡️ **Defense-in-depth in the server.** Even if a corrupted COG slips through, the tile server has three independent guards so a single bad pixel can no longer black out an entire terrain tile (the failure mode we observed in production with a `f32::MIN`-sentinel overlay):
+>
+> 1. **Adaptive nodata tolerance** (`src/cog/reader.rs`) — `max(0.5 m, |nodata| · 1e-3)`. Small sentinels get the 0.5 m floor that catches `254.99996` next to `255`; huge sentinels get a proportional band wide enough to absorb bilinear-blended fringe values.
+> 2. **Physical elevation guard** (`src/cog/decode.rs`, `MAX_PHYSICAL_ELEVATION_M = 50_000`) — anything beyond ±50 km is dropped to NaN at decode time. Mt. Everest is 8.85 km, Mariana Trench −10.9 km; anything bigger is corruption.
+> 3. **Mesh-generator sanitisation** (`src/terrain/mesh_gen.rs`) — `find_height_range` and the martini callback both reject non-finite / out-of-range heights so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point.
+>
+> Mosaicking with `-r near` is still the right thing to do — keeping the data clean upstream means *other* tools (QGIS, downstream processors) also see well-formed values.
 
 > ⚠️ The COG driver-only option for adopting pre-built overviews is **`OVERVIEWS=FORCE_USE_EXISTING`**. The GTiff-driver equivalent `COPY_SRC_OVERVIEWS=YES` is silently ignored by `-of COG` (GDAL only emits a `Warning 6`), and the result is a COG whose overviews were regenerated with `average` — exactly the spike-producing case.
 

@@ -455,22 +455,33 @@ impl CogReader {
 
                             // Apply nodata -> NaN.
                             //
-                            // Use a 0.5 m tolerance instead of a strict equality
-                            // check: DEM mosaics that were built with anything
-                            // other than nearest-neighbour (e.g. gdalwarp's
-                            // default bilinear) blend real elevations with the
-                            // nodata sentinel at every mask/data boundary,
-                            // producing near-but-not-equal sentinels like
-                            // `254.99996` next to a nodata of `255.0`. A 1e-6
-                            // check lets those sentinels through as if they
-                            // were real ~255 m elevations, which Cesium then
-                            // renders as needle-thin spikes over the sea.
-                            // 0.5 m is well below any reasonable elevation
-                            // quantisation and safely above the float-32 ULP
-                            // gap around typical sentinels (255, -9999, ...).
+                            // Use a scaled tolerance instead of strict equality:
+                            // DEM mosaics that were built with anything other
+                            // than nearest-neighbour (e.g. gdalwarp's default
+                            // bilinear) blend real elevations with the nodata
+                            // sentinel at every mask/data boundary, producing
+                            // near-but-not-equal sentinels.
+                            //
+                            // - Small sentinels (255, -9999): blend gap is at
+                            //   most ~0.5 m off, so a flat 0.5 m floor catches
+                            //   `254.99996` next to `255.0`.
+                            // - Huge sentinels (f32::MIN ≈ −3.4 × 10³⁸): blends
+                            //   can land *anywhere* between the sentinel and
+                            //   the real value (e.g. `−2.7 × 10³⁷`), so a fixed
+                            //   0.5 m floor is useless. Scale the tolerance
+                            //   to `|nodata| · 1e-3` (≈ 3.4 × 10³⁵ for
+                            //   f32::MIN), which still leaves seven orders of
+                            //   magnitude between "blended fringe" and any
+                            //   real elevation.
+                            //
+                            // Defense in depth: `decode_elevation` also drops
+                            // anything beyond `MAX_PHYSICAL_ELEVATION_M`, so
+                            // even values that slip the tolerance check are
+                            // caught before they reach the mesh.
                             if let Some(nodata_val) = nodata {
+                                let tol = (nodata_val.abs() * 1e-3).max(0.5);
                                 for v in elevations.iter_mut() {
-                                    if (*v - nodata_val).abs() < 0.5 {
+                                    if (*v - nodata_val).abs() < tol {
                                         *v = f64::NAN;
                                     }
                                 }

@@ -413,7 +413,13 @@ fn resample_to_geodetic_grid(
     xyz_tile_size: u32,
     z: u8,
 ) -> Result<Vec<f64>, DemError> {
-    resample_to_geodetic_grid_sized(bounds, tile_data, xyz_tile_size, z, CESIUM_TILE_SIZE as usize)
+    resample_to_geodetic_grid_sized(
+        bounds,
+        tile_data,
+        xyz_tile_size,
+        z,
+        CESIUM_TILE_SIZE as usize,
+    )
 }
 
 /// Like `resample_to_geodetic_grid` but writes an `output_size × output_size`

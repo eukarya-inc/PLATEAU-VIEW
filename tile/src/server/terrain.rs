@@ -31,9 +31,7 @@ use crate::terrain::{
     DemProvider, Geoid, GeoidModel,
     ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
     extract_and_upsample,
-    geodetic::{
-        GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds,
-    },
+    geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
     layer_json::TileAvailability,
     mapbox::encode_mapbox,
     mesh_gen::{HaloElevations, QuantizedMeshOptions, generate_quantized_mesh_tile},
