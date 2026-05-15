@@ -307,12 +307,19 @@ pub async fn terrain_tile(
         }
     };
 
-    // ETag composition: dem-version + aggregated dem-etags + geoid slug + coord.
+    // ETag composition: dem-version + aggregated dem-etags + geoid slug +
+    // mesh-algo version + coord. The mesh-algo tag exists so terrain caches
+    // (memory + persistent + downstream) roll forward when we change how the
+    // mesh or its normals are computed. Bump this string on any change that
+    // alters serialized .terrain bytes for unchanged DEM input — otherwise
+    // operators have to manually flush caches or bump DEM_VERSION.
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v2-gradient-normals";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
         format!("dem-etag:{}", upstream_etag_digest),
         format!("geoid:{}", geoid_model.slug()),
+        format!("mesh-algo:{TERRAIN_MESH_ALGO_VERSION}"),
     ];
     let etag = compute_etag(&etag_keys, "terrain", TileFormat::Png, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
@@ -321,8 +328,13 @@ pub async fn terrain_tile(
         return not_modified_response(&etag, state.cache_control.as_deref());
     }
 
+    // Mesh-algo tag goes into the cache prefix so persistent storage rolls
+    // forward independently of DEM upstream changes — see the comment on
+    // `TERRAIN_MESH_ALGO_VERSION` above. The raster endpoints use their own
+    // prefix ("terrarium-xyz" / "mapbox-xyz") and stay untouched.
+    let terrain_cache_prefix = format!("terrain/{TERRAIN_MESH_ALGO_VERSION}");
     let cache_key = TerrainCacheKey {
-        prefix: "terrain",
+        prefix: &terrain_cache_prefix,
         dem_slug: terrain.dem.slug(),
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
