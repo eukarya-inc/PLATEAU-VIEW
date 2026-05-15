@@ -40,6 +40,7 @@
     <span class="sep">|</span>
     <button id="terrainCompare" title="Toggle between PLATEAU terrain (default) and the older Cesium Ion-hosted tileset for visual A/B comparison">旧テラインと比較</button>
     <button id="inspectorToggle" title="Show source bounds (incl. DEM overlays) on the globe">Inspector</button>
+    <button id="tileGridToggle" title="Overlay TMS-Geodetic terrain-tile boundaries with z/x/y labels">Tile grid</button>
   </div>
   <div id="cesium"></div>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
@@ -108,6 +109,12 @@
       // sanity-checking PLATEAU data in this debug viewer.
       infoBox: true,
       selectionIndicator: true,
+      // Force continuous rendering. requestRenderMode would otherwise
+      // skip frames while the camera is idle, which hides issues that
+      // only show up while terrain LOD streams in and makes the tile-
+      // grid overlay below update only on explicit `scene.requestRender`
+      // — not what we want when eyeballing terrain seams.
+      requestRenderMode: false,
     });
 
     // Fixed clock at 10:00 JST so lighting & shadows are consistent.
@@ -339,6 +346,33 @@
         await buildInspector();
       } else {
         clearInspector();
+      }
+    });
+
+    // ── Tile-grid overlay (TMS Geodetic) ──────────────────────────────
+    // Cesium's built-in `TileCoordinatesImageryProvider` overlays a hollow
+    // rectangle + z/x/y label on every tile in whatever scheme the globe
+    // is using — for our Cesium globe that's `GeographicTilingScheme`,
+    // i.e. the same TMS-Geodetic addressing as /terrain/{z}/{x}/{y}.terrain.
+    // No manual viewport math, no per-frame polyline rebuild.
+    //
+    // Default colour is a thin Cesium-cyan that disappears over GSI's
+    // pale base; we override to hot magenta + thicker outline so the grid
+    // pops over imagery and shaded terrain alike.
+    const tileGridBtn = document.getElementById('tileGridToggle');
+    let tileGridLayer = null;
+
+    tileGridBtn.addEventListener('click', () => {
+      const willEnable = tileGridLayer == null;
+      tileGridBtn.classList.toggle('active', willEnable);
+      if (willEnable) {
+        const provider = new Cesium.TileCoordinatesImageryProvider({
+          color: Cesium.Color.fromCssColorString('#ff00aa'),
+        });
+        tileGridLayer = viewer.imageryLayers.addImageryProvider(provider);
+      } else if (tileGridLayer) {
+        viewer.imageryLayers.remove(tileGridLayer, true);
+        tileGridLayer = null;
       }
     });
   </script>

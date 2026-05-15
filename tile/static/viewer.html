@@ -202,6 +202,7 @@
         <button id="terrain3dToggle" title="3D terrain (Mapbox Terrain-RGB)">3D</button>
         <button id="hillshadeToggle" title="Hillshade overlay">Hillshade</button>
         <button id="inspectorToggle" title="Show source bounds on the map">Inspector</button>
+        <button id="tileGridToggle" title="Overlay TMS-Geodetic terrain-tile boundaries with z/x/y labels">Tile grid</button>
         <a href="/terrain-viewer" class="terrain-link" title="Cesium 3D viewer">Terrain →</a>
         <span class="spacer"></span>
         <span class="info" id="coords"></span>
@@ -619,6 +620,83 @@
                 { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
             ));
         }
+
+        // ── Tile-grid overlay (XYZ Web Mercator) ────────────────────
+        // Draws each rendered tile's border + z/x/y label on a transparent
+        // raster overlay. MapLibre passes the active tile's `{z, x, y}` to
+        // the `addProtocol` callback, so the overlay always matches what
+        // the map is actually requesting — no manual viewport math, no
+        // GeoJSON resampling. Pattern borrowed from
+        // ../stralift/crates/stralift-server/src/viewer.html.
+        const TILE_GRID_PROTOCOL = 'debug';
+        const TILE_GRID_SOURCE = 'tile-grid-src';
+        const TILE_GRID_LAYER = 'tile-grid-layer';
+
+        maplibregl.addProtocol(TILE_GRID_PROTOCOL, (params) => {
+            const url = new URL(params.url);
+            const [z, x, y] = url.pathname.split('/').filter(Boolean).map(Number);
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Hot magenta border — pops over GSI, aerial imagery, and the
+            // dem-style overlays we serve. 4 px so it's readable when
+            // zoomed out and the overlay is downsampled by the GPU.
+            ctx.strokeStyle = '#ff00aa';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, 252, 252);
+
+            // Filled `z/x/y` text in the centre with a thick black outline
+            // so it stays legible on white-on-white or busy backgrounds.
+            ctx.font = 'bold 22px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const lines = [`z=${z}`, `x=${x}`, `y=${y}`];
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#000';
+            ctx.fillStyle = '#ff00aa';
+            for (let i = 0; i < lines.length; i++) {
+                const ty = 96 + i * 30;
+                ctx.strokeText(lines[i], 128, ty);
+                ctx.fillText(lines[i], 128, ty);
+            }
+
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (!blob) return reject(new Error('debug tile blob failed'));
+                    blob.arrayBuffer().then((data) => resolve({ data }));
+                }, 'image/png');
+            });
+        });
+
+        const tileGridToggle = document.getElementById('tileGridToggle');
+        tileGridToggle.addEventListener('click', () => {
+            const willEnable = !tileGridToggle.classList.contains('active');
+            tileGridToggle.classList.toggle('active', willEnable);
+            if (willEnable) {
+                if (!map.getSource(TILE_GRID_SOURCE)) {
+                    map.addSource(TILE_GRID_SOURCE, {
+                        type: 'raster',
+                        tiles: [`${TILE_GRID_PROTOCOL}:///{z}/{x}/{y}`],
+                        tileSize: 256,
+                    });
+                }
+                if (!map.getLayer(TILE_GRID_LAYER)) {
+                    // Top of the stack so the labels never sit under tiles
+                    // or the inspector polygons.
+                    map.addLayer({
+                        id: TILE_GRID_LAYER,
+                        type: 'raster',
+                        source: TILE_GRID_SOURCE,
+                        paint: { 'raster-opacity': 1 },
+                    });
+                }
+            } else {
+                if (map.getLayer(TILE_GRID_LAYER)) map.removeLayer(TILE_GRID_LAYER);
+                if (map.getSource(TILE_GRID_SOURCE)) map.removeSource(TILE_GRID_SOURCE);
+            }
+        });
 
         // Event listeners
         gsiToggle.addEventListener('click', toggleGsi);
