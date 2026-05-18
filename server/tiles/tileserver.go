@@ -14,8 +14,15 @@ type TileServerConfig struct {
 	Cache   *TileServerCacheConfig            `json:"cache,omitempty"`
 }
 
-// TileServerSourceConfig represents a named tile source configuration
+// TileServerSourceConfig represents a named tile source configuration.
+//
+// Type identifies how the tile server should treat the source. Empty means a
+// regular raster source (XYZ/COG/PMTiles overlay). "dem" marks the source as
+// a DEM overlay stack that the tile server composites over the base DEM and
+// exposes via its /terrain/... endpoints. Multiple "dem" sources can coexist;
+// each becomes a separately addressable terrain endpoint on the tile side.
 type TileServerSourceConfig struct {
+	Type        string                  `json:"type,omitempty"`
 	Description string                  `json:"description,omitempty"`
 	Layers      []TileServerLayerConfig `json:"layers"`
 }
@@ -68,6 +75,7 @@ func (t Tiles) ToTileServerConfig(baseURL string) TileServerConfig {
 			layers = append(layers, layer)
 		}
 		sources[name] = TileServerSourceConfig{
+			Type:        entry.Type,
 			Description: entry.Description,
 			Layers:      layers,
 		}

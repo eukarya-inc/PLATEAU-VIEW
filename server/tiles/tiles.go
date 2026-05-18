@@ -27,6 +27,7 @@ func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 		}
 
 		description := lo.FromPtr(item.FieldByKey("description").GetValue().String())
+		sourceType := lo.FromPtr(item.FieldByKey("type").GetValue().String())
 
 		assetsRaw, _ := item.FieldByKey("assets").Value.([]any)
 		urls := []lo.Entry[Range, string]{}
@@ -46,7 +47,7 @@ func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 			continue
 		}
 
-		res[name] = TileEntry{Description: description, URLs: urls}
+		res[name] = TileEntry{Type: sourceType, Description: description, URLs: urls}
 	}
 
 	return res, nil
@@ -71,7 +72,12 @@ func assetBaseURL(assetURL string) string {
 
 // TileEntry is a single named tile source: a human-readable description plus
 // one or more upstream URLs each scoped to a `Range` of z/x/y tile coords.
+//
+// Type comes from the CMS `type` field. Empty means a regular raster source.
+// "dem" marks this source as a DEM overlay stack consumed by the tile server's
+// /terrain endpoints; multiple "dem" entries are allowed.
 type TileEntry struct {
+	Type        string
 	Description string
 	URLs        []lo.Entry[Range, string]
 }
