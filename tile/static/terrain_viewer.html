@@ -49,6 +49,33 @@
   <script>
     Cesium.Ion.defaultAccessToken = null;
 
+    // ── URL state ──────────────────────────────────────────────────────
+    // Persist UI state (camera, imagery, DEM, geoid, toggles) to the query
+    // string so reloads and shared links preserve the view. Cesium has no
+    // built-in URL-hash sync analogous to MapLibre's `hash: true`, so we wire
+    // camera persistence by hand on `moveEnd`.
+    const urlParams = new URLSearchParams(window.location.search);
+    function setUrlParam(key, value) {
+      const p = new URLSearchParams(window.location.search);
+      if (value === null || value === undefined || value === '') {
+        p.delete(key);
+      } else {
+        p.set(key, String(value));
+      }
+      const qs = p.toString();
+      const next = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+      window.history.replaceState(null, '', next);
+    }
+    const readBoolParam = (key, defaultValue) => {
+      const v = urlParams.get(key);
+      if (v === null) return defaultValue;
+      return v === '1';
+    };
+    const writeBoolParam = (key, value, defaultValue) => {
+      if (value === defaultValue) setUrlParam(key, '');
+      else setUrlParam(key, value ? '1' : '0');
+    };
+
     // ── Imagery options ────────────────────────────────────────────────
     // GSI (国土地理院) is the default base map and stays default — the
     // outline-style tiles are easier to read against 3D terrain than
@@ -143,8 +170,15 @@
       layers.removeAll(true);
       layers.addImageryProvider(opt.build());
     }
-    setImagery(gsiOption.id);
-    imagerySelect.addEventListener('change', (e) => setImagery(e.target.value));
+    // The initial imagery may not be available yet (e.g. a `tiles:foo`
+    // imagery from a CMS source that loads asynchronously below). Start with
+    // GSI and re-apply once the dropdown is rebuilt with the full option set.
+    const initialImagery = urlParams.get('imagery') || gsiOption.id;
+    setImagery(options.some((o) => o.id === initialImagery) ? initialImagery : gsiOption.id);
+    imagerySelect.addEventListener('change', (e) => {
+      setImagery(e.target.value);
+      setUrlParam('imagery', e.target.value === gsiOption.id ? '' : e.target.value);
+    });
 
     // Append /tiles/<name> sources to the dropdown but keep GSI selected.
     fetch('/tiles/sources.json')
@@ -162,9 +196,14 @@
             }),
         }));
         if (tilesOptions.length === 0) return;
-        // Insert after GSI so GSI stays at the top and selected.
+        // Insert after GSI so GSI stays at the top.
         options.splice(1, 0, ...tilesOptions);
-        rebuildImagerySelect(gsiOption.id);
+        // Now that the full option set is known, apply the persisted choice if
+        // it's available — otherwise stay on the current (GSI) selection.
+        const persisted = urlParams.get('imagery');
+        const valid = persisted && options.some((o) => o.id === persisted);
+        rebuildImagerySelect(valid ? persisted : imagerySelect.value || gsiOption.id);
+        if (valid && persisted !== imagerySelect.value) setImagery(persisted);
       });
 
     // ── Terrain ────────────────────────────────────────────────────────
@@ -181,11 +220,13 @@
     const demSourceSelect = document.getElementById('demSource');
     const demSourceLabel = document.getElementById('demSourceLabel');
     const terrainCompareBtn = document.getElementById('terrainCompare');
-    let usingLegacyTerrain = false;
+    let usingLegacyTerrain = readBoolParam('legacy', false);
+    const initialGeoid = urlParams.get('geoid');
+    if (initialGeoid) geoidSelect.value = initialGeoid;
     // Selected DEM source name. Empty string = the default `/terrain` route
     // (which the tile server aliases to source name "dem"). Anything else
     // becomes `/terrain/{name}`.
-    let demSourceName = '';
+    let demSourceName = urlParams.get('dem') || '';
 
     function applyTerrain() {
       // Use scene.setTerrain(new Terrain(promise)) for both providers.
@@ -212,9 +253,13 @@
       viewer.scene.setTerrain(new Cesium.Terrain(providerPromise));
     }
     applyTerrain();
-    geoidSelect.addEventListener('change', () => applyTerrain());
+    geoidSelect.addEventListener('change', () => {
+      setUrlParam('geoid', geoidSelect.value === 'gsigeo2011' ? '' : geoidSelect.value);
+      applyTerrain();
+    });
     demSourceSelect.addEventListener('change', (e) => {
       demSourceName = e.target.value;
+      setUrlParam('dem', demSourceName);
       applyTerrain();
     });
 
@@ -240,12 +285,20 @@
           opt.textContent = name;
           demSourceSelect.appendChild(opt);
         }
-        demSourceSelect.value = '';
+        // Apply the persisted DEM if it's available; otherwise clear and
+        // re-apply terrain so any stale ?dem value doesn't keep hitting a
+        // 404 endpoint.
+        const exists = demNames.includes(demSourceName || 'dem');
+        if (!exists) {
+          demSourceName = '';
+          setUrlParam('dem', '');
+        }
+        demSourceSelect.value = demSourceName;
         demSourceLabel.style.display = '';
         demSourceSelect.style.display = '';
+        if (demSourceName) applyTerrain();
       });
-    terrainCompareBtn.addEventListener('click', () => {
-      usingLegacyTerrain = !usingLegacyTerrain;
+    function applyLegacyState() {
       terrainCompareBtn.classList.toggle('active', usingLegacyTerrain);
       terrainCompareBtn.textContent = usingLegacyTerrain
         ? 'PLATEAUに戻す'
@@ -253,6 +306,12 @@
       // Geoid is irrelevant for the legacy tileset — it bakes its own
       // height model. Disable the dropdown to avoid confusion.
       geoidSelect.disabled = usingLegacyTerrain;
+    }
+    if (usingLegacyTerrain) applyLegacyState();
+    terrainCompareBtn.addEventListener('click', () => {
+      usingLegacyTerrain = !usingLegacyTerrain;
+      writeBoolParam('legacy', usingLegacyTerrain, false);
+      applyLegacyState();
       applyTerrain();
     });
 
@@ -271,13 +330,48 @@
     })();
 
     // ── Camera ─────────────────────────────────────────────────────────
-    viewer.camera.setView({
+    // Default viewport over central Tokyo. `?cam=lng,lat,height,heading,pitch,roll`
+    // overrides on load; subsequent camera changes write the param back so a
+    // reload restores exactly where the user left off.
+    const defaultCam = {
       destination: Cesium.Cartesian3.fromDegrees(139.753, 35.68, 3000),
       orientation: {
         heading: Cesium.Math.toRadians(0.0),
         pitch: Cesium.Math.toRadians(-35.0),
         roll: 0.0,
       },
+    };
+    function parseCamParam(s) {
+      if (!s) return null;
+      const parts = s.split(',').map(Number);
+      if (parts.length < 5 || parts.some((n) => !Number.isFinite(n))) return null;
+      const [lng, lat, height, heading, pitch, roll = 0] = parts;
+      return {
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
+        orientation: {
+          heading: Cesium.Math.toRadians(heading),
+          pitch: Cesium.Math.toRadians(pitch),
+          roll: Cesium.Math.toRadians(roll),
+        },
+      };
+    }
+    viewer.camera.setView(parseCamParam(urlParams.get('cam')) || defaultCam);
+    // Persist on every camera-stop. `moveEnd` fires after both user-driven
+    // moves and programmatic ones — we accept the redundant writes here since
+    // they're cheap (`replaceState` of a short URL).
+    const round = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+    viewer.camera.moveEnd.addEventListener(() => {
+      const c = viewer.camera;
+      const carto = Cesium.Cartographic.fromCartesian(c.positionWC);
+      const cam = [
+        round(Cesium.Math.toDegrees(carto.longitude), 6),
+        round(Cesium.Math.toDegrees(carto.latitude), 6),
+        Math.round(carto.height),
+        round(Cesium.Math.toDegrees(c.heading), 2),
+        round(Cesium.Math.toDegrees(c.pitch), 2),
+        round(Cesium.Math.toDegrees(c.roll), 2),
+      ].join(',');
+      setUrlParam('cam', cam);
     });
     document.getElementById('flyChiyoda').addEventListener('click', () => {
       viewer.camera.flyTo({
@@ -302,7 +396,7 @@
     ];
     const inspectorEntities = [];
     const inspectorBtn = document.getElementById('inspectorToggle');
-    let inspectorEnabled = false;
+    let inspectorEnabled = readBoolParam('inspector', false);
 
     async function buildInspector() {
       const data = await fetch('/tiles/sources.json')
@@ -379,15 +473,20 @@
       inspectorEntities.length = 0;
     }
 
-    inspectorBtn.addEventListener('click', async () => {
-      inspectorEnabled = !inspectorEnabled;
+    async function applyInspector() {
       inspectorBtn.classList.toggle('active', inspectorEnabled);
       if (inspectorEnabled) {
         await buildInspector();
       } else {
         clearInspector();
       }
+    }
+    inspectorBtn.addEventListener('click', async () => {
+      inspectorEnabled = !inspectorEnabled;
+      writeBoolParam('inspector', inspectorEnabled, false);
+      await applyInspector();
     });
+    if (inspectorEnabled) applyInspector();
 
     // ── Tile-grid overlay (TMS Geodetic) ──────────────────────────────
     // Cesium's built-in `TileCoordinatesImageryProvider` overlays a hollow
@@ -401,20 +500,24 @@
     // pops over imagery and shaded terrain alike.
     const tileGridBtn = document.getElementById('tileGridToggle');
     let tileGridLayer = null;
-
-    tileGridBtn.addEventListener('click', () => {
-      const willEnable = tileGridLayer == null;
-      tileGridBtn.classList.toggle('active', willEnable);
-      if (willEnable) {
+    function applyTileGrid(enable) {
+      tileGridBtn.classList.toggle('active', enable);
+      if (enable && !tileGridLayer) {
         const provider = new Cesium.TileCoordinatesImageryProvider({
           color: Cesium.Color.fromCssColorString('#ff00aa'),
         });
         tileGridLayer = viewer.imageryLayers.addImageryProvider(provider);
-      } else if (tileGridLayer) {
+      } else if (!enable && tileGridLayer) {
         viewer.imageryLayers.remove(tileGridLayer, true);
         tileGridLayer = null;
       }
+    }
+    tileGridBtn.addEventListener('click', () => {
+      const willEnable = tileGridLayer == null;
+      writeBoolParam('tileGrid', willEnable, false);
+      applyTileGrid(willEnable);
     });
+    if (readBoolParam('tileGrid', false)) applyTileGrid(true);
   </script>
 </body>
 </html>

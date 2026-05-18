@@ -237,6 +237,41 @@
     </div>
 
     <script>
+        // ── URL state ──────────────────────────────────────────────────
+        // Persist non-camera UI state to the query string so reloads and
+        // shared links preserve the picked tile source, DEM, geoid, format,
+        // and active toggles. Camera position is handled separately by
+        // MapLibre's built-in `hash: true` (URL fragment) — kept distinct so
+        // these utilities never touch the fragment.
+        const urlParams = new URLSearchParams(window.location.search);
+        function setUrlParam(key, value) {
+            const p = new URLSearchParams(window.location.search);
+            // Empty/null/undefined/default-equivalent values are dropped to
+            // keep the URL short — restoring an absent key simply falls back
+            // to the in-page default.
+            if (value === null || value === undefined || value === '') {
+                p.delete(key);
+            } else {
+                p.set(key, String(value));
+            }
+            const qs = p.toString();
+            const next = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+            window.history.replaceState(null, '', next);
+        }
+        // Boolean param helpers: `1`/`0` is shorter and unambiguous in URLs
+        // than `true`/`false`. Anything not exactly `"1"` reads as false.
+        const readBoolParam = (key, defaultValue) => {
+            const v = urlParams.get(key);
+            if (v === null) return defaultValue;
+            return v === '1';
+        };
+        const writeBoolParam = (key, value, defaultValue) => {
+            // Skip writing when the value matches the default — keeps the URL
+            // clean when the user hasn't deviated from the page defaults.
+            if (value === defaultValue) setUrlParam(key, '');
+            else setUrlParam(key, value ? '1' : '0');
+        };
+
         const sourceSelect = document.getElementById('source');
         const formatSelect = document.getElementById('format');
         const copyUrlBtn = document.getElementById('copyUrl');
@@ -245,7 +280,14 @@
         const helpBtn = document.getElementById('helpBtn');
         const modalOverlay = document.getElementById('modalOverlay');
         const modalClose = document.getElementById('modalClose');
-        let gsiEnabled = true;
+        let gsiEnabled = readBoolParam('gsi', true);
+        gsiToggle.classList.toggle('active', gsiEnabled);
+        // Restore the format dropdown right away (its options are static).
+        // Source dropdown is restored once `/tiles/sources.json` populates it.
+        const initialFormat = urlParams.get('format');
+        if (initialFormat) formatSelect.value = initialFormat;
+        const initialGeoid = urlParams.get('geoid');
+        // geoidSelect is declared later; defer applying until after that block.
 
         // Cache of /tiles/sources.json (populated lazily; shared by the
         // dropdown and the inspector overlay).
@@ -271,7 +313,9 @@
                 sourceSelect.appendChild(option);
             }
             if (list.length > 0) {
-                sourceSelect.value = list[0].name;
+                const persisted = urlParams.get('source');
+                const valid = persisted && list.some((s) => s.name === persisted);
+                sourceSelect.value = valid ? persisted : list[0].name;
                 if (map.loaded()) {
                     updateSource();
                 } else {
@@ -314,6 +358,16 @@
             if (map.getLayer('gsi')) {
                 map.setLayoutProperty('gsi', 'visibility', gsiEnabled ? 'visible' : 'none');
             }
+            writeBoolParam('gsi', gsiEnabled, true);
+        }
+        // Apply initial gsi visibility once the GSI layer is loaded — the
+        // default is true so this only matters if the URL flipped it off.
+        if (!gsiEnabled) {
+            map.once('load', () => {
+                if (map.getLayer('gsi')) {
+                    map.setLayoutProperty('gsi', 'visibility', 'none');
+                }
+            });
         }
 
         function updateSource() {
@@ -385,18 +439,19 @@
 
         // ── Mapbox Terrain-RGB DEM (3D terrain + hillshade) ────────────
         const geoidSelect = document.getElementById('geoid');
+        if (initialGeoid) geoidSelect.value = initialGeoid;
         const demSourceSelect = document.getElementById('demSource');
         const terrain3dToggle = document.getElementById('terrain3dToggle');
         const hillshadeToggle = document.getElementById('hillshadeToggle');
         const inspectorToggle = document.getElementById('inspectorToggle');
 
-        let terrain3dEnabled = false;
-        let hillshadeEnabled = false;
-        let inspectorEnabled = false;
+        let terrain3dEnabled = readBoolParam('3d', false);
+        let hillshadeEnabled = readBoolParam('hillshade', false);
+        let inspectorEnabled = readBoolParam('inspector', false);
         // Selected DEM source name. Empty = default `/mapbox/...` route, which
         // the tile server aliases to source "dem". Non-empty becomes
         // `/mapbox/{name}/...`.
-        let demSourceName = '';
+        let demSourceName = urlParams.get('dem') || '';
 
         function demTilejsonUrl() {
             const g = encodeURIComponent(geoidSelect.value);
@@ -473,12 +528,28 @@
             terrain3dEnabled = !terrain3dEnabled;
             if (terrain3dEnabled) ensureSource(TERRAIN_SOURCE);
             applyTerrain3d();
+            writeBoolParam('3d', terrain3dEnabled, false);
         });
         hillshadeToggle.addEventListener('click', () => {
             hillshadeEnabled = !hillshadeEnabled;
             if (hillshadeEnabled) ensureSource(HILLSHADE_SOURCE);
             applyHillshade();
+            writeBoolParam('hillshade', hillshadeEnabled, false);
         });
+        // Restore terrain/hillshade once the map style is ready — adding
+        // sources before `load` is a no-op in MapLibre and just silently fails.
+        if (terrain3dEnabled || hillshadeEnabled) {
+            map.once('load', () => {
+                if (terrain3dEnabled) {
+                    ensureSource(TERRAIN_SOURCE);
+                    applyTerrain3d();
+                }
+                if (hillshadeEnabled) {
+                    ensureSource(HILLSHADE_SOURCE);
+                    applyHillshade();
+                }
+            });
+        }
         function rebuildDemSources() {
             if (terrain3dEnabled) {
                 rebuildSource(TERRAIN_SOURCE,
@@ -491,9 +562,13 @@
                     () => applyHillshade());
             }
         }
-        geoidSelect.addEventListener('change', rebuildDemSources);
+        geoidSelect.addEventListener('change', () => {
+            setUrlParam('geoid', geoidSelect.value === 'gsigeo2011' ? '' : geoidSelect.value);
+            rebuildDemSources();
+        });
         demSourceSelect.addEventListener('change', (e) => {
             demSourceName = e.target.value;
+            setUrlParam('dem', demSourceName);
             rebuildDemSources();
         });
 
@@ -517,8 +592,18 @@
                     opt.textContent = `DEM: ${name}`;
                     demSourceSelect.appendChild(opt);
                 }
-                demSourceSelect.value = '';
+                // Apply persisted DEM choice if it matches an available option;
+                // otherwise fall back to the default and rebuild any active
+                // DEM-dependent layers so they pick up the correct source.
+                const persisted = demSourceName;
+                const exists = demNames.includes(persisted || 'dem');
+                demSourceSelect.value = exists ? persisted : '';
+                if (!exists) {
+                    demSourceName = '';
+                    setUrlParam('dem', '');
+                }
                 demSourceSelect.style.display = '';
+                if (demSourceName) rebuildDemSources();
             });
 
         // ── Inspector: bounds.json overlay ─────────────────────────────
@@ -640,8 +725,7 @@
             });
         }
 
-        inspectorToggle.addEventListener('click', async () => {
-            inspectorEnabled = !inspectorEnabled;
+        async function applyInspector() {
             inspectorToggle.classList.toggle('active', inspectorEnabled);
             if (inspectorEnabled) {
                 await loadInspector();
@@ -649,7 +733,17 @@
             } else {
                 setInspectorVisibility(false);
             }
+        }
+        inspectorToggle.addEventListener('click', async () => {
+            inspectorEnabled = !inspectorEnabled;
+            writeBoolParam('inspector', inspectorEnabled, false);
+            await applyInspector();
         });
+        if (inspectorEnabled) {
+            // Loading inspector requires the map style to be ready (it adds
+            // sources + layers) — defer until then.
+            map.once('load', applyInspector);
+        }
 
         function escapeHtml(s) {
             return String(s).replace(/[&<>"']/g, (c) => (
@@ -707,10 +801,10 @@
         });
 
         const tileGridToggle = document.getElementById('tileGridToggle');
-        tileGridToggle.addEventListener('click', () => {
-            const willEnable = !tileGridToggle.classList.contains('active');
-            tileGridToggle.classList.toggle('active', willEnable);
-            if (willEnable) {
+        let tileGridEnabled = readBoolParam('tileGrid', false);
+        function applyTileGrid() {
+            tileGridToggle.classList.toggle('active', tileGridEnabled);
+            if (tileGridEnabled) {
                 if (!map.getSource(TILE_GRID_SOURCE)) {
                     map.addSource(TILE_GRID_SOURCE, {
                         type: 'raster',
@@ -732,12 +826,26 @@
                 if (map.getLayer(TILE_GRID_LAYER)) map.removeLayer(TILE_GRID_LAYER);
                 if (map.getSource(TILE_GRID_SOURCE)) map.removeSource(TILE_GRID_SOURCE);
             }
+        }
+        tileGridToggle.addEventListener('click', () => {
+            tileGridEnabled = !tileGridEnabled;
+            writeBoolParam('tileGrid', tileGridEnabled, false);
+            applyTileGrid();
         });
+        if (tileGridEnabled) map.once('load', applyTileGrid);
 
         // Event listeners
         gsiToggle.addEventListener('click', toggleGsi);
-        sourceSelect.addEventListener('change', updateSource);
-        formatSelect.addEventListener('change', updateSource);
+        sourceSelect.addEventListener('change', () => {
+            setUrlParam('source', sourceSelect.value);
+            updateSource();
+        });
+        formatSelect.addEventListener('change', () => {
+            // `png` is the in-page default; drop it from the URL to keep
+            // links short.
+            setUrlParam('format', formatSelect.value === 'png' ? '' : formatSelect.value);
+            updateSource();
+        });
         copyUrlBtn.addEventListener('click', copyUrlTemplate);
         helpBtn.addEventListener('click', openModal);
         modalClose.addEventListener('click', closeModal);
