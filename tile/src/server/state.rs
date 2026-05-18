@@ -16,9 +16,12 @@ use crate::{
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
 
-/// Name of the special source whose layers are interpreted as DEM overlays
-/// rather than `/tiles/...` raster sources.
-const DEM_SOURCE_KEY: &str = "dem";
+/// Default DEM source name used when terrain endpoints are hit without an
+/// explicit `{name}` path segment (i.e. `/terrain/{z}/{x}/{y}` rather than
+/// `/terrain/{name}/{z}/{x}/{y}`). Also doubles as the back-compat reserved
+/// name: a source named `"dem"` is treated as a DEM source even if its
+/// config entry doesn't set `type: "dem"`.
+pub const DEFAULT_DEM_SOURCE_KEY: &str = "dem";
 
 /// Application state shared across handlers.
 pub struct AppState {
@@ -36,9 +39,12 @@ pub struct AppState {
     pub reload_secret: Option<String>,
     /// Cache-Control header value (optional)
     pub cache_control: Option<String>,
-    /// Terrain endpoint state. Wrapped in a lock so config reload can swap in
-    /// a freshly built `TerrainState` (DEM overlay set may change in CMS).
-    terrain: Arc<RwLock<Arc<super::terrain::TerrainState>>>,
+    /// Terrain endpoint state, keyed by DEM source name. Wrapped in a lock so
+    /// config reload can swap in a freshly built set of `TerrainState`s — the
+    /// DEM source list (or any overlay within them) may change in CMS. Always
+    /// contains at least an entry under [`DEFAULT_DEM_SOURCE_KEY`]; that entry
+    /// is what `/terrain/{z}/{x}/{y}` (no name) resolves to.
+    terrains: Arc<RwLock<HashMap<String, Arc<super::terrain::TerrainState>>>>,
     /// Cached env-derived terrain settings, needed at reload time to rebuild
     /// the base DEM with the same configuration.
     terrain_settings: TerrainSettings,
@@ -53,7 +59,8 @@ pub struct AppState {
 /// metadata queries (`bounds()`, `zoom_range()`).
 #[derive(Clone)]
 pub struct LayerEntry {
-    /// Owning source name in the config (or `"dem"` for DEM overlays).
+    /// Owning source name in the config. For DEM overlays this is the
+    /// originating DEM source name (one of multiple may exist).
     pub source_name: String,
     /// Position within the owning source's `layers` array.
     pub layer_idx: usize,
@@ -116,8 +123,8 @@ impl AppState {
             }
         }
 
-        let (terrain, dem_inventory) =
-            Self::build_terrain(&terrain_settings, &config.sources).await;
+        let (terrains, dem_inventory) =
+            Self::build_terrains(&terrain_settings, &config.sources).await;
 
         Self {
             config_manager,
@@ -127,7 +134,7 @@ impl AppState {
             dem_inventory: Arc::new(RwLock::new(dem_inventory)),
             reload_secret,
             cache_control,
-            terrain: Arc::new(RwLock::new(terrain)),
+            terrains: Arc::new(RwLock::new(terrains)),
             terrain_settings,
             reload_mutex: Arc::new(Mutex::new(())),
         }
@@ -175,22 +182,35 @@ impl AppState {
         self.reload_mutex.clone()
     }
 
-    /// Current terrain state. Cheap (Arc clone) and lock-free for callers
-    /// after the read lock is dropped — handlers cache the returned `Arc` for
-    /// the lifetime of one request.
-    pub async fn current_terrain(&self) -> Arc<super::terrain::TerrainState> {
-        self.terrain.read().await.clone()
+    /// Look up a terrain state by source name. `None` (or an empty string)
+    /// resolves to [`DEFAULT_DEM_SOURCE_KEY`]. Returns `None` if no terrain
+    /// is registered under the requested name.
+    pub async fn get_terrain(
+        &self,
+        name: Option<&str>,
+    ) -> Option<Arc<super::terrain::TerrainState>> {
+        let key = match name {
+            None | Some("") => DEFAULT_DEM_SOURCE_KEY,
+            Some(n) => n,
+        };
+        self.terrains.read().await.get(key).cloned()
     }
 
-    /// Construct the terrain state. Base DEM comes from `terrain_settings`
-    /// (env vars). If a source named `"dem"` exists in the config, its
-    /// `layers` (in original order — first = bottom-most overlay, last =
-    /// frontmost) are used as overlays atop the base via
-    /// `CompositeDemProvider`.
-    async fn build_terrain(
+    /// Construct the set of terrain states, one per DEM source in the config.
+    ///
+    /// The base DEM (env-configured) is shared across every entry; only the
+    /// overlay stack differs between them. If no config source is identified
+    /// as a DEM source (via `type: "dem"` or the reserved name `"dem"`), a
+    /// single bare-base entry is still produced under
+    /// [`DEFAULT_DEM_SOURCE_KEY`] so `/terrain/...` keeps working out of the
+    /// box without any config.
+    async fn build_terrains(
         settings: &TerrainSettings,
         sources: &HashMap<String, SourceConfig>,
-    ) -> (Arc<super::terrain::TerrainState>, Vec<LayerEntry>) {
+    ) -> (
+        HashMap<String, Arc<super::terrain::TerrainState>>,
+        Vec<LayerEntry>,
+    ) {
         // Wrap the base DEM in an LRU so the parent-tile fallback in
         // `CompositeDemProvider::fetch_base_upsampled` doesn't re-fetch +
         // re-decode the same Mapterhorn parent for every child request.
@@ -202,19 +222,26 @@ impl AppState {
             200,
         ));
         let mut dem_inventory: Vec<LayerEntry> = Vec::new();
+        let mut terrains: HashMap<String, Arc<super::terrain::TerrainState>> = HashMap::new();
 
-        let dem: Arc<dyn DemProvider> = match sources.get(DEM_SOURCE_KEY) {
-            None => base,
-            Some(dem_cfg) if dem_cfg.layers.is_empty() => base,
-            Some(dem_cfg) => {
+        // Collect every config source recognised as a DEM source.
+        let dem_sources: Vec<(&String, &SourceConfig)> = sources
+            .iter()
+            .filter(|(name, cfg)| cfg.is_dem(name))
+            .collect();
+
+        for (name, dem_cfg) in &dem_sources {
+            let dem: Arc<dyn DemProvider> = if dem_cfg.layers.is_empty() {
+                base.clone()
+            } else {
                 let overlays: Vec<Arc<dyn DemProvider>> = dem_cfg
                     .layers
                     .iter()
                     .enumerate()
                     .filter_map(|(i, layer)| {
-                        let provider = build_dem_overlay(i, layer)?;
+                        let provider = build_dem_overlay(name, i, layer)?;
                         dem_inventory.push(LayerEntry {
-                            source_name: DEM_SOURCE_KEY.to_string(),
+                            source_name: (*name).to_string(),
                             layer_idx: i,
                             layer_type: layer.layer_type_static(),
                             url: layer.url().to_string(),
@@ -225,23 +252,41 @@ impl AppState {
                     })
                     .collect();
                 tracing::info!(
+                    source = %name,
                     "Building composite DEM: 1 base + {} overlays",
                     overlays.len()
                 );
-                Arc::new(build_composite_dem(base, overlays).await)
-            }
-        };
+                Arc::new(build_composite_dem(base.clone(), overlays).await)
+            };
+            terrains.insert(
+                (*name).to_string(),
+                Arc::new(super::terrain::TerrainState {
+                    dem,
+                    tile_size: settings.tile_size,
+                    default_geoid: settings.default_geoid,
+                    max_zoom: settings.max_zoom,
+                    max_error: settings.max_error,
+                }),
+            );
+        }
 
-        (
-            Arc::new(super::terrain::TerrainState {
-                dem,
-                tile_size: settings.tile_size,
-                default_geoid: settings.default_geoid,
-                max_zoom: settings.max_zoom,
-                max_error: settings.max_error,
-            }),
-            dem_inventory,
-        )
+        // Guarantee a default entry: if no DEM source is configured at all, or
+        // if every configured DEM source has a non-default name, fall back to
+        // a bare-base provider under the default key so legacy `/terrain/...`
+        // (no name) keeps responding.
+        terrains
+            .entry(DEFAULT_DEM_SOURCE_KEY.to_string())
+            .or_insert_with(|| {
+                Arc::new(super::terrain::TerrainState {
+                    dem: base.clone(),
+                    tile_size: settings.tile_size,
+                    default_geoid: settings.default_geoid,
+                    max_zoom: settings.max_zoom,
+                    max_error: settings.max_error,
+                })
+            });
+
+        (terrains, dem_inventory)
     }
 
     /// Preload all sources in parallel (e.g., COG metadata).
@@ -272,9 +317,9 @@ impl AppState {
         let mut sources = HashMap::new();
 
         for (name, config) in source_configs {
-            // The "dem" source is repurposed for terrain overlays — it must
+            // DEM sources are repurposed for terrain overlays — they must
             // not appear under `/tiles/...`.
-            if name == DEM_SOURCE_KEY {
+            if config.is_dem(name) {
                 continue;
             }
             // Skip sources that only have maplibre layers when feature is off
@@ -438,8 +483,8 @@ impl AppState {
         let new_sources = Self::build_sources(&config.sources, &mut new_inventory);
         Self::preload_sources(&new_sources).await;
 
-        let (new_terrain, new_dem_inventory) =
-            Self::build_terrain(&self.terrain_settings, &config.sources).await;
+        let (new_terrains, new_dem_inventory) =
+            Self::build_terrains(&self.terrain_settings, &config.sources).await;
 
         let mut sources = self.sources.write().await;
         *sources = new_sources;
@@ -447,8 +492,8 @@ impl AppState {
         *inv = new_inventory;
         let mut dem_inv = self.dem_inventory.write().await;
         *dem_inv = new_dem_inventory;
-        let mut terrain = self.terrain.write().await;
-        *terrain = new_terrain;
+        let mut terrains = self.terrains.write().await;
+        *terrains = new_terrains;
         tracing::info!(
             "Rebuilt {} tile sources and DEM terrain on reload",
             sources.len()
@@ -528,8 +573,15 @@ impl AppState {
 /// to read at a glance.
 const DEM_OVERLAY_DEFAULT_VERSION: &str = "20260508-2230";
 
-fn build_dem_overlay(idx: usize, layer: &LayerConfig) -> Option<Arc<dyn DemProvider>> {
-    let slug = format!("dem{idx}");
+fn build_dem_overlay(
+    source_name: &str,
+    idx: usize,
+    layer: &LayerConfig,
+) -> Option<Arc<dyn DemProvider>> {
+    // Slug feeds into per-overlay cache keys; include the source name so two
+    // DEM sources that happen to reuse the same upstream URL at the same
+    // layer index don't collide in any downstream cache that keys on slug.
+    let slug = format!("{source_name}-dem{idx}");
     let version = layer
         .version()
         .unwrap_or(DEM_OVERLAY_DEFAULT_VERSION)

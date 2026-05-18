@@ -52,11 +52,31 @@ pub struct SourceConfig {
     /// Per-source version string for ETag calculation (overrides global version)
     #[serde(default)]
     pub version: Option<String>,
+    /// Source kind. Empty/absent = regular raster overlay. `"dem"` = composite
+    /// DEM stack consumed by the terrain endpoints. For back-compat the
+    /// reserved source name `"dem"` is also treated as a DEM source even when
+    /// `type` is absent — see [`SourceConfig::is_dem`].
+    #[serde(default, rename = "type")]
+    pub source_type: Option<String>,
     /// Human-readable description of the source. Surfaced via the public
     /// `/tiles/catalog.json` endpoint for end-user UIs.
     #[serde(default)]
     pub description: Option<String>,
     pub layers: Vec<LayerConfig>,
+}
+
+impl SourceConfig {
+    /// Returns true if this source should be treated as a DEM overlay stack.
+    ///
+    /// The `name` argument is needed for the back-compat rule: a source named
+    /// `"dem"` is treated as DEM even when `type` is unset, matching the
+    /// historical hard-coded behavior.
+    pub fn is_dem(&self, name: &str) -> bool {
+        match self.source_type.as_deref() {
+            Some(t) => t.eq_ignore_ascii_case("dem"),
+            None => name == "dem",
+        }
+    }
 }
 
 /// Layer configuration (XYZ, COG, or other types). Most fields are shared

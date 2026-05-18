@@ -135,19 +135,17 @@ struct CatalogEntry {
 /// formats accepted by [`get_tilejson`] and the terrain raster endpoints.
 const CATALOG_RASTER_FORMATS: &[&str] = &["png", "webp", "avif"];
 
-/// Name used by the special DEM-overlay source in `config.json`. Its layers
-/// are folded into the composite DEM provider rather than exposed under
-/// `/tiles/dem/...`, so it's not user-fetchable and we hide it from the
-/// catalog (terrain itself appears under the built-in `terrain` entry).
-const DEM_SOURCE_KEY: &str = "dem";
-
 pub async fn get_catalog(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let config = state.config_manager.get().await;
 
     let mut tiles: Vec<CatalogEntry> = config
         .sources
         .into_iter()
-        .filter(|(name, _)| name != DEM_SOURCE_KEY)
+        // DEM-typed sources are folded into the composite terrain provider
+        // rather than exposed under `/tiles/{name}/...`; hide them from the
+        // catalog (terrain itself appears under the built-in `terrain` entry
+        // and — for named DEM sources — appears below).
+        .filter(|(name, src)| !src.is_dem(name))
         .map(|(name, src)| {
             let urls = CATALOG_RASTER_FORMATS
                 .iter()

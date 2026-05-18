@@ -61,6 +61,14 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
             get(terrain_handlers::terrain_tile),
         )
         .route(
+            "/terrain/{name}/layer.json",
+            get(terrain_handlers::terrain_layer_json_named),
+        )
+        .route(
+            "/terrain/{name}/{z}/{x}/{y_ext}",
+            get(terrain_handlers::terrain_tile_named),
+        )
+        .route(
             "/terrarium/tilejson.json",
             get(terrain_handlers::terrarium_tilejson),
         )
@@ -69,12 +77,28 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
             get(terrain_handlers::terrarium_tile),
         )
         .route(
+            "/terrarium/{name}/tilejson.json",
+            get(terrain_handlers::terrarium_tilejson_named),
+        )
+        .route(
+            "/terrarium/{name}/{z}/{x}/{y_ext}",
+            get(terrain_handlers::terrarium_tile_named),
+        )
+        .route(
             "/mapbox/tilejson.json",
             get(terrain_handlers::mapbox_tilejson),
         )
         .route(
             "/mapbox/{z}/{x}/{y_ext}",
             get(terrain_handlers::mapbox_tile),
+        )
+        .route(
+            "/mapbox/{name}/tilejson.json",
+            get(terrain_handlers::mapbox_tilejson_named),
+        )
+        .route(
+            "/mapbox/{name}/{z}/{x}/{y_ext}",
+            get(terrain_handlers::mapbox_tile_named),
         )
         .route("/health", get(handlers::health))
         .route("/reload", post(handlers::reload))

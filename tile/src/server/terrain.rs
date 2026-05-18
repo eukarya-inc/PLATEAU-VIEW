@@ -179,13 +179,35 @@ pub async fn terrain_viewer() -> axum::response::Response {
     super::static_assets::serve_html("terrain_viewer.html")
 }
 
-/// GET /terrain/layer.json
+/// GET /terrain/layer.json   (default DEM source)
 pub async fn terrain_layer_json(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    query: Query<GeoidQuery>,
+) -> Response {
+    terrain_layer_json_impl(state, headers, query, None).await
+}
+
+/// GET /terrain/{name}/layer.json
+pub async fn terrain_layer_json_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    terrain_layer_json_impl(state, headers, query, Some(name)).await
+}
+
+async fn terrain_layer_json_impl(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(q): Query<GeoidQuery>,
+    name: Option<String>,
 ) -> Response {
-    let terrain = state.current_terrain().await;
+    let terrain = match state.get_terrain(name.as_deref()).await {
+        Some(t) => t,
+        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
+    };
     let geoid_model = match resolve_geoid(&terrain, &q) {
         Ok(g) => g,
         Err(r) => return r,
@@ -249,15 +271,38 @@ pub async fn terrain_layer_json(
     }
 }
 
-/// GET /terrain/{z}/{x}/{y}.terrain
+/// GET /terrain/{z}/{x}/{y}.terrain   (default DEM source)
 pub async fn terrain_tile(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    path: Path<(u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    terrain_tile_impl(state, headers, path, query, None).await
+}
+
+/// GET /terrain/{name}/{z}/{x}/{y}.terrain
+pub async fn terrain_tile_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    terrain_tile_impl(state, headers, Path((z, x, y_ext)), query, Some(name)).await
+}
+
+async fn terrain_tile_impl(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
     Query(q): Query<GeoidQuery>,
+    name: Option<String>,
 ) -> Response {
     state.maybe_revalidate().await;
-    let terrain = state.current_terrain().await;
+    let terrain = match state.get_terrain(name.as_deref()).await {
+        Some(t) => t,
+        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
+    };
 
     // Parse y and validate extension.
     let y: u32 = match y_ext.strip_suffix(".terrain").and_then(|s| s.parse().ok()) {
@@ -451,7 +496,25 @@ pub async fn terrarium_tile(
     path: Path<(u8, u32, String)>,
     query: Query<GeoidQuery>,
 ) -> Response {
-    raster_tile(state, headers, path, query, RasterEncoding::Terrarium).await
+    raster_tile(state, headers, path, query, RasterEncoding::Terrarium, None).await
+}
+
+/// GET /terrarium/{name}/{z}/{x}/{y}.{png|webp|avif}
+pub async fn terrarium_tile_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tile(
+        state,
+        headers,
+        Path((z, x, y_ext)),
+        query,
+        RasterEncoding::Terrarium,
+        Some(name),
+    )
+    .await
 }
 
 /// GET /mapbox/{z}/{x}/{y}.{png|webp|avif}
@@ -461,7 +524,25 @@ pub async fn mapbox_tile(
     path: Path<(u8, u32, String)>,
     query: Query<GeoidQuery>,
 ) -> Response {
-    raster_tile(state, headers, path, query, RasterEncoding::Mapbox).await
+    raster_tile(state, headers, path, query, RasterEncoding::Mapbox, None).await
+}
+
+/// GET /mapbox/{name}/{z}/{x}/{y}.{png|webp|avif}
+pub async fn mapbox_tile_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tile(
+        state,
+        headers,
+        Path((z, x, y_ext)),
+        query,
+        RasterEncoding::Mapbox,
+        Some(name),
+    )
+    .await
 }
 
 async fn raster_tile(
@@ -470,9 +551,13 @@ async fn raster_tile(
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
     Query(q): Query<GeoidQuery>,
     encoding: RasterEncoding,
+    name: Option<String>,
 ) -> Response {
     state.maybe_revalidate().await;
-    let terrain = state.current_terrain().await;
+    let terrain = match state.get_terrain(name.as_deref()).await {
+        Some(t) => t,
+        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
+    };
 
     let (y, format) = match parse_y_and_format(&y_ext) {
         Some(parsed) => parsed,
@@ -616,7 +701,17 @@ pub async fn terrarium_tilejson(
     headers: HeaderMap,
     query: Query<GeoidQuery>,
 ) -> Response {
-    raster_tilejson(state, headers, query, RasterEncoding::Terrarium).await
+    raster_tilejson(state, headers, query, RasterEncoding::Terrarium, None).await
+}
+
+/// GET /terrarium/{name}/tilejson.json
+pub async fn terrarium_tilejson_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tilejson(state, headers, query, RasterEncoding::Terrarium, Some(name)).await
 }
 
 /// GET /mapbox/tilejson.json
@@ -625,7 +720,17 @@ pub async fn mapbox_tilejson(
     headers: HeaderMap,
     query: Query<GeoidQuery>,
 ) -> Response {
-    raster_tilejson(state, headers, query, RasterEncoding::Mapbox).await
+    raster_tilejson(state, headers, query, RasterEncoding::Mapbox, None).await
+}
+
+/// GET /mapbox/{name}/tilejson.json
+pub async fn mapbox_tilejson_named(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    query: Query<GeoidQuery>,
+) -> Response {
+    raster_tilejson(state, headers, query, RasterEncoding::Mapbox, Some(name)).await
 }
 
 async fn raster_tilejson(
@@ -633,8 +738,12 @@ async fn raster_tilejson(
     headers: HeaderMap,
     Query(q): Query<GeoidQuery>,
     encoding: RasterEncoding,
+    name: Option<String>,
 ) -> Response {
-    let terrain = state.current_terrain().await;
+    let terrain = match state.get_terrain(name.as_deref()).await {
+        Some(t) => t,
+        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
+    };
     let geoid_model = match resolve_geoid(&terrain, &q) {
         Ok(g) => g,
         Err(r) => return r,
@@ -648,8 +757,11 @@ async fn raster_tilejson(
     // which fronting load balancers (Cloud Run / Cloudflare) sometimes
     // rewrite to `localhost` — same fix as `/terrain/layer.json`.
     let _ = &headers;
+    // Embed the source name segment when this tilejson refers to a non-default
+    // DEM source, so MapLibre's resolved tile URLs hit `/{slug}/{name}/...`.
+    let name_segment = name.as_deref().map(|n| format!("/{n}")).unwrap_or_default();
     let tile_url = format!(
-        "/{slug}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
+        "/{slug}{name_segment}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
         slug = encoding.slug(),
         geoid = geoid_model.slug(),
     );
