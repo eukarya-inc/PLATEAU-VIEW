@@ -124,7 +124,7 @@ Any sentinel works for the tile server, but **small magnitudes are easier on eve
 >
 > 1. **Adaptive nodata tolerance** (`src/cog/reader.rs`) — `max(0.5 m, |nodata| · 1e-3)`. Small sentinels get the 0.5 m floor that catches `254.99996` next to `255`; huge sentinels get a proportional band wide enough to absorb bilinear-blended fringe values.
 > 2. **Physical elevation guard** (`src/cog/decode.rs`, `MAX_PHYSICAL_ELEVATION_M = 50_000`) — anything beyond ±50 km is dropped to NaN at decode time. Mt. Everest is 8.85 km, Mariana Trench −10.9 km; anything bigger is corruption.
-> 3. **Mesh-generator sanitisation** (`src/terrain/mesh_gen.rs`) — `find_height_range` and the martini callback both reject non-finite / out-of-range heights so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point.
+> 3. **Mesh-generator sanitisation** (`src/terrain/mesh_gen.rs`) — `find_height_range` and the Martini sample callback both reject non-finite / out-of-range heights so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point.
 >
 > Mosaicking with `-r near` is still the right thing to do — keeping the data clean upstream means *other* tools (QGIS, downstream processors) also see well-formed values.
 

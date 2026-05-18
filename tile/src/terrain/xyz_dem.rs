@@ -10,8 +10,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
-use super::mapbox::mapbox_rgb_to_elevation;
-use super::terrarium::rgb_to_elevation;
+use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -95,17 +94,15 @@ impl DemProvider for XyzDemSource {
         let bytes = response.bytes().await?;
         let img = image::load_from_memory(&bytes)?;
         let (src_w, src_h) = img.dimensions();
-        let rgba = img.to_rgba8();
-
-        let decode: fn(u8, u8, u8) -> f64 = match self.encoding {
-            XyzDemEncoding::Terrarium => |r, g, b| rgb_to_elevation(image::Rgb([r, g, b])),
-            XyzDemEncoding::Mapbox => |r, g, b| mapbox_rgb_to_elevation(image::Rgb([r, g, b])),
+        // `to_rgb8` (vs `to_rgba8`) skips the unused alpha — 25% less
+        // intermediate memory — and `HeightmapView` borrows those bytes.
+        let rgb = img.to_rgb8();
+        let fmt = match self.encoding {
+            XyzDemEncoding::Terrarium => HeightmapFormat::Terrarium,
+            XyzDemEncoding::Mapbox => HeightmapFormat::Mapbox,
         };
-
-        let mut native = Vec::with_capacity((src_w * src_h) as usize);
-        for p in rgba.pixels() {
-            native.push(decode(p[0], p[1], p[2]));
-        }
+        let view = HeightmapView::new(fmt, rgb.as_raw(), src_w, src_h);
+        let native: Vec<f64> = view.iter().map(|e| e as f64).collect();
 
         let elevations = if src_w == tile_size && src_h == tile_size {
             native

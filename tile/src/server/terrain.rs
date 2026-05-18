@@ -21,6 +21,12 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use serde::{Deserialize, Serialize};
+use terrain_codec::heightmap::{HeightmapFormat, encode_pixel as encode_heightmap_pixel};
+use terrain_codec::layer_json::{
+    LayerJson, LayerJsonConfig, TerrainFormat, TileAvailability, TilingScheme,
+};
+use terrain_codec::normals::BufferedElevations;
+use terrain_codec::quantized_mesh::TileBounds as QmBounds;
 use xxhash_rust::xxh64::xxh64;
 
 use super::format::{TileFormat, encode_image, parse_y_and_format};
@@ -32,11 +38,7 @@ use crate::terrain::{
     ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
-    layer_json::TileAvailability,
-    mapbox::encode_mapbox,
-    mesh_gen::{HaloElevations, QuantizedMeshOptions, generate_quantized_mesh_tile},
-    quantized_mesh::TileBounds as QmBounds,
-    terrarium::encode_terrarium,
+    mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
     webmercator::xyz_tile_bounds,
 };
 
@@ -72,11 +74,27 @@ impl RasterEncoding {
         }
     }
 
-    fn encode(self, elevations: &[f64], width: u32, height: u32) -> image::RgbImage {
+    fn heightmap_format(self) -> HeightmapFormat {
         match self {
-            Self::Terrarium => encode_terrarium(elevations, width, height),
-            Self::Mapbox => encode_mapbox(elevations, width, height),
+            Self::Terrarium => HeightmapFormat::Terrarium,
+            Self::Mapbox => HeightmapFormat::Mapbox,
         }
+    }
+
+    /// Encode elevations directly into a fresh `RgbaImage`. Writes each
+    /// pixel straight into the destination buffer so no intermediate
+    /// `Vec<f32>` (for the f64→f32 cast) or `Vec<u8>` (for the RGB stream)
+    /// is allocated — only the final `RgbaImage` that the PNG/WebP encoder
+    /// consumes.
+    fn encode_to_rgba(self, elevations: &[f64], width: u32, height: u32) -> image::RgbaImage {
+        let fmt = self.heightmap_format();
+        debug_assert_eq!(elevations.len(), (width as usize) * (height as usize));
+        let mut out = image::RgbaImage::new(width, height);
+        for (dst, &elev) in out.pixels_mut().zip(elevations.iter()) {
+            let [r, g, b] = encode_heightmap_pixel(fmt, elev as f32);
+            *dst = image::Rgba([r, g, b, 255]);
+        }
+        out
     }
 }
 
@@ -92,7 +110,7 @@ const JAPAN_BOUNDS_NORTH: f64 = 46.0;
 fn japan_availability(max_zoom: u8) -> Vec<Vec<TileAvailability>> {
     (0..=max_zoom)
         .map(|z| {
-            vec![TileAvailability::from_bounds_geodetic(
+            vec![TileAvailability::from_bounds_geodetic_tms(
                 z,
                 JAPAN_BOUNDS_WEST,
                 JAPAN_BOUNDS_SOUTH,
@@ -224,7 +242,7 @@ async fn terrain_layer_json_impl(
     let _ = geoid_model;
     let tiles_template = "{z}/{x}/{y}.terrain".to_string();
 
-    let config = crate::terrain::layer_json::LayerJsonConfig {
+    let config = LayerJsonConfig {
         tiles_template,
         version: terrain.dem.version().to_string(),
         attribution: Some(
@@ -234,7 +252,7 @@ async fn terrain_layer_json_impl(
         available: japan_availability(terrain.max_zoom),
         min_zoom: Some(0),
         max_zoom: Some(terrain.max_zoom),
-        scheme: "tms".to_string(),
+        scheme: TilingScheme::Tms,
         bounds: Some([
             JAPAN_BOUNDS_WEST,
             JAPAN_BOUNDS_SOUTH,
@@ -242,11 +260,11 @@ async fn terrain_layer_json_impl(
             JAPAN_BOUNDS_NORTH,
         ]),
         extensions: vec!["octvertexnormals".to_string()],
-        format: "quantized-mesh-1.0".to_string(),
+        format: TerrainFormat::QuantizedMesh1,
         metadata_availability: None,
     };
 
-    let layer = crate::terrain::layer_json::generate_layer_json(&config);
+    let layer = LayerJson::from_config(&config);
     match serde_json::to_string(&layer) {
         Ok(json) => (
             StatusCode::OK,
@@ -458,10 +476,11 @@ async fn terrain_tile_impl(
                     current_zoom: Some(z),
                     max_zoom: Some(max_zoom),
                     compression_level: 6,
-                    halo_elevations: Some(HaloElevations {
-                        elevations: elevations_with_halo,
-                        halo: halo_cells,
-                    }),
+                    buffered_elevations: Some(BufferedElevations::new(
+                        elevations_with_halo,
+                        crate::terrain::mesh_gen::MESH_GRID_SIZE,
+                        halo_cells,
+                    )),
                 };
                 let tile = generate_quantized_mesh_tile(&elevations, &qm_bounds, &opts);
                 Ok::<_, crate::tile::TileError>(tile.data)
@@ -674,8 +693,7 @@ async fn raster_tile(
                 let g = Geoid::load(geoid_for_gen);
                 apply_geoid_to_xyz_grid(z, x, y, tile_size, &mut elevations, &g);
 
-                let img_rgb = encoding.encode(&elevations, tile_size, tile_size);
-                let img_rgba = rgb_to_rgba(&img_rgb);
+                let img_rgba = encoding.encode_to_rgba(&elevations, tile_size, tile_size);
                 encode_image(&img_rgba, format)
                     .map_err(|e| crate::tile::TileError::ImageError(e.to_string()))
             },
@@ -800,15 +818,6 @@ async fn raster_tilejson(
 }
 
 // ─────────────────────────────── Helpers ───────────────────────────────
-
-fn rgb_to_rgba(img: &image::RgbImage) -> image::RgbaImage {
-    let (w, h) = (img.width(), img.height());
-    let mut out = image::RgbaImage::new(w, h);
-    for (x, y, p) in img.enumerate_pixels() {
-        out.put_pixel(x, y, image::Rgba([p.0[0], p.0[1], p.0[2], 255]));
-    }
-    out
-}
 
 /// Local variant of `tile_response` with an explicit content-type (used for
 /// the `.terrain` endpoint which is not a regular image format).

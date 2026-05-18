@@ -11,7 +11,7 @@ use image::GenericImageView;
 use reqwest::StatusCode;
 
 use super::dem::{DemError, DemProvider, DemTile};
-use super::terrarium::rgb_to_elevation;
+use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 /// Default public Mapterhorn tile endpoint.
 pub const DEFAULT_URL_TEMPLATE: &str = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
@@ -89,12 +89,13 @@ impl DemProvider for MapterhornSource {
         let img = image::load_from_memory(&bytes)?;
         let (src_w, src_h) = img.dimensions();
 
-        // Decode to f64 elevations at the native resolution (row-major, north first).
-        let rgba = img.to_rgba8();
-        let mut native: Vec<f64> = Vec::with_capacity((src_w * src_h) as usize);
-        for pixel in rgba.pixels() {
-            native.push(rgb_to_elevation(image::Rgb([pixel[0], pixel[1], pixel[2]])));
-        }
+        // Decode to f64 elevations at the native resolution (row-major,
+        // north first). `to_rgb8` (vs `to_rgba8`) skips the unused alpha
+        // channel — 25% less intermediate memory — and `HeightmapView`
+        // borrows the bytes so no separate RGB Vec is materialised.
+        let rgb = img.to_rgb8();
+        let view = HeightmapView::new(HeightmapFormat::Terrarium, rgb.as_raw(), src_w, src_h);
+        let native: Vec<f64> = view.iter().map(|e| e as f64).collect();
 
         // If the caller asked for a different tile size, bilinear-resample.
         let elevations = if src_w == tile_size && src_h == tile_size {

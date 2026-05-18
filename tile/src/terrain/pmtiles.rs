@@ -33,8 +33,7 @@ use tokio::sync::OnceCell;
 use url::Url;
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
-use super::mapbox::mapbox_rgb_to_elevation;
-use super::terrarium::rgb_to_elevation;
+use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 /// Encoding used by the PMTiles archive's tile payloads.
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -152,21 +151,15 @@ impl DemProvider for PmtilesSource {
 
         let img = image::load_from_memory(&bytes)?;
         let (src_w, src_h) = img.dimensions();
-        let rgba = img.to_rgba8();
-
-        let decode: fn(u8, u8, u8) -> f64 = match self.encoding {
-            PmtilesEncoding::Terrarium => {
-                |r: u8, g: u8, b: u8| rgb_to_elevation(image::Rgb([r, g, b]))
-            }
-            PmtilesEncoding::Mapbox => {
-                |r: u8, g: u8, b: u8| mapbox_rgb_to_elevation(image::Rgb([r, g, b]))
-            }
+        // `to_rgb8` (vs `to_rgba8`) skips the unused alpha — 25% less
+        // intermediate memory — and `HeightmapView` borrows those bytes.
+        let rgb = img.to_rgb8();
+        let fmt = match self.encoding {
+            PmtilesEncoding::Terrarium => HeightmapFormat::Terrarium,
+            PmtilesEncoding::Mapbox => HeightmapFormat::Mapbox,
         };
-
-        let mut native = Vec::with_capacity((src_w * src_h) as usize);
-        for p in rgba.pixels() {
-            native.push(decode(p[0], p[1], p[2]));
-        }
+        let view = HeightmapView::new(fmt, rgb.as_raw(), src_w, src_h);
+        let native: Vec<f64> = view.iter().map(|e| e as f64).collect();
 
         let elevations = if src_w == tile_size && src_h == tile_size {
             native

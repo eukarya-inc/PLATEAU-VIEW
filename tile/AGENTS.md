@@ -97,7 +97,7 @@ Any config-JSON source with `"type": "dem"` (or, for back-compat, the reserved n
 
 Multiple DEM sources can coexist — each addressable under `/terrain/{name}/...`, `/terrarium/{name}/...`, and `/mapbox/{name}/...`. The unnamed endpoints (`/terrain/...` etc.) resolve to the source named `"dem"`, so the previous single-DEM setup keeps working unchanged. The base DEM and geoid are shared across every named source; only the overlay stack differs, which is useful for e.g. wiring up a `dem-staging` source whose COG overlays can be validated alongside the production `dem`.
 
-Terrain source code lives in `src/terrain/` (quantized-mesh + martini + terrarium + geodetic resampling ported from <https://github.com/MIERUNE/stralift>) and `src/server/terrain.rs` (handlers). Build & ship a Japan-only PMTiles mirror with `scripts/japan-pmtiles/`.
+Terrain source code lives in `src/terrain/` (DEM providers + geodetic resampling, originally ported from <https://github.com/MIERUNE/stralift>) and `src/server/terrain.rs` (handlers). Mesh encoding, the Martini RTIN implementation, vertex-normal computation, Terrarium/Mapbox heightmap codecs, and `layer.json` types are provided by the [`terrain-codec`](https://crates.io/crates/terrain-codec) crate (which re-exports the [`martini`](https://crates.io/crates/martini) and [`quantized-mesh`](https://crates.io/crates/quantized-mesh) crates). Build & ship a Japan-only PMTiles mirror with `scripts/japan-pmtiles/`.
 
 ## Features
 
