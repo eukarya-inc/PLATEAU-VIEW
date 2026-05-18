@@ -180,21 +180,29 @@
       setUrlParam('imagery', e.target.value === gsiOption.id ? '' : e.target.value);
     });
 
-    // Append /tiles/<name> sources to the dropdown but keep GSI selected.
-    fetch('/tiles/sources.json')
+    // Cache of /tiles/sources.json — drives both the imagery dropdown (raster
+    // sources only) and the DEM picker (DEM sources only) below.
+    const sourcesPromise = fetch('/tiles/sources.json')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
-      .catch(() => ({ sources: [] }))
+      .catch(() => ({ sources: [] }));
+
+    // Append raster /tiles/<name> sources to the dropdown but keep GSI selected.
+    // DEM-typed sources are excluded — they aren't addressable under /tiles/<name>
+    // and would 404 the imagery layer.
+    sourcesPromise
       .then((data) => {
-        const tilesOptions = (data.sources || []).map((src) => ({
-          id: `tiles:${src.name}`,
-          label: src.name,
-          build: () =>
-            new Cesium.UrlTemplateImageryProvider({
-              url: `/tiles/${src.name}/{z}/{x}/{y}.png`,
-              credit:
-                '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>',
-            }),
-        }));
+        const tilesOptions = (data.sources || [])
+          .filter((src) => src.type !== 'dem')
+          .map((src) => ({
+            id: `tiles:${src.name}`,
+            label: src.name,
+            build: () =>
+              new Cesium.UrlTemplateImageryProvider({
+                url: `/tiles/${src.name}/{z}/{x}/{y}.png`,
+                credit:
+                  '<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>',
+              }),
+          }));
         if (tilesOptions.length === 0) return;
         // Insert after GSI so GSI stays at the top.
         options.splice(1, 0, ...tilesOptions);
@@ -263,16 +271,14 @@
       applyTerrain();
     });
 
-    // Populate the DEM source dropdown from /tiles/config.json. Only show it
+    // Populate the DEM source dropdown from /tiles/sources.json. Only show it
     // when there's more than one DEM source — the picker is otherwise just
     // visual noise for the typical single-DEM setup.
-    fetch('/tiles/config.json')
-      .then((r) => (r.ok ? r.json() : { sources: {} }))
-      .catch(() => ({ sources: {} }))
-      .then((config) => {
-        const sources = config.sources || {};
-        const demNames = Object.keys(sources)
-          .filter((name) => sources[name] && sources[name].type === 'dem')
+    sourcesPromise
+      .then((data) => {
+        const demNames = (data.sources || [])
+          .filter((src) => src.type === 'dem')
+          .map((src) => src.name)
           .sort();
         if (demNames.length < 2) return;
         demSourceSelect.innerHTML = '';
@@ -360,6 +366,13 @@
     // moves and programmatic ones — we accept the redundant writes here since
     // they're cheap (`replaceState` of a short URL).
     const round = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+    // Cesium normalises heading/roll to (0, 2π], so after `setView` with a
+    // zero angle the getter returns ~2π → 360°. Wrap into [-180, 180) for
+    // compact, human-readable URLs.
+    const wrap180 = (deg) => {
+      const w = ((deg + 180) % 360 + 360) % 360 - 180;
+      return Object.is(w, -0) ? 0 : w;
+    };
     viewer.camera.moveEnd.addEventListener(() => {
       const c = viewer.camera;
       const carto = Cesium.Cartographic.fromCartesian(c.positionWC);
@@ -367,9 +380,9 @@
         round(Cesium.Math.toDegrees(carto.longitude), 6),
         round(Cesium.Math.toDegrees(carto.latitude), 6),
         Math.round(carto.height),
-        round(Cesium.Math.toDegrees(c.heading), 2),
-        round(Cesium.Math.toDegrees(c.pitch), 2),
-        round(Cesium.Math.toDegrees(c.roll), 2),
+        round(wrap180(Cesium.Math.toDegrees(c.heading)), 2),
+        round(wrap180(Cesium.Math.toDegrees(c.pitch)), 2),
+        round(wrap180(Cesium.Math.toDegrees(c.roll)), 2),
       ].join(',');
       setUrlParam('cam', cam);
     });

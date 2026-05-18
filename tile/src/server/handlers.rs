@@ -43,6 +43,12 @@ struct SourcesResponse {
 #[derive(Serialize)]
 struct SourceEntry {
     name: String,
+    /// `"raster"` (default, addressable under `/tiles/{name}/...`) or `"dem"`
+    /// (folded into the composite terrain provider; addressable under
+    /// `/terrain/{name}/...`). Surfaced here so the debug viewers can decide
+    /// which dropdown to populate without re-deriving the type from heuristics.
+    #[serde(rename = "type")]
+    source_type: &'static str,
     layers: Vec<LayerEntry>,
 }
 
@@ -67,20 +73,24 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
     use std::collections::BTreeMap;
 
     let entries = state.inventory_snapshot().await;
-    let mut grouped: BTreeMap<String, Vec<LayerEntry>> = BTreeMap::new();
+    // Track each source's kind alongside its layers. A single source only ever
+    // produces one kind (raster vs dem) in `inventory_snapshot`, so the first
+    // entry we see for a name is authoritative.
+    let mut grouped: BTreeMap<String, (&'static str, Vec<LayerEntry>)> = BTreeMap::new();
     for e in entries {
-        let (bounds, min_zoom, max_zoom) = match &e.kind {
+        let (bounds, min_zoom, max_zoom, kind) = match &e.kind {
             LayerEntryKind::Raster(s) => {
                 let b = s.bounds().await.map(|b| [b.west, b.south, b.east, b.north]);
                 let (mn, mx) = s.zoom_range();
-                (b, mn, mx)
+                (b, mn, mx, "raster")
             }
             LayerEntryKind::Dem(p) => {
                 let b = p.bounds().map(|b| [b.west, b.south, b.east, b.north]);
-                (b, None, Some(p.max_zoom()))
+                (b, None, Some(p.max_zoom()), "dem")
             }
         };
-        grouped.entry(e.source_name).or_default().push(LayerEntry {
+        let entry = grouped.entry(e.source_name).or_insert((kind, Vec::new()));
+        entry.1.push(LayerEntry {
             layer_index: e.layer_idx,
             layer_type: e.layer_type,
             url: e.url,
@@ -94,9 +104,13 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
     // Stable order: sort layers by their original index, sources alphabetically.
     let mut sources: Vec<SourceEntry> = grouped
         .into_iter()
-        .map(|(name, mut layers)| {
+        .map(|(name, (source_type, mut layers))| {
             layers.sort_by_key(|l| l.layer_index);
-            SourceEntry { name, layers }
+            SourceEntry {
+                name,
+                source_type,
+                layers,
+            }
         })
         .collect();
     sources.sort_by(|a, b| a.name.cmp(&b.name));

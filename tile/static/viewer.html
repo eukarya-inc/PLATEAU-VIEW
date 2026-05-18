@@ -305,7 +305,10 @@
         // first source and render its tiles — otherwise the map sits on the
         // GSI base with nothing on top until the user picks something.
         loadSources().then((data) => {
-            const list = data.sources || [];
+            // Skip DEM-typed sources — they aren't addressable under
+            // /tiles/{name}/... and would 404 if picked from the raster
+            // dropdown. The DEM picker (below) surfaces them separately.
+            const list = (data.sources || []).filter((s) => s.type !== 'dem');
             for (const src of list) {
                 const option = document.createElement('option');
                 option.value = src.name;
@@ -572,16 +575,14 @@
             rebuildDemSources();
         });
 
-        // Populate the DEM source dropdown from /tiles/config.json. Hidden
+        // Populate the DEM source dropdown from /tiles/sources.json. Hidden
         // when fewer than two DEM sources exist — the picker is noise for the
         // typical single-DEM setup.
-        fetch('/tiles/config.json')
-            .then((r) => (r.ok ? r.json() : { sources: {} }))
-            .catch(() => ({ sources: {} }))
-            .then((config) => {
-                const sources = config.sources || {};
-                const demNames = Object.keys(sources)
-                    .filter((name) => sources[name] && sources[name].type === 'dem')
+        loadSources()
+            .then((data) => {
+                const demNames = (data.sources || [])
+                    .filter((src) => src.type === 'dem')
+                    .map((src) => src.name)
                     .sort();
                 if (demNames.length < 2) return;
                 demSourceSelect.innerHTML = '';
