@@ -193,6 +193,7 @@
         </select>
         <button id="copyUrl" title="Copy tile URL template">URL</button>
         <button id="gsiToggle" class="active">地理院</button>
+        <select id="demSource" style="display:none;" title="DEM source served by /mapbox/{name}/"></select>
         <select id="geoid" title="Geoid model used by /mapbox/ DEM">
             <option value="gsigeo2011">GSIGEO2011</option>
             <option value="jpgeo2024">JPGEO2024</option>
@@ -384,6 +385,7 @@
 
         // ── Mapbox Terrain-RGB DEM (3D terrain + hillshade) ────────────
         const geoidSelect = document.getElementById('geoid');
+        const demSourceSelect = document.getElementById('demSource');
         const terrain3dToggle = document.getElementById('terrain3dToggle');
         const hillshadeToggle = document.getElementById('hillshadeToggle');
         const inspectorToggle = document.getElementById('inspectorToggle');
@@ -391,10 +393,15 @@
         let terrain3dEnabled = false;
         let hillshadeEnabled = false;
         let inspectorEnabled = false;
+        // Selected DEM source name. Empty = default `/mapbox/...` route, which
+        // the tile server aliases to source "dem". Non-empty becomes
+        // `/mapbox/{name}/...`.
+        let demSourceName = '';
 
         function demTilejsonUrl() {
             const g = encodeURIComponent(geoidSelect.value);
-            return `${window.location.origin}/mapbox/tilejson.json?geoid=${g}&format=png`;
+            const prefix = demSourceName ? `/mapbox/${demSourceName}` : '/mapbox';
+            return `${window.location.origin}${prefix}/tilejson.json?geoid=${g}&format=png`;
         }
 
         // MapLibre warns (and degrades rendering) when the same raster-dem
@@ -472,7 +479,7 @@
             if (hillshadeEnabled) ensureSource(HILLSHADE_SOURCE);
             applyHillshade();
         });
-        geoidSelect.addEventListener('change', () => {
+        function rebuildDemSources() {
             if (terrain3dEnabled) {
                 rebuildSource(TERRAIN_SOURCE,
                     () => map.setTerrain(null),
@@ -483,7 +490,36 @@
                     () => { if (map.getLayer('hillshade')) map.removeLayer('hillshade'); },
                     () => applyHillshade());
             }
+        }
+        geoidSelect.addEventListener('change', rebuildDemSources);
+        demSourceSelect.addEventListener('change', (e) => {
+            demSourceName = e.target.value;
+            rebuildDemSources();
         });
+
+        // Populate the DEM source dropdown from /tiles/config.json. Hidden
+        // when fewer than two DEM sources exist — the picker is noise for the
+        // typical single-DEM setup.
+        fetch('/tiles/config.json')
+            .then((r) => (r.ok ? r.json() : { sources: {} }))
+            .catch(() => ({ sources: {} }))
+            .then((config) => {
+                const sources = config.sources || {};
+                const demNames = Object.keys(sources)
+                    .filter((name) => sources[name] && sources[name].type === 'dem')
+                    .sort();
+                if (demNames.length < 2) return;
+                demSourceSelect.innerHTML = '';
+                for (const name of demNames) {
+                    const opt = document.createElement('option');
+                    // Empty for "dem" so the URL keeps the legacy no-name form.
+                    opt.value = name === 'dem' ? '' : name;
+                    opt.textContent = `DEM: ${name}`;
+                    demSourceSelect.appendChild(opt);
+                }
+                demSourceSelect.value = '';
+                demSourceSelect.style.display = '';
+            });
 
         // ── Inspector: bounds.json overlay ─────────────────────────────
         const inspectorPalette = [
