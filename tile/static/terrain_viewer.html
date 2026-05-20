@@ -236,6 +236,12 @@
     // becomes `/terrain/{name}`.
     let demSourceName = urlParams.get('dem') || '';
 
+    // Mirror sources (type === 'qmesh-mirror') don't honor ?geoid= — the
+    // bytes were pre-rendered against a fixed geoid by the upstream crawler —
+    // so we suppress the query parameter and grey out the geoid picker when
+    // a mirror is selected.
+    const mirrorSources = new Set();
+
     function applyTerrain() {
       // Use scene.setTerrain(new Terrain(promise)) for both providers.
       // Direct `viewer.terrainProvider = await provider` worked one-way
@@ -249,14 +255,14 @@
         );
       } else {
         const url = demSourceName ? `/terrain/${demSourceName}` : '/terrain';
-        const resource = new Cesium.Resource({
-          url,
-          queryParameters: { geoid: geoidSelect.value },
-        });
+        const isMirror = mirrorSources.has(demSourceName);
+        const queryParameters = isMirror ? {} : { geoid: geoidSelect.value };
+        const resource = new Cesium.Resource({ url, queryParameters });
         providerPromise = Cesium.CesiumTerrainProvider.fromUrl(resource, {
           requestVertexNormals: true,
           requestWaterMask: false,
         });
+        geoidSelect.disabled = isMirror;
       }
       viewer.scene.setTerrain(new Cesium.Terrain(providerPromise));
     }
@@ -271,30 +277,36 @@
       applyTerrain();
     });
 
-    // Populate the DEM source dropdown from /tiles/sources.json. Only show it
-    // when there's more than one DEM source — the picker is otherwise just
-    // visual noise for the typical single-DEM setup.
+    // Populate the DEM source dropdown from /tiles/sources.json. Includes
+    // both DEM-generated sources and the pre-rendered qmesh mirror (if
+    // configured server-side). Only shows when there's more than one entry —
+    // otherwise just visual noise for a single-source setup.
     sourcesPromise
       .then((data) => {
-        const demNames = (data.sources || [])
-          .filter((src) => src.type === 'dem')
-          .map((src) => src.name)
-          .sort();
-        if (demNames.length < 2) return;
+        const entries = (data.sources || [])
+          .filter((src) => src.type === 'dem' || src.type === 'qmesh-mirror')
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (entries.length < 2) return;
+        mirrorSources.clear();
+        for (const src of entries) {
+          if (src.type === 'qmesh-mirror') mirrorSources.add(src.name);
+        }
         demSourceSelect.innerHTML = '';
-        for (const name of demNames) {
+        for (const src of entries) {
           const opt = document.createElement('option');
           // Empty value for "dem" → hits the no-name `/terrain` route, which
           // the server already aliases to source "dem". Keeps the URL the same
           // as the legacy default for the common case.
-          opt.value = name === 'dem' ? '' : name;
-          opt.textContent = name;
+          opt.value = src.name === 'dem' ? '' : src.name;
+          opt.textContent =
+            src.type === 'qmesh-mirror' ? `${src.name} (mirror)` : src.name;
           demSourceSelect.appendChild(opt);
         }
         // Apply the persisted DEM if it's available; otherwise clear and
         // re-apply terrain so any stale ?dem value doesn't keep hitting a
         // 404 endpoint.
-        const exists = demNames.includes(demSourceName || 'dem');
+        const names = entries.map((s) => s.name);
+        const exists = names.includes(demSourceName || 'dem');
         if (!exists) {
           demSourceName = '';
           setUrlParam('dem', '');

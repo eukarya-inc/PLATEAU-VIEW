@@ -43,10 +43,12 @@ struct SourcesResponse {
 #[derive(Serialize)]
 struct SourceEntry {
     name: String,
-    /// `"raster"` (default, addressable under `/tiles/{name}/...`) or `"dem"`
+    /// `"raster"` (default, addressable under `/tiles/{name}/...`), `"dem"`
     /// (folded into the composite terrain provider; addressable under
-    /// `/terrain/{name}/...`). Surfaced here so the debug viewers can decide
-    /// which dropdown to populate without re-deriving the type from heuristics.
+    /// `/terrain/{name}/...`), or `"qmesh-mirror"` (the synthetic entry for
+    /// the pre-rendered mirror configured via `TERRAIN_MIRROR_URL`).
+    /// Surfaced here so the debug viewers can decide which dropdown to
+    /// populate without re-deriving the type from heuristics.
     #[serde(rename = "type")]
     source_type: &'static str,
     layers: Vec<LayerEntry>,
@@ -113,6 +115,34 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
             }
         })
         .collect();
+
+    // Surface the pre-rendered quantized-mesh mirror (if configured) as a
+    // synthetic source so debug viewers can populate their terrain picker
+    // without needing to probe env vars. Distinct `type` lets the viewer
+    // skip mirror-incompatible UI (e.g. the `?geoid=` selector).
+    //
+    // When a mirror is present, also surface the default DEM source as an
+    // explicit entry — even when it has no overlays in config — so the
+    // viewer's "two or more entries" gate fires and the comparison picker
+    // actually appears.
+    if state.get_mirror().is_some() {
+        if !sources
+            .iter()
+            .any(|s| s.name == crate::server::state::DEFAULT_DEM_SOURCE_KEY)
+        {
+            sources.push(SourceEntry {
+                name: crate::server::state::DEFAULT_DEM_SOURCE_KEY.to_string(),
+                source_type: "dem",
+                layers: Vec::new(),
+            });
+        }
+        sources.push(SourceEntry {
+            name: crate::server::state::MIRROR_SOURCE_KEY.to_string(),
+            source_type: "qmesh-mirror",
+            layers: Vec::new(),
+        });
+    }
+
     sources.sort_by(|a, b| a.name.cmp(&b.name));
 
     (
