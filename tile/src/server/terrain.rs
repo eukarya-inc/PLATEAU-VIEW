@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
@@ -31,16 +32,21 @@ use xxhash_rust::xxh64::xxh64;
 
 use super::format::{TileFormat, encode_image, parse_y_and_format};
 use super::response::{compute_etag, etag_matches, not_modified_response, tile_response};
-use super::state::AppState;
+use super::state::{AppState, TerrainBackend};
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
-    DemProvider, Geoid, GeoidModel,
+    DemProvider, Geoid, GeoidModel, MirrorSource,
     ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
     mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
     webmercator::xyz_tile_bounds,
 };
+
+/// Attribution shown for both the DEM-generated `/terrain/dem/...` source and
+/// the R2 quantized-mesh mirror — same upstream lineage (PLATEAU + Mapterhorn
+/// + 国土地理院), so the credit line is identical.
+const TERRAIN_ATTRIBUTION_HTML: &str = r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#;
 
 /// Output encoding for the elevation raster endpoints.
 #[derive(Debug, Clone, Copy)]
@@ -222,10 +228,19 @@ async fn terrain_layer_json_impl(
     Query(q): Query<GeoidQuery>,
     name: Option<String>,
 ) -> Response {
-    let terrain = match state.get_terrain(name.as_deref()).await {
-        Some(t) => t,
-        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
-    };
+    match state.resolve_terrain(name.as_deref()).await {
+        Some(TerrainBackend::Mirror(m)) => mirror_layer_json_response(m, &state).await,
+        Some(TerrainBackend::Dem(t)) => dem_layer_json_response(t, &state, headers, q),
+        None => (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
+    }
+}
+
+fn dem_layer_json_response(
+    terrain: Arc<super::terrain::TerrainState>,
+    state: &AppState,
+    headers: HeaderMap,
+    q: GeoidQuery,
+) -> Response {
     let geoid_model = match resolve_geoid(&terrain, &q) {
         Ok(g) => g,
         Err(r) => return r,
@@ -245,10 +260,7 @@ async fn terrain_layer_json_impl(
     let config = LayerJsonConfig {
         tiles_template,
         version: terrain.dem.version().to_string(),
-        attribution: Some(
-            r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#
-                .to_string(),
-        ),
+        attribution: Some(TERRAIN_ATTRIBUTION_HTML.to_string()),
         available: japan_availability(terrain.max_zoom),
         min_zoom: Some(0),
         max_zoom: Some(terrain.max_zoom),
@@ -289,6 +301,159 @@ async fn terrain_layer_json_impl(
     }
 }
 
+/// Serve the mirror's `layer.json`. The stored file is the verbatim Ion
+/// document (with its original attribution and tile template); we deserialize
+/// it just enough to overwrite `attribution` with the PLATEAU credit and to
+/// normalize `tiles` to a single relative template that resolves against
+/// whatever URL the layer.json was loaded from.
+async fn mirror_layer_json_response(mirror: Arc<MirrorSource>, state: &AppState) -> Response {
+    let bytes = match mirror.fetch_layer_json().await {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                "terrain mirror: layer.json missing from upstream bucket",
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "terrain mirror: layer.json fetch failed");
+            return (
+                StatusCode::BAD_GATEWAY,
+                "terrain mirror: failed to read layer.json",
+            )
+                .into_response();
+        }
+    };
+    let mut layer: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                format!("terrain mirror: layer.json parse: {e}"),
+            )
+                .into_response();
+        }
+    };
+    if let Some(obj) = layer.as_object_mut() {
+        obj.insert(
+            "attribution".into(),
+            serde_json::Value::String(TERRAIN_ATTRIBUTION_HTML.into()),
+        );
+        obj.insert(
+            "tiles".into(),
+            serde_json::Value::Array(vec![serde_json::Value::String(
+                "{z}/{x}/{y}.terrain".into(),
+            )]),
+        );
+    }
+    match serde_json::to_string(&layer) {
+        Ok(json) => (
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (
+                    header::CACHE_CONTROL,
+                    state
+                        .cache_control
+                        .as_deref()
+                        .unwrap_or("public, max-age=3600"),
+                ),
+            ],
+            json,
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("terrain mirror: layer.json serialize: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /terrain-mirror/layer.json
+pub async fn terrain_mirror_layer_json(state: State<Arc<AppState>>) -> Response {
+    let State(state) = state;
+    match state.get_mirror() {
+        Some(m) => mirror_layer_json_response(m, &state).await,
+        None => (
+            StatusCode::NOT_FOUND,
+            "terrain mirror not configured (set TERRAIN_MIRROR_URL)",
+        )
+            .into_response(),
+    }
+}
+
+/// GET /terrain-mirror/{z}/{x}/{y}.terrain
+pub async fn terrain_mirror_tile(
+    state: State<Arc<AppState>>,
+    Path((z, x, y_ext)): Path<(u32, u32, String)>,
+) -> Response {
+    let State(state) = state;
+    let mirror = match state.get_mirror() {
+        Some(m) => m,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                "terrain mirror not configured (set TERRAIN_MIRROR_URL)",
+            )
+                .into_response();
+        }
+    };
+    let y: u32 = match y_ext.strip_suffix(".terrain").and_then(|s| s.parse().ok()) {
+        Some(v) => v,
+        None => {
+            return (StatusCode::BAD_REQUEST, "Expected {y}.terrain suffix").into_response();
+        }
+    };
+    mirror_tile_response(&mirror, z, x, y, state.cache_control.as_deref()).await
+}
+
+/// Pass-through one tile from the configured quantized-mesh mirror. The
+/// stored object already carries the right `Content-Type` and is gzipped
+/// per the crawler's convention, so we don't decode/re-encode — just send
+/// the bytes back with explicit `Content-Encoding: gzip` so Cesium can
+/// inflate it client-side.
+async fn mirror_tile_response(
+    mirror: &MirrorSource,
+    z: u32,
+    x: u32,
+    y: u32,
+    cache_control: Option<&str>,
+) -> Response {
+    match mirror.fetch_tile(z, x, y).await {
+        Ok(Some(bytes)) => {
+            let cc = cache_control.unwrap_or("public, max-age=31536000, immutable");
+            match Response::builder()
+                .status(StatusCode::OK)
+                .header(
+                    header::CONTENT_TYPE,
+                    "application/vnd.quantized-mesh;extensions=octvertexnormals-metadata",
+                )
+                .header(header::CONTENT_ENCODING, "gzip")
+                .header(header::CACHE_CONTROL, cc)
+                .body(Body::from(bytes))
+            {
+                Ok(r) => r,
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("terrain mirror: build response: {e}"),
+                )
+                    .into_response(),
+            }
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, "tile not in terrain mirror").into_response(),
+        Err(e) => {
+            tracing::error!(z, x, y, error = %e, "terrain mirror: tile fetch failed");
+            (
+                StatusCode::BAD_GATEWAY,
+                "terrain mirror: upstream fetch failed",
+            )
+                .into_response()
+        }
+    }
+}
+
 /// GET /terrain/{z}/{x}/{y}.terrain   (default DEM source)
 pub async fn terrain_tile(
     state: State<Arc<AppState>>,
@@ -317,17 +482,22 @@ async fn terrain_tile_impl(
     name: Option<String>,
 ) -> Response {
     state.maybe_revalidate().await;
-    let terrain = match state.get_terrain(name.as_deref()).await {
-        Some(t) => t,
-        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
-    };
 
-    // Parse y and validate extension.
+    // Parse y and validate extension once — same wire format for both
+    // backends so we can short-circuit any garbage upfront.
     let y: u32 = match y_ext.strip_suffix(".terrain").and_then(|s| s.parse().ok()) {
         Some(v) => v,
         None => {
             return (StatusCode::BAD_REQUEST, "Expected {y}.terrain suffix").into_response();
         }
+    };
+
+    let terrain = match state.resolve_terrain(name.as_deref()).await {
+        Some(TerrainBackend::Mirror(m)) => {
+            return mirror_tile_response(&m, z as u32, x, y, state.cache_control.as_deref()).await;
+        }
+        Some(TerrainBackend::Dem(t)) => t,
+        None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
     };
 
     let geoid_model = match resolve_geoid(&terrain, &q) {

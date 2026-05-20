@@ -69,6 +69,14 @@ pub fn create_router(state: Arc<AppState>, cors_origins: Option<&str>) -> Router
             get(terrain_handlers::terrain_tile_named),
         )
         .route(
+            "/terrain-mirror/layer.json",
+            get(terrain_handlers::terrain_mirror_layer_json),
+        )
+        .route(
+            "/terrain-mirror/{z}/{x}/{y_ext}",
+            get(terrain_handlers::terrain_mirror_tile),
+        )
+        .route(
             "/terrarium/tilejson.json",
             get(terrain_handlers::terrarium_tilejson),
         )

@@ -200,6 +200,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Default geoid model when `?geoid=` is not specified. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`, `none` |
 | `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
+| `TERRAIN_MIRROR_URL` | No | — | Pre-rendered quantized-mesh mirror bucket (`r2://`, `s3://`, `gs://`, `file://`). When set, `/terrain/`, `/terrain/mirror/`, and `/terrain-mirror/` serve directly from this bucket instead of generating from DEM. The DEM pipeline remains reachable at `/terrain/dem/` for side-by-side validation. See [Quantized-mesh mirror](#quantized-mesh-mirror-pre-rendered-passthrough) below. |
 
 ```bash
 # Self-hosted PMTiles on a public R2 bucket (HTTPS)
@@ -218,6 +219,33 @@ DEM_URL=file:///abs/path/to/japan-dem-v1.pmtiles cargo run
 # Default Mapterhorn upstream — fine for development
 cargo run
 ```
+
+### Quantized-mesh mirror (pre-rendered pass-through)
+
+`/terrain/` has a second backend: a pass-through mirror that serves pre-rendered quantized-mesh tiles read straight from an object-store bucket — no DEM, no Martini, no geoid composition at request time. Use this when a sibling job (e.g. [`eukarya-inc/ion-terrain-mirror`](https://github.com/eukarya-inc/ion-terrain-mirror)) has already populated a bucket with `{prefix}/layer.json` + `{prefix}/{z}/{x}/{y}.terrain` (gzipped) under the [Cesium Ion mirror layout](https://github.com/eukarya-inc/ion-terrain-mirror).
+
+```bash
+# R2 (S3-compatible): mirror takes over /terrain/
+R2_ACCOUNT_ID=xxx R2_ACCESS_KEY_ID=xxx R2_SECRET_ACCESS_KEY=xxx \
+  TERRAIN_MIRROR_URL=r2://plateau-terrain/plateau-terrain-2024/ \
+  cargo run
+
+# Local files (smoke testing)
+TERRAIN_MIRROR_URL=file:///abs/path/to/mirror/ cargo run
+```
+
+Routing once `TERRAIN_MIRROR_URL` is set:
+
+| URL                                        | Backend |
+|--------------------------------------------|---------|
+| `/terrain/layer.json`                      | Mirror  |
+| `/terrain/{z}/{x}/{y}.terrain`             | Mirror  |
+| `/terrain/mirror/{z}/{x}/{y}.terrain`      | Mirror  |
+| `/terrain-mirror/{z}/{x}/{y}.terrain`      | Mirror (separate route — always the mirror; 404 when `TERRAIN_MIRROR_URL` is unset) |
+| `/terrain/dem/{z}/{x}/{y}.terrain`         | DEM pipeline (Mapterhorn etc.) — used for side-by-side validation |
+| `/terrain/{other}/...`                     | DEM, looked up under the source name in the config JSON |
+
+The mirror handler stamps `Content-Encoding: gzip` and the standard quantized-mesh `Content-Type` on every tile response and rewrites `attribution` + `tiles` on the upstream `layer.json` so the credit line and tile template match the rest of the server (`PLATEAU | Mapterhorn | 国土地理院`, relative `{z}/{x}/{y}.terrain`). `/terrarium/...` and `/mapbox/...` raster endpoints are unaffected — they still go through the DEM pipeline.
 
 ### Persistent Cache Configuration
 

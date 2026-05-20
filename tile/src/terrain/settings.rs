@@ -42,6 +42,10 @@ pub struct TerrainSettings {
     pub max_zoom: u8,
     /// Martini mesh-simplification error (meters).
     pub max_error: f64,
+    /// Pre-rendered quantized-mesh mirror URL. When set, /terrain/ (no
+    /// `{name}`) and /terrain/mirror/ and /terrain-mirror/ pass-through to
+    /// this bucket. Supports `file://`, `gs://`, `s3://`, `r2://`.
+    pub mirror_url: Option<String>,
 }
 
 impl TerrainSettings {
@@ -63,6 +67,9 @@ impl TerrainSettings {
                 .unwrap_or(GeoidModel::Gsigeo2011),
             max_zoom: parse_env_u8("TERRAIN_MAX_ZOOM", DEFAULT_TERRAIN_MAX_ZOOM),
             max_error: parse_env_f64("TERRAIN_MAX_ERROR", DEFAULT_TERRAIN_MAX_ERROR),
+            mirror_url: env::var("TERRAIN_MIRROR_URL")
+                .ok()
+                .filter(|s| !s.is_empty()),
         }
     }
 

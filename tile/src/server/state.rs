@@ -10,8 +10,8 @@ use crate::{
     cache::{CacheMode, TileCache},
     config::{ConfigManager, LayerConfig, SourceConfig},
     terrain::{
-        CogDemSource, DemProvider, GeoBounds, PmtilesEncoding, PmtilesSource, TerrainSettings,
-        XyzDemEncoding, XyzDemSource, build_composite_dem,
+        CogDemSource, DemProvider, GeoBounds, MirrorSource, PmtilesEncoding, PmtilesSource,
+        TerrainSettings, XyzDemEncoding, XyzDemSource, build_composite_dem,
     },
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
@@ -22,6 +22,21 @@ use crate::{
 /// name: a source named `"dem"` is treated as a DEM source even if its
 /// config entry doesn't set `type: "dem"`.
 pub const DEFAULT_DEM_SOURCE_KEY: &str = "dem";
+
+/// Named-source segment that explicitly addresses the quantized-mesh mirror,
+/// e.g. `/terrain/mirror/{z}/{x}/{y}.terrain`. Separate from the
+/// `/terrain-mirror/...` route, which is always the mirror regardless of
+/// whether a name was supplied.
+pub const MIRROR_SOURCE_KEY: &str = "mirror";
+
+/// Which backend a `/terrain/...` request resolves to. Returned by
+/// [`AppState::resolve_terrain`].
+pub enum TerrainBackend {
+    /// Existing DEM-generation pipeline (Mapterhorn + geoid + Martini).
+    Dem(Arc<super::terrain::TerrainState>),
+    /// Pass-through quantized-mesh mirror (R2 / S3 / file / GCS).
+    Mirror(Arc<MirrorSource>),
+}
 
 /// Application state shared across handlers.
 pub struct AppState {
@@ -48,6 +63,11 @@ pub struct AppState {
     /// Cached env-derived terrain settings, needed at reload time to rebuild
     /// the base DEM with the same configuration.
     terrain_settings: TerrainSettings,
+    /// Optional quantized-mesh mirror (R2 / S3 / file / GCS). When `Some`,
+    /// `/terrain/` (no `{name}`) and `/terrain/mirror/...` and
+    /// `/terrain-mirror/...` all serve from this bucket. The DEM-generation
+    /// pipeline is still available at `/terrain/dem/...`.
+    mirror: Option<Arc<MirrorSource>>,
     /// Serializes config reload work. Both manual `/reload` and lazy
     /// revalidation take this — `/reload` blocks (`.lock()`) so the operator
     /// sees a deterministic outcome, while lazy revalidation uses `try_lock`
@@ -126,6 +146,19 @@ impl AppState {
         let (terrains, dem_inventory) =
             Self::build_terrains(&terrain_settings, &config.sources).await;
 
+        let mirror = terrain_settings.mirror_url.as_deref().and_then(|url| {
+            match MirrorSource::from_url(url) {
+                Ok(m) => {
+                    tracing::info!(url = %url, "Terrain mirror enabled");
+                    Some(Arc::new(m))
+                }
+                Err(e) => {
+                    tracing::error!(url = %url, error = %e, "Terrain mirror disabled: failed to build object store");
+                    None
+                }
+            }
+        });
+
         Self {
             config_manager,
             cache,
@@ -136,6 +169,7 @@ impl AppState {
             cache_control,
             terrains: Arc::new(RwLock::new(terrains)),
             terrain_settings,
+            mirror,
             reload_mutex: Arc::new(Mutex::new(())),
         }
     }
@@ -194,6 +228,37 @@ impl AppState {
             Some(n) => n,
         };
         self.terrains.read().await.get(key).cloned()
+    }
+
+    /// The currently active quantized-mesh mirror, if `TERRAIN_MIRROR_URL`
+    /// was set at startup and the backing object store built successfully.
+    pub fn get_mirror(&self) -> Option<Arc<MirrorSource>> {
+        self.mirror.clone()
+    }
+
+    /// Resolve a `/terrain/...` request to its backend (mirror or DEM):
+    ///
+    /// | name              | resolution                                           |
+    /// |-------------------|------------------------------------------------------|
+    /// | `None` / `""`     | mirror if configured, else DEM `"dem"`               |
+    /// | `Some("mirror")`  | mirror, or `None` if `TERRAIN_MIRROR_URL` is unset   |
+    /// | `Some("dem")`     | DEM `"dem"` (existing default-DEM behavior)          |
+    /// | `Some(other)`     | DEM `other`                                          |
+    ///
+    /// `/terrain-mirror/...` doesn't go through here — it always targets the
+    /// mirror via [`Self::get_mirror`].
+    pub async fn resolve_terrain(&self, name: Option<&str>) -> Option<TerrainBackend> {
+        match name {
+            None | Some("") => {
+                if let Some(m) = self.get_mirror() {
+                    Some(TerrainBackend::Mirror(m))
+                } else {
+                    self.get_terrain(None).await.map(TerrainBackend::Dem)
+                }
+            }
+            Some(MIRROR_SOURCE_KEY) => self.get_mirror().map(TerrainBackend::Mirror),
+            Some(other) => self.get_terrain(Some(other)).await.map(TerrainBackend::Dem),
+        }
     }
 
     /// Construct the set of terrain states, one per DEM source in the config.
