@@ -134,8 +134,7 @@ cargo build --release --features maplibre
 
 **Note:** The `maplibre` feature requires:
 - Linux environment (macOS/Windows not supported)
-- Xvfb for headless rendering
-- Mesa OpenGL libraries for software rendering
+- A Vulkan loader + ICD (the Dockerfile ships Mesa's lavapipe for CPU rendering — no GPU or X server needed)
 
 ## Docker
 
@@ -157,6 +156,4 @@ These are pre-configured in the Dockerfile:
 
 | Variable | Value | Description |
 |----------|-------|-------------|
-| `DISPLAY` | `:99` | Virtual display for Xvfb |
-| `LIBGL_ALWAYS_SOFTWARE` | `1` | Force software rendering (no GPU) |
-| `GALLIUM_DRIVER` | `llvmpipe` | Use LLVMpipe software renderer |
+| `VK_ICD_FILENAMES` | `/usr/share/vulkan/icd.d/lvp_icd.json` | Point the Vulkan loader at Mesa lavapipe (CPU ICD); skips enumeration of absent GPU drivers |
