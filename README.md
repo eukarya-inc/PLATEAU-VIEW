@@ -13,6 +13,7 @@ PLATEAU VIEW 5.0 は以下のシステムにより構成されます。
 
 ## フォルダ構成
 
+- [cloudflare](cloudflare): Cloudflare Workers
 - [cms](cms): PLATEAU CMS
 - [docs](docs): PLATEAU 配信サービスの公式ドキュメントサイト（Astro + Starlight 製、`docs.plateauview.mlit.go.jp` で公開）
 - [e2e](e2e): PlaywrightによるPLATEAU VIEWの自動E2Eテスト用パッケージ

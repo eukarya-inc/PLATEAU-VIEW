@@ -18,6 +18,7 @@ on:
           - tools
           - worker
           - docs
+          - cloudflare-tiles
 
 permissions:
   contents: write
@@ -40,6 +41,7 @@ jobs:
       cms-worker: ${{ steps.cms-worker.outputs.any_changed }}
       cms-web: ${{ steps.cms-web.outputs.any_changed }}
       docs: ${{ steps.docs.outputs.any_changed }}
+      cloudflare-tiles: ${{ steps.cloudflare-tiles.outputs.any_changed }}
       build: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name == 'main' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -109,6 +111,14 @@ jobs:
             .github/workflows/ci-docs.yml
             .github/workflows/build-docs.yml
             .github/workflows/deploy-docs-*.yml
+      - name: changed files for cloudflare-tiles
+        id: cloudflare-tiles
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
+        with:
+          since_last_remote_commit: true
+          files: |
+            cloudflare/tiles/**
+            .github/workflows/ci-cloudflare-tiles.yml
       - name: changed files for editor - core
         id: editor-core
         uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
@@ -240,6 +250,17 @@ jobs:
     if: ${{ needs.prepare.outputs.docs == 'true' || inputs.action_type == 'docs' }}
     uses: ./.github/workflows/ci-docs.yml
 
+  ci-cloudflare-tiles:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.cloudflare-tiles == 'true' || inputs.action_type == 'cloudflare-tiles' }}
+    uses: ./.github/workflows/ci-cloudflare-tiles.yml
+
+  deploy-cloudflare-tiles:
+    needs: [prepare, ci-cloudflare-tiles]
+    if: ${{ !failure() && needs.ci-cloudflare-tiles.result == 'success' && needs.prepare.outputs.build == 'true' }}
+    uses: ./.github/workflows/deploy-cloudflare-tiles.yml
+    secrets: inherit
+
   ci-cms-server:
     needs: prepare
     if: ${{ needs.prepare.outputs.cms-server == 'true' }}
@@ -268,6 +289,7 @@ jobs:
       - ci-cms-server
       - ci-cms-worker
       - ci-cms-web
+      - ci-cloudflare-tiles
     if: always()
     steps:
       - run: |
