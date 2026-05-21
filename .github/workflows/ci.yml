@@ -119,6 +119,7 @@ jobs:
           files: |
             cloudflare/tiles/**
             .github/workflows/ci-cloudflare-tiles.yml
+            .github/workflows/deploy-cloudflare-tiles.yml
       - name: changed files for editor - core
         id: editor-core
         uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
