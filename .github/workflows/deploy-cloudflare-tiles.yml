@@ -21,5 +21,7 @@ jobs:
       - name: Deploy
         run: npx wrangler deploy
         env:
+          # Account ID is omitted because the API token is scoped to a single
+          # account; wrangler resolves it automatically. Pass an explicit
+          # CLOUDFLARE_ACCOUNT_ID only if the token gains multi-account scope.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -32,8 +32,7 @@ npx wrangler login
 
 GitHub Actions Secrets に以下が必要:
 
-- `CLOUDFLARE_API_TOKEN` — Workers / R2 への書き込み権限を持つ API トークン
-- `CLOUDFLARE_ACCOUNT_ID` — 対象アカウントの ID
+- `CLOUDFLARE_API_TOKEN` — Workers / R2 / Workers Routes (Zone) への Read+Write 権限を持つ、対象アカウント単一にスコープした API トークン
 
 > 現状 dev / prod を分けていないため、`main` へのマージは即本番反映。dev 環境が必要になったら `wrangler.toml` の environments と `--env` フラグで分離する。
 
