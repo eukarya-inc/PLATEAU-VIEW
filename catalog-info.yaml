@@ -1,0 +1,18 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: PLATEAU-VIEW
+  namespace: eukarya-inc
+  description: PLATEAU VIEW
+  annotations:
+    github.com/project-slug: eukarya-inc/PLATEAU-VIEW
+  links:
+  - url: https://github.com/eukarya-inc/PLATEAU-VIEW
+    title: GitHub
+    icon: github
+  tags:
+  - typescript
+spec:
+  type: service
+  lifecycle: production
+  owner: eukarya-inc/plateau
