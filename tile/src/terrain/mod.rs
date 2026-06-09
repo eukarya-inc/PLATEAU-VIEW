@@ -2,9 +2,6 @@
 //!
 //! Provides DEM-backed Cesium quantized-mesh-1.0 tiles and Terrarium raster tiles.
 //! Heights are served as ellipsoidal (orthometric DEM + geoid via `japan-geoid`).
-//!
-//! Modules ported from <https://github.com/MIERUNE/stralift> (quantized-mesh,
-//! martini, cesium/geodetic, cesium/layer_json, format/terrarium).
 
 #![allow(dead_code)]
 
@@ -41,9 +38,9 @@ pub use xyz_dem::{XyzDemEncoding, XyzDemSource};
 /// `dem_max_zoom`, the relevant quadrant is extracted, and the missing
 /// detail is filled in by bilinear interpolation.
 ///
-/// Per stralift's per-source upsampling. The interpolation is independent
-/// per child tile, so adjacent children may differ by sub-pixel amounts
-/// at their shared edge — acceptable for terrain rendering.
+/// The interpolation is independent per child tile, so adjacent children
+/// may differ by sub-pixel amounts at their shared edge — acceptable for
+/// terrain rendering.
 pub(crate) fn extract_and_upsample(
     parent: &[f64],
     tile_size: u32,

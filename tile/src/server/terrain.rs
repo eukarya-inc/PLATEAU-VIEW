@@ -39,7 +39,7 @@ use crate::terrain::{
     ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
-    mesh_gen::{QuantizedMeshOptions, generate_quantized_mesh_tile},
+    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile},
     webmercator::xyz_tile_bounds,
 };
 
@@ -518,7 +518,7 @@ async fn terrain_tile_impl(
     //
     // `fetch_geodetic_tile_elevations_with_halo` internally clamps to the
     // DEM's max zoom and bilinear-upsamples from the parent XYZ tile when z
-    // exceeds it (per stralift's per-source upsampling).
+    // exceeds it.
     const TERRAIN_NORMAL_HALO: u32 = 1;
     let fetch = match fetch_geodetic_tile_elevations_with_halo(
         terrain.dem.as_ref(),
@@ -546,7 +546,10 @@ async fn terrain_tile_impl(
     // mesh or its normals are computed. Bump this string on any change that
     // alters serialized .terrain bytes for unchanged DEM input — otherwise
     // operators have to manually flush caches or bump DEM_VERSION.
-    const TERRAIN_MESH_ALGO_VERSION: &str = "v2-gradient-normals";
+    //
+    // v3: terrain-codec 0.3.0 — pixel-centre DEM sampling via MercatorDem and
+    // mesh-vertex (not full-grid) height range, both of which change bytes.
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v3-terrain-codec";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
@@ -587,7 +590,6 @@ async fn terrain_tile_impl(
     };
 
     let max_error = terrain.max_error;
-    let max_zoom = terrain.max_zoom;
     let mut elevations = fetch.elevations;
     let mut elevations_with_halo = fetch.elevations_with_halo;
     let halo_cells = fetch.halo_cells;
@@ -630,30 +632,22 @@ async fn terrain_tile_impl(
                     bounds_copy.east,
                     bounds_copy.north,
                 );
+                // No water-mask and no per-tile metadata extension: metadata
+                // is only needed when layer.json declares `metadataAvailability`
+                // (dynamic availability). We ship a static `available` array
+                // instead, so metadata would make Cesium try to call
+                // `_availability.addAvailableTileRange` on an undefined
+                // tracker and blow up.
                 let opts = QuantizedMeshOptions {
                     max_error,
-                    include_normals: true,
-                    include_water_mask: false,
-                    water_mask: None,
-                    // Per-tile metadata extension is only needed when layer.json
-                    // declares `metadataAvailability` (dynamic availability). We
-                    // ship a static `available` array instead, so metadata would
-                    // make Cesium try to call `_availability.addAvailableTileRange`
-                    // on an undefined tracker and blow up.
-                    include_metadata: false,
-                    tile_x: Some(x),
-                    tile_y: Some(y),
-                    current_zoom: Some(z),
-                    max_zoom: Some(max_zoom),
-                    compression_level: 6,
-                    buffered_elevations: Some(BufferedElevations::new(
+                    normals: NormalMode::BufferedGradient(BufferedElevations::new(
                         elevations_with_halo,
                         crate::terrain::mesh_gen::MESH_GRID_SIZE,
                         halo_cells,
                     )),
                 };
-                let tile = generate_quantized_mesh_tile(&elevations, &qm_bounds, &opts);
-                Ok::<_, crate::tile::TileError>(tile.data)
+                let data = generate_quantized_mesh_tile(&elevations, &qm_bounds, opts);
+                Ok::<_, crate::tile::TileError>(data)
             },
         )
         .await;
@@ -773,7 +767,7 @@ async fn raster_tile(
 
     // Fetch DEM at the requested XYZ tile directly — no reprojection.
     // For zooms above the upstream DEM's max, fall back to the parent tile
-    // and upsample the relevant sub-region (per stralift's behavior).
+    // and upsample the relevant sub-region.
     let tile_size = terrain.tile_size;
     let dem_max = terrain.dem.max_zoom();
     let (fetch_z, fetch_x, fetch_y, upsample_info) = if z > dem_max {

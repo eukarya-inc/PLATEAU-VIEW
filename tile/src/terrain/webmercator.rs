@@ -4,9 +4,6 @@
 //! endpoints, which serve Mapbox Terrain-RGB and Mapzen Terrarium tiles in
 //! standard Web Mercator XYZ. (The `/terrain/{z}/{x}/{y}.terrain`
 //! quantized-mesh endpoint uses TMS Geodetic instead — see `geodetic.rs`.)
-//!
-//! Math ported from
-//! <https://github.com/eukarya-inc/stralift> (`crates/stralift/src/tile.rs`).
 
 use std::f64::consts::PI;
 

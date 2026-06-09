@@ -13,7 +13,7 @@ use super::webmercator::{xyz_pixel_lat, xyz_pixel_lon};
 /// ellipsoidal heights.
 ///
 /// The grid is 65×65 row-major, north-first (matching
-/// `fetch_geodetic_tile_elevations`). NaN elevations are preserved.
+/// `fetch_geodetic_tile_elevations_with_halo`). NaN elevations are preserved.
 pub fn apply_geoid_to_grid(bounds: &GeodeticBounds, grid: &mut [f64], geoid: &Geoid) {
     apply_geoid_to_grid_sized(bounds, grid, geoid, CESIUM_TILE_SIZE as usize);
 }
