@@ -83,7 +83,8 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
         for_each = var.plateauview.datacatalog_cache_size != "" ? [""] : []
         content {
           name  = "REEARTH_PLATEAUVIEW_DATACATALOG_CACHESIZE"
-        value = var.plateauview.datacatalog_cache_size
+          value = var.plateauview.datacatalog_cache_size
+        }
       }
 
       env {
