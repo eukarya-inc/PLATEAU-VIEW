@@ -11,8 +11,8 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eukarya-inc/japan-geoid-go v1.0.0
 	github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a
-	github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260116055752-116806756ed6
-	github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260116055752-116806756ed6
+	github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260615095223-6baeeef8c1d7
+	github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260615095223-6baeeef8c1d7
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/hasura/go-graphql-client v0.14.3

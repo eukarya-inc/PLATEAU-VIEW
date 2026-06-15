@@ -163,10 +163,10 @@ github.com/eukarya-inc/japan-geoid-go v1.0.0 h1:5aiQN7VT251clb/1qdJ8brQUYsfZTap6
 github.com/eukarya-inc/japan-geoid-go v1.0.0/go.mod h1:P59z8MaVqGCorPf0A7XdydXIpO8oL7Ywt+2ATX02BfU=
 github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a h1:ZEntf2oouZdXmtmcuUbA00RNzaiGzJPaK/vQFqPqZE0=
 github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a/go.mod h1:thkfAUkPUNwQq/0zySwRf9sQ/8hIFtUMLOfDsiZcI5I=
-github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260116055752-116806756ed6 h1:5W7nPDw0MEmO/hshiZF3ZCxWWwLJAMOmilXCE1FKGmk=
-github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260116055752-116806756ed6/go.mod h1:LR/gnvhq7hcVGFn7YCslEYSN60ejiJrhHULeouEkfiQ=
-github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260116055752-116806756ed6 h1:oqA2OmlF6aMJyVU+bQnG+10QbOugFDvALwL+0MrqF6o=
-github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260116055752-116806756ed6/go.mod h1:0vOQPwLifzxcCMCQq4NRKJ52l7Gyr9BJlLyho075B68=
+github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260615095223-6baeeef8c1d7 h1:KMTCoZpGUF7QWjPjS28DP7Q5/LaNb1gHbx8jKPv4I64=
+github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20260615095223-6baeeef8c1d7/go.mod h1:LR/gnvhq7hcVGFn7YCslEYSN60ejiJrhHULeouEkfiQ=
+github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260615095223-6baeeef8c1d7 h1:OozRQ+5/Ikbn1Go4iUB/F+QLrzKar5eC97TLg/KyUqE=
+github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20260615095223-6baeeef8c1d7/go.mod h1:0vOQPwLifzxcCMCQq4NRKJ52l7Gyr9BJlLyho075B68=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
