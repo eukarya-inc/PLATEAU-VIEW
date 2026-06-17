@@ -5,10 +5,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
 )
+
+// upstreamTimeout bounds requests to the external geocoding services (GSI /
+// Nominatim), which are treated as unreliable. Without it the shared
+// http.DefaultClient waits indefinitely and a slow-but-alive upstream piles up
+// hung requests, holding goroutines and outbound sockets.
+const upstreamTimeout = 30 * time.Second
 
 type HandlerConfig struct {
 	GSIURL       string
@@ -23,8 +30,9 @@ func Echo(g *echo.Group, conf *HandlerConfig) error {
 		nominatimURL = conf.NominatimURL
 	}
 
-	gsiClient := NewGSIClient(nil, gsiURL)
-	nominatimClient := NewNominatimClient(nil, nominatimURL, "")
+	httpClient := &http.Client{Timeout: upstreamTimeout}
+	gsiClient := NewGSIClient(httpClient, gsiURL)
+	nominatimClient := NewNominatimClient(httpClient, nominatimURL, "")
 
 	// GET /geocoding?lon=139.7&lat=35.6&includeRadii=true
 	g.GET("", func(c echo.Context) error {
