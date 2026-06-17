@@ -849,12 +849,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/error"
 
+  /spec:
+    get:
+      summary: 仕様書ドキュメント一覧
+      description: PLATEAU 3D都市モデルの仕様書ドキュメント（標準製品仕様書・標準作業手順書）の一覧を返します。各 document_type は `/spec/{document_type}` で目次を取得できます。
+      tags:
+        - Data Catalog API
+      responses:
+        "200":
+          description: 成功時のレスポンス
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    document_type:
+                      type: string
+                      enum:
+                        - standard
+                        - procedure
+                    title:
+                      type: string
+                    path:
+                      type: string
+                      description: 目次を取得するパス
+
   /spec/search:
     get:
       summary: 仕様書の全文検索
       description: |
         PLATEAU 3D都市モデルの標準製品仕様書・標準作業手順書を全文検索し、該当セクションのパス・関連度スコア・スニペットを返します。
-        得られた `path` は `/spec/read` に渡して本文を取得できます。
+        得られた `path` は `/spec/{document_type}/{path}` で本文を取得できます。
       tags:
         - Data Catalog API
       parameters:
@@ -903,7 +930,7 @@ paths:
                           description: セクションのタイトル
                         path:
                           type: string
-                          description: "`/spec/read` で本文取得に使うパス"
+                          description: "`/spec/{document_type}/{path}` で本文取得に使うパス"
                         document_type:
                           type: string
                           enum:
@@ -931,24 +958,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/error"
 
-  /spec/outline:
+  /spec/{document_type}:
     get:
       summary: 仕様書の目次（アウトライン）取得
       description: |
-        仕様書の章・節の階層構造とパスを取得します。得られた `path` は `/spec/read` に渡して本文取得に使用します。
+        指定した文書の章・節の階層構造とパスを取得します。得られたパスは `/spec/{document_type}/{path}` に渡して本文取得に使用します。
       tags:
         - Data Catalog API
       parameters:
         - name: document_type
-          in: query
-          required: false
+          in: path
+          required: true
           schema:
             type: string
             enum:
               - standard
               - procedure
-            default: standard
-          description: "対象文書。既定: `standard`"
+          description: 対象文書。`standard`(標準製品仕様書) / `procedure`(標準作業手順書)
         - name: depth
           in: query
           required: false
@@ -986,6 +1012,12 @@ paths:
             text/markdown:
               schema:
                 type: string
+        "404":
+          description: 文書種別が不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
         "500":
           description: 目次の取得に失敗
           content:
@@ -993,31 +1025,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/error"
 
-  /spec/read:
+  /spec/{document_type}/{path}:
     get:
       summary: 仕様書セクションの本文取得
       description: |
-        指定したパスのセクション本文を Markdown で取得します(既定で子セクションを含む)。
-        パスは `/spec/outline` または `/spec/search` で取得します。
+        指定したセクションの本文を Markdown で取得します(既定で子セクションを含む)。
+        パスは `/spec/{document_type}` の目次、または `/spec/search` の検索結果から取得します。
       tags:
         - Data Catalog API
       parameters:
-        - name: path
-          in: query
-          required: true
-          schema:
-            type: string
-          description: "取得するパス。例: `toc1`, `/plateaudocument/toc4`"
         - name: document_type
-          in: query
-          required: false
+          in: path
+          required: true
           schema:
             type: string
             enum:
               - standard
               - procedure
-            default: standard
-          description: "対象文書。既定: `standard`"
+          description: 対象文書。`standard`(標準製品仕様書) / `procedure`(標準作業手順書)
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          description: "取得するパス。例: `toc1`, `toc4_01`（末尾の `.md` は省略可）"
         - name: single_page
           in: query
           required: false
@@ -1052,14 +1083,8 @@ paths:
                     type: string
                   content:
                     type: string
-        "400":
-          description: path が指定されていない
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/error"
         "404":
-          description: 指定パスのコンテンツが見つからない
+          description: 文書種別が不正、または指定パスのコンテンツが見つからない
           content:
             application/json:
               schema:

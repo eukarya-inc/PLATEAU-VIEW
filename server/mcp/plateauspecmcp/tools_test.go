@@ -144,7 +144,7 @@ func TestFormatOutlineAsMarkdown(t *testing.T) {
 		},
 	}
 
-	result := formatOutlineAsMarkdown(items, "standard")
+	result := formatOutlineAsMarkdown(items, "standard", "read hint")
 	assert.Contains(t, result, "# 3D都市モデル標準製品仕様書 目次")
 	assert.Contains(t, result, "Chapter 1")
 	assert.Contains(t, result, "Section 1.1")

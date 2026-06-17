@@ -1,7 +1,6 @@
 package plateauspecmcp
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,14 +9,35 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// RegisterEcho registers the REST endpoints for PLATEAU specification document
-// search/outline/read on the given group. These expose the same functionality
-// as the plateau_spec_* MCP tools so the specification can be queried without
-// an MCP client.
+// RegisterEcho registers the REST endpoints for the PLATEAU specification
+// documents on the given group (mounted at /spec). It exposes the same
+// functionality as the plateau_spec_* MCP tools so the specification can be
+// queried without an MCP client, in a resource-oriented layout:
+//
+//	GET /spec                       -> list of documents
+//	GET /spec/search?q=...          -> full-text search across documents
+//	GET /spec/{docType}             -> outline (table of contents)
+//	GET /spec/{docType}/{path}      -> section content
+//
+// /spec/search is a static route, so it takes precedence over /spec/:docType.
 func RegisterEcho(g *echo.Group) {
+	g.GET("", handleListHTTP)
 	g.GET("/search", handleSearchHTTP)
-	g.GET("/outline", handleOutlineHTTP)
-	g.GET("/read", handleReadHTTP)
+	g.GET("/:docType", handleOutlineHTTP)
+	g.GET("/:docType/:path", handleReadHTTP)
+}
+
+// SpecDocument describes one specification document.
+type SpecDocument struct {
+	DocType string `json:"document_type"`
+	Title   string `json:"title"`
+	Path    string `json:"path"`
+}
+
+// specDocuments is the catalog returned by the list endpoint.
+var specDocuments = []SpecDocument{
+	{DocType: "standard", Title: "3D都市モデル標準製品仕様書", Path: "/spec/standard"},
+	{DocType: "procedure", Title: "3D都市モデル標準作業手順書", Path: "/spec/procedure"},
 }
 
 // SpecSearchResult is a single search hit.
@@ -42,7 +62,12 @@ type SpecReadResponse struct {
 	Content string `json:"content"`
 }
 
-// handleSearchHTTP handles GET /search.
+// handleListHTTP handles GET /spec: the catalog of available documents.
+func handleListHTTP(c echo.Context) error {
+	return c.JSON(http.StatusOK, specDocuments)
+}
+
+// handleSearchHTTP handles GET /spec/search.
 func handleSearchHTTP(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -54,9 +79,9 @@ func handleSearchHTTP(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "q is required")
 	}
 
-	docType, err := parseSearchDocType(c.QueryParam("document_type"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	docType, ok := parseSearchDocType(c.QueryParam("document_type"))
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid document_type: must be 'standard', 'procedure', or 'all'")
 	}
 
 	limit := parseIntDefault(c.QueryParam("limit"), 10)
@@ -83,8 +108,10 @@ func handleSearchHTTP(c echo.Context) error {
 	}
 	for _, r := range results {
 		res.Results = append(res.Results, SpecSearchResult{
-			Title:    r.Title,
-			Path:     r.Path,
+			Title: r.Title,
+			// Normalize to an extension-less path so it can be used directly as
+			// the {path} segment of GET /spec/{docType}/{path}.
+			Path:     strings.TrimSuffix(r.Path, ".md"),
 			DocType:  string(r.DocType),
 			Score:    r.Score,
 			Snippets: r.Snippets,
@@ -94,11 +121,15 @@ func handleSearchHTTP(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-// handleOutlineHTTP handles GET /outline.
+// handleOutlineHTTP handles GET /spec/{docType}: the table of contents.
 func handleOutlineHTTP(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	docType := docTypeOrDefault(c.QueryParam("document_type"))
+	docType := c.Param("docType")
+	if !validDocType(docType) {
+		return echo.NewHTTPError(http.StatusNotFound, "unknown document type")
+	}
+
 	chapter := c.QueryParam("chapter")
 	format := c.QueryParam("format")
 
@@ -126,21 +157,27 @@ func handleOutlineHTTP(c echo.Context) error {
 	outline = limitDepth(outline, depth)
 
 	if format == "markdown" {
-		return c.String(http.StatusOK, formatOutlineAsMarkdown(outline, docType))
+		md := formatOutlineAsMarkdown(outline, docType, "各節の本文は `/spec/"+docType+"/<path>` で取得できます。")
+		return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
 	}
 	return c.JSON(http.StatusOK, outline)
 }
 
-// handleReadHTTP handles GET /read.
+// handleReadHTTP handles GET /spec/{docType}/{path}: a section's content.
 func handleReadHTTP(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	path := c.QueryParam("path")
+	docType := c.Param("docType")
+	if !validDocType(docType) {
+		return echo.NewHTTPError(http.StatusNotFound, "unknown document type")
+	}
+
+	// Accept both extension-less paths (from the outline) and .md paths.
+	path := strings.TrimSuffix(c.Param("path"), ".md")
 	if path == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
 	}
 
-	docType := docTypeOrDefault(c.QueryParam("document_type"))
 	singlePage, _ := strconv.ParseBool(c.QueryParam("single_page"))
 	format := c.QueryParam("format")
 
@@ -167,26 +204,24 @@ func handleReadHTTP(c echo.Context) error {
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(content))
 }
 
-// parseSearchDocType validates and maps the document_type query param for search.
-func parseSearchDocType(s string) (plateaudocsearch.DocType, error) {
+// parseSearchDocType maps the document_type query param for search. The second
+// return value is false when the value is not a recognized document type.
+func parseSearchDocType(s string) (plateaudocsearch.DocType, bool) {
 	switch s {
 	case "standard":
-		return plateaudocsearch.DocTypeStandard, nil
+		return plateaudocsearch.DocTypeStandard, true
 	case "procedure":
-		return plateaudocsearch.DocTypeProcedure, nil
+		return plateaudocsearch.DocTypeProcedure, true
 	case "all", "":
-		return plateaudocsearch.DocTypeAll, nil
+		return plateaudocsearch.DocTypeAll, true
 	default:
-		return "", errors.New("invalid document_type: must be 'standard', 'procedure', or 'all'")
+		return "", false
 	}
 }
 
-// docTypeOrDefault returns the document type for outline/read, defaulting to standard.
-func docTypeOrDefault(s string) string {
-	if s == "procedure" {
-		return "procedure"
-	}
-	return "standard"
+// validDocType reports whether s is a readable document type (standard or procedure).
+func validDocType(s string) bool {
+	return s == "standard" || s == "procedure"
 }
 
 func parseIntDefault(s string, def int) int {

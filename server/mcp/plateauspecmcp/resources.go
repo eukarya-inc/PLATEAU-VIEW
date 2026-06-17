@@ -71,7 +71,7 @@ func HandleResourceRead(ctx context.Context, request mcp.ReadResourceRequest) ([
 		// Apply depth limit
 		outline = limitDepth(outline, 2)
 
-		content := formatOutlineAsMarkdown(outline, docType)
+		content := formatOutlineAsMarkdown(outline, docType, "以下のパスを `plateau_spec_read` ツールで指定すると、その節の内容を読むことができます。")
 		return []mcp.ResourceContents{
 			mcp.TextResourceContents{
 				URI:      uri,

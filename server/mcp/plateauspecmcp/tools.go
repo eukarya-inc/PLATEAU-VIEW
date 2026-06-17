@@ -97,7 +97,7 @@ func HandleSpecOutline(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		}
 		content = string(data)
 	} else {
-		content = formatOutlineAsMarkdown(outline, docType)
+		content = formatOutlineAsMarkdown(outline, docType, "以下のパスを `plateau_spec_read` ツールで指定すると、その節の内容を読むことができます。")
 	}
 
 	return mcp.NewToolResultText(content), nil
@@ -190,8 +190,10 @@ func formatTruncationHint(currentPath string, childPaths []string) string {
 	return sb.String()
 }
 
-// formatOutlineAsMarkdown formats the outline as markdown
-func formatOutlineAsMarkdown(items []OutlineItem, docType string) string {
+// formatOutlineAsMarkdown formats the outline as markdown. readHint is the
+// one-line guidance on how to read a section from a path; it differs between
+// the MCP tool and the REST API, so callers pass their own.
+func formatOutlineAsMarkdown(items []OutlineItem, docType, readHint string) string {
 	var sb strings.Builder
 
 	title := "3D都市モデル標準製品仕様書"
@@ -200,7 +202,9 @@ func formatOutlineAsMarkdown(items []OutlineItem, docType string) string {
 	}
 
 	sb.WriteString(fmt.Sprintf("# %s 目次\n\n", title))
-	sb.WriteString("以下のパスを `plateau_spec_read` ツールで指定すると、その節の内容を読むことができます。\n\n")
+	if readHint != "" {
+		sb.WriteString(readHint + "\n\n")
+	}
 
 	formatOutlineItems(&sb, items, 0)
 

@@ -4,13 +4,34 @@ PLATEAU 3D 都市モデルの **標準製品仕様書** と **標準作業手順
 
 ベース URL: `https://api.plateauview.mlit.go.jp`
 
-`document_type` は全エンドポイント共通:
+`{document_type}`（対象文書）:
 
-- `standard`: 3D都市モデル標準製品仕様書（既定）
+- `standard`: 3D都市モデル標準製品仕様書
 - `procedure`: 3D都市モデル標準作業手順書
-- `all`: 両方（検索のみ）
 
-## 1. 全文検索
+リソース指向の構成:
+
+| 用途 | エンドポイント |
+|---|---|
+| 文書一覧 | `GET /spec` |
+| 全文検索 | `GET /spec/search?q=...` |
+| 目次（index） | `GET /spec/{document_type}` |
+| 本文（get） | `GET /spec/{document_type}/{path}` |
+
+## 1. 文書一覧
+
+```bash
+curl -fsSL 'https://api.plateauview.mlit.go.jp/spec'
+```
+
+```json
+[
+  {"document_type":"standard","title":"3D都市モデル標準製品仕様書","path":"/spec/standard"},
+  {"document_type":"procedure","title":"3D都市モデル標準作業手順書","path":"/spec/procedure"}
+]
+```
+
+## 2. 全文検索
 
 ```
 GET /spec/search
@@ -26,7 +47,7 @@ GET /spec/search
 curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/search?q=LOD&document_type=all&limit=5'
 ```
 
-レスポンス（JSON）:
+レスポンス（JSON）。`path` と `document_type` をそのまま本文取得に渡せる:
 
 ```json
 {
@@ -43,48 +64,45 @@ curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/search?q=LOD&document_type=a
 }
 ```
 
-`path` を `/spec/read` に渡すと本文を取得できる。
-
-## 2. 目次（アウトライン）
+## 3. 目次（index）
 
 ```
-GET /spec/outline
+GET /spec/{document_type}
 ```
 
 | パラメータ | 必須 | 説明 |
 |---|---|---|
-| `document_type` | | `standard` / `procedure`（既定: `standard`） |
 | `depth` | | 階層の深さ。1=章のみ、2=章+節（既定: 2、最大: 4） |
 | `chapter` | | 特定の章だけ取得（例: `toc4`） |
 | `format` | | `json`（既定） / `markdown` |
 
 ```bash
-curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/outline?depth=1'
+curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/standard?depth=1'
 ```
 
 `format=json` のレスポンスは目次項目の配列（`id` / `title` / `path` / `children[]`）。
 
-## 3. 本文取得
+## 4. 本文（get）
 
 ```
-GET /spec/read
+GET /spec/{document_type}/{path}
 ```
 
 | パラメータ | 必須 | 説明 |
 |---|---|---|
-| `path` | ✓ | 取得するパス（例: `toc1`, `/plateaudocument/toc4`）。目次・検索で取得 |
-| `document_type` | | `standard` / `procedure`（既定: `standard`） |
 | `single_page` | | `true` で子セクションを含めず単一ページのみ（既定: `false`） |
 | `format` | | `markdown`（既定、`text/markdown` で本文を返す） / `json`（`{path, document_type, content}`） |
 
+`{path}` は目次・検索で得たパス（例: `toc1`, `toc4_01`）。末尾の `.md` は省略可。
+
 ```bash
-curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/read?path=toc1'
+curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/standard/toc1'
 ```
 
-既定では指定セクション配下の子ページも含めて Markdown で返す。範囲が広いと本文が大きくなるため、必要に応じて `chapter` で章を絞るか、より深いパスを指定する。
+既定では指定セクション配下の子ページも含めて Markdown で返す。範囲が広いと本文が大きくなるため、必要に応じて目次でより深いパスに絞る。
 
 ## 典型的な流れ
 
-1. `/spec/search?q=...` でキーワードに該当するセクションの `path` を見つける
-2. `/spec/read?path=<path>` で本文を読む
-3. 全体像を把握したいときは `/spec/outline` で目次を取得
+1. `/spec/search?q=...` でキーワードに該当するセクションの `document_type` と `path` を見つける
+2. `/spec/{document_type}/{path}` で本文を読む
+3. 全体像を把握したいときは `/spec/{document_type}` で目次を取得
