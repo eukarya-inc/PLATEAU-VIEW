@@ -854,7 +854,7 @@ paths:
       summary: 仕様書ドキュメント一覧
       description: PLATEAU 3D都市モデルの仕様書ドキュメント（標準製品仕様書・標準作業手順書）の一覧を返します。各 document_type は `/spec/{document_type}` で目次を取得できます。
       tags:
-        - Data Catalog API
+        - Specification API
       responses:
         "200":
           description: 成功時のレスポンス
@@ -883,7 +883,7 @@ paths:
         PLATEAU 3D都市モデルの標準製品仕様書・標準作業手順書を全文検索し、該当セクションのパス・関連度スコア・スニペットを返します。
         得られた `path` は `/spec/{document_type}/{path}` で本文を取得できます。
       tags:
-        - Data Catalog API
+        - Specification API
       parameters:
         - name: q
           in: query
@@ -964,7 +964,7 @@ paths:
       description: |
         指定した文書の章・節の階層構造とパスを取得します。得られたパスは `/spec/{document_type}/{path}` に渡して本文取得に使用します。
       tags:
-        - Data Catalog API
+        - Specification API
       parameters:
         - name: document_type
           in: path
@@ -1032,7 +1032,7 @@ paths:
         指定したセクションの本文を Markdown で取得します(既定で子セクションを含む)。
         パスは `/spec/{document_type}` の目次、または `/spec/search` の検索結果から取得します。
       tags:
-        - Data Catalog API
+        - Specification API
       parameters:
         - name: document_type
           in: path
@@ -1048,7 +1048,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "取得するパス。例: `toc1`, `toc4_01`（末尾の `.md` は省略可）"
+          description: "取得するパス。例: `toc1`, `toc4_01`。末尾に拡張子を付けると出力形式を選択でき（`.json` で JSON、`.md` で Markdown）、`format` クエリより優先される。拡張子なしも可。"
         - name: single_page
           in: query
           required: false
@@ -1065,7 +1065,7 @@ paths:
               - markdown
               - json
             default: markdown
-          description: "出力形式。既定: `markdown`"
+          description: "出力形式。既定: `markdown`。パス末尾の拡張子（`.json` / `.md`）が指定された場合はそちらが優先される。"
       responses:
         "200":
           description: 成功時のレスポンス

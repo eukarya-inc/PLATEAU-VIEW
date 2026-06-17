@@ -151,17 +151,25 @@ func TestHandleReadHTTP(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "PLATEAUの概要")
 	})
 
-	t.Run("strips .md and returns json", func(t *testing.T) {
-		// A path with a .md suffix (as returned by search) resolves the same.
-		c, rec := newSpecTestContext("/spec/standard/toc1.md?single_page=true&format=json", "docType", "standard", "path", "toc1.md")
+	t.Run(".json extension returns json", func(t *testing.T) {
+		c, rec := newSpecTestContext("/spec/standard/toc1.json?single_page=true", "docType", "standard", "path", "toc1.json")
 		require.NoError(t, handleReadHTTP(c))
 		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get(echo.HeaderContentType), "application/json")
 
 		var parsed SpecReadResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &parsed))
 		assert.Equal(t, "toc1", parsed.Path)
 		assert.Equal(t, "standard", parsed.DocType)
 		assert.Contains(t, parsed.Content, "PLATEAUの概要")
+	})
+
+	t.Run(".md extension returns markdown (overrides ?format=json)", func(t *testing.T) {
+		c, rec := newSpecTestContext("/spec/standard/toc1.md?single_page=true&format=json", "docType", "standard", "path", "toc1.md")
+		require.NoError(t, handleReadHTTP(c))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get(echo.HeaderContentType), "text/markdown")
+		assert.Contains(t, rec.Body.String(), "PLATEAUの概要")
 	})
 }
 

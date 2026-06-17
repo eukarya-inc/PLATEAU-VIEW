@@ -93,10 +93,14 @@ GET /spec/{document_type}/{path}
 | `single_page` | | `true` で子セクションを含めず単一ページのみ（既定: `false`） |
 | `format` | | `markdown`（既定、`text/markdown` で本文を返す） / `json`（`{path, document_type, content}`） |
 
-`{path}` は目次・検索で得たパス（例: `toc1`, `toc4_01`）。末尾の `.md` は省略可。
+`{path}` は目次・検索で得たパス（例: `toc1`, `toc4_01`）。末尾に拡張子を付けると出力形式を選べる（`format` クエリより優先）:
+
+- `/spec/standard/toc1` または `/spec/standard/toc1.md` → Markdown
+- `/spec/standard/toc1.json` → JSON
 
 ```bash
-curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/standard/toc1'
+curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/standard/toc1'        # Markdown
+curl -fsSL 'https://api.plateauview.mlit.go.jp/spec/standard/toc1.json'   # JSON
 ```
 
 既定では指定セクション配下の子ページも含めて Markdown で返す。範囲が広いと本文が大きくなるため、必要に応じて目次でより深いパスに絞る。

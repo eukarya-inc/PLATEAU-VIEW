@@ -172,14 +172,24 @@ func handleReadHTTP(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "unknown document type")
 	}
 
-	// Accept both extension-less paths (from the outline) and .md paths.
-	path := strings.TrimSuffix(c.Param("path"), ".md")
+	// A path extension selects the representation and takes precedence over the
+	// format query parameter: ".json" -> JSON, ".md" -> markdown. An
+	// extension-less path (from the outline) or a search-result path also work.
+	path := c.Param("path")
+	format := c.QueryParam("format")
+	switch {
+	case strings.HasSuffix(path, ".json"):
+		format = "json"
+		path = strings.TrimSuffix(path, ".json")
+	case strings.HasSuffix(path, ".md"):
+		format = "markdown"
+		path = strings.TrimSuffix(path, ".md")
+	}
 	if path == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
 	}
 
 	singlePage, _ := strconv.ParseBool(c.QueryParam("single_page"))
-	format := c.QueryParam("format")
 
 	client := clientFactory()
 
