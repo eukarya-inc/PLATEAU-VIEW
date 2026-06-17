@@ -1,10 +1,25 @@
 //! XYZ tile source implementation.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use image::RgbaImage;
 
 use super::source::{TileError, TileSource, single_etag_key};
 use crate::config::RangeConfig;
+
+/// Per-request timeout for upstream XYZ tile fetches. Without it a slow upstream
+/// lets requests hang indefinitely, accumulating Tokio tasks and connection-pool
+/// slots and degrading the shared server.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Build a reqwest client with the upstream fetch timeout applied.
+fn build_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .expect("failed to build reqwest client")
+}
 
 /// XYZ tile source that fetches tiles from a remote URL.
 pub struct XyzTileSource {
@@ -24,7 +39,7 @@ impl XyzTileSource {
         Self {
             url_template,
             range,
-            client: reqwest::Client::new(),
+            client: build_client(),
             etag_key,
         }
     }
@@ -41,7 +56,7 @@ impl XyzTileSource {
         Self {
             url_template,
             range,
-            client: reqwest::Client::new(),
+            client: build_client(),
             etag_key,
         }
     }

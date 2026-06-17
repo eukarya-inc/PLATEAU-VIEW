@@ -4,10 +4,17 @@
 //! Terrarium or Mapbox Terrain-RGB. Used for `dem` overlay layers in the
 //! config JSON; `MapterhornSource` is the specialised default-base equivalent.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use image::GenericImageView;
 use reqwest::StatusCode;
 use serde::Deserialize;
+
+/// Per-request timeout for upstream DEM fetches. Terrain tiles fan out heavily,
+/// so an unbounded client lets a slow upstream accumulate hung Tokio tasks and
+/// connection-pool slots faster than they drain.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
 use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
@@ -50,7 +57,10 @@ impl XyzDemSource {
             version: version.into(),
             slug: slug.into(),
             bounds,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(HTTP_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
         }
     }
 

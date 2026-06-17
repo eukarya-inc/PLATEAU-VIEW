@@ -6,6 +6,8 @@
 //! response header is captured per-tile so that downstream cache keys can
 //! invalidate automatically on DEM data refresh.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use image::GenericImageView;
 use reqwest::StatusCode;
@@ -15,6 +17,11 @@ use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 /// Default public Mapterhorn tile endpoint.
 pub const DEFAULT_URL_TEMPLATE: &str = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
+
+/// Per-request timeout for upstream DEM fetches. Terrain tiles fan out heavily,
+/// so an unbounded client lets a slow upstream accumulate hung Tokio tasks and
+/// connection-pool slots faster than they drain.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Native Mapterhorn tile size (pixels).
 pub const MAPTERHORN_NATIVE_TILE_SIZE: u32 = 512;
@@ -34,7 +41,10 @@ impl MapterhornSource {
     pub fn new(url_template: impl Into<String>, version: impl Into<String>, max_zoom: u8) -> Self {
         Self {
             url_template: url_template.into(),
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(HTTP_TIMEOUT)
+                .build()
+                .expect("failed to build reqwest client"),
             max_zoom,
             version: version.into(),
             slug: "mapterhorn".to_string(),
