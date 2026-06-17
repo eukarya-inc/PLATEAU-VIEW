@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 )
@@ -59,6 +60,14 @@ func (c *GSIClient) Fetch(ctx context.Context, lon, lat float64) (*GSIResult, er
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// A timeout (e.g. the client-side http.Client.Timeout firing on a
+		// hung-but-alive upstream) means GSI is effectively unavailable, so
+		// surface it as ErrGSIUnavailable to trigger the Nominatim fallback.
+		// The request-context cancellation is filtered out separately by the
+		// handler before it inspects this error.
+		if isTimeoutErr(err) {
+			return nil, fmt.Errorf("%w: %v", ErrGSIUnavailable, err)
+		}
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer func() {
@@ -88,4 +97,14 @@ func (c *GSIClient) Fetch(ctx context.Context, lon, lat float64) (*GSIResult, er
 		MunicipalityCode: gsiResp.Results.MuniCd,
 		Name:             gsiResp.Results.Lv01Nm,
 	}, nil
+}
+
+// isTimeoutErr reports whether err is a request timeout, covering both the
+// http.Client.Timeout deadline and lower-level network timeouts.
+func isTimeoutErr(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

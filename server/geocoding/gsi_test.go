@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -105,4 +106,20 @@ func TestGSIClient_Fetch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGSIClient_Fetch_Timeout(t *testing.T) {
+	// Server that hangs longer than the client timeout, simulating a
+	// slow-but-alive upstream.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewGSIClient(&http.Client{Timeout: 20 * time.Millisecond}, server.URL)
+	_, err := client.Fetch(context.Background(), 139.7671, 35.6812)
+
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrGSIUnavailable), "timeout should surface as ErrGSIUnavailable so the handler falls back to Nominatim")
 }
