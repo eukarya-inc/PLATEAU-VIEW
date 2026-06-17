@@ -22,6 +22,7 @@ type Config struct {
 	ErrorOnInit          bool
 	GeocodingAppID       string
 	CityConcurrency      int    // Concurrent city fetches limit (default: 10)
+	MaxCities            int    // Max cities resolved from spatial bounds per request (default: 50)
 	DiskCache            bool   // for debugging
 	Debug                bool   // for debugging
 	CacheURL             string // gs://bucket/path for GCS cache (skip CMS init if set)

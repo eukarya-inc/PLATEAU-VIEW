@@ -38,6 +38,7 @@ type ReposHandler struct {
 	cacheUpdateKey     string
 	geocodingAppID     string
 	cityConcurrency    int
+	maxCities          int
 	cacheURL           string
 	host               string
 
@@ -50,6 +51,7 @@ const gqlComplexityLimit = 1000
 const cmsSchemaVersion = "v3"
 const cmsSchemaVersionV2 = "v2"
 const defaultCityConcurrency = 10
+const defaultMaxCities = 50
 
 // NewReposHandler creates a new ReposHandler
 func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
@@ -62,6 +64,10 @@ func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 
 	if conf.CityConcurrency <= 0 {
 		conf.CityConcurrency = defaultCityConcurrency
+	}
+
+	if conf.MaxCities <= 0 {
+		conf.MaxCities = defaultMaxCities
 	}
 
 	if conf.DiskCache {
@@ -84,6 +90,7 @@ func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 		cacheUpdateKey:     conf.CacheUpdateKey,
 		geocodingAppID:     conf.GeocodingAppID,
 		cityConcurrency:    conf.CityConcurrency,
+		maxCities:          conf.MaxCities,
 		cacheURL:           conf.CacheURL,
 		host:               conf.Host,
 		qt:                 qt,
@@ -172,6 +179,16 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 			cityIDs = strings.Split(conditions, ",")
 		}
 		cityIDs = lo.Uniq(cityIDs)
+
+		// Cap the number of cities resolved from spatial bounds to prevent a single
+		// large-area request (e.g. a prefecture or all-Japan rectangle) from fanning
+		// out into thousands of upstream CMS/CSV calls. This guards the ward-expansion
+		// loop and the per-city fetch below. Explicit city id queries are bounded by
+		// the request itself, so the cap only applies to bounds-derived queries.
+		if len(bounds) > 0 && len(cityIDs) > h.maxCities {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("query area too large: %d cities (max %d)", len(cityIDs), h.maxCities))
+		}
 
 		merged, err := h.prepareMergedRepo(c, admin)
 		if err != nil {

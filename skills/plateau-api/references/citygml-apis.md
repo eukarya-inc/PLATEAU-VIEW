@@ -52,6 +52,8 @@ GET /datacatalog/citygml/{conditions}
 curl -fsSL 'https://api.plateauview.mlit.go.jp/datacatalog/citygml/m:533935'
 ```
 
+> **範囲の上限**: 空間クエリ（`m:` / `mm:` / `s:` / `r:` / `g:`）から解決される都市数が **50 を超える**と `400 Bad Request` を返す。都道府県全体や日本全体のような広域指定はエラーになるため、範囲を分割して指定すること。自治体コードの直接指定にはこの上限は適用されない。
+
 ## 3. CityGML Pack（非同期 zip 生成）
 
 | エンドポイント | 用途 |

@@ -77,7 +77,9 @@ func parseCityGMLFilesQuery(ctx context.Context, conditions string, featureTypes
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("invalid rectangle: %w", err)
 		}
-		filter = intersectFilter([]geo.Bounds2{geo.ToBounds2(b)})
+		b2 := geo.ToBounds2(b)
+		bounds = append(bounds, b2) // resolve cities intersecting the rectangle
+		filter = intersectFilter([]geo.Bounds2{b2})
 	case "g":
 		if geocoder == nil {
 			return nil, nil, nil, fmt.Errorf("invalid condition type: %s", conditionType)
@@ -90,7 +92,9 @@ func parseCityGMLFilesQuery(ctx context.Context, conditions string, featureTypes
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("geocoding: %w", err)
 		}
-		filter = intersectFilter([]geo.Bounds2{geo.ToBounds2(b)})
+		b2 := geo.ToBounds2(b)
+		bounds = append(bounds, b2) // resolve cities intersecting the geocoded area
+		filter = intersectFilter([]geo.Bounds2{b2})
 	case "":
 		if cond == "" {
 			return nil, nil, nil, fmt.Errorf("no conditions")
