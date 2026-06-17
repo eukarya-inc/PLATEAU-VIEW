@@ -14,6 +14,14 @@ jobs:
       - name: Install
         working-directory: docs
         run: npm ci
+      - name: Check OpenAPI snapshot is in sync with server/openapi/openapi.yml
+        working-directory: docs
+        run: |
+          npm run api:gen
+          if ! git diff --exit-code src/openapi/plateau-api.json; then
+            echo "::error::docs/src/openapi/plateau-api.json is out of sync with server/openapi/openapi.yml. Run 'npm run api:gen' in docs/ and commit the result."
+            exit 1
+          fi
       - name: Build
         working-directory: docs
         run: npm run build

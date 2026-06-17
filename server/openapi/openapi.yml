@@ -645,7 +645,10 @@ paths:
   /datacatalog/citygml/{conditions}:
     get:
       summary: CityGMLファイルのURLリストを取得
-      description: 指定した範囲に含まれるCityGMLファイルのURLリストを取得します。
+      description: |
+        指定した範囲に含まれるCityGMLファイルのURLリストを取得します。
+
+        空間クエリ（`m:` / `mm:` / `s:` / `r:` / `g:`）から解決される都市数が50を超える場合は `400 Bad Request` を返します。都道府県全体や日本全体のような広域の指定はエラーになるため、範囲を分割して指定してください。自治体コードの直接指定にはこの上限は適用されません。
       tags:
         - Data Catalog API
       parameters:
@@ -833,8 +836,230 @@ paths:
                   - url
                   - files
                   - featureTypes
+        "400":
+          description: 範囲が広すぎる、または条件が不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
         "404":
           description: リソースが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
+
+  /spec/search:
+    get:
+      summary: 仕様書の全文検索
+      description: |
+        PLATEAU 3D都市モデルの標準製品仕様書・標準作業手順書を全文検索し、該当セクションのパス・関連度スコア・スニペットを返します。
+        得られた `path` は `/spec/read` に渡して本文を取得できます。
+      tags:
+        - Data Catalog API
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "検索クエリ。日本語・英語に対応。例: `LOD`, `CityGML`, `属性`, `メタデータ`"
+        - name: document_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - standard
+              - procedure
+              - all
+            default: all
+          description: "検索対象。`standard`(標準製品仕様書) / `procedure`(標準作業手順書) / `all`(両方)。既定: `all`"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+          description: "最大取得件数。既定: 10、最大: 50"
+      responses:
+        "200":
+          description: 成功時のレスポンス
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                          description: セクションのタイトル
+                        path:
+                          type: string
+                          description: "`/spec/read` で本文取得に使うパス"
+                        document_type:
+                          type: string
+                          enum:
+                            - standard
+                            - procedure
+                          description: 該当文書の種類
+                        score:
+                          type: number
+                          description: 関連度スコア
+                        snippets:
+                          type: array
+                          items:
+                            type: string
+                          description: マッチした箇所の抜粋
+        "400":
+          description: クエリが不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
+        "500":
+          description: 検索インデックスの初期化または検索に失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
+
+  /spec/outline:
+    get:
+      summary: 仕様書の目次（アウトライン）取得
+      description: |
+        仕様書の章・節の階層構造とパスを取得します。得られた `path` は `/spec/read` に渡して本文取得に使用します。
+      tags:
+        - Data Catalog API
+      parameters:
+        - name: document_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - standard
+              - procedure
+            default: standard
+          description: "対象文書。既定: `standard`"
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 2
+            minimum: 1
+            maximum: 4
+          description: "取得する階層の深さ。1=章のみ、2=章+節。既定: 2、最大: 4"
+        - name: chapter
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "特定の章のみ取得する場合に指定。例: `toc4`"
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - json
+              - markdown
+            default: json
+          description: "出力形式。既定: `json`"
+      responses:
+        "200":
+          description: 成功時のレスポンス。format=json は目次項目の配列、format=markdown は Markdown テキスト。
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/specOutlineItem"
+            text/markdown:
+              schema:
+                type: string
+        "500":
+          description: 目次の取得に失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
+
+  /spec/read:
+    get:
+      summary: 仕様書セクションの本文取得
+      description: |
+        指定したパスのセクション本文を Markdown で取得します(既定で子セクションを含む)。
+        パスは `/spec/outline` または `/spec/search` で取得します。
+      tags:
+        - Data Catalog API
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "取得するパス。例: `toc1`, `/plateaudocument/toc4`"
+        - name: document_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - standard
+              - procedure
+            default: standard
+          description: "対象文書。既定: `standard`"
+        - name: single_page
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: "true の場合、子セクションを含めず単一ページのみ取得。既定: false"
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - markdown
+              - json
+            default: markdown
+          description: "出力形式。既定: `markdown`"
+      responses:
+        "200":
+          description: 成功時のレスポンス
+          content:
+            text/markdown:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  document_type:
+                    type: string
+                  content:
+                    type: string
+        "400":
+          description: path が指定されていない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/error"
+        "404":
+          description: 指定パスのコンテンツが見つからない
           content:
             application/json:
               schema:
@@ -1199,3 +1424,18 @@ components:
           description: エラーの原因
       required:
         - error
+    specOutlineItem:
+      type: object
+      description: 仕様書の目次項目（再帰的）
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        path:
+          type: string
+          description: "`/spec/read` で本文取得に使うパス"
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/specOutlineItem"

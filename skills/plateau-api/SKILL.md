@@ -23,6 +23,7 @@ PLATEAU 3D 都市モデルの配信 API。試験運用中で、スキーマ・UR
 | 3D Tiles 表示 URL | 複合 tileset（[references/composite-urls.md](references/composite-urls.md)） |
 | MVT TileJSON | [references/composite-urls.md](references/composite-urls.md) |
 | CityGML 検索 / Pack / 属性 / 空間 ID | [references/citygml-apis.md](references/citygml-apis.md) |
+| 仕様書（標準製品仕様書・標準作業手順書）の全文検索 / 目次 / 本文 | [references/spec-apis.md](references/spec-apis.md) |
 
 REST レスポンスの主要フィールド（`citygml[]` / `latest_datasets[]` / `latest_citygml[]` 等）:
 `url`, `composite_url`, `file_size`（int64、null あり）, `year`, `pref_code`, `city_code`, `feature_types`。

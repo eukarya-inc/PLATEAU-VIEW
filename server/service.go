@@ -11,6 +11,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/mcp/plateauspecmcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/openapi"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/opinion"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
@@ -20,6 +21,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/sidebar"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/tiles"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
@@ -46,6 +48,7 @@ var services = [](func(*Config) (*Service, error)){
 	Embed,
 	CityGML,
 	MCP,
+	Spec,
 	LodStat,
 }
 
@@ -272,6 +275,21 @@ func MCP(conf *Config) (*Service, error) {
 
 			// Fallback: register with spec tools only
 			mcp.RegisterHTTPEndpoint(g.Group("/mcp"))
+			return nil
+		},
+	}, nil
+}
+
+// Spec exposes the PLATEAU specification document API (full-text search /
+// outline / read) at /spec. It is independent of CMS data and the data
+// catalog, mirroring the plateau_spec_* MCP tools as a plain REST API.
+func Spec(conf *Config) (*Service, error) {
+	return &Service{
+		Name: "spec",
+		Echo: func(g *echo.Group) error {
+			sg := g.Group("/spec")
+			sg.Use(middleware.CORS(), middleware.Gzip())
+			plateauspecmcp.RegisterEcho(sg)
 			return nil
 		},
 	}, nil
