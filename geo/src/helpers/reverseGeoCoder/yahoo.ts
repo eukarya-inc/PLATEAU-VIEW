@@ -1,7 +1,7 @@
 import axios from "axios";
 import { XMLParser } from "fast-xml-parser";
 
-import { AreasFetcherBase } from "./types";
+import { AreasFetcherBase, UPSTREAM_TIMEOUT_MS } from "./types";
 
 const xmlParser = new XMLParser();
 
@@ -12,6 +12,7 @@ export const fetchYahoo: AreasFetcherBase = async (url, lon, lat) => {
       lon,
       lat,
     },
+    timeout: UPSTREAM_TIMEOUT_MS,
   });
 
   const json = xmlParser.parse(data);

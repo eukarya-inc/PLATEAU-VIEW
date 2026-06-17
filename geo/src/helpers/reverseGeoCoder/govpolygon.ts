@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { AreasFetcherBase } from "./types";
+import { AreasFetcherBase, UPSTREAM_TIMEOUT_MS } from "./types";
 
 export const fetchGovPolygon: AreasFetcherBase = async (url, lon, lat) => {
   const { data } = await axios.get(url, {
@@ -8,6 +8,7 @@ export const fetchGovPolygon: AreasFetcherBase = async (url, lon, lat) => {
       lng: lon,
       lat,
     },
+    timeout: UPSTREAM_TIMEOUT_MS,
   });
 
   return {
