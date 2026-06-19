@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     permissions:
+      contents: read
       id-token: write
       packages: write
     if: ${{ inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
@@ -88,6 +89,7 @@ jobs:
     if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
+      contents: read
       id-token: write
       packages: write
     steps:
@@ -133,6 +135,7 @@ jobs:
     if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
+      contents: read
       id-token: write
       packages: write
     steps:
@@ -179,6 +182,7 @@ jobs:
     if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
+      contents: read
       id-token: write
       packages: write
     steps:
@@ -224,6 +228,7 @@ jobs:
     if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
     permissions:
+      contents: read
       id-token: write
       packages: write
     steps:
