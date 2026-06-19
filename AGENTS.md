@@ -169,9 +169,10 @@ ln -s ../../skills/<name> .claude/skills/<name>
 
 Deployment scripts are located in `/.github/scripts/`:
 
-- **watch-and-deploy-prod.sh**: Watches CI and dev deploy workflows, then triggers production deployment. Supports server, worker, and tile targets.
+- **watch-and-deploy-prod.sh**: Watches CI and dev deploy workflows, then triggers production deployment. Supports server, worker, tile, and docs targets.
   ```bash
   .github/scripts/watch-and-deploy-prod.sh server  # Deploy PLATEAU Server
   .github/scripts/watch-and-deploy-prod.sh worker  # Deploy PLATEAU Worker
   .github/scripts/watch-and-deploy-prod.sh tile    # Deploy PLATEAU Tile
+  .github/scripts/watch-and-deploy-prod.sh docs    # Deploy PLATEAU Docs
   ```
