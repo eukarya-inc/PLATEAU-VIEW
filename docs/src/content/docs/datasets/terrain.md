@@ -5,50 +5,47 @@ description: 日本全国の地形データ配信サービスの利用方法
 
 ## 1. PLATEAU-Terrain の概要
 
-Project PLATEAU では、日本全国の地形データを Cesium / MapLibre / Mapbox GL など主要な 3D 地図エンジンから直接利用できるタイル配信サービス「PLATEAU-Terrain」を提供しています。
+Project PLATEAU では、日本全国の地形データを Cesium などの 3D 地図エンジンから直接利用できるタイル配信サービス「PLATEAU-Terrain」を提供しています。
 
-国土地理院の基盤地図情報数値標高モデル（DEM）をはじめとした各種データソースから生成された標高値に、日本のジオイドモデル（[GSIGEO2011](https://www.gsi.go.jp/buturisokuchi/grageo_geoidseika.html) など）を合成して **楕円体高（ellipsoidal height）** に変換したタイルを配信しています。Cesium と MapLibre のどちらから利用しても 3D Tiles などのジオコード済みデータと垂直方向のずれが発生しないようになっています。
+国土地理院の基盤地図情報数値標高モデル（DEM）をはじめとした各種データソースから生成された標高値に、日本のジオイドモデル（[GSIGEO2011](https://www.gsi.go.jp/buturisokuchi/grageo_geoidseika.html) など）を合成し、**楕円体高（ellipsoidal height）** に変換した地形を配信しています。これにより、3D Tiles などのジオコード済みデータと垂直方向のずれが発生しないようになっています。
 
 本チュートリアルでは、PLATEAU-Terrain の利用方法について解説します。
 
-### 1.1. 提供する地形データ
+:::note[現在の提供状況]
+現在配信しているのは、Cesium 向けの **quantized-mesh 形式**の地形タイル（`/terrain/`）です。これは従来 Cesium ion 上でホストしていた PLATEAU-Terrain（[5 章](#5-plateau-terrain-cesium-ion)）をオブジェクトストレージにミラーし、そのまま配信しているものです。配信される標高は楕円体高に変換済みですが、**ジオイドモデルはデータ生成時に固定**されており、リクエスト時に切り替えることはできません。
 
-PLATEAU-Terrain は、3 種類の標準的なフォーマットで同じ標高データを配信しています。利用する地図エンジンに合わせて選択してください。
+リクエスト時のジオイドモデル切り替え（`?geoid=`）や、MapLibre / Mapbox GL 向けの raster-dem エンドポイント（`/terrarium/`・`/mapbox/`）は、新しい DEM ベースの配信パイプラインで開発を進めていますが、**現在調整中で、まだリリースされていません**（[1.3](#13-今後提供予定の機能調整中)）。
+:::
 
-| エンドポイント | フォーマット | 用途 |
-| --- | --- | --- |
-| `/terrain/` | [Cesium quantized-mesh-1.0](https://github.com/CesiumGS/quantized-mesh)（TMS Geodetic、`octvertexnormals` 拡張付き） | CesiumJS の `CesiumTerrainProvider` |
-| `/terrarium/` | [Mapzen Terrarium](https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)（PNG / WebP / AVIF、Web Mercator XYZ） | MapLibre / Mapbox GL の `raster-dem` ソース（`encoding: "terrarium"`） |
-| `/mapbox/` | [Mapbox Terrain-RGB v1](https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/)（PNG / WebP / AVIF、Web Mercator XYZ） | MapLibre / Mapbox GL の `raster-dem` ソース（`encoding: "mapbox"`） |
-
-### 1.2. 高さの基準（楕円体高）
+### 1.1. 高さの基準（楕円体高）
 
 3D 地図エンジンは一般に WGS84 楕円体（GPS と同じ基準面）を 3 次元空間の基準にしているのに対し、国土地理院の DEM や日常的な「標高」は **正標高（orthometric height、平均海面からの高さ）** で表現されています。両者の差はジオイド高 N と呼ばれ、日本付近では概ね **+30〜+45 m** あります。この差を補正しないと、3D Tiles などのデータと地形が垂直方向にずれてしまいます。
-
-PLATEAU-Terrain では各タイル生成時に、選択されたジオイドモデルから算出した N を画素ごとに加算し、結果を楕円体高として配信しています。
 
 ```
 ellipsoidal height = orthometric height + geoid height (N)
 ```
 
-### 1.3. ジオイドモデルの切り替え
+PLATEAU-Terrain では、ジオイド高 N を加算した楕円体高を配信しています。現在配信中の `/terrain/`（quantized-mesh ミラー）では、この補正がデータ生成時に済んでおり、固定のジオイドモデルが適用されています。
 
-すべてのエンドポイントは `?geoid=` クエリパラメータでジオイドモデルを切り替えられます。
+### 1.2. ズームレベル
 
-| `geoid=` | 内容 | 適用範囲 |
-| --- | --- | --- |
-| `gsigeo2011`（既定） | 国土地理院「日本のジオイド 2011」(Ver.2.2) | 日本陸域 |
-| `jpgeo2024` | 国土地理院「日本のジオイド 2024」 | 日本陸域 + 周辺海域 |
-| `jpgeo2024-hrefconv` | JPGEO2024 + Hrefconv 補正 | 日本陸域のみ |
-| `none` | ジオイド補正なし（正標高のまま） | グローバル |
+最大ズームは `/terrain/layer.json` の `maxzoom` で確認できます。
 
-ジオイドのカバー範囲を完全に外れているタイルは `404 Not Found` を返します。
+### 1.3. 今後提供予定の機能（調整中）
 
-### 1.4. ズームレベルとアップサンプリング
+以下の機能は新しい DEM ベースの配信パイプラインで開発を進めていますが、調整中のためまだリリースされていません。正式公開までは [2 章](#2-配信-url)の quantized-mesh 配信をご利用ください。
 
-DEM の元データの最大ズームよりも高いズームレベルが要求された場合、サーバー側で親タイルを取得し、要求された領域を bilinear で **アップサンプリング** して返します。Cesium の terrain LOD や MapLibre の terrain mesh が高ズームでも切れずに描画されます。
+- **ジオイドモデルの切り替え**：`?geoid=` クエリパラメータで、用途に応じてジオイドモデルを切り替え。提供予定のモデルは次のとおりです。
 
-最大ズームは `/terrain/layer.json` および `/terrarium/tilejson.json`、`/mapbox/tilejson.json` の `maxzoom` で確認できます。
+  | `geoid=` | 内容 | 適用範囲 |
+  | --- | --- | --- |
+  | `gsigeo2011`（既定） | 国土地理院「日本のジオイド 2011」(Ver.2.2) | 日本陸域 |
+  | `jpgeo2024` | 国土地理院「日本のジオイド 2024」 | 日本陸域 + 周辺海域 |
+  | `jpgeo2024-hrefconv` | JPGEO2024 + Hrefconv 補正 | 日本陸域のみ |
+  | `none` | ジオイド補正なし（正標高のまま） | グローバル |
+
+- **MapLibre / Mapbox GL 向け raster-dem エンドポイント**：同じ標高データを MapLibre / Mapbox GL からも利用できるよう、`/terrarium/`（[Mapzen Terrarium](https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)）と `/mapbox/`（[Mapbox Terrain-RGB v1](https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/)）の各エンドポイントを PNG / WebP / AVIF 形式で配信。
+- **高ズームのアップサンプリング**：DEM 元データの最大ズームを超えるズームが要求された場合に、親タイルを bilinear でアップサンプリングして返却。
 
 ## 2. 配信 URL
 
@@ -62,9 +59,22 @@ DEM の元データの最大ズームよりも高いズームレベルが要求�
 https://tile.plateauview.mlit.go.jp
 ```
 
-### 2.1. 配信中のタイル一覧（カタログ API）
+### 2.1. Cesium 用 quantized-mesh terrain
 
-`/tiles/catalog.json` で、現在配信中の全タイルソース（オルソ画像と地形を含む）の一覧をプログラムから取得できます。地形は以下の 3 種類のエントリとして含まれます。
+```
+https://tile.plateauview.mlit.go.jp/terrain/layer.json
+https://tile.plateauview.mlit.go.jp/terrain/{z}/{x}/{y}.terrain
+```
+
+[Cesium quantized-mesh-1.0](https://github.com/CesiumGS/quantized-mesh) 形式（TMS Geodetic、`octvertexnormals` 拡張付き）の地形タイルです。CesiumJS の `CesiumTerrainProvider.fromUrl` に `layer.json` の URL（または `/terrain`）を渡すだけで利用できます。`requestVertexNormals: true` を指定すると法線付きで読み込めます。
+
+:::note
+現在の `/terrain/` は、固定のジオイドモデルを適用済みの quantized-mesh ミラーです。`?geoid=` を付与してもジオイドモデルは切り替わりません（[1.3](#13-今後提供予定の機能調整中)）。
+:::
+
+### 2.2. 配信中のタイル一覧（カタログ API）
+
+`/tiles/catalog.json` で、現在配信中の全タイルソース（オルソ画像と地形を含む）の一覧をプログラムから取得できます。地形は次のエントリとして含まれます。
 
 ```
 https://tile.plateauview.mlit.go.jp/tiles/catalog.json
@@ -73,8 +83,6 @@ https://tile.plateauview.mlit.go.jp/tiles/catalog.json
 | `name` | `urls` のキー | URL |
 | --- | --- | --- |
 | `terrain` | `quantized-mesh` | `/terrain/layer.json` |
-| `terrarium` | `png` / `webp` / `avif` | `/terrarium/tilejson.json?format=...` |
-| `mapbox` | `png` / `webp` / `avif` | `/mapbox/tilejson.json?format=...` |
 
 レスポンス例（地形部分の抜粋）:
 
@@ -87,46 +95,10 @@ https://tile.plateauview.mlit.go.jp/tiles/catalog.json
       "urls": {
         "quantized-mesh": "https://tile.plateauview.mlit.go.jp/terrain/layer.json"
       }
-    },
-    {
-      "name": "terrarium",
-      "description": "MapLibre raster-dem source (Terrarium encoding, ellipsoidal heights)",
-      "urls": {
-        "png":  "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=png",
-        "webp": "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=webp",
-        "avif": "https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json?format=avif"
-      }
     }
   ]
 }
 ```
-
-### 2.2. Cesium 用 quantized-mesh terrain
-
-```
-https://tile.plateauview.mlit.go.jp/terrain/layer.json
-https://tile.plateauview.mlit.go.jp/terrain/{z}/{x}/{y}.terrain
-```
-
-CesiumJS の `CesiumTerrainProvider.fromUrl` に `layer.json` の URL を渡すだけで利用できます。`?geoid=` を付けるとジオイドモデルを切り替えられます（既定は `gsigeo2011`）。
-
-### 2.3. MapLibre / Mapbox GL 用 raster-dem（Terrarium）
-
-```
-https://tile.plateauview.mlit.go.jp/terrarium/tilejson.json
-https://tile.plateauview.mlit.go.jp/terrarium/{z}/{x}/{y}.{png|webp|avif}
-```
-
-`tilejson.json` を MapLibre の `raster-dem` ソースの `url` に指定し、`encoding: "terrarium"` を併せて指定してください。タイル拡張子は既定で `webp`、`tilejson.json?format=png` のように切り替えできます。
-
-### 2.4. MapLibre / Mapbox GL 用 raster-dem（Mapbox Terrain-RGB v1）
-
-```
-https://tile.plateauview.mlit.go.jp/mapbox/tilejson.json
-https://tile.plateauview.mlit.go.jp/mapbox/{z}/{x}/{y}.{png|webp|avif}
-```
-
-`encoding: "mapbox"` を指定してください。タイル拡張子は既定で `webp`、`tilejson.json?format=png` のように切り替えできます。
 
 ## 3. 利用例
 
@@ -153,7 +125,7 @@ https://tile.plateauview.mlit.go.jp/mapbox/{z}/{x}/{y}.{png|webp|avif}
 
     // PLATEAU-Terrain（quantized-mesh、ellipsoidal heights）
     Cesium.CesiumTerrainProvider.fromUrl(
-      "https://tile.plateauview.mlit.go.jp/terrain?geoid=gsigeo2011",
+      "https://tile.plateauview.mlit.go.jp/terrain",
       { requestVertexNormals: true },
     ).then((provider) => {
       viewer.terrainProvider = provider;
@@ -178,66 +150,12 @@ https://tile.plateauview.mlit.go.jp/mapbox/{z}/{x}/{y}.{png|webp|avif}
 
 ### 3.2. MapLibre GL JS
 
-`raster-dem` ソースに `tilejson.json` を URL として渡し、`terrain` と `hillshade` レイヤーで参照します。`encoding` と `tileSize` を必ず指定してください。
-
-```html
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>PLATEAU-Terrain を MapLibre で表示</title>
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
-  <style>#map { position: absolute; inset: 0; } html, body { height: 100%; margin: 0; }</style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    const map = new maplibregl.Map({
-      container: "map",
-      style: {
-        version: 8,
-        sources: {
-          basemap: {
-            type: "raster",
-            tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            attribution: "国土地理院",
-          },
-          "dem": {
-            type: "raster-dem",
-            url: "https://tile.plateauview.mlit.go.jp/mapbox/tilejson.json?geoid=gsigeo2011",
-            encoding: "mapbox",
-            tileSize: 256,
-          },
-        },
-        layers: [
-          { id: "basemap", type: "raster", source: "basemap" },
-          {
-            id: "hillshade",
-            type: "hillshade",
-            source: "dem",
-            paint: {
-              "hillshade-shadow-color": "#000",
-              "hillshade-exaggeration": 0.5,
-            },
-          },
-        ],
-        terrain: { source: "dem", exaggeration: 1.0 },
-      },
-      center: [138.73, 35.36],
-      zoom: 11,
-      pitch: 60,
-    });
-  </script>
-</body>
-</html>
-```
+MapLibre / Mapbox GL から利用するための raster-dem エンドポイント（`/terrarium/`・`/mapbox/`）は現在調整中で、まだリリースされていません（[1.3](#13-今後提供予定の機能調整中)）。正式公開後に利用方法を追記します。
 
 ### 3.3. プレビュー
 
-ブラウザで以下にアクセスすると、ジオイド切り替えや 3D / hillshade のオン・オフを試せるプレビューが利用できます。
+ブラウザで以下にアクセスすると、Cesium 上で地形表現を試せるプレビューが利用できます。
 
-- MapLibre プレビュー: <https://tile.plateauview.mlit.go.jp/>
 - Cesium プレビュー: <https://tile.plateauview.mlit.go.jp/terrain-viewer>
 
 ## 4. 帰属表示
@@ -248,7 +166,7 @@ PLATEAU-Terrain を利用する場合は、地図画面上に下記のいずれ�
 PLATEAU | Mapterhorn | 国土地理院
 ```
 
-`/terrarium/tilejson.json` および `/mapbox/tilejson.json`、`/terrain/layer.json` のレスポンスにも同等の `attribution` 文字列が含まれます。
+`/terrain/layer.json` のレスポンスにも同等の `attribution` 文字列が含まれます。
 
 ## 5. PLATEAU-Terrain (Cesium ion)
 
