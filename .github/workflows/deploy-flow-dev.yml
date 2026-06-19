@@ -113,7 +113,7 @@ jobs:
       - name: Build and push docker image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6
         with:
-          context: .
+          context: ui
           file: ui/Dockerfile
           platforms: linux/amd64
           push: true
@@ -206,7 +206,7 @@ jobs:
       - name: Build and push docker image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6
         with:
-          context: .
+          context: server/websocket
           file: server/websocket/Dockerfile.websocket
           platforms: linux/amd64
           push: true
@@ -252,7 +252,7 @@ jobs:
       - name: Build and push docker image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6
         with:
-          context: .
+          context: engine
           file: engine/containers/worker/Dockerfile
           platforms: linux/amd64
           push: true
