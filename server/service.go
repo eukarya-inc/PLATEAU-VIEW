@@ -290,6 +290,18 @@ func Spec(conf *Config) (*Service, error) {
 			sg := g.Group("/spec")
 			sg.Use(middleware.CORS(), middleware.Gzip())
 			plateauspecmcp.RegisterEcho(sg)
+
+			// Eagerly warm the search index in the background so the first
+			// request doesn't pay the multi-second download cost and a
+			// transient startup failure doesn't surface to that first user.
+			// Initialization is retryable, so a failure here is recovered on
+			// the next request.
+			go func() {
+				if err := plateauspecmcp.Prewarm(context.Background()); err != nil {
+					log.Errorf("spec: failed to prewarm search index: %v", err)
+				}
+			}()
+
 			return nil
 		},
 	}, nil

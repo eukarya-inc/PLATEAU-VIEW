@@ -5,32 +5,65 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/eukarya-inc/plateau-spec/plateaudocsearch"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// searchInitTimeout bounds a single attempt to download and open the search
+// index. It is deliberately independent of any caller's request context so a
+// client disconnect cannot abort — and permanently break — initialization.
+const searchInitTimeout = 6 * time.Minute
+
 var (
-	searchClient     *plateaudocsearch.Client
-	searchClientOnce sync.Once
-	searchClientErr  error
+	searchMu     sync.Mutex
+	searchClient *plateaudocsearch.Client // non-nil only after a successful Init
 )
 
-// getSearchClient returns the singleton search client, initializing it if necessary.
-// The search client downloads the search index on first use.
+// getSearchClient returns the singleton search client, initializing it on first
+// use. The search client downloads the search index on first use, which can take
+// several seconds.
+//
+// Initialization is retryable: unlike a sync.Once, a failed attempt (transient
+// network error, a 5xx from the index host, a cancelled download, etc.) is NOT
+// cached, so the next call tries again instead of failing forever. The download
+// also runs on a context detached from the caller, so a single client that
+// disconnects mid-download cannot abort initialization for everyone else.
 func getSearchClient(ctx context.Context) (*plateaudocsearch.Client, error) {
-	searchClientOnce.Do(func() {
-		searchClient = plateaudocsearch.New()
-		_, searchClientErr = searchClient.Init(ctx)
-		if searchClientErr != nil {
-			searchClient = nil
-		}
-	})
+	searchMu.Lock()
+	defer searchMu.Unlock()
 
-	if searchClientErr != nil {
-		return nil, searchClientErr
+	if searchClient != nil {
+		return searchClient, nil
 	}
+
+	c := plateaudocsearch.New()
+
+	// Detach from the caller's context: downloading the index is a shared,
+	// one-time cost, so a single request's cancellation (client disconnect or a
+	// per-request timeout) must not cancel it for every other caller. Bound it
+	// with our own timeout instead.
+	initCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), searchInitTimeout)
+	defer cancel()
+
+	if _, err := c.Init(initCtx); err != nil {
+		// Do not cache the failure: the next call retries from scratch.
+		return nil, err
+	}
+
+	searchClient = c
 	return searchClient, nil
+}
+
+// Prewarm eagerly initializes the search client so the first real request does
+// not pay the index-download cost and a transient startup failure does not
+// surface to that first user. It is safe to call from a background goroutine and
+// to call more than once; initialization is serialized and retried by
+// getSearchClient.
+func Prewarm(ctx context.Context) error {
+	_, err := getSearchClient(ctx)
+	return err
 }
 
 // searchClientFactory allows overriding getSearchClient for testing
