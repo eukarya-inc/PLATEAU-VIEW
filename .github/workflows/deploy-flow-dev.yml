@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       only_policies:
-        description: 'Run only update-policies and deploy-cerbos jobs'
+        description: "Run only update-policies and deploy-cerbos jobs"
         required: false
-        default: 'false'
+        default: "false"
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - "true"
+          - "false"
 env:
   FLOW_REPO: reearth/reearth-flow
   FLOW_BRANCH: plateau5
@@ -223,7 +223,32 @@ jobs:
             --platform managed \
             --quiet
 
+  ci-engine:
+    runs-on: ubuntu-latest
+    if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: ${{ env.FLOW_REPO }}
+          ref: ${{ env.FLOW_BRANCH }}
+      - uses: reearth/reearth-flow/.github/actions/setup-engine-ci@plateau5
+        with:
+          rust-components: clippy, rustfmt
+          tools: cargo-make,taplo-cli
+      - name: Lint
+        working-directory: engine
+        run: |
+          cargo make clippy
+          cargo make format -- --check
+          cargo make format-taplo -- --check
+      - name: Test
+        working-directory: engine
+        run: cargo make test-rs
+
   deploy_worker:
+    needs: [ci-engine]
     runs-on: ubuntu-latest
     if: inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
     environment: dev
