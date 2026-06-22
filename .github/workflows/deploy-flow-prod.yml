@@ -201,6 +201,21 @@ jobs:
       - name: Tag and push docker image
         run: docker tag $WORKER_IMAGE_NAME_GHCR $WORKER_IMAGE_NAME_GCP && docker push $WORKER_IMAGE_NAME_GCP
 
+  upload_actions_schema:
+    runs-on: ubuntu-latest
+    environment: prod
+    if: ${{ inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - name: Promote actions schema from plateau-dev bucket
+        run: gsutil -m cp "gs://${{ vars.UPSTREAM_BUCKET }}/actions/actions*.json" "gs://${{ vars.REEARTH_FLOW_GCS_BUCKET_NAME }}/actions/"
+
   update-policies:
     runs-on: ubuntu-latest
     if: github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW'
