@@ -233,10 +233,16 @@ jobs:
         with:
           repository: ${{ env.FLOW_REPO }}
           ref: ${{ env.FLOW_BRANCH }}
-      - uses: reearth/reearth-flow/.github/actions/setup-engine-ci@plateau5
+      - uses: dtolnay/rust-toolchain@2ea1b3bdd0261867664fd125505456a7b9c3385c # 1.93.1
         with:
-          rust-components: clippy, rustfmt
-          tools: cargo-make,taplo-cli
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: engine
+          shared-key: engine-ci
+      - uses: taiki-e/install-action@74e87cbfa15a59692b158178d8905a61bf6fca95 # v2.75.20
+        with:
+          tool: cargo-make,taplo-cli
       - name: Lint
         working-directory: engine
         run: |
