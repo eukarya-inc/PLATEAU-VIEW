@@ -288,6 +288,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=flow-worker
 
   upload_actions_schema:
+    needs: [deploy_api, deploy_worker]
     runs-on: ubuntu-latest
     environment: dev
     if: ${{ inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
@@ -303,6 +304,7 @@ jobs:
         with:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
       - name: Upload actions schema to GCS
         run: gsutil -m cp engine/schema/actions*.json gs://${{ vars.REEARTH_FLOW_GCS_BUCKET_NAME }}/actions/
 
