@@ -1,6 +1,6 @@
 /** Correspond to https://github.com/takram-design-engineering/plateau-view/blob/main/libs/cesium/src/Environment.tsx */
 
-import { FC, useEffect } from "react";
+import { FC, useEffect, useMemo, useRef } from "react";
 
 import { useTerrainNormal, useTerrainUrl } from "../../states/environmentVariables";
 import { AmbientOcclusion, Antialias, CameraPosition, Tile, TileLabels } from "../types";
@@ -108,7 +108,67 @@ export const Scene: FC<SceneProps> = ({
 }) => {
   const [terrainUrl] = useTerrainUrl();
   const [terrainNormal] = useTerrainNormal();
+  // CesiumTerrainProvider.fromUrl appends "/layer.json" to the given URL, so we
+  // must pass the terrain base URL (e.g. ".../terrain"), not the layer.json URL
+  // itself. Otherwise it requests ".../terrain/layer.json/layer.json" (404),
+  // which makes Cesium retry the terrain load endlessly. Strip a trailing
+  // "/layer.json" (and slashes) so either form configured in the widget works.
+  const terrainBaseUrl = useMemo(
+    () => terrainUrl?.replace(/\/+$/, "").replace(/\/layer\.json$/i, "") || undefined,
+    [terrainUrl],
+  );
+  // Some of this effect's dependencies (tiles, tileLabels, shadows, initialCamera,
+  // sphericalHarmonicCoefficients, ...) may be recreated with a new identity on every
+  // render by parents, which re-runs this effect dozens of times per second even when
+  // the actual values are unchanged. Each overrideProperty call makes Re:Earth rebuild
+  // the engine's ViewerProperty, which re-creates the terrain provider and triggers an
+  // endless terrain reload loop. Gate on a value-based signature so we only push when
+  // the resolved property actually changes.
+  const lastPropertySigRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const propertySig = JSON.stringify([
+      isReEarthAPIv2(window?.reearth),
+      antialias,
+      ambientOcclusion,
+      atmosphereBrightnessShift,
+      atmosphereSaturationShift,
+      backgroundColor,
+      debugSphericalHarmonics,
+      enableFog,
+      enableGlobeLighting,
+      fogDensity,
+      globeImageBasedLightingFactor,
+      groundAtmosphereBrightnessShift,
+      groundAtmosphereSaturationShift,
+      imageBasedLightingIntensity,
+      lightColor,
+      lightIntensity,
+      shadowDarkness,
+      showGroundAtmosphere,
+      showSkyAtmosphere,
+      showSkyBox,
+      showSun,
+      showMoon,
+      sphericalHarmonicCoefficients,
+      tiles,
+      tileLabels,
+      shadows,
+      globeBaseColor,
+      skyAtmosphereBrightnessShift,
+      skyAtmosphereSaturationShift,
+      terrainHeatmap,
+      terrainHeatmapLogarithmic,
+      terrainHeatmapMaxHeight,
+      terrainHeatmapMinHeight,
+      initialCamera,
+      enterUnderground,
+      hideUnderground,
+      terrainBaseUrl,
+      terrainNormal,
+    ]);
+    if (propertySig === lastPropertySigRef.current) return;
+    lastPropertySigRef.current = propertySig;
+
     if (isReEarthAPIv2(window?.reearth)) {
       window.reearth?.viewer?.overrideProperty?.({
         camera: {
@@ -211,7 +271,7 @@ export const Scene: FC<SceneProps> = ({
               ionAccessToken:
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
               ionAsset: "4195264",
-              ...(terrainUrl ? { ionUrl: terrainUrl } : {}),
+              ...(terrainBaseUrl ? { ionUrl: terrainBaseUrl } : {}),
             },
           },
         },
@@ -278,7 +338,7 @@ export const Scene: FC<SceneProps> = ({
           terrainCesiumIonAccessToken:
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
           terrainCesiumIonAsset: "4195264",
-          ...(terrainUrl ? { terrainCesiumIonUrl: terrainUrl } : {}),
+          ...(terrainBaseUrl ? { terrainCesiumIonUrl: terrainBaseUrl } : {}),
           terrainNormal: terrainNormal ?? true,
           ...(terrainHeatmap
             ? {
@@ -330,7 +390,7 @@ export const Scene: FC<SceneProps> = ({
     initialCamera,
     enterUnderground,
     hideUnderground,
-    terrainUrl,
+    terrainBaseUrl,
     terrainNormal,
   ]);
 
