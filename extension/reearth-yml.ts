@@ -1,9 +1,10 @@
 import { writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import { stringify } from "yaml";
 
-import pkg from "./package.json" assert { type: "json" };
+const pkg = createRequire(import.meta.url)("./package.json") as { version: string };
 
 const yml = {
   id: "plateau-view-3",
