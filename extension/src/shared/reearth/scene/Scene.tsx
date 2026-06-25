@@ -117,60 +117,33 @@ export const Scene: FC<SceneProps> = ({
     () => terrainUrl?.replace(/\/+$/, "").replace(/\/layer\.json$/i, "") || undefined,
     [terrainUrl],
   );
-  // Some of this effect's dependencies (tiles, tileLabels, shadows, initialCamera,
-  // sphericalHarmonicCoefficients, ...) may be recreated with a new identity on every
-  // render by parents, which re-runs this effect dozens of times per second even when
-  // the actual values are unchanged. Each overrideProperty call makes Re:Earth rebuild
-  // the engine's ViewerProperty, which re-creates the terrain provider and triggers an
-  // endless terrain reload loop. Gate on a value-based signature so we only push when
-  // the resolved property actually changes.
+  // The deps of this effect (tiles, tileLabels, shadows, initialCamera, ...) can be
+  // recreated with a new identity on every parent render, re-running it dozens of times
+  // per second even when nothing actually changed. Each overrideProperty call makes
+  // Re:Earth rebuild the engine ViewerProperty, which re-creates the Cesium terrain
+  // provider and causes an endless terrain reload loop. Gate on the serialized payload we
+  // are about to send (NOT the inputs) so we only push when the payload truly changes —
+  // this also ignores churn in inputs (e.g. initialCamera) that don't affect the payload.
   const lastPropertySigRef = useRef<string | undefined>(undefined);
+  const pushCountRef = useRef(0);
   useEffect(() => {
-    const propertySig = JSON.stringify([
-      isReEarthAPIv2(window?.reearth),
-      antialias,
-      ambientOcclusion,
-      atmosphereBrightnessShift,
-      atmosphereSaturationShift,
-      backgroundColor,
-      debugSphericalHarmonics,
-      enableFog,
-      enableGlobeLighting,
-      fogDensity,
-      globeImageBasedLightingFactor,
-      groundAtmosphereBrightnessShift,
-      groundAtmosphereSaturationShift,
-      imageBasedLightingIntensity,
-      lightColor,
-      lightIntensity,
-      shadowDarkness,
-      showGroundAtmosphere,
-      showSkyAtmosphere,
-      showSkyBox,
-      showSun,
-      showMoon,
-      sphericalHarmonicCoefficients,
-      tiles,
-      tileLabels,
-      shadows,
-      globeBaseColor,
-      skyAtmosphereBrightnessShift,
-      skyAtmosphereSaturationShift,
-      terrainHeatmap,
-      terrainHeatmapLogarithmic,
-      terrainHeatmapMaxHeight,
-      terrainHeatmapMinHeight,
-      initialCamera,
-      enterUnderground,
-      hideUnderground,
-      terrainBaseUrl,
-      terrainNormal,
-    ]);
-    if (propertySig === lastPropertySigRef.current) return;
-    lastPropertySigRef.current = propertySig;
+    const pushIfChanged = (property: object, push: (p: never) => void) => {
+      const sig = JSON.stringify(property);
+      if (sig === lastPropertySigRef.current) return;
+      // A stable scene only pushes a couple of times. If it keeps pushing, the payload is
+      // genuinely unstable — log a few samples so the changing field can be identified.
+      pushCountRef.current += 1;
+      if (pushCountRef.current >= 3 && pushCountRef.current <= 8) {
+        // eslint-disable-next-line no-console
+        console.warn(`[plateau] scene property pushed ${pushCountRef.current}x`, property);
+      }
+      lastPropertySigRef.current = sig;
+      push(property as never);
+    };
 
     if (isReEarthAPIv2(window?.reearth)) {
-      window.reearth?.viewer?.overrideProperty?.({
+      const reearth = window.reearth;
+      const property = {
         camera: {
           allowEnterGround: enterUnderground,
         },
@@ -275,9 +248,11 @@ export const Scene: FC<SceneProps> = ({
             },
           },
         },
-      });
+      };
+      pushIfChanged(property, p => reearth?.viewer?.overrideProperty?.(p));
     } else {
-      window.reearth?.scene?.overrideProperty({
+      const reearth = window.reearth;
+      const property = {
         default: {
           camera: initialCamera,
           bgcolor: backgroundColor,
@@ -352,7 +327,8 @@ export const Scene: FC<SceneProps> = ({
         render: {
           antialias,
         },
-      });
+      };
+      pushIfChanged(property, p => reearth?.scene?.overrideProperty(p));
     }
   }, [
     antialias,
