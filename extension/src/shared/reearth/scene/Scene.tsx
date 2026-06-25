@@ -182,8 +182,7 @@ export const Scene: FC<SceneProps> = ({
         tileLabels,
         terrain: {
           enabled: true,
-          type: terrainUrl ? "cesium" : "cesiumion",
-          ...(terrainUrl ? { url: terrainUrl } : {}),
+          type: "cesiumion",
           normal: terrainNormal ?? true,
           ...(terrainHeatmap
             ? {
@@ -208,13 +207,12 @@ export const Scene: FC<SceneProps> = ({
         },
         assets: {
           cesium: {
-            terrain: terrainUrl
-              ? {}
-              : {
-                  ionAccessToken:
-                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
-                  ionAsset: "4195264",
-                },
+            terrain: {
+              ionAccessToken:
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
+              ionAsset: "4195264",
+              ...(terrainUrl ? { ionUrl: terrainUrl } : {}),
+            },
           },
         },
       });
@@ -275,15 +273,12 @@ export const Scene: FC<SceneProps> = ({
         tileLabels,
         terrain: {
           terrain: true,
-          terrainType: terrainUrl ? "cesium" : "cesiumion",
+          terrainType: "cesiumion",
           depthTestAgainstTerrain: hideUnderground,
-          ...(terrainUrl
-            ? { terrainUrl }
-            : {
-                terrainCesiumIonAccessToken:
-                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
-                terrainCesiumIonAsset: "4195264",
-              }),
+          terrainCesiumIonAccessToken:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
+          terrainCesiumIonAsset: "4195264",
+          ...(terrainUrl ? { terrainCesiumIonUrl: terrainUrl } : {}),
           terrainNormal: terrainNormal ?? true,
           ...(terrainHeatmap
             ? {
