@@ -233,10 +233,16 @@ jobs:
         with:
           repository: ${{ env.FLOW_REPO }}
           ref: ${{ env.FLOW_BRANCH }}
-      - uses: reearth/reearth-flow/.github/actions/setup-engine-ci@plateau5
+      - uses: dtolnay/rust-toolchain@2ea1b3bdd0261867664fd125505456a7b9c3385c # 1.93.1
         with:
-          rust-components: clippy, rustfmt
-          tools: cargo-make,taplo-cli
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: engine
+          shared-key: engine-ci
+      - uses: taiki-e/install-action@74e87cbfa15a59692b158178d8905a61bf6fca95 # v2.75.20
+        with:
+          tool: cargo-make,taplo-cli
       - name: Lint
         working-directory: engine
         run: |
@@ -286,6 +292,27 @@ jobs:
             ${{ env.WORKER_IMAGE_NAME_GCP }}
           cache-from: type=gha,scope=flow-worker
           cache-to: type=gha,mode=max,scope=flow-worker
+
+  upload_actions_schema:
+    needs: [deploy_api, deploy_worker]
+    runs-on: ubuntu-latest
+    environment: dev
+    if: ${{ inputs.only_policies != 'true' && github.event.repository.full_name == 'eukarya-inc/PLATEAU-VIEW' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: ${{ env.FLOW_REPO }}
+          ref: ${{ env.FLOW_BRANCH }}
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Upload actions schema to GCS
+        run: gsutil -m cp engine/schema/actions*.json gs://${{ vars.REEARTH_FLOW_GCS_BUCKET_NAME }}/actions/
 
   update-policies:
     runs-on: ubuntu-latest
