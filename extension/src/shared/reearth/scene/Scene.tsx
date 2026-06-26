@@ -125,18 +125,10 @@ export const Scene: FC<SceneProps> = ({
   // are about to send (NOT the inputs) so we only push when the payload truly changes —
   // this also ignores churn in inputs (e.g. initialCamera) that don't affect the payload.
   const lastPropertySigRef = useRef<string | undefined>(undefined);
-  const pushCountRef = useRef(0);
   useEffect(() => {
     const pushIfChanged = (property: object, push: (p: never) => void) => {
       const sig = JSON.stringify(property);
       if (sig === lastPropertySigRef.current) return;
-      // A stable scene only pushes a couple of times. If it keeps pushing, the payload is
-      // genuinely unstable — log a few samples so the changing field can be identified.
-      pushCountRef.current += 1;
-      if (pushCountRef.current >= 3 && pushCountRef.current <= 8) {
-        // eslint-disable-next-line no-console
-        console.warn(`[plateau] scene property pushed ${pushCountRef.current}x`, property);
-      }
       lastPropertySigRef.current = sig;
       push(property as never);
     };
