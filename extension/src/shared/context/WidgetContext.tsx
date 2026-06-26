@@ -37,7 +37,6 @@ import {
   useDatasetAttributesURL,
   useCityGMLApiUrl,
   useTerrainUrl,
-  useTerrainNormal,
 } from "../states/environmentVariables";
 
 type Props = {
@@ -66,7 +65,6 @@ type Props = {
   customPedestrian?: CameraPosition;
   customSiteUrl?: string;
   terrainUrl?: string;
-  terrainNormal?: boolean;
   // Notification setting
   isEnable?: boolean;
   content?: string;
@@ -98,7 +96,6 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   customPedestrian,
   customSiteUrl,
   terrainUrl,
-  terrainNormal,
   geojsonURL,
   isEnable,
   content,
@@ -121,7 +118,7 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   // has the value and the widgets that don't endlessly write value/undefined back over each
   // other — an infinite atom ping-pong that re-renders the whole map every frame. This bit
   // us with terrainUrl: it manifested as an endless terrain reload loop (overrideProperty
-  // fired ~28x/second). See the terrainUrl/terrainNormal effects below for the correct shape.
+  // fired ~28x/second). See the terrainUrl effect below for the correct shape.
   const [hideFeedbackState, setHideFeedbackState] = useHideFeedback();
   useEffect(() => {
     if (hideFeedback !== undefined && hideFeedback !== hideFeedbackState) {
@@ -237,22 +234,15 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
 
   // Only write when this widget actually carries a value. Every widget mounts its own
   // WidgetContext sharing these atoms, but only the widget that defines the terrain
-  // setting has terrainUrl/terrainNormal; without this guard the others keep writing
-  // `undefined` over the configured value, causing an endless atom ping-pong (and a
-  // matching overrideProperty / terrain reload loop). Mirrors the guarded settings above.
+  // setting has terrainUrl; without this guard the others keep writing `undefined` over
+  // the configured value, causing an endless atom ping-pong (and a matching
+  // overrideProperty / terrain reload loop). Mirrors the guarded settings above.
   const [terrainUrlState, setTerrainUrlState] = useTerrainUrl();
   useEffect(() => {
     if (terrainUrl && terrainUrl !== terrainUrlState) {
       setTerrainUrlState(terrainUrl);
     }
   }, [terrainUrl, terrainUrlState, setTerrainUrlState]);
-
-  const [terrainNormalState, setTerrainNormalState] = useTerrainNormal();
-  useEffect(() => {
-    if (terrainNormal != null && terrainNormal !== terrainNormalState) {
-      setTerrainNormalState(terrainNormal);
-    }
-  }, [terrainNormal, terrainNormalState, setTerrainNormalState]);
 
   const [datasetAttributesURLState, setDatasetAttributesURLState] = useDatasetAttributesURL();
   useEffect(() => {

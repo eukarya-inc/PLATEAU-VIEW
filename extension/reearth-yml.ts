@@ -170,13 +170,6 @@ const yml = {
                 description:
                   "Cesium ion の代わりに任意の quantized-mesh 地形 (layer.json) を読み込みます。CORS 許可が必要です。",
               },
-              {
-                id: "terrainNormal",
-                type: "bool",
-                title: "地形の法線を有効化",
-                description:
-                  "地形の陰影表現に必要な法線データを要求します（デフォルト有効）。法線非対応の地形を読み込む場合は無効にしてください。",
-              },
             ],
           },
         ],

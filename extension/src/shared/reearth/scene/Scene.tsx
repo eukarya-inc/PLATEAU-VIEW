@@ -2,7 +2,7 @@
 
 import { FC, useEffect, useMemo, useRef } from "react";
 
-import { useTerrainNormal, useTerrainUrl } from "../../states/environmentVariables";
+import { useTerrainUrl } from "../../states/environmentVariables";
 import { AmbientOcclusion, Antialias, CameraPosition, Tile, TileLabels } from "../types";
 import { isReEarthAPIv2 } from "../utils/reearth";
 
@@ -107,7 +107,6 @@ export const Scene: FC<SceneProps> = ({
   initialCamera,
 }) => {
   const [terrainUrl] = useTerrainUrl();
-  const [terrainNormal] = useTerrainNormal();
   // CesiumTerrainProvider.fromUrl appends "/layer.json" to the given URL, so we
   // must pass the terrain base URL (e.g. ".../terrain"), not the layer.json URL
   // itself. Otherwise it requests ".../terrain/layer.json/layer.json" (404),
@@ -208,7 +207,7 @@ export const Scene: FC<SceneProps> = ({
         terrain: {
           enabled: true,
           type: "cesiumion",
-          normal: terrainNormal ?? true,
+          normal: true,
           ...(terrainHeatmap
             ? {
                 elevationHeatMap: {
@@ -306,7 +305,7 @@ export const Scene: FC<SceneProps> = ({
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiODVhMmQ5OS1hOWZjLTQ3YmYtODlmNi1lNWUwY2MwOGUxYTMiLCJpZCI6MTQ5ODk3LCJpYXQiOjE2ODc5MzQ3NDN9.OG0mc3i7ZxGwHQjlMv3TRjiOvKWpzxglxmJRaUIykTY",
           terrainCesiumIonAsset: "4195264",
           ...(terrainBaseUrl ? { terrainCesiumIonUrl: terrainBaseUrl } : {}),
-          terrainNormal: terrainNormal ?? true,
+          terrainNormal: true,
           ...(terrainHeatmap
             ? {
                 heatmapType: "custom",
@@ -359,7 +358,6 @@ export const Scene: FC<SceneProps> = ({
     enterUnderground,
     hideUnderground,
     terrainBaseUrl,
-    terrainNormal,
   ]);
 
   useEffect(() => {
