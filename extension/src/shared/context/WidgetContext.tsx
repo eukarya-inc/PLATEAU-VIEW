@@ -105,6 +105,23 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   startTime,
   finishTime,
 }) => {
+  // === Widget prop → shared atom sync ===
+  // Each effect below mirrors one widget property into a global Jotai atom. IMPORTANT:
+  // every widget (Toolbar, Search, Inspector, ...) mounts its OWN WidgetContext, so all of
+  // these atoms are written by EVERY widget instance. A given setting is usually configured
+  // on only one widget; the other instances receive that prop as `undefined`.
+  //
+  // Therefore, when you add a new option here, you MUST guard the write with a presence
+  // check so instances that don't carry the value never clobber it:
+  //
+  //   if (value !== undefined && value !== state) setState(value);   // booleans / numbers
+  //   if (value && value !== state) setState(value);                 // strings / objects
+  //
+  // Skipping the guard (e.g. `if (value !== state) setState(value)`) makes the widget that
+  // has the value and the widgets that don't endlessly write value/undefined back over each
+  // other — an infinite atom ping-pong that re-renders the whole map every frame. This bit
+  // us with terrainUrl: it manifested as an endless terrain reload loop (overrideProperty
+  // fired ~28x/second). See the terrainUrl/terrainNormal effects below for the correct shape.
   const [hideFeedbackState, setHideFeedbackState] = useHideFeedback();
   useEffect(() => {
     if (hideFeedback !== undefined && hideFeedback !== hideFeedbackState) {
@@ -218,16 +235,21 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
     }
   }, [geojsonURL, geojsonURLState, setPlateauGeojsonUrlState]);
 
+  // Only write when this widget actually carries a value. Every widget mounts its own
+  // WidgetContext sharing these atoms, but only the widget that defines the terrain
+  // setting has terrainUrl/terrainNormal; without this guard the others keep writing
+  // `undefined` over the configured value, causing an endless atom ping-pong (and a
+  // matching overrideProperty / terrain reload loop). Mirrors the guarded settings above.
   const [terrainUrlState, setTerrainUrlState] = useTerrainUrl();
   useEffect(() => {
-    if (terrainUrl !== terrainUrlState) {
+    if (terrainUrl && terrainUrl !== terrainUrlState) {
       setTerrainUrlState(terrainUrl);
     }
   }, [terrainUrl, terrainUrlState, setTerrainUrlState]);
 
   const [terrainNormalState, setTerrainNormalState] = useTerrainNormal();
   useEffect(() => {
-    if (terrainNormal !== terrainNormalState) {
+    if (terrainNormal != null && terrainNormal !== terrainNormalState) {
       setTerrainNormalState(terrainNormal);
     }
   }, [terrainNormal, terrainNormalState, setTerrainNormalState]);
