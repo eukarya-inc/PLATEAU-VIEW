@@ -612,23 +612,81 @@ The default `must-revalidate` ensures that expired cache entries are always reva
 
 ## Requirements
 
-- COG files must be in **EPSG:4326 (WGS84)** projection
+- COG files must be in a **supported CRS** — geographic degrees (WGS84 4326, JGD2011 6668, JGD2000 4612) or Web Mercator meters (3857, 3785). See [COG Layer](#cog-layer) for the full matrix.
 - COG files should have internal tiling and overviews for best performance
 
 ### Creating COG Files
 
-Using GDAL:
+#### Choosing the CRS: it's really a resampling-pipeline decision
+
+Picking the COG's CRS isn't a standalone choice — it's a question of **where you
+resample and how to avoid resampling twice**. Every reprojection that changes the
+pixel grid is one generation of quality loss, and **the per-tile resample from COG
+buffer to the 256×256 output happens no matter what** (it's inherent to tile
+serving). So the goal is: do any *grid-changing* reprojection **once, offline, at
+build time** with a good kernel, and land the COG on the grid the data will
+ultimately be consumed on.
+
+For this server the final display grid is **Web Mercator**, which drives the rule:
+
+| Source CRS | Recommended COG CRS | Why |
+|------------|---------------------|-----|
+| Already 3857 | **Keep 3857** | Zero grid-changing resamples at build; serve-time tile fit is an exact axis-aligned scale (no latitude distortion). |
+| Already 4326 / 6668 | **Keep as-is** | Don't reproject to "normalize" — the server treats 6668 as 4326 (sub-pixel datum shift), so a warp would only add loss. Serve-time does the degree→tile mapping (a mild linear-in-latitude approximation, negligible at city zooms). |
+| Some other projection (UTM, JGD2011 **plane rectangular** 6677…, …) | **Reproject straight to 3857** | You must reproject anyway (these aren't accepted). Going to 3857 collapses the build reproject *and* the inevitable serve resample into effectively one clean step — the second step degrades to same-grid scaling. Reprojecting to 4326 instead leaves two *different* grids (lat/lon then mercator) = two lossy passes. |
+
+Rule of thumb: **serve-only asset → Web Mercator; data asset reused in GIS/analysis
+→ WGS84** (Mercator distorts area/distance, ~1.22× scale at Japan's latitude).
+
+#### Web Mercator: align to the XYZ grid for 1:1 overview selection
+
+The server picks which overview (IFD) to read by resolution ratio
+(`src/cog/reader.rs::select_best_ifd`): for a requested tile it computes
+`required_res = tile_size / tile_extent` and reads the smallest overview whose
+resolution clears `required_res × 1.5`. If the COG's overview levels line up with
+the **standard XYZ zoom resolutions** — Web Mercator pixel size at zoom `z` is
+`(2 × 20037508.34) / (2^z × tile_size)` — then each requested zoom maps to exactly
+one overview and `resample_to_tile` copies buffer pixels **1:1** to the output:
+sharpest result, least bytes fetched, lowest CPU.
+
+The COG driver's `TILING_SCHEME` does all of this — reproject to EPSG:3857, align
+the origin to tile-matrix boundaries, set the block size, and build a
+zoom-aligned overview pyramid — in a single pass (think "gdal2tiles baked into a
+COG"):
 
 ```bash
-# Convert GeoTIFF to COG
-gdal_translate input.tif output.tif \
+gdal_translate -of COG \
+  -co TILING_SCHEME=GoogleMapsCompatible \
+  -co BLOCKSIZE=256 \
+  -co RESAMPLING=cubic \
+  -co ZOOM_LEVEL_STRATEGY=AUTO \
+  -co COMPRESS=DEFLATE \
+  source.tif out_cog.tif
+```
+
+- `BLOCKSIZE` must match the server's `tile_size` (default **256**; use 512 only if you run the server at 512).
+- `ZOOM_LEVEL_STRATEGY`: `LOWER` avoids upsampling the source, `UPPER` preserves all detail, `AUTO` rounds to the nearest zoom.
+- `RESAMPLING`: `cubic`/`bilinear` for continuous imagery, `nearest`/`mode` for categorical rasters.
+- **DEM overlays are the exception** — build overviews with `nearest` and mosaic with `-r near` to avoid nodata-blend spikes. See [Preparing COG DEM overlays](#preparing-cog-dem-overlays).
+
+#### Geographic (WGS84 / JGD2011) — plain COG
+
+When the source is already geographic, skip the reprojection and just wrap it as a
+COG with internal tiling and overviews:
+
+```bash
+gdal_translate input.tif output_cog.tif \
   -of COG \
   -co COMPRESS=DEFLATE \
   -co OVERVIEW_RESAMPLING=BILINEAR
+```
 
-# Reproject to EPSG:4326 if needed
-gdalwarp -t_srs EPSG:4326 input.tif output_4326.tif
-gdal_translate output_4326.tif output_cog.tif -of COG
+If the source is in some other CRS and you want a geographic (rather than Web
+Mercator) COG, reproject **once** with a quality kernel — don't chain warps:
+
+```bash
+gdalwarp -t_srs EPSG:4326 -r cubic input.tif output_4326.tif
+gdal_translate output_4326.tif output_cog.tif -of COG -co COMPRESS=DEFLATE
 ```
 
 ## Development
