@@ -18,7 +18,7 @@ use url::Url;
 use xxhash_rust::xxh64::xxh64;
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
-use crate::cog::{CogReader, TileBounds};
+use crate::cog::{CogCrs, CogReader, TileBounds, mercator_tile_bounds};
 
 /// How long to wait before retrying a failed `upstream_etag` HEAD. A transient
 /// network blip during `preload()` shouldn't poison the per-tile etag for the
@@ -193,17 +193,23 @@ impl DemProvider for CogDemSource {
             return Err(DemError::OutOfRange);
         }
         let reader = self.reader().await?;
-        let bounds = mercator_xyz_to_bounds(z, x, y);
+        // WGS84 bounds of the requested tile, for the overlap short-circuit.
+        let wgs84_tile = mercator_xyz_to_bounds(z, x, y);
 
         // Short-circuit when the COG bounds don't overlap this tile.
-        if let Some(cog_bounds) = reader.bounds() {
+        if let Some(cog_bounds) = reader.wgs84_bounds() {
             let g = GeoBounds::new(
                 cog_bounds.west,
                 cog_bounds.south,
                 cog_bounds.east,
                 cog_bounds.north,
             );
-            let req = GeoBounds::new(bounds.west, bounds.south, bounds.east, bounds.north);
+            let req = GeoBounds::new(
+                wgs84_tile.west,
+                wgs84_tile.south,
+                wgs84_tile.east,
+                wgs84_tile.north,
+            );
             if !g.intersects(&req) {
                 return Ok(DemTile {
                     elevations: vec![f64::NAN; (tile_size * tile_size) as usize],
@@ -211,6 +217,12 @@ impl DemProvider for CogDemSource {
                 });
             }
         }
+
+        // Sample in the COG's native CRS (exact for Web Mercator COGs).
+        let bounds = match reader.crs() {
+            CogCrs::Geographic => wgs84_tile,
+            CogCrs::WebMercator => mercator_tile_bounds(z as u32, x, y),
+        };
 
         // Prefer the explicit `nodata` from config, but fall back to the
         // COG's own `GDAL_NODATA` tag. Without this fallback, sentinel pixels
@@ -253,7 +265,7 @@ impl DemProvider for CogDemSource {
 
     async fn preload(&self) -> Result<(), DemError> {
         let reader = self.reader().await?;
-        if let Some(b) = reader.bounds() {
+        if let Some(b) = reader.wgs84_bounds() {
             let _ = self
                 .bounds_cell
                 .set(Some(GeoBounds::new(b.west, b.south, b.east, b.north)));

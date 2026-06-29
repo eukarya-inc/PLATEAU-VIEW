@@ -9,7 +9,7 @@ mod interpolate;
 mod reader;
 mod resample;
 
-pub use bounds::TileBounds;
+pub use bounds::{CogCrs, TileBounds, mercator_tile_bounds};
 pub use decode::MAX_PHYSICAL_ELEVATION_M;
 pub use error::CogError;
 pub use reader::CogReader;

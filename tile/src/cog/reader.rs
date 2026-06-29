@@ -13,7 +13,7 @@ use async_tiff::{TagValue, tags::Tag};
 use object_store::{ObjectStore, path::Path as ObjectPath};
 
 use super::{
-    bounds::TileBounds,
+    bounds::{CogCrs, TileBounds},
     decode::{decode_elevation, decode_rgba, get_pixel_values},
     error::CogError,
     interpolate::{bilinear_f64, bilinear_rgba},
@@ -26,7 +26,10 @@ pub struct CogReader {
     tiff: TIFF,
     store: Arc<dyn ObjectStore>,
     path: ObjectPath,
+    /// Bounds in the COG's native CRS units (degrees or Web Mercator meters).
     bounds: Option<TileBounds>,
+    /// Coordinate reference system the bounds and pixel grid live in.
+    crs: CogCrs,
     samples_per_pixel: u16,
 }
 
@@ -46,10 +49,10 @@ impl CogReader {
             .await
             .map_err(|e| CogError::OpenError(format!("{e:?}")))?;
 
-        // Validate CRS
-        Self::check_crs(&tiff)?;
+        // Detect and validate CRS
+        let crs = Self::detect_crs(&tiff)?;
 
-        // Extract bounds from GeoTIFF metadata
+        // Extract bounds from GeoTIFF metadata (in the COG's native CRS units)
         let bounds = Self::extract_bounds(&tiff);
 
         // Get samples per pixel
@@ -80,12 +83,16 @@ impl CogReader {
             store,
             path,
             bounds,
+            crs,
             samples_per_pixel,
         })
     }
 
     /// Read only the first IFD to extract bounds (much faster than reading all IFDs).
     /// Use this for preloading bounds without reading the entire metadata.
+    ///
+    /// The returned bounds are always in **WGS84 degrees** (reprojected when the
+    /// COG is Web Mercator), so callers can intersection-test against XYZ tiles.
     pub async fn read_bounds_only(
         store: Arc<dyn ObjectStore>,
         path: ObjectPath,
@@ -107,31 +114,31 @@ impl CogReader {
             return Err(CogError::NoIfd);
         };
 
-        // Check CRS
-        Self::check_crs_ifd(&ifd)?;
+        // Detect and validate CRS
+        let crs = Self::detect_crs_ifd(&ifd)?;
 
-        // Extract bounds
-        Ok(Self::extract_bounds_from_ifd(&ifd))
+        // Extract bounds and normalize to WGS84 degrees for the caller.
+        Ok(Self::extract_bounds_from_ifd(&ifd).map(|b| match crs {
+            CogCrs::Geographic => b,
+            CogCrs::WebMercator => b.mercator_to_wgs84(),
+        }))
     }
 
-    fn check_crs(tiff: &TIFF) -> Result<(), CogError> {
+    fn detect_crs(tiff: &TIFF) -> Result<CogCrs, CogError> {
         let ifd = tiff.ifds().first().ok_or(CogError::NoIfd)?;
-        Self::check_crs_ifd(ifd)
+        Self::detect_crs_ifd(ifd)
     }
 
-    fn check_crs_ifd(ifd: &ImageFileDirectory) -> Result<(), CogError> {
+    fn detect_crs_ifd(ifd: &ImageFileDirectory) -> Result<CogCrs, CogError> {
         if let Some(geo_keys) = ifd.geo_key_directory()
             && let Some(epsg) = geo_keys.epsg_code()
         {
-            if epsg == 4326 {
-                return Ok(());
-            }
-            return Err(CogError::UnsupportedCrs(epsg));
+            return CogCrs::from_epsg(epsg).ok_or(CogError::UnsupportedCrs(epsg));
         }
 
         // If no EPSG code found, assume WGS84
         tracing::warn!("No EPSG code found in GeoTIFF metadata, assuming WGS84");
-        Ok(())
+        Ok(CogCrs::Geographic)
     }
 
     fn extract_bounds(tiff: &TIFF) -> Option<TileBounds> {
@@ -163,9 +170,27 @@ impl CogReader {
         }
     }
 
-    /// Get the geographic bounds of the COG.
+    /// Get the COG bounds in the COG's **native CRS units** (degrees for
+    /// geographic, Web Mercator meters for Web Mercator). Used internally for
+    /// sampling against the matching native requested-tile bounds.
     pub fn bounds(&self) -> Option<&TileBounds> {
         self.bounds.as_ref()
+    }
+
+    /// The COG's coordinate reference system. Callers use this to build the
+    /// requested-tile bounds in the same space the COG was sampled in.
+    pub fn crs(&self) -> CogCrs {
+        self.crs
+    }
+
+    /// Get the COG bounds normalized to **WGS84 degrees**, regardless of the
+    /// COG's native CRS. Use for intersection tests against XYZ tiles and for
+    /// reporting the extent to the catalog/API.
+    pub fn wgs84_bounds(&self) -> Option<TileBounds> {
+        self.bounds.map(|b| match self.crs {
+            CogCrs::Geographic => b,
+            CogCrs::WebMercator => b.mercator_to_wgs84(),
+        })
     }
 
     /// Read the `GDAL_NODATA` tag (TIFF tag 42113) from the first IFD.
@@ -249,6 +274,11 @@ impl CogReader {
     }
 
     /// Read a tile as RGBA image data.
+    ///
+    /// `bounds` must be in the COG's **native CRS** (see [`Self::crs`]): degrees
+    /// for geographic COGs, Web Mercator meters for Web Mercator COGs. Build it
+    /// with [`crate::tile::xyz_to_bounds`] or
+    /// [`crate::cog::mercator_tile_bounds`] accordingly.
     pub async fn read_tile_rgba(
         &self,
         bounds: &TileBounds,
@@ -393,6 +423,9 @@ impl CogReader {
     }
 
     /// Read a tile as elevation (f64) data.
+    ///
+    /// `bounds` must be in the COG's **native CRS** (see [`Self::crs`]): degrees
+    /// for geographic COGs, Web Mercator meters for Web Mercator COGs.
     pub async fn read_tile_elevation(
         &self,
         bounds: &TileBounds,
