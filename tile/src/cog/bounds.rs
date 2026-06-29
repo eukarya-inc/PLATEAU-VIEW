@@ -58,13 +58,13 @@ pub fn mercator_y_to_lat(y: f64) -> f64 {
 /// min/max edges along each axis.
 #[derive(Debug, Clone, Copy)]
 pub struct TileBounds {
-    /// Western longitude (degrees)
+    /// Western edge (longitude degrees, or Web Mercator easting meters)
     pub west: f64,
-    /// Southern latitude (degrees)
+    /// Southern edge (latitude degrees, or Web Mercator northing meters)
     pub south: f64,
-    /// Eastern longitude (degrees)
+    /// Eastern edge (longitude degrees, or Web Mercator easting meters)
     pub east: f64,
-    /// Northern latitude (degrees)
+    /// Northern edge (latitude degrees, or Web Mercator northing meters)
     pub north: f64,
 }
 

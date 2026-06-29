@@ -15,7 +15,7 @@ pub enum CogError {
     #[error("No IFD available")]
     NoIfd,
     #[error(
-        "Unsupported CRS: expected geographic (EPSG:4326/6668) or Web Mercator (EPSG:3857), got EPSG:{0}"
+        "Unsupported CRS: expected geographic degrees (WGS84 4326, JGD2011 6668, JGD2000 4612) or Web Mercator meters (3857, 3785), got EPSG:{0}"
     )]
     UnsupportedCrs(u16),
     #[error("Invalid URL: {0}")]
