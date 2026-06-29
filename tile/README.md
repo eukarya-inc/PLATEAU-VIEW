@@ -432,6 +432,13 @@ Fetches tiles from a remote XYZ tile server.
 
 Generates tiles from a Cloud Optimized GeoTIFF file.
 
+Supported CRS (from the GeoTIFF EPSG key):
+
+- **Geographic degrees** — WGS84 (EPSG:4326) and JGD2011 / JGD2000 geographic (EPSG:6668 / 4612). The latter are treated as WGS84; the datum shift over Japan is sub-pixel, so the error is negligible. A COG with no EPSG key is assumed to be WGS84.
+- **Web Mercator meters** — EPSG:3857 (and the legacy `3785` alias). Since XYZ tiles *are* Web Mercator, requests map to a perfect square in this space and sampling is exact (no latitude distortion). Bounds are reprojected to WGS84 only for catalog/intersection bookkeeping.
+
+Any other CRS (e.g. a JGD2011 *plane rectangular* system in meters, or UTM) is rejected at open time.
+
 ```json
 {
   "type": "cog",

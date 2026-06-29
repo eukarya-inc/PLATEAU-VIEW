@@ -14,7 +14,9 @@ pub enum CogError {
     TiffError(String),
     #[error("No IFD available")]
     NoIfd,
-    #[error("Unsupported CRS: expected WGS84 (EPSG:4326), got EPSG:{0}")]
+    #[error(
+        "Unsupported CRS: expected geographic degrees (WGS84 4326, JGD2011 6668, JGD2000 4612) or Web Mercator meters (3857, 3785), got EPSG:{0}"
+    )]
     UnsupportedCrs(u16),
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),

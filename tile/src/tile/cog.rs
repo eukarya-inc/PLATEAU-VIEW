@@ -15,7 +15,7 @@ use super::{
     source::{TileError, TileSource, single_etag_key},
 };
 use crate::{
-    cog::{CogReader, TileBounds},
+    cog::{CogCrs, CogReader, TileBounds, mercator_tile_bounds},
     config::NoDataConfig,
 };
 
@@ -93,10 +93,10 @@ impl CogTileSource {
         let (store, path) = self.create_object_store().await?;
         let reader = CogReader::open(store, path).await?;
 
-        // Cache bounds
-        if let Some(b) = reader.bounds() {
+        // Cache bounds in WGS84 (intersection tests run against WGS84 XYZ tiles).
+        if let Some(b) = reader.wgs84_bounds() {
             let mut bounds = self.bounds.write().await;
-            *bounds = Some(*b);
+            *bounds = Some(b);
         }
 
         *reader_guard = Some(reader);
@@ -211,13 +211,14 @@ impl TileSource for CogTileSource {
         // Ensure reader is initialized
         self.ensure_reader().await?;
 
-        let tile_bounds = xyz_to_bounds(z, x, y);
+        // WGS84 bounds for the intersection short-circuit (cached bounds are WGS84).
+        let wgs84_bounds = xyz_to_bounds(z, x, y);
 
         // Check if tile intersects COG bounds
         {
             let bounds = self.bounds.read().await;
             if let Some(cog_bounds) = &*bounds
-                && !cog_bounds.intersects(&tile_bounds)
+                && !cog_bounds.intersects(&wgs84_bounds)
             {
                 tracing::debug!(
                     url = %self.url,
@@ -231,7 +232,7 @@ impl TileSource for CogTileSource {
         tracing::debug!(
             url = %self.url,
             z = z, x = x, y = y,
-            tile_bounds = ?tile_bounds,
+            tile_bounds = ?wgs84_bounds,
             "Reading COG tile"
         );
 
@@ -240,6 +241,13 @@ impl TileSource for CogTileSource {
         let reader = reader_guard
             .as_ref()
             .ok_or_else(|| TileError::Internal("Reader not initialized".to_string()))?;
+
+        // Build the requested-tile bounds in the COG's native CRS so the linear
+        // sampling matches the COG's pixel grid (exact for Web Mercator).
+        let tile_bounds = match reader.crs() {
+            CogCrs::Geographic => wgs84_bounds,
+            CogCrs::WebMercator => mercator_tile_bounds(z, x, y),
+        };
 
         let rgba_data = reader
             .read_tile_rgba(&tile_bounds, self.tile_size, self.nodata.as_ref())
