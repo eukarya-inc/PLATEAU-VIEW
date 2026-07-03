@@ -72,6 +72,13 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
 - Each pod refreshes every COG overlay's upstream ETag every **5 minutes** (single HEAD per overlay), so a CMS-side file swap that doesn't bump the config hash is picked up automatically — no `/reload` needed. The pod's own memory and persistent caches invalidate on ETag mismatch; downstream HTTP caches still honour their `Cache-Control: max-age` so end-users see the new tiles after at most one CDN TTL.
 
+### Supported COG tile compressions
+
+COG tiles are decoded via `async_tiff`, whose default decoders cover **uncompressed, Deflate, LZW, JPEG, and ZSTD**. On top of those the server also registers a **WebP** decoder (`src/cog/webp.rs`), so ortho-imagery COGs built with `-co COMPRESS=WEBP` (GDAL's private TIFF compression tag `50001`) decode correctly. Recommended choices:
+
+- **DEM (float32 elevation):** `ZSTD` (or `DEFLATE`) with `PREDICTOR=3` — lossless, see below.
+- **Ortho (RGB imagery):** `WEBP` or `JPEG` — both are decodable and give a good size/quality trade-off for aerial photography.
+
 ### Preparing COG DEM overlays
 
 When you build a COG to use as a `dem` overlay, **how you generate the overviews matters a lot at low zooms**. The default `gdal_translate -of COG` pipeline uses `average` resampling for overviews — which, even when nodata-aware, has a footprint-growing behavior: any 2×2 group with *at least one* valid pixel keeps a valid value in the parent. After five levels (×32 downsample) a single 5 m land pixel in the middle of the sea has spread to a ~160 m square block of "land" surrounding it.
