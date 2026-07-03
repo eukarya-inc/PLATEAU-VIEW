@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use async_tiff::{
     ImageFileDirectory, TIFF,
-    decoder::DecoderRegistry,
     metadata::{TiffMetadataReader, cache::ReadaheadMetadataCache},
     reader::ObjectReader,
     tags::SampleFormat,
@@ -18,6 +17,7 @@ use super::{
     error::CogError,
     interpolate::{bilinear_f64, bilinear_rgba},
     resample::{TileRange, resample_to_tile},
+    webp::decoder_registry,
 };
 use crate::config::NoDataConfig;
 
@@ -332,7 +332,7 @@ impl CogReader {
 
         // Fetch and decode tiles
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let decoder_registry = DecoderRegistry::default();
+        let decoder_registry = decoder_registry();
 
         for ty in tile_range.y_start..tile_range.y_end {
             for tx in tile_range.x_start..tile_range.x_end {
@@ -471,7 +471,7 @@ impl CogReader {
         let mut pixel_buffer: Vec<f64> = vec![f64::NAN; buffer_width * buffer_height];
 
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let decoder_registry = DecoderRegistry::default();
+        let decoder_registry = decoder_registry();
 
         for ty in tile_range.y_start..tile_range.y_end {
             for tx in tile_range.x_start..tile_range.x_end {
