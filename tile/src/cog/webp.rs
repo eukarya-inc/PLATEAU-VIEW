@@ -16,7 +16,6 @@ use async_tiff::decoder::{Decoder, DecoderRegistry};
 use async_tiff::error::AsyncTiffResult;
 use async_tiff::tags::{CompressionMethod, PhotometricInterpretation};
 use bytes::Bytes;
-use image::DynamicImage;
 
 /// TIFF compression tag that GDAL/libtiff use for WebP-compressed tiles
 /// (`COMPRESSION_WEBP`).
@@ -36,16 +35,18 @@ impl Decoder for WebpDecoder {
         let img = image::load_from_memory_with_format(&buffer, image::ImageFormat::WebP)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-        // Return interleaved samples matching the source channel count so the
-        // caller's `samples_per_pixel`-based unpacking (see
-        // [`crate::cog::decode::decode_rgba`]) lines up: RGB WebP -> 3 bytes/px,
-        // RGBA WebP -> 4 bytes/px. Any other colour type is normalised to RGBA.
-        let raw = match img {
-            DynamicImage::ImageRgb8(b) => b.into_raw(),
-            DynamicImage::ImageRgba8(b) => b.into_raw(),
-            other => other.into_rgba8().into_raw(),
-        };
-        Ok(Bytes::from(raw))
+        // **Always normalise to RGBA (4 bytes/px).**
+        //
+        // GDAL/libtiff writes a 4-band RGBA WebP COG tile-by-tile: fully opaque
+        // tiles are emitted as *RGB* WebP (alpha dropped), while tiles with real
+        // transparency are emitted as *RGBA* WebP. `image` therefore returns a
+        // mix of `Rgb8` (3 B/px) and `Rgba8` (4 B/px) across tiles of the same
+        // COG. The IFD's `SamplesPerPixel` is fixed (=4), so the caller unpacks
+        // every tile as 4 B/px ([`crate::cog::decode::decode_rgba`]); returning a
+        // 3 B/px tile shifts the row stride and corrupts the tile. Normalising to
+        // RGBA (opaque tiles get alpha=255) keeps every tile at 4 B/px and in
+        // step with the IFD. (WebP COGs consumed here are RGBA ortho imagery.)
+        Ok(Bytes::from(img.into_rgba8().into_raw()))
     }
 }
 
@@ -66,12 +67,14 @@ pub fn decoder_registry() -> DecoderRegistry {
 mod tests {
     use super::*;
     use async_tiff::tags::PhotometricInterpretation;
-    use image::{ImageFormat, Rgb, RgbImage};
+    use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
     use std::io::Cursor;
 
     #[test]
-    fn decodes_webp_to_interleaved_rgb() {
-        // Build a tiny image and encode it as (lossless) WebP in-memory.
+    fn decodes_rgb_webp_to_rgba() {
+        // Build a tiny RGB image and encode it as (lossless) WebP in-memory.
+        // GDAL emits opaque tiles as RGB WebP even inside a 4-band COG, so the
+        // decoder must pad them to RGBA to stay in step with SamplesPerPixel=4.
         let mut img = RgbImage::new(2, 2);
         img.put_pixel(0, 0, Rgb([10, 20, 30]));
         img.put_pixel(1, 0, Rgb([40, 50, 60]));
@@ -91,9 +94,10 @@ mod tests {
             )
             .expect("decode webp");
 
-        // Lossless round-trip: 2x2 RGB -> 12 interleaved bytes, values preserved.
-        assert_eq!(decoded.len(), 2 * 2 * 3);
-        assert_eq!(&decoded[..], img.as_raw().as_slice());
+        // Always RGBA: 2x2 -> 16 bytes, RGB preserved (lossless), alpha=255.
+        assert_eq!(decoded.len(), 2 * 2 * 4);
+        let expected: Vec<u8> = img.pixels().flat_map(|p| [p[0], p[1], p[2], 255]).collect();
+        assert_eq!(&decoded[..], expected.as_slice());
     }
 
     #[test]
