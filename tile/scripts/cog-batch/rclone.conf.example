@@ -1,0 +1,22 @@
+# cp rclone.conf.example rclone.conf して値を埋める。
+# src = 原本バックアップ(読取) / dst = 配信用COG(書込)。同一アカウントなら同じ endpoint。
+# ⚠️ dst 用トークンは plateau-terrain / plateau-ortho に **書込み権限**が必要
+#    （Cloudflare ダッシュボード → R2 → Manage API Tokens で S3 credentials を発行）。
+#    バケット作成は: npx wrangler r2 bucket create plateau-terrain
+#                    npx wrangler r2 bucket create plateau-ortho
+
+[src]
+type = s3
+provider = Cloudflare
+access_key_id = <READ token access key>
+secret_access_key = <READ token secret>
+endpoint = https://132bd56aa9a51d5aa8a09491bb903503.r2.cloudflarestorage.com
+acl = private
+
+[dst]
+type = s3
+provider = Cloudflare
+access_key_id = <WRITE token access key (plateau-terrain/plateau-ortho)>
+secret_access_key = <WRITE token secret>
+endpoint = https://132bd56aa9a51d5aa8a09491bb903503.r2.cloudflarestorage.com
+acl = private
