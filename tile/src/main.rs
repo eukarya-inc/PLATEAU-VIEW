@@ -142,20 +142,37 @@ async fn main() -> Result<()> {
         .unwrap_or(60);
     let config_ttl = Duration::from_secs(config_ttl_secs);
 
-    let config_manager = Arc::new(match config_url.as_deref() {
-        Some(url) => {
-            tracing::info!("Loading configuration from {}", url);
-            ConfigManager::new(url, config_ttl)
-                .await
-                .context("Failed to load configuration")?
-        }
-        None => {
-            tracing::info!(
-                "CONFIG_URL not set; starting with built-in terrain endpoint only \
-                 (set CONFIG_URL to enable /tiles/... sources)"
-            );
-            ConfigManager::empty()
-        }
+    // CONFIG_URL may list several comma-separated config URLs; their sources are
+    // merged in order (earlier wins on a name collision). This lets independent
+    // authorities each publish a config — e.g. the CMS-derived config plus a
+    // Cloudflare Worker that enumerates R2 COGs — without one having to know the
+    // other's contents.
+    let config_urls: Vec<String> = config_url
+        .as_deref()
+        .map(|s| {
+            s.split(',')
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let config_manager = Arc::new(if config_urls.is_empty() {
+        tracing::info!(
+            "CONFIG_URL not set; starting with built-in terrain endpoint only \
+             (set CONFIG_URL to enable /tiles/... sources)"
+        );
+        ConfigManager::empty()
+    } else {
+        tracing::info!(
+            "Loading configuration from {} URL(s): {}",
+            config_urls.len(),
+            config_urls.join(", ")
+        );
+        ConfigManager::new(&config_urls, config_ttl)
+            .await
+            .context("Failed to load configuration")?
     });
 
     if config_ttl_secs == 0 {
