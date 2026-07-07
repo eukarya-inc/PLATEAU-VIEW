@@ -249,15 +249,15 @@ function demSource(
  * `CONFIG_URL` and render the R2 COGs on demand. The COGs never move — the tile
  * server reads them straight from this Worker over HTTP Range.
  *
- * Modes (query params):
- * - **raster (default)** — for ortho. One `cog` source per group (first key
- *   segment, e.g. acquisition year): `<dataset>-<group>` (e.g. `ortho-2024`),
- *   each a footprint mosaic. `?source=<name>` instead stacks all COGs into one
- *   source with layer `order` = numeric group (newer on top).
- * - **`?type=dem`** — for terrain. A single `type: "dem"` source (name from
- *   `?name=`, default `<dataset>`) stacking every COG bottom→top via `demPriority`
- *   (`sea` < `base/dem10` < `dem5` < `dem1` < `patch`). No per-layer `nodata` —
- *   the tile server reads each COG's own NoData tag.
+ * `isDem` (from the `DEM_DATASETS` config, e.g. terrain) selects the mode:
+ * - **raster** (ortho) — one `cog` source per group (first key segment, e.g.
+ *   acquisition year): `<dataset>-<group>` (e.g. `ortho-2024`), each a footprint
+ *   mosaic. `?source=<name>` instead stacks all COGs into one source with layer
+ *   `order` = numeric group (newer on top).
+ * - **dem** (terrain) — a single `type: "dem"` source (name from `?name=`,
+ *   default `dem` = the tile server's default DEM source) stacking every COG
+ *   bottom→top via `demPriority` (`sea` < `base/dem10` < `dem5` < `dem1` <
+ *   `patch`). No per-layer `nodata` — the tile server reads each COG's own tag.
  *
  * `?prefix=a/,b/` scopes enumeration to those key prefixes (comma-separated);
  * defaults to `base/,patch/,sea/` in dem mode (skips the quantized-mesh mirror)
@@ -271,6 +271,7 @@ export async function tileConfig(
   params: URLSearchParams,
   cors: Headers,
   method: string,
+  isDem: boolean,
 ): Promise<Response> {
   const headers = new Headers(cors);
   headers.set("content-type", "application/json; charset=utf-8");
@@ -279,8 +280,6 @@ export async function tileConfig(
   if (method === "HEAD") {
     return new Response(null, { status: 200, headers });
   }
-
-  const isDem = params.get("type") === "dem";
 
   const prefixParam = params.get("prefix");
   const prefixes =
@@ -300,7 +299,7 @@ export async function tileConfig(
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
   const sources = isDem
-    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || dataset)
+    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || "dem")
     : rasterSources(cogs, dataset, origin, params.get("source")?.trim() || null);
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.

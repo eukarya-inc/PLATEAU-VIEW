@@ -24,6 +24,9 @@ CORS_ALLOW_ORIGIN = "*"
 # First path segment -> R2 binding name. The handler resolves env[binding], so a
 # new dataset only needs an entry here plus a matching r2_buckets binding.
 PATH_BUCKETS = { terrain = "TERRAIN", ortho = "ORTHO" }
+# Datasets whose `config.json` emits a DEM overlay stack (type: "dem") rather
+# than raster sources. Comma-separated; no query param needed.
+DEM_DATASETS = "terrain"
 
 [observability]
 enabled = true

@@ -23,6 +23,21 @@ function pathBuckets(env: Env): Record<string, string> {
   return map && typeof map === "object" ? (map as Record<string, string>) : {};
 }
 
+/**
+ * Datasets whose COGs are DEM overlays (config.json emits a `type: "dem"` stack
+ * instead of raster sources). Config-driven via the `DEM_DATASETS` var, so no
+ * `?type=` query param is needed — `/terrain/config.json` just knows it's a DEM.
+ */
+function demDatasets(env: Env): string[] {
+  const raw = (env as unknown as Record<string, unknown>).DEM_DATASETS;
+  return typeof raw === "string"
+    ? raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : [];
+}
+
 /** Resolve the R2 bucket for a dataset segment (e.g. "terrain"), or null. */
 function bucketForDataset(env: Env, segment: string): { bucket: R2Bucket; name: string } | null {
   const bindingName = pathBuckets(env)[segment];
@@ -91,6 +106,7 @@ export default {
         url.searchParams,
         cors,
         request.method,
+        demDatasets(env).includes(segment),
       );
     }
 
