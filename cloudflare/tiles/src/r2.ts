@@ -131,6 +131,8 @@ interface TileCogLayer {
 }
 
 interface TileSource {
+  /** `"dem"` marks a CompositeDemProvider stack; omitted for raster overlays. */
+  type?: string;
   description: string;
   layers: TileCogLayer[];
 }
@@ -140,34 +142,17 @@ interface TileConfig {
   sources: Record<string, TileSource>;
 }
 
-/**
- * Emit a PLATEAU `/tile` config.json describing this dataset's COGs as `cog`
- * sources, so the tile server can be pointed at
- * `https://<host>/<dataset>/config.json` (as one entry in its comma-separated
- * `CONFIG_URL`) and render the R2 COGs on demand. The COGs never move — the tile
- * server reads them straight from this Worker over HTTP Range.
- *
- * COG keys are `<group>/<file>.tif` (for ortho, group = acquisition year).
- * Default: one source per group, named `<dataset>-<group>` (e.g. `ortho-2024`),
- * each a footprint mosaic of that group's COGs. Pass `?source=<name>` to stack
- * every COG into a single source instead; numeric groups become the layer
- * `order` so newer groups render on top.
- *
- * `version` is a cheap FNV-1a hash of every key+etag, so the tile server's
- * config revalidation picks up any added / changed / removed COG.
- */
-export async function tileConfig(
-  bucket: R2Bucket,
-  dataset: string,
-  origin: string,
-  params: URLSearchParams,
-  cors: Headers,
-): Promise<Response> {
-  // Enumerate every COG in the bucket (paginated — no delimiter, full recurse).
-  const cogs: { key: string; etag: string }[] = [];
+interface Cog {
+  key: string;
+  etag: string;
+}
+
+/** List every `.tif`/`.tiff` under `prefix` (paginated). Empty prefix = whole bucket. */
+async function listCogs(bucket: R2Bucket, prefix: string): Promise<Cog[]> {
+  const cogs: Cog[] = [];
   let cursor: string | undefined;
   do {
-    const res = await bucket.list({ cursor, limit: 1000 });
+    const res = await bucket.list({ prefix: prefix || undefined, cursor, limit: 1000 });
     for (const o of res.objects) {
       if (o.key.endsWith(".tif") || o.key.endsWith(".tiff")) {
         cogs.push({ key: o.key, etag: o.etag });
@@ -175,21 +160,36 @@ export async function tileConfig(
     }
     cursor = res.truncated ? (res.cursor ?? undefined) : undefined;
   } while (cursor);
+  return cogs;
+}
 
-  cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+/**
+ * Bottom→top paint priority for a terrain DEM overlay, from its key. Coarser and
+ * more general layers sit at the bottom; finer/more-specific win on top:
+ * `sea/` < `base/dem10` < `base/dem5` < `base/dem1` < `patch/`.
+ */
+function demPriority(key: string): number {
+  if (key.startsWith("sea/")) return 0;
+  const m = key.match(/^base\/dem(\d+)\//);
+  if (m) return 100 - Number(m[1]); // dem10 -> 90 (bottom) ... dem1 -> 99 (top of base)
+  if (key.startsWith("patch/")) return 200; // finest, frontmost
+  return 150;
+}
 
-  const layerFor = (key: string): TileCogLayer => ({
-    type: "cog",
-    url: `${origin}/${dataset}/${key}`,
-  });
-
+/** Raster sources: one per group (`<dataset>-<group>`), or one stacked source with `?source=`. */
+function rasterSources(
+  cogs: Cog[],
+  dataset: string,
+  origin: string,
+  single: string | null,
+): Record<string, TileSource> {
+  const url = (key: string) => `${origin}/${dataset}/${key}`;
   const sources: Record<string, TileSource> = {};
-  const single = params.get("source");
   if (single) {
     sources[single] = {
       description: `${dataset} COG mosaic (${cogs.length} COGs)`,
       layers: cogs.map((o) => {
-        const layer = layerFor(o.key);
+        const layer: TileCogLayer = { type: "cog", url: url(o.key) };
         const group = Number(o.key.split("/")[0]);
         if (Number.isFinite(group)) layer.order = group; // newer group on top
         return layer;
@@ -203,9 +203,87 @@ export async function tileConfig(
       (sources[name] ??= {
         description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
         layers: [],
-      }).layers.push(layerFor(o.key));
+      }).layers.push({ type: "cog", url: url(o.key) });
     }
   }
+  return sources;
+}
+
+/**
+ * A single `type: "dem"` source stacking every COG bottom→top (see `demPriority`).
+ * No per-layer `nodata` — the tile server reads each COG's own NoData tag.
+ */
+function demSource(
+  cogs: Cog[],
+  dataset: string,
+  origin: string,
+  name: string,
+): Record<string, TileSource> {
+  const ordered = [...cogs].sort(
+    (a, b) => demPriority(a.key) - demPriority(b.key) || (a.key < b.key ? -1 : 1),
+  );
+  return {
+    [name]: {
+      type: "dem",
+      description: `${dataset} DEM overlay stack (${cogs.length} COGs, bottom->top)`,
+      layers: ordered.map((o) => ({
+        type: "cog",
+        url: `${origin}/${dataset}/${o.key}`,
+      })),
+    },
+  };
+}
+
+/**
+ * Emit a PLATEAU `/tile` config.json describing this dataset's COGs, so the tile
+ * server can list `https://<host>/<dataset>/config.json` in its (comma-separated)
+ * `CONFIG_URL` and render the R2 COGs on demand. The COGs never move — the tile
+ * server reads them straight from this Worker over HTTP Range.
+ *
+ * Modes (query params):
+ * - **raster (default)** — for ortho. One `cog` source per group (first key
+ *   segment, e.g. acquisition year): `<dataset>-<group>` (e.g. `ortho-2024`),
+ *   each a footprint mosaic. `?source=<name>` instead stacks all COGs into one
+ *   source with layer `order` = numeric group (newer on top).
+ * - **`?type=dem`** — for terrain. A single `type: "dem"` source (name from
+ *   `?name=`, default `<dataset>`) stacking every COG bottom→top via `demPriority`
+ *   (`sea` < `base/dem10` < `dem5` < `dem1` < `patch`). No per-layer `nodata` —
+ *   the tile server reads each COG's own NoData tag.
+ *
+ * `?prefix=a/,b/` scopes enumeration to those key prefixes (comma-separated);
+ * defaults to `base/,patch/,sea/` in dem mode (skips the quantized-mesh mirror)
+ * and the whole bucket otherwise. `version` is an FNV-1a hash of every key+etag,
+ * so the tile server's config revalidation picks up any COG add/change/remove.
+ */
+export async function tileConfig(
+  bucket: R2Bucket,
+  dataset: string,
+  origin: string,
+  params: URLSearchParams,
+  cors: Headers,
+): Promise<Response> {
+  const isDem = params.get("type") === "dem";
+
+  const prefixParam = params.get("prefix");
+  const prefixes =
+    prefixParam !== null
+      ? prefixParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : isDem
+        ? ["base/", "patch/", "sea/"]
+        : [""];
+
+  const cogs: Cog[] = [];
+  for (const prefix of prefixes) {
+    cogs.push(...(await listCogs(bucket, prefix)));
+  }
+  cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  const sources = isDem
+    ? demSource(cogs, dataset, origin, params.get("name") ?? dataset)
+    : rasterSources(cogs, dataset, origin, params.get("source"));
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.
   let h = 0x811c9dc5;
