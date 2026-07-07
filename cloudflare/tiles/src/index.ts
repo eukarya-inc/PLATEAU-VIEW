@@ -84,7 +84,14 @@ export default {
     // dataset's COGs as `cog` sources (for the tile server's CONFIG_URL). Special
     // key, checked before object serving so it isn't looked up as an R2 object.
     if (key === "config.json") {
-      return tileConfig(resolved.bucket, resolved.name, url.origin, url.searchParams, cors);
+      return tileConfig(
+        resolved.bucket,
+        resolved.name,
+        url.origin,
+        url.searchParams,
+        cors,
+        request.method,
+      );
     }
 
     // A bare prefix (`/terrain`, `/terrain/`) or a trailing slash lists that

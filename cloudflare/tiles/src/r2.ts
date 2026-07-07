@@ -164,6 +164,16 @@ async function listCogs(bucket: R2Bucket, prefix: string): Promise<Cog[]> {
 }
 
 /**
+ * Absolute COG URL against this Worker's own origin. Each `/`-delimited key
+ * segment is percent-encoded (keys with spaces/unicode/# would otherwise produce
+ * a broken URL); the tile server round-trips it back via `decodeURIComponent`.
+ */
+function cogUrl(origin: string, dataset: string, key: string): string {
+  const path = key.split("/").map(encodeURIComponent).join("/");
+  return `${origin}/${dataset}/${path}`;
+}
+
+/**
  * Bottom→top paint priority for a terrain DEM overlay, from its key. Coarser and
  * more general layers sit at the bottom; finer/more-specific win on top:
  * `sea/` < `base/dem10` < `base/dem5` < `base/dem1` < `patch/`.
@@ -183,13 +193,12 @@ function rasterSources(
   origin: string,
   single: string | null,
 ): Record<string, TileSource> {
-  const url = (key: string) => `${origin}/${dataset}/${key}`;
   const sources: Record<string, TileSource> = {};
   if (single) {
     sources[single] = {
       description: `${dataset} COG mosaic (${cogs.length} COGs)`,
       layers: cogs.map((o) => {
-        const layer: TileCogLayer = { type: "cog", url: url(o.key) };
+        const layer: TileCogLayer = { type: "cog", url: cogUrl(origin, dataset, o.key) };
         const group = Number(o.key.split("/")[0]);
         if (Number.isFinite(group)) layer.order = group; // newer group on top
         return layer;
@@ -203,7 +212,7 @@ function rasterSources(
       (sources[name] ??= {
         description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
         layers: [],
-      }).layers.push({ type: "cog", url: url(o.key) });
+      }).layers.push({ type: "cog", url: cogUrl(origin, dataset, o.key) });
     }
   }
   return sources;
@@ -228,7 +237,7 @@ function demSource(
       description: `${dataset} DEM overlay stack (${cogs.length} COGs, bottom->top)`,
       layers: ordered.map((o) => ({
         type: "cog",
-        url: `${origin}/${dataset}/${o.key}`,
+        url: cogUrl(origin, dataset, o.key),
       })),
     },
   };
@@ -261,7 +270,16 @@ export async function tileConfig(
   origin: string,
   params: URLSearchParams,
   cors: Headers,
+  method: string,
 ): Promise<Response> {
+  const headers = new Headers(cors);
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("cache-control", "public, max-age=60");
+  // HEAD wants headers only — skip the (potentially whole-bucket) R2 listing.
+  if (method === "HEAD") {
+    return new Response(null, { status: 200, headers });
+  }
+
   const isDem = params.get("type") === "dem";
 
   const prefixParam = params.get("prefix");
@@ -282,8 +300,8 @@ export async function tileConfig(
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
   const sources = isDem
-    ? demSource(cogs, dataset, origin, params.get("name") ?? dataset)
-    : rasterSources(cogs, dataset, origin, params.get("source"));
+    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || dataset)
+    : rasterSources(cogs, dataset, origin, params.get("source")?.trim() || null);
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.
   let h = 0x811c9dc5;
@@ -296,9 +314,6 @@ export async function tileConfig(
   const version = `${dataset}-${cogs.length}-${(h >>> 0).toString(16)}`;
 
   const config: TileConfig = { version, sources };
-  const headers = new Headers(cors);
-  headers.set("content-type", "application/json; charset=utf-8");
-  headers.set("cache-control", "public, max-age=60");
   return new Response(JSON.stringify(config, null, 2), { headers });
 }
 
