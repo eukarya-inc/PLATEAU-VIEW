@@ -58,7 +58,7 @@ CONFIG_URL=file://path/to/config.json cargo run
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `CONFIG_URL` | No | - | Config JSON URL (file://, http://, https://). Omit to run with built-in terrain only |
+| `CONFIG_URL` | No | - | Config JSON URL(s) (file://, http://, https://). Comma-separated list allowed — sources merged in order, earlier wins on name collision. Omit to run with built-in terrain only |
 | `PORT` | No | 8080 | Server port |
 | `CACHE_SIZE_MB` | No | 512 | Memory cache size in MB |
 | `RELOAD_SECRET` | No | - | Secret for config reload endpoint |

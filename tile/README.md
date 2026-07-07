@@ -181,7 +181,7 @@ docker run -e CONFIG_URL=https://example.com/config.json -p 8080:8080 tile
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CONFIG_URL` | No | - | URL to the configuration JSON file. Omit to run with terrain-only defaults; required only to enable `/tiles/...` sources |
+| `CONFIG_URL` | No | - | Config JSON URL(s). Omit to run with terrain-only defaults; required only to enable `/tiles/...` sources. Accepts a **comma-separated list** — each URL is fetched and their `sources` merged in list order (earlier wins on a name collision), so independent authorities can each publish a config |
 | `CONFIG_TTL_SECS` | No | `60` | Lazy revalidation TTL. Each tile/terrain request checks whether the config has been re-fetched within this window; on the first miss per pod the request synchronously re-fetches and, if the body hash changed, rebuilds sources before serving. `0` disables (manual `/reload` only). Synchronous on purpose — Cloud Run throttles CPU outside the active request, so a background poller could be paused or killed mid-rebuild |
 | `PORT` | No | `8080` | HTTP server port |
 | `CACHE_SIZE_MB` | No | `512` | Memory cache size in MB |
@@ -365,6 +365,19 @@ Query parameters:
 ## Configuration
 
 Configuration is loaded from a remote JSON file specified by `CONFIG_URL`.
+
+`CONFIG_URL` may list several comma-separated URLs (`file://`, `http(s)://`).
+Each is fetched and their `sources` are merged in list order; on a source-name
+collision the **earlier** URL wins (list order = precedence) and the duplicate
+is logged. The merged `version` joins each config's version with `+`, and the
+combined content hash folds in every body, so `/reload` (and lazy revalidation)
+picks up a change in any of them. This lets independent authorities each publish
+a config — e.g. the CMS-derived config plus a Cloudflare Worker that enumerates
+R2 COGs — without either having to know the other's contents:
+
+```bash
+CONFIG_URL="https://cms.example/config.json,https://tiles.example/r2-cogs.json" ./target/release/tile
+```
 
 ### Example Configuration
 

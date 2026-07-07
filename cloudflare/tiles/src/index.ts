@@ -15,12 +15,27 @@
  *   - the root (/)                                 -> index of available datasets
  */
 
-import { corsHeaders, listPrefix, serveObject } from "./r2";
+import { corsHeaders, listPrefix, serveObject, tileConfig } from "./r2";
 
 /** Read PATH_BUCKETS, tolerating a missing/malformed binding (fail closed). */
 function pathBuckets(env: Env): Record<string, string> {
   const map = env.PATH_BUCKETS as unknown;
   return map && typeof map === "object" ? (map as Record<string, string>) : {};
+}
+
+/**
+ * Datasets whose COGs are DEM overlays (config.json emits a `type: "dem"` stack
+ * instead of raster sources). Config-driven via the `DEM_DATASETS` var, so no
+ * `?type=` query param is needed — `/terrain/config.json` just knows it's a DEM.
+ */
+function demDatasets(env: Env): string[] {
+  const raw = (env as unknown as Record<string, unknown>).DEM_DATASETS;
+  return typeof raw === "string"
+    ? raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : [];
 }
 
 /** Resolve the R2 bucket for a dataset segment (e.g. "terrain"), or null. */
@@ -78,6 +93,21 @@ export default {
     const resolved = bucketForDataset(env, segment);
     if (!resolved) {
       return new Response("Unknown dataset", { status: 404, headers: cors });
+    }
+
+    // `/<dataset>/config.json` emits a PLATEAU /tile config describing this
+    // dataset's COGs as `cog` sources (for the tile server's CONFIG_URL). Special
+    // key, checked before object serving so it isn't looked up as an R2 object.
+    if (key === "config.json") {
+      return tileConfig(
+        resolved.bucket,
+        resolved.name,
+        url.origin,
+        url.searchParams,
+        cors,
+        request.method,
+        demDatasets(env).includes(segment),
+      );
     }
 
     // A bare prefix (`/terrain`, `/terrain/`) or a trailing slash lists that

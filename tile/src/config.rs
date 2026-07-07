@@ -322,7 +322,10 @@ pub struct CacheConfig {
 /// from the currently loaded state (eventually consistent).
 pub struct ConfigManager {
     config: Arc<RwLock<Config>>,
-    config_url: String,
+    /// One or more config URLs (from a comma-separated `CONFIG_URL`). Their
+    /// `sources` are merged in list order; on a name collision the earlier URL
+    /// wins (list order = precedence).
+    config_urls: Vec<String>,
     client: reqwest::Client,
     /// Unix-seconds timestamp of the last revalidation attempt. Bumped via CAS
     /// before fetching so concurrent requests only let one through per TTL
@@ -339,19 +342,26 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
-    pub async fn new(config_url: &str, revalidate_ttl: Duration) -> Result<Self, ConfigError> {
+    pub async fn new(
+        config_urls: &[String],
+        revalidate_ttl: Duration,
+    ) -> Result<Self, ConfigError> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| ConfigError::FetchError(e.to_string()))?;
 
-        let (config, body_hash) = Self::fetch_config(&client, config_url).await?;
+        let (config, body_hash) = Self::fetch_and_merge(&client, config_urls).await?;
 
-        tracing::info!("Loaded configuration with {} sources", config.sources.len());
+        tracing::info!(
+            "Loaded configuration with {} sources from {} config URL(s)",
+            config.sources.len(),
+            config_urls.len()
+        );
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
-            config_url: config_url.to_string(),
+            config_urls: config_urls.to_vec(),
             client,
             last_checked: AtomicU64::new(unix_secs()),
             content_hash: AtomicU64::new(body_hash),
@@ -373,7 +383,7 @@ impl ConfigManager {
                 sources: HashMap::new(),
                 cache: None,
             })),
-            config_url: String::new(),
+            config_urls: Vec::new(),
             client,
             last_checked: AtomicU64::new(0),
             content_hash: AtomicU64::new(0),
@@ -383,7 +393,7 @@ impl ConfigManager {
 
     /// Reload is a no-op if no config URL is configured.
     pub fn has_url(&self) -> bool {
-        !self.config_url.is_empty()
+        !self.config_urls.is_empty()
     }
 
     /// Whether lazy revalidation is enabled (TTL > 0 and a URL is configured).
@@ -447,6 +457,56 @@ impl ConfigManager {
         Ok((cfg, hash))
     }
 
+    /// Fetch every configured URL and merge them into one `Config`.
+    ///
+    /// `sources` are unioned across URLs; on a name collision the earlier URL
+    /// wins (CONFIG_URL list order = precedence) and the duplicate is logged.
+    /// The combined content hash folds each body's hash in list order, so a
+    /// change in *any* config flips it and triggers a downstream rebuild. The
+    /// merged `version` joins each config's version with `+`; `cache` takes the
+    /// first config that specifies one. Any single fetch failure fails the whole
+    /// merge (callers keep serving the previously loaded state).
+    async fn fetch_and_merge(
+        client: &reqwest::Client,
+        urls: &[String],
+    ) -> Result<(Config, u64), ConfigError> {
+        let mut merged = Config {
+            version: None,
+            sources: HashMap::new(),
+            cache: None,
+        };
+        let mut versions: Vec<String> = Vec::new();
+        let mut combined_hash: u64 = 0;
+
+        for url in urls {
+            let (cfg, hash) = Self::fetch_config(client, url).await?;
+            combined_hash = xxh64(&hash.to_le_bytes(), combined_hash);
+            if let Some(v) = cfg.version {
+                versions.push(v);
+            }
+            if merged.cache.is_none() {
+                merged.cache = cfg.cache;
+            }
+            for (name, src) in cfg.sources {
+                match merged.sources.entry(name) {
+                    std::collections::hash_map::Entry::Occupied(e) => {
+                        tracing::warn!(
+                            "Duplicate source '{}' from {url}; keeping earlier \
+                             CONFIG_URL entry (first-wins)",
+                            e.key()
+                        );
+                    }
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        e.insert(src);
+                    }
+                }
+            }
+        }
+
+        merged.version = (!versions.is_empty()).then(|| versions.join("+"));
+        Ok((merged, combined_hash))
+    }
+
     /// Reload configuration from URL unconditionally and swap it in.
     /// Returns `Ok(true)` if the content hash changed (callers should rebuild
     /// downstream sources), `Ok(false)` if the body is byte-identical to the
@@ -456,7 +516,7 @@ impl ConfigManager {
             tracing::info!("Reload requested but no CONFIG_URL is set; nothing to do");
             return Ok(false);
         }
-        let (new_config, new_hash) = Self::fetch_config(&self.client, &self.config_url).await?;
+        let (new_config, new_hash) = Self::fetch_and_merge(&self.client, &self.config_urls).await?;
         let prev_hash = self.content_hash.swap(new_hash, Ordering::AcqRel);
         // Bump the revalidation timestamp so any concurrent lazy check that
         // arrives within the next TTL window short-circuits.
@@ -465,12 +525,12 @@ impl ConfigManager {
         if changed {
             let mut config = self.config.write().await;
             *config = new_config;
-            tracing::info!("Configuration reloaded from {}", self.config_url);
-        } else {
-            tracing::debug!(
-                "Config refetched from {} but content is unchanged",
-                self.config_url
+            tracing::info!(
+                "Configuration reloaded from {} config URL(s)",
+                self.config_urls.len()
             );
+        } else {
+            tracing::debug!("Config refetched but content is unchanged");
         }
         Ok(changed)
     }
@@ -562,5 +622,47 @@ mod tests {
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(config.sources.contains_key("ortho"));
         assert_eq!(config.sources["ortho"].layers.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_multi_config_merge_first_wins() {
+        use std::io::Write;
+
+        let mut a = tempfile::NamedTempFile::new().unwrap();
+        a.write_all(
+            br#"{"version":"va","sources":{
+                "only_a":{"layers":[{"type":"xyz","url":"https://a/{z}/{x}/{y}.png"}]},
+                "shared":{"description":"from-a","layers":[{"type":"cog","url":"https://a/c.tif"}]}
+            }}"#,
+        )
+        .unwrap();
+        a.flush().unwrap();
+
+        let mut b = tempfile::NamedTempFile::new().unwrap();
+        b.write_all(
+            br#"{"version":"vb","sources":{
+                "only_b":{"layers":[{"type":"cog","url":"https://b/c.tif"}]},
+                "shared":{"description":"from-b","layers":[{"type":"cog","url":"https://b/c.tif"}]}
+            }}"#,
+        )
+        .unwrap();
+        b.flush().unwrap();
+
+        let urls = vec![
+            format!("file://{}", a.path().display()),
+            format!("file://{}", b.path().display()),
+        ];
+        let mgr = ConfigManager::new(&urls, Duration::from_secs(0))
+            .await
+            .unwrap();
+        let cfg = mgr.get().await;
+
+        // Union of sources across both configs.
+        assert!(cfg.sources.contains_key("only_a"));
+        assert!(cfg.sources.contains_key("only_b"));
+        // Collision: the earlier URL (config A) wins.
+        assert_eq!(cfg.sources["shared"].description.as_deref(), Some("from-a"));
+        // Versions are joined in list order.
+        assert_eq!(cfg.version.as_deref(), Some("va+vb"));
     }
 }
