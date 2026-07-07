@@ -67,16 +67,61 @@ export async function serveObject(
     headers.set("content-encoding", "gzip");
   }
 
-  // `get` returns R2ObjectBody (with body) only on success; a failed conditional
-  // yields a bodyless R2Object -> 304.
-  const body = "body" in object ? object.body : null;
-  const status = body ? (headers.has("content-range") ? 206 : 200) : 304;
+  // Advertise byte-range support on every response; COG readers probe for it.
+  headers.set("accept-ranges", "bytes");
 
-  return new Response(body, {
+  // A failed conditional (If-None-Match / If-Modified-Since) yields a bodyless
+  // R2Object -> 304 Not Modified.
+  if (!("body" in object) || !object.body) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  // R2 sets `range` when it honored a Range request, but writeHttpMetadata does
+  // NOT emit Content-Range -- build it ourselves and return 206 Partial Content.
+  // Without this a satisfied range would wrongly read as a full 200.
+  // Only a client-sent Range makes this a partial response. (R2/Miniflare may
+  // populate `object.range` regardless, so gate on the actual request header.)
+  let status = 200;
+  if (request.headers.has("range") && object.range) {
+    const resolved = resolveRange(object.range, object.size);
+    if (resolved) {
+      headers.set("content-range", `bytes ${resolved.start}-${resolved.end}/${object.size}`);
+      headers.set("content-length", String(resolved.end - resolved.start + 1));
+      status = 206;
+    }
+  }
+
+  return new Response(object.body, {
     status,
     headers,
     encodeBody: isTerrain ? "manual" : "automatic",
   });
+}
+
+/**
+ * Resolve an R2Range to an inclusive byte [start, end], or null if it doesn't
+ * describe a valid sub-range. `suffix`/`offset`/`length` are read by value (not
+ * `"key" in range`) because some runtimes attach all three keys as undefined.
+ */
+function resolveRange(range: R2Range, size: number): { start: number; end: number } | null {
+  const suffix = (range as { suffix?: number }).suffix;
+  const offset = (range as { offset?: number }).offset;
+  const length = (range as { length?: number }).length;
+
+  let start: number;
+  let end: number;
+  if (typeof suffix === "number") {
+    start = size - Math.min(suffix, size);
+    end = size - 1;
+  } else {
+    start = typeof offset === "number" ? offset : 0;
+    end = typeof length === "number" ? start + length - 1 : size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) {
+    return null;
+  }
+  return { start, end };
 }
 
 interface ListingEntry {
