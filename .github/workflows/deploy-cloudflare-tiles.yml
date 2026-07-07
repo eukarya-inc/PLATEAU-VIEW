@@ -6,20 +6,17 @@ jobs:
   deploy:
     name: deploy
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cloudflare/tiles
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: cloudflare/tiles/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install
         run: npm ci
       - name: Deploy
-        run: npx wrangler deploy
+        run: npm run -w cloudflare/tiles deploy
         env:
           # Account ID is omitted because the API token is scoped to a single
           # account; wrangler resolves it automatically. Pass an explicit
