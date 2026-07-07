@@ -15,7 +15,7 @@
  *   - the root (/)                                 -> index of available datasets
  */
 
-import { corsHeaders, listPrefix, serveObject } from "./r2";
+import { corsHeaders, listPrefix, serveObject, tileConfig } from "./r2";
 
 /** Read PATH_BUCKETS, tolerating a missing/malformed binding (fail closed). */
 function pathBuckets(env: Env): Record<string, string> {
@@ -78,6 +78,13 @@ export default {
     const resolved = bucketForDataset(env, segment);
     if (!resolved) {
       return new Response("Unknown dataset", { status: 404, headers: cors });
+    }
+
+    // `/<dataset>/config.json` emits a PLATEAU /tile config describing this
+    // dataset's COGs as `cog` sources (for the tile server's CONFIG_URL). Special
+    // key, checked before object serving so it isn't looked up as an R2 object.
+    if (key === "config.json") {
+      return tileConfig(resolved.bucket, resolved.name, url.origin, url.searchParams, cors);
     }
 
     // A bare prefix (`/terrain`, `/terrain/`) or a trailing slash lists that

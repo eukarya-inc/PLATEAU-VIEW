@@ -124,6 +124,106 @@ function resolveRange(range: R2Range, size: number): { start: number; end: numbe
   return { start, end };
 }
 
+interface TileCogLayer {
+  type: "cog";
+  url: string;
+  order?: number;
+}
+
+interface TileSource {
+  description: string;
+  layers: TileCogLayer[];
+}
+
+interface TileConfig {
+  version: string;
+  sources: Record<string, TileSource>;
+}
+
+/**
+ * Emit a PLATEAU `/tile` config.json describing this dataset's COGs as `cog`
+ * sources, so the tile server can be pointed at
+ * `https://<host>/<dataset>/config.json` (as one entry in its comma-separated
+ * `CONFIG_URL`) and render the R2 COGs on demand. The COGs never move — the tile
+ * server reads them straight from this Worker over HTTP Range.
+ *
+ * COG keys are `<group>/<file>.tif` (for ortho, group = acquisition year).
+ * Default: one source per group, named `<dataset>-<group>` (e.g. `ortho-2024`),
+ * each a footprint mosaic of that group's COGs. Pass `?source=<name>` to stack
+ * every COG into a single source instead; numeric groups become the layer
+ * `order` so newer groups render on top.
+ *
+ * `version` is a cheap FNV-1a hash of every key+etag, so the tile server's
+ * config revalidation picks up any added / changed / removed COG.
+ */
+export async function tileConfig(
+  bucket: R2Bucket,
+  dataset: string,
+  origin: string,
+  params: URLSearchParams,
+  cors: Headers,
+): Promise<Response> {
+  // Enumerate every COG in the bucket (paginated — no delimiter, full recurse).
+  const cogs: { key: string; etag: string }[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await bucket.list({ cursor, limit: 1000 });
+    for (const o of res.objects) {
+      if (o.key.endsWith(".tif") || o.key.endsWith(".tiff")) {
+        cogs.push({ key: o.key, etag: o.etag });
+      }
+    }
+    cursor = res.truncated ? (res.cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  const layerFor = (key: string): TileCogLayer => ({
+    type: "cog",
+    url: `${origin}/${dataset}/${key}`,
+  });
+
+  const sources: Record<string, TileSource> = {};
+  const single = params.get("source");
+  if (single) {
+    sources[single] = {
+      description: `${dataset} COG mosaic (${cogs.length} COGs)`,
+      layers: cogs.map((o) => {
+        const layer = layerFor(o.key);
+        const group = Number(o.key.split("/")[0]);
+        if (Number.isFinite(group)) layer.order = group; // newer group on top
+        return layer;
+      }),
+    };
+  } else {
+    for (const o of cogs) {
+      const slash = o.key.indexOf("/");
+      const group = slash === -1 ? "" : o.key.slice(0, slash);
+      const name = group ? `${dataset}-${group}` : dataset;
+      (sources[name] ??= {
+        description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
+        layers: [],
+      }).layers.push(layerFor(o.key));
+    }
+  }
+
+  // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.
+  let h = 0x811c9dc5;
+  for (const o of cogs) {
+    const s = `${o.key}:${o.etag};`;
+    for (let i = 0; i < s.length; i++) {
+      h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    }
+  }
+  const version = `${dataset}-${cogs.length}-${(h >>> 0).toString(16)}`;
+
+  const config: TileConfig = { version, sources };
+  const headers = new Headers(cors);
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("cache-control", "public, max-age=60");
+  return new Response(JSON.stringify(config, null, 2), { headers });
+}
+
 interface ListingEntry {
   key: string;
   size: number;
