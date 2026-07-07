@@ -17,10 +17,10 @@
 
 import { corsHeaders, listPrefix, serveObject } from "./r2";
 
-/** PATH_BUCKETS as a plain object, or `{}` if misconfigured (fail closed). */
+/** Read PATH_BUCKETS, tolerating a missing/malformed binding (fail closed). */
 function pathBuckets(env: Env): Record<string, string> {
   const map = env.PATH_BUCKETS as unknown;
-  return map !== null && typeof map === "object" ? (map as Record<string, string>) : {};
+  return map && typeof map === "object" ? (map as Record<string, string>) : {};
 }
 
 /** Resolve the R2 bucket for a dataset segment (e.g. "terrain"), or null. */
@@ -55,8 +55,9 @@ export default {
     }
 
     const url = new URL(request.url);
-    // R2 keys have no leading slash. Decode percent-encoding (e.g. %20), but a
-    // malformed sequence would throw -- fail with 400 instead of a 500.
+    // R2 keys have no leading slash. Decoding turns a percent-encoded pathname
+    // back into the literal key; malformed encoding is a client error (400), not
+    // a 500.
     let path: string;
     try {
       path = decodeURIComponent(url.pathname.replace(/^\/+/, ""));

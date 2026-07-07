@@ -11,12 +11,11 @@ export function corsHeaders(allowOrigin: string): Headers {
   return new Headers({
     "access-control-allow-origin": allowOrigin,
     "access-control-allow-methods": "GET, HEAD, OPTIONS",
-    // Clients read tiles/COGs cross-origin with Range and conditional requests;
-    // allow those request headers through the preflight.
+    // Allow the request headers COG/quantized-mesh clients send (Range reads,
+    // conditional revalidation), and expose the response headers they read back
+    // (byte-range progress, cache validators, range support).
     "access-control-allow-headers": "Range, If-None-Match, If-Modified-Since",
-    // Expose the response metadata JS needs for range/caching logic.
-    "access-control-expose-headers":
-      "ETag, Content-Range, Content-Length, Accept-Ranges, Content-Encoding",
+    "access-control-expose-headers": "ETag, Content-Range, Content-Length, Accept-Ranges",
     "access-control-max-age": "86400",
   });
 }
