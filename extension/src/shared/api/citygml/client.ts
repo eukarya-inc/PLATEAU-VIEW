@@ -37,8 +37,11 @@ export class CityGMLClient {
   async getFiles(params: CityGMLGetFilesParams) {
     const conditions = makeFileAPIConditionsByParams(params);
     if (!conditions) return;
+    // Spatial IDs (s:z/f/x/y) contain slashes that must be percent-encoded so the
+    // whole condition stays a single path segment; otherwise the datacatalog route
+    // (/citygml/:conditions) does not match and returns 404.
     return this.handleError(
-      await fetchWithGet(`${this.fileUrl}/${conditions}`).catch((e: any) => {
+      await fetchWithGet(`${this.fileUrl}/${conditions.replace(/\//g, "%2F")}`).catch((e: any) => {
         console.error(e);
       }),
     ) as CityGMLGetFilesData;
