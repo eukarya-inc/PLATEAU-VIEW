@@ -186,35 +186,43 @@ function demPriority(key: string): number {
   return 150;
 }
 
-/** Raster sources: one per group (`<dataset>-<group>`), or one stacked source with `?source=`. */
+/**
+ * Raster sources: one footprint mosaic per group (`<dataset>-<group>`, e.g.
+ * `ortho-2024`), plus a cumulative `<dataset>-all` stacking every COG with layer
+ * `order` = numeric group, so newer groups win where footprints overlap — the
+ * COG equivalent of the production all-years ortho mosaic.
+ */
 function rasterSources(
   cogs: Cog[],
   dataset: string,
   origin: string,
-  single: string | null,
 ): Record<string, TileSource> {
   const sources: Record<string, TileSource> = {};
-  if (single) {
-    sources[single] = {
-      description: `${dataset} COG mosaic (${cogs.length} COGs)`,
+
+  // Per-group mosaics.
+  for (const o of cogs) {
+    const slash = o.key.indexOf("/");
+    const group = slash === -1 ? "" : o.key.slice(0, slash);
+    const name = group ? `${dataset}-${group}` : dataset;
+    (sources[name] ??= {
+      description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
+      layers: [],
+    }).layers.push({ type: "cog", url: cogUrl(origin, dataset, o.key) });
+  }
+
+  // Cumulative "-all": every COG, newer group (higher order) on top.
+  if (cogs.length > 0) {
+    sources[`${dataset}-all`] = {
+      description: `${dataset} all groups, newest on top (${cogs.length} COGs)`,
       layers: cogs.map((o) => {
         const layer: TileCogLayer = { type: "cog", url: cogUrl(origin, dataset, o.key) };
         const group = Number(o.key.split("/")[0]);
-        if (Number.isFinite(group)) layer.order = group; // newer group on top
+        if (Number.isFinite(group)) layer.order = group;
         return layer;
       }),
     };
-  } else {
-    for (const o of cogs) {
-      const slash = o.key.indexOf("/");
-      const group = slash === -1 ? "" : o.key.slice(0, slash);
-      const name = group ? `${dataset}-${group}` : dataset;
-      (sources[name] ??= {
-        description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
-        layers: [],
-      }).layers.push({ type: "cog", url: cogUrl(origin, dataset, o.key) });
-    }
   }
+
   return sources;
 }
 
@@ -252,7 +260,7 @@ function demSource(
  * `isDem` (from the `DEM_DATASETS` config, e.g. terrain) selects the mode:
  * - **raster** (ortho) — one `cog` source per group (first key segment, e.g.
  *   acquisition year): `<dataset>-<group>` (e.g. `ortho-2024`), each a footprint
- *   mosaic. `?source=<name>` instead stacks all COGs into one source with layer
+ *   mosaic, plus a cumulative `<dataset>-all` stacking every COG with layer
  *   `order` = numeric group (newer on top).
  * - **dem** (terrain) — a single `type: "dem"` source (name from `?name=`,
  *   default `dem` = the tile server's default DEM source) stacking every COG
@@ -300,7 +308,7 @@ export async function tileConfig(
 
   const sources = isDem
     ? demSource(cogs, dataset, origin, params.get("name")?.trim() || "dem")
-    : rasterSources(cogs, dataset, origin, params.get("source")?.trim() || null);
+    : rasterSources(cogs, dataset, origin);
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.
   let h = 0x811c9dc5;
