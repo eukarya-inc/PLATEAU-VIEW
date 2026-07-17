@@ -476,7 +476,8 @@ func (c *Ckan) sendOnce(
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", userAgent)
 	if c.token != "" {
-		req.Header.Set("X-CKAN-API-Key", c.token)
+		// geospatial.jp expects the raw API token in the Authorization header (no Bearer prefix)
+		req.Header.Set("Authorization", c.token)
 	}
 
 	log.Infofc(ctx, "ckan: send: %s %s", method, u)

@@ -133,7 +133,7 @@ func mockCkan(t *testing.T) {
 		if req.Header.Get("User-Agent") != userAgent {
 			return httpmock.NewJsonResponse(http.StatusBadRequest, Response[any]{Error: &Error{Message: "invalid user agent"}})
 		}
-		if req.Header.Get("X-CKAN-API-Key") != "TOKEN" {
+		if req.Header.Get("Authorization") != "TOKEN" {
 			return httpmock.NewJsonResponse(http.StatusUnauthorized, Response[any]{Error: &Error{Message: "error"}})
 		}
 		return nil, nil
