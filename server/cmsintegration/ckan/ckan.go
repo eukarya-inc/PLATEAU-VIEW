@@ -387,6 +387,9 @@ func (c *Ckan) ReorderResource(ctx context.Context, pkgID string, resourceIDs []
 
 const ckanMaxRetries = 3
 
+// userAgent is requested by geospatial.jp to identify requests from PLATEAU CMS.
+const userAgent = "plateau-cms"
+
 func (c *Ckan) send(
 	ctx context.Context,
 	method string,
@@ -471,6 +474,7 @@ func (c *Ckan) sendOnce(
 		req.Header.Set("Content-Length", strconv.Itoa(contentLength))
 	}
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("User-Agent", userAgent)
 	if c.token != "" {
 		req.Header.Set("X-CKAN-API-Key", c.token)
 	}
