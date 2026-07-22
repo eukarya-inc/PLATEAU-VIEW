@@ -339,4 +339,13 @@ mod tests {
         let (_, etag) = fit_to_tile_size(ramp(4), 4, 4, 8, None);
         assert_eq!(etag, Some(marker));
     }
+
+    /// A zoom_diff whose factor exceeds the tile size (one parent pixel spread
+    /// over many child tiles) with the farthest sub-tile must still return a
+    /// full tile instead of indexing past the end of `parent`.
+    #[test]
+    fn upsample_zoom_diff_beyond_tile_size_does_not_panic() {
+        let out = extract_and_upsample(&ramp(4), 4, 10, 1023, 1023);
+        assert_eq!(out.len(), 16);
+    }
 }
