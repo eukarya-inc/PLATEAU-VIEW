@@ -16,8 +16,17 @@
 /** Tile path pattern: /tiles/{source}/{z}/{x}/{y}.{format} */
 const TILE_PATH_REGEX = /^\/tiles\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.(png|webp|avif)$/;
 
-/** Default Cache-Control header */
-const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+/**
+ * Default Cache-Control header.
+ *
+ * The tile server writes tiles under deterministic keys (`{source}/{format}/
+ * {z}/{x}/{y}.{format}`) and may re-upload them at the same key when the
+ * upstream COG/DEM changes. `immutable` disabled browser/edge revalidation,
+ * so clients kept serving stale tiles for a year after the underlying data
+ * was fixed. Use a shorter TTL with `must-revalidate` so ETag revalidation
+ * (which this worker already emits) actually runs.
+ */
+const DEFAULT_CACHE_CONTROL = "public, max-age=3600, must-revalidate";
 
 /** Check if origin is allowed for CORS */
 function isOriginAllowed(origin: string | null, allowedOrigins: string | undefined): string | null {
