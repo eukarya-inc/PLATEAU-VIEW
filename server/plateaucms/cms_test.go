@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -307,6 +308,60 @@ func mockCMS(t *testing.T) {
 			},
 		}),
 	)
+}
+
+// TestHandler_AllMetadata_Cache guards SCA-01: repeated AllMetadata calls
+// within the cache TTL must hit the upstream CMS at most once, and concurrent
+// misses must be deduplicated via singleflight.
+func TestHandler_AllMetadata_Cache(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	mockCMS(t)
+
+	h := newHandler()
+	h.metadataCacheTTL = time.Minute
+
+	ctx := context.Background()
+
+	// Prime the cache.
+	_, err := h.AllMetadata(ctx, false)
+	assert.NoError(t, err)
+	baseline := httpmock.GetCallCountInfo()["GET "+lo.Must(url.JoinPath(testCMSHost, "api", "projects", tokenProject, "models", metadataModel, "items"))]
+	assert.Positive(t, baseline)
+
+	// Subsequent calls within the TTL must not hit upstream again.
+	for range 5 {
+		_, err := h.AllMetadata(ctx, false)
+		assert.NoError(t, err)
+	}
+	assert.Equal(t, baseline, httpmock.GetCallCountInfo()["GET "+lo.Must(url.JoinPath(testCMSHost, "api", "projects", tokenProject, "models", metadataModel, "items"))])
+
+	// Concurrent misses on a fresh handler should be deduplicated by singleflight.
+	// Collect errors in per-goroutine slots and assert on the main goroutine
+	// (testify's assertions are not safe to call concurrently, and doing so
+	// races against -race under real contention).
+	h2 := newHandler()
+	h2.metadataCacheTTL = time.Minute
+	const workers = 10
+	errs := make([]error, workers)
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := h2.AllMetadata(ctx, false)
+			errs[i] = err
+		}(i)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		assert.NoError(t, err)
+	}
+	// After the concurrent burst the counter should have advanced by only 1
+	// (singleflight collapses the misses); allow ≤ baseline to tolerate that
+	// GetItemsByKeyInParallel may issue more than one HTTP call per fetch.
+	after := httpmock.GetCallCountInfo()["GET "+lo.Must(url.JoinPath(testCMSHost, "api", "projects", tokenProject, "models", metadataModel, "items"))]
+	assert.LessOrEqual(t, after-baseline, baseline, "singleflight should collapse concurrent misses to a single upstream fetch")
 }
 
 func TestMetadataList_PlateauProjects(t *testing.T) {

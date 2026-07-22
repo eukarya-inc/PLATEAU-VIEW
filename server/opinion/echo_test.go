@@ -22,7 +22,8 @@ import (
 func TestEcho(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
-	httpmock.RegisterResponder("POST", "https://api.sendgrid.com/v3/mail/send", httpmock.NewJsonResponderOrPanic(http.StatusOK, `{}`))
+	// SendGrid returns 202 Accepted on success for /v3/mail/send.
+	httpmock.RegisterResponder("POST", "https://api.sendgrid.com/v3/mail/send", httpmock.NewJsonResponderOrPanic(http.StatusAccepted, `{}`))
 
 	e := echo.New()
 	e.Validator = &customValidator{validator: validator.New()}
@@ -101,6 +102,32 @@ func TestEcho(t *testing.T) {
 	e.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, `"invalid file"`, strings.TrimSpace(w.Body.String()))
+}
+
+// TestEcho_SendGridRejects guards REL-01: a non-2xx SendGrid response
+// (e.g. expired API key, rate limit) must surface as a 502 rather than
+// being silently reported as success.
+func TestEcho_SendGridRejects(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	httpmock.RegisterResponder("POST", "https://api.sendgrid.com/v3/mail/send", httpmock.NewJsonResponderOrPanic(http.StatusUnauthorized, `{"errors":[{"message":"invalid api key"}]}`))
+
+	e := echo.New()
+	e.Validator = &customValidator{validator: validator.New()}
+	g := e.Group("")
+	Echo(g, Config{
+		SendGridAPIKey: "xxx",
+		From:           "hoge@example.com",
+		To:             "hoge@example.com",
+	})
+
+	rb := `{"email":"from@example.com","content":"aaaa","name":"name"}`
+	r := httptest.NewRequest("POST", "/", strings.NewReader(rb))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	e.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, `"failed to send email"`, strings.TrimSpace(w.Body.String()))
 }
 
 type customValidator struct {

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/rerror"
@@ -214,11 +215,87 @@ func (h *CMS) Metadata(ctx context.Context, prj string, findDataCatalog, useDefa
 	return md, all, nil
 }
 
+// AllMetadata returns the full metadata list for the system project.
+//
+// This is on the hot path of AuthMiddleware — invoked on every authenticated
+// request through the sidebar, share, and datacatalog services — so the result
+// is cached in memory with a short TTL. Concurrent misses are deduplicated via
+// singleflight so a burst of cache-miss requests results in a single upstream
+// fan-out to the CMS rather than one per request. The `findDataCatalog`
+// parameter does not affect the fetched set (filtering happens downstream in
+// MetadataList methods), so a single cache entry serves both cases.
 func (h *CMS) AllMetadata(ctx context.Context, findDataCatalog bool) (MetadataList, error) {
 	if h.cmsSysProject == "" {
 		return nil, rerror.ErrNotFound
 	}
 
+	if cached, ok := h.cachedAllMetadata(); ok {
+		return cached, nil
+	}
+
+	v, err, _ := h.metadataSF.Do("all", func() (any, error) {
+		// Recheck under singleflight: an earlier waiter may have populated the
+		// cache while this goroutine was queued.
+		if cached, ok := h.cachedAllMetadata(); ok {
+			return cached, nil
+		}
+
+		// Detach cancellation for the shared fetch: singleflight has multiple
+		// waiters and the leader is a coincidence — if the leader's request is
+		// cancelled (client disconnect / handler deadline), the upstream fetch
+		// must still complete so the other waiters aren't poisoned by
+		// context.Canceled. A bounded timeout keeps a stuck upstream from
+		// hanging the group forever.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), metadataFetchTimeout)
+		defer cancel()
+
+		list, err := h.fetchAllMetadata(fetchCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		h.storeAllMetadata(list)
+		return list, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(MetadataList), nil
+}
+
+// metadataFetchTimeout bounds the shared upstream fetch inside singleflight so
+// a stuck CMS API can't keep followers waiting indefinitely. This is separate
+// from any per-request deadline because the leader's context is detached (see
+// AllMetadata for the rationale).
+const metadataFetchTimeout = 30 * time.Second
+
+func (h *CMS) cachedAllMetadata() (MetadataList, bool) {
+	ttl := h.metadataCacheTTL
+	if ttl <= 0 {
+		return nil, false
+	}
+
+	h.metadataMu.RLock()
+	defer h.metadataMu.RUnlock()
+
+	if h.metadataCache == nil || time.Since(h.metadataFetched) >= ttl {
+		return nil, false
+	}
+	return h.metadataCache, true
+}
+
+func (h *CMS) storeAllMetadata(list MetadataList) {
+	if h.metadataCacheTTL <= 0 {
+		return
+	}
+
+	h.metadataMu.Lock()
+	defer h.metadataMu.Unlock()
+	h.metadataCache = list
+	h.metadataFetched = time.Now()
+}
+
+func (h *CMS) fetchAllMetadata(ctx context.Context) (MetadataList, error) {
 	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsSysProject, metadataModel, false, 100)
 	if err != nil || items == nil {
 		if errors.Is(err, cms.ErrNotFound) || items == nil {
