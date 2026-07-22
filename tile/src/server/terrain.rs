@@ -759,6 +759,17 @@ async fn raster_tile(
     };
     let geoid = Geoid::load(geoid_model);
 
+    // Cap `z` against the configured raster max zoom before any coordinate
+    // math. Without this, `z >= dem_max + 9` makes `factor > tile_size`, so
+    // the inner-loop index `off_y * tile_size` in extract_and_upsample walks
+    // straight off the end of `parent` and the always-on bounds check panics
+    // — a cheap, unauthenticated DoS on a public endpoint. Legitimate
+    // MapLibre clients cap at `maxzoom` (`terrain.max_zoom`, default 18) and
+    // never send anything past it, so returning 404 is the right answer.
+    if z > terrain.max_zoom {
+        return (StatusCode::NOT_FOUND, "Zoom out of range").into_response();
+    }
+
     // Web Mercator XYZ tile bounds for coverage check.
     let bounds = xyz_tile_bounds(z, x, y);
     if !geoid.bounds_have_any_coverage(bounds.west, bounds.south, bounds.east, bounds.north) {
