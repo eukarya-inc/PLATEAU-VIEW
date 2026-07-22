@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -81,6 +82,18 @@ func attributeHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
+		// Independent of the operator-configured Domain allowlist, refuse
+		// URLs that resolve to non-public addresses (loopback / RFC1918 /
+		// cloud metadata / link-local). The actual outbound socket is
+		// re-checked in safeDialContext so a DNS-rebinding attacker cannot
+		// bypass the pre-flight guard.
+		if err := checkExternalURL(u); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]any{
+				"url":   citygmlURL,
+				"error": "invalid url",
+			})
+		}
+
 		ids := strings.Split(c.QueryParam("id"), ",")
 		if len(ids) == 0 || (len(ids) == 1 && ids[0] == "") {
 			return c.JSON(http.StatusBadRequest, map[string]any{
@@ -98,7 +111,7 @@ func attributeHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		resp, err := httpClient.Do(req)
+		resp, err := safeHTTPClient.Do(req)
 		if err != nil {
 			log.Errorfc(c.Request().Context(), "citygml: failed to fetch: %v", err)
 			return c.JSON(http.StatusInternalServerError, map[string]any{
@@ -120,7 +133,7 @@ func attributeHandler(domain string) echo.HandlerFunc {
 		var resolver CodeResolver
 		if !skipCodeListFetch {
 			resolver = &fetchCodeResolver{
-				client: httpClient,
+				client: safeHTTPClient,
 				url:    citygmlURL,
 			}
 		}
@@ -188,12 +201,26 @@ func spatialIDAttributesHandler(dc *dataCatalogAPI) echo.HandlerFunc {
 			})
 		}
 
+		// Cap the fan-out so a broad, low-zoom spatial ID can't enqueue
+		// thousands of full-file GETs into a single request.
+		if len(urls) > spatialIDMaxURLs {
+			log.Warnfc(ctx, "citygml: capping %d urls to %d", len(urls), spatialIDMaxURLs)
+			urls = urls[:spatialIDMaxURLs]
+		}
+
 		log.Debugfc(ctx, "citygml: fetch %d citygml files", len(urls))
 
 		rs := make([]Reader, 0, len(urls))
 		etagCache := make(map[string]string)
+		var etagMu sync.Mutex
 		for _, u := range urls {
-			rs = append(rs, &urlReader{URL: u, client: httpClient, etagCache: etagCache, skipCodeListFetch: skipCodeListFetch})
+			rs = append(rs, &urlReader{
+				URL:               u,
+				client:            httpClient,
+				etagCache:         etagCache,
+				etagCacheMu:       &etagMu,
+				skipCodeListFetch: skipCodeListFetch,
+			})
 		}
 
 		// Stream the JSON array to avoid buffering every matched feature in memory.
@@ -255,6 +282,15 @@ func featureHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
+		// See attributeHandler: reject non-public targets regardless of the
+		// operator-configured Domain allowlist.
+		if err := checkExternalURL(u); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]any{
+				"url":   citygmlURL,
+				"error": "invalid url",
+			})
+		}
+
 		ids := strings.Split(c.QueryParam("sid"), ",")
 		if len(ids) == 0 || (len(ids) == 1 && ids[0] == "") {
 			return c.JSON(http.StatusBadRequest, map[string]any{
@@ -270,7 +306,7 @@ func featureHandler(domain string) echo.HandlerFunc {
 			})
 		}
 
-		resp, err := httpClient.Do(req)
+		resp, err := safeHTTPClient.Do(req)
 		if err != nil {
 			log.Errorfc(c.Request().Context(), "citygml: failed to fetch: %v", err)
 			return c.JSON(http.StatusInternalServerError, map[string]any{

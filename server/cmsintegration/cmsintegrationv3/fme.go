@@ -11,9 +11,17 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/reearth/reearthx/log"
 )
+
+// fmeRequestTimeout bounds the synchronous HTTP call that submits a job to FME.
+// The FME job itself runs asynchronously and reports back via ResultURL, so this
+// only needs to cover the submit round-trip. Without it, a stalled FME (half-open
+// TCP, no response body) would hold the webhook goroutine open indefinitely and
+// leave items stuck in "converting".
+const fmeRequestTimeout = 60 * time.Second
 
 type fmeRequestType string
 
@@ -53,7 +61,7 @@ func newFME(url, resultURL string) *fme {
 	return &fme{
 		url:       url,
 		resultURL: resultURL,
-		client:    http.DefaultClient,
+		client:    &http.Client{Timeout: fmeRequestTimeout},
 	}
 }
 

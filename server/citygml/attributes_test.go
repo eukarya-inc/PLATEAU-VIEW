@@ -96,9 +96,12 @@ func TestAttributesHandlerCodeOnly(t *testing.T) {
 	citygml, err := os.ReadFile("testdata/" + testdata)
 	require.NoError(t, err)
 
-	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
+	// attributeHandler routes through safeHTTPClient, which has its own
+	// Transport, so activate httpmock on it too.
+	httpmock.ActivateNonDefault(safeHTTPClient)
 	httpmock.Activate()
 	defer httpmock.Deactivate()
+	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
 
 	u := &url.URL{Path: "/attributes"}
 	q := url.Values{}
@@ -144,9 +147,12 @@ func TestAttributesHandler(t *testing.T) {
 		}
 	}
 
-	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
+	// attributeHandler routes through safeHTTPClient, which has its own
+	// Transport, so activate httpmock on it too.
+	httpmock.ActivateNonDefault(safeHTTPClient)
 	httpmock.Activate()
 	defer httpmock.Deactivate()
+	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
 
 	u := &url.URL{Path: "/attributes"}
 	q := url.Values{}
