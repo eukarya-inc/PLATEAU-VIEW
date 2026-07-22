@@ -7,13 +7,21 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/putil"
 	"github.com/labstack/echo/v4"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/rerror"
+	"golang.org/x/sync/singleflight"
 )
+
+// defaultMetadataCacheTTL is the time-to-live for the in-memory metadata cache.
+// Metadata rarely changes at request cadence (adding a project / rotating a token
+// happens on human timescales), so a short TTL absorbs bursts of concurrent
+// requests without noticeably delaying propagation of legitimate edits.
+const defaultMetadataCacheTTL = 60 * time.Second
 
 const (
 	ProjectNameParam             = "pid"
@@ -60,6 +68,13 @@ type CMS struct {
 	cmsMainProject string
 	cmsToken       string
 	adminToken     string
+
+	// metadata cache
+	metadataCacheTTL time.Duration
+	metadataSF       singleflight.Group
+	metadataMu       sync.RWMutex
+	metadataCache    MetadataList
+	metadataFetched  time.Time
 }
 
 func New(c Config) (*CMS, error) {
@@ -77,9 +92,10 @@ func New(c Config) (*CMS, error) {
 		cmsSysProject: c.CMSSystemProject,
 		cmsMain:       cmsMain,
 		// compat
-		cmsMainProject: c.CMSMainProject,
-		cmsToken:       c.CMSMainToken,
-		adminToken:     c.AdminToken,
+		cmsMainProject:   c.CMSMainProject,
+		cmsToken:         c.CMSMainToken,
+		adminToken:       c.AdminToken,
+		metadataCacheTTL: defaultMetadataCacheTTL,
 	}, nil
 }
 
@@ -100,9 +116,12 @@ func (h *CMS) Clone() *CMS {
 		cmsSysProject: h.cmsSysProject,
 		cmsMain:       h.cmsMain,
 		// compat
-		cmsMainProject: h.cmsMainProject,
-		cmsToken:       h.cmsToken,
-		adminToken:     h.adminToken,
+		cmsMainProject:   h.cmsMainProject,
+		cmsToken:         h.cmsToken,
+		adminToken:       h.adminToken,
+		metadataCacheTTL: h.metadataCacheTTL,
+		// Note: singleflight.Group and cache state intentionally not copied —
+		// a clone is a fresh instance that maintains its own cache.
 	}
 }
 

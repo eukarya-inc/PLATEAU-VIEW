@@ -93,12 +93,19 @@ func Echo(g *echo.Group, conf Config) {
 		}
 
 		response, err := client.Send(message)
-		if err != nil {
+		// SendGrid returns a nil error for any completed HTTP round-trip
+		// including 4xx/5xx responses (e.g. expired API key, rate limit,
+		// upstream outage). We must also inspect the status code — a
+		// successful send is 2xx (202 Accepted for /v3/mail/send) — otherwise
+		// user submissions are silently discarded.
+		if err != nil || response == nil || response.StatusCode < 200 || response.StatusCode >= 300 {
 			e := ""
 			if err != nil {
 				e = err.Error()
-			} else {
+			} else if response != nil {
 				e = fmt.Sprintf("code=%d,body=%s", response.StatusCode, response.Body)
+			} else {
+				e = "no response"
 			}
 
 			log.Errorfc(ctx, "opinion: failed to send email: %s", e)
