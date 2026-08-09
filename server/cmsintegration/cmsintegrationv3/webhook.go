@@ -19,14 +19,20 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		ctx := req.Context()
 		ctx = log.WithPrefixMessage(ctx, "cmsintegrationv3 webhook: ")
 
-		log.Infofc(ctx, "incoming: type=%s, project=%s, model=%s, item=%s",
-			w.Type, w.ProjectID(), w.ItemData.Model.Key, w.ItemData.Item.ID)
+		// ValidatePayload is what rejects deliveries with a nil ItemData /
+		// Model / Item, so the pre-validation log must not dereference them —
+		// otherwise a webhook whose shape is exactly what the validator exists
+		// to filter panics before it can be filtered.
+		log.Infofc(ctx, "incoming: type=%s, project=%s", w.Type, w.ProjectID())
 		log.Debugfc(ctx, "incoming payload: %+v", w)
 
 		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf.CMSIntegration) {
 			log.Infofc(ctx, "validation failed, skipping")
 			return nil
 		}
+
+		log.Infofc(ctx, "validated: model=%s, item=%s",
+			w.ItemData.Model.Key, w.ItemData.Item.ID)
 
 		modelName := strings.TrimPrefix(w.ItemData.Model.Key, cmsintegrationcommon.ModelPrefix)
 		log.Infofc(ctx, "processing: model=%s, item=%s", modelName, w.ItemData.Item.ID)

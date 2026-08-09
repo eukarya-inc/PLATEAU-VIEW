@@ -80,9 +80,13 @@ func TestFeaturesHandler(t *testing.T) {
 	citygmlURL := "http://example.com/udx/bldg/52382287_bldg_6697_psc_op.gml"
 	citygml, err := os.ReadFile("testdata/" + testdata)
 	require.NoError(t, err)
-	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
+	// featureHandler uses safeHTTPClient, which has its own Transport, so
+	// activate httpmock on it too — plain httpmock.Activate() only patches
+	// http.DefaultTransport.
+	httpmock.ActivateNonDefault(safeHTTPClient)
 	httpmock.Activate()
 	defer httpmock.Deactivate()
+	httpmock.RegisterResponder(http.MethodGet, citygmlURL, httpmock.NewBytesResponder(http.StatusOK, citygml))
 
 	u := &url.URL{Path: "/features"}
 	q := url.Values{}

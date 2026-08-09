@@ -152,6 +152,14 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 				"error": "invalid domain",
 			})
 		}
+		// Block private / loopback / cloud-metadata destinations even when
+		// the operator has not configured a Domain allowlist.
+		if err := checkExternalURL(u); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]any{
+				"url":   citygmlURL,
+				"error": "invalid url",
+			})
+		}
 	}
 
 	// sort urls and calculate hash

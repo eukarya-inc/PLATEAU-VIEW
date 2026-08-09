@@ -30,13 +30,17 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		ctx := req.Context()
 		ctx = log.WithPrefixMessage(ctx, "cmsintflow webhook: ")
 
-		log.Infofc(ctx, "incoming: type=%s, project=%s, model=%s, item=%s",
-			w.Type, w.ProjectID(), w.ItemData.Model.Key, w.ItemData.Item.ID)
+		// See webhook.go: ValidatePayload is what filters nil ItemData /
+		// Model / Item, so the pre-validation log must be nil-safe.
+		log.Infofc(ctx, "incoming: type=%s, project=%s", w.Type, w.ProjectID())
 		log.Debugfc(ctx, "incoming payload: %+v", w)
 		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf.CMSIntegration) {
 			log.Infofc(ctx, "validation failed, skipping")
 			return nil
 		}
+
+		log.Infofc(ctx, "validated: model=%s, item=%s",
+			w.ItemData.Model.Key, w.ItemData.Item.ID)
 
 		// Check for status change that should trigger cancellation
 		if shouldCancelFlow(w) {
