@@ -43,6 +43,10 @@ type ReposHandler struct {
 	host               string
 
 	qt *govpolygon.Quadtree
+
+	// simpleCache memoises the expensive whole-catalog computation shared by the
+	// simple datasets API and the tileset / tilejson / CityGML redirect APIs.
+	simpleCache simpleDatasetsCache
 }
 
 const pidParamName = "pid"
@@ -132,7 +136,7 @@ func (h *ReposHandler) SimplePlateauDatasetsAPI() echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context()
-		res, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
+		res, err := h.fetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
 			return err
 		}
@@ -180,14 +184,18 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 		}
 		cityIDs = lo.Uniq(cityIDs)
 
-		// Cap the number of cities resolved from spatial bounds to prevent a single
-		// large-area request (e.g. a prefecture or all-Japan rectangle) from fanning
-		// out into thousands of upstream CMS/CSV calls. This guards the ward-expansion
-		// loop and the per-city fetch below. Explicit city id queries are bounded by
-		// the request itself, so the cap only applies to bounds-derived queries.
-		if len(bounds) > 0 && len(cityIDs) > h.maxCities {
+		// Cap the number of cities per request to prevent a single large request
+		// from fanning out into thousands of upstream CMS/CSV calls. This guards
+		// the ward-expansion loop and the per-city fetch below. The cap applies to
+		// every source of city ids: a wide spatial query (e.g. a prefecture or
+		// all-Japan rectangle) and an explicit comma-separated city id list (which
+		// may enumerate every municipality code in Japan) fan out identically.
+		// The ward expansion below can roughly double the bounds-derived ids; that
+		// is left uncapped on purpose so a valid area query keeps resolving the
+		// parent city codes of the wards it already selected.
+		if len(cityIDs) > h.maxCities {
 			return echo.NewHTTPError(http.StatusBadRequest,
-				fmt.Sprintf("query area too large: %d cities (max %d)", len(cityIDs), h.maxCities))
+				fmt.Sprintf("query too large: %d cities (max %d)", len(cityIDs), h.maxCities))
 		}
 
 		merged, err := h.prepareMergedRepo(c, admin)

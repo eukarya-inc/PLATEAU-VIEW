@@ -24,17 +24,17 @@ type SimpleDatasetsResponse struct {
 // bucket. The URL changes content when a new maintenance year is published,
 // without requiring clients to update the URL itself.
 type SimpleLatestDataset struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Pref     string   `json:"pref"`
-	PrefCode string   `json:"pref_code"`
-	City     *string  `json:"city"`
-	CityCode *string  `json:"city_code"`
-	Ward     *string  `json:"ward"`
-	WardCode *string  `json:"ward_code"`
-	Type     string   `json:"type"`
-	TypeCode string   `json:"type_en"`
-	URL      string   `json:"url"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Pref     string  `json:"pref"`
+	PrefCode string  `json:"pref_code"`
+	City     *string `json:"city"`
+	CityCode *string `json:"city_code"`
+	Ward     *string `json:"ward"`
+	WardCode *string `json:"ward_code"`
+	Type     string  `json:"type"`
+	TypeCode string  `json:"type_en"`
+	URL      string  `json:"url"`
 	// FileSize is the CMS-reported size of the asset at URL, in bytes.
 	// Mirrors the underlying year-specific dataset chosen as the latest.
 	FileSize *int64   `json:"file_size,omitempty"`
@@ -67,13 +67,13 @@ type SimpleLatestCityGMLDataset struct {
 // SimpleCityGMLDataset describes a per-city CityGML merged.zip dataset
 // derived from the G-Spatial Information Center dataset model.
 type SimpleCityGMLDataset struct {
-	ID       string  `json:"id"`
-	Pref     string  `json:"pref"`
-	PrefCode string  `json:"pref_code"`
-	City     string  `json:"city"`
-	CityCode string  `json:"city_code"`
-	URL      string  `json:"url"`
-	FileSize *int64  `json:"file_size,omitempty"`
+	ID               string   `json:"id"`
+	Pref             string   `json:"pref"`
+	PrefCode         string   `json:"pref_code"`
+	City             string   `json:"city"`
+	CityCode         string   `json:"city_code"`
+	URL              string   `json:"url"`
+	FileSize         *int64   `json:"file_size,omitempty"`
 	CompositeURL     *string  `json:"composite_url"`
 	FeatureTypes     []string `json:"feature_types"`
 	Year             int      `json:"year"`

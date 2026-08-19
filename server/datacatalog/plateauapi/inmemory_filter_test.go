@@ -1,6 +1,7 @@
 package plateauapi
 
 import (
+	"context"
 	"testing"
 
 	"github.com/samber/lo"
@@ -444,4 +445,21 @@ func TestFilterDatasetType(t *testing.T) {
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestVisibilityKey(t *testing.T) {
+	ctx := context.Background()
+	assert.Equal(t, "public|", VisibilityKey(ctx))
+	assert.Equal(t, "admin|", VisibilityKey(BypassAdminRemoval(ctx, true)))
+	assert.Equal(t, "public|", VisibilityKey(BypassAdminRemoval(ctx, false)))
+
+	// Stage order must not change the key, but the stage set must.
+	assert.Equal(t,
+		VisibilityKey(AllowAdminStages(ctx, []string{"alpha", "beta"})),
+		VisibilityKey(AllowAdminStages(ctx, []string{"beta", "alpha"})),
+	)
+	assert.NotEqual(t,
+		VisibilityKey(AllowAdminStages(ctx, []string{"beta"})),
+		VisibilityKey(AllowAdminStages(ctx, []string{"alpha", "beta"})),
+	)
 }

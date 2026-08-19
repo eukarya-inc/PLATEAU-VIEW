@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
@@ -34,17 +35,24 @@ func newCityQuadtree(n int) *govpolygon.Quadtree {
 	return govpolygon.NewQuadtree(features, 0)
 }
 
-// A bounds-derived query that resolves to more cities than maxCities must be
-// rejected with 400 before any upstream CMS/CSV fan-out happens. This covers
-// both the mesh path (m) and the rectangle path (r); the rectangle path only
-// resolves cities once parseCityGMLFilesQuery appends its bound.
+// A query that resolves to more cities than maxCities must be rejected with 400
+// before any upstream CMS/CSV fan-out happens. This covers the mesh path (m),
+// the rectangle path (r) — which only resolves cities once
+// parseCityGMLFilesQuery appends its bound — and an explicit comma-separated
+// city id list, which bypasses the quadtree entirely but fans out the same way.
 func TestCityGMLFiles_RejectsTooManyCities(t *testing.T) {
+	explicit := make([]string, 0, 60)
+	for i := range 60 {
+		explicit = append(explicit, fmt.Sprintf("%05d", 13000+i))
+	}
+
 	tests := []struct {
 		name       string
 		conditions string
 	}{
 		{"mesh", "m:5339"},                       // level-1 mesh covering all 60 cities
 		{"rectangle", "r:139.0,35.4,139.1,35.6"}, // rectangle covering all 60 cities
+		{"explicit city ids", strings.Join(explicit, ",")},
 	}
 
 	for _, tt := range tests {
@@ -69,4 +77,32 @@ func TestCityGMLFiles_RejectsTooManyCities(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, he.Code)
 		})
 	}
+}
+
+// A city id list within the cap must pass the guard: the request then fails on
+// repo resolution (there is no CMS metadata in this test), not with 400.
+func TestCityGMLFiles_AllowsCityIDsWithinCap(t *testing.T) {
+	ids := make([]string, 0, 10)
+	for i := range 10 {
+		ids = append(ids, fmt.Sprintf("%05d", 13000+i))
+	}
+
+	h := &ReposHandler{
+		qt:        newCityQuadtree(0),
+		maxCities: 50,
+	}
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames(conditionsParamName)
+	c.SetParamValues(strings.Join(ids, ","))
+
+	err := h.CityGMLFiles(false)(c)
+
+	require.Error(t, err)
+	he, ok := err.(*echo.HTTPError)
+	require.True(t, ok, "expected *echo.HTTPError, got %T", err)
+	assert.Equal(t, http.StatusNotFound, he.Code)
 }

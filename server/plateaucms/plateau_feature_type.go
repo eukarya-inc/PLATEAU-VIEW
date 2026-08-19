@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/rerror"
@@ -110,11 +111,76 @@ func (f DatasetTypeList) Codes(cat string) []string {
 	return codes
 }
 
+// PlateauFeatureTypes returns the plateau feature types registered in the CMS
+// system project. The whole model is paginated on a miss, which is far too
+// expensive to repeat per request (the public CityGML files API needs it on
+// every call), so results are memoised for a short TTL and concurrent misses
+// are collapsed with singleflight — the same approach as AllMetadata.
 func (h *CMS) PlateauFeatureTypes(ctx context.Context) (PlateauFeatureTypeList, error) {
 	if h.cmsSysProject == "" {
 		return nil, rerror.ErrNotFound
 	}
 
+	if cached, ok := h.cachedPlateauFeatureTypes(); ok {
+		return cached, nil
+	}
+
+	v, err, _ := h.featureTypeSF.Do("plateauFeatureTypes", func() (any, error) {
+		// Recheck under singleflight: an earlier waiter may have populated the
+		// cache while this goroutine was queued.
+		if cached, ok := h.cachedPlateauFeatureTypes(); ok {
+			return cached, nil
+		}
+
+		// Detach cancellation for the shared fetch: singleflight has multiple
+		// waiters and the leader is a coincidence — if the leader's request is
+		// cancelled (client disconnect / handler deadline), the upstream fetch
+		// must still complete so the other waiters aren't poisoned by
+		// context.Canceled. A bounded timeout keeps a stuck upstream from
+		// hanging the group forever.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), metadataFetchTimeout)
+		defer cancel()
+
+		list, err := h.fetchPlateauFeatureTypes(fetchCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		h.storePlateauFeatureTypes(list)
+		return list, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(PlateauFeatureTypeList), nil
+}
+
+func (h *CMS) cachedPlateauFeatureTypes() (PlateauFeatureTypeList, bool) {
+	if h.featureTypeCacheTTL <= 0 {
+		return nil, false
+	}
+
+	h.featureTypeMu.RLock()
+	defer h.featureTypeMu.RUnlock()
+
+	if h.featureTypeCache == nil || time.Since(h.featureTypeFetched) >= h.featureTypeCacheTTL {
+		return nil, false
+	}
+	return h.featureTypeCache, true
+}
+
+func (h *CMS) storePlateauFeatureTypes(list PlateauFeatureTypeList) {
+	if h.featureTypeCacheTTL <= 0 {
+		return
+	}
+
+	h.featureTypeMu.Lock()
+	defer h.featureTypeMu.Unlock()
+	h.featureTypeCache = list
+	h.featureTypeFetched = time.Now()
+}
+
+func (h *CMS) fetchPlateauFeatureTypes(ctx context.Context) (PlateauFeatureTypeList, error) {
 	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsSysProject, plateauFeatureTypesModel, true, 100)
 	if err != nil || items == nil {
 		if errors.Is(err, cms.ErrNotFound) || items == nil {
@@ -133,11 +199,66 @@ func (h *CMS) PlateauFeatureTypes(ctx context.Context) (PlateauFeatureTypeList, 
 	return all, nil
 }
 
+// DatasetTypes returns the dataset types registered in the CMS system project.
+// Cached the same way as PlateauFeatureTypes.
 func (h *CMS) DatasetTypes(ctx context.Context) (DatasetTypeList, error) {
 	if h.cmsSysProject == "" {
 		return nil, rerror.ErrNotFound
 	}
 
+	if cached, ok := h.cachedDatasetTypes(); ok {
+		return cached, nil
+	}
+
+	v, err, _ := h.featureTypeSF.Do("datasetTypes", func() (any, error) {
+		if cached, ok := h.cachedDatasetTypes(); ok {
+			return cached, nil
+		}
+
+		// See PlateauFeatureTypes for why the shared fetch is detached.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), metadataFetchTimeout)
+		defer cancel()
+
+		list, err := h.fetchDatasetTypes(fetchCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		h.storeDatasetTypes(list)
+		return list, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(DatasetTypeList), nil
+}
+
+func (h *CMS) cachedDatasetTypes() (DatasetTypeList, bool) {
+	if h.featureTypeCacheTTL <= 0 {
+		return nil, false
+	}
+
+	h.featureTypeMu.RLock()
+	defer h.featureTypeMu.RUnlock()
+
+	if h.datasetTypeCache == nil || time.Since(h.datasetTypeFetched) >= h.featureTypeCacheTTL {
+		return nil, false
+	}
+	return h.datasetTypeCache, true
+}
+
+func (h *CMS) storeDatasetTypes(list DatasetTypeList) {
+	if h.featureTypeCacheTTL <= 0 {
+		return
+	}
+
+	h.featureTypeMu.Lock()
+	defer h.featureTypeMu.Unlock()
+	h.datasetTypeCache = list
+	h.datasetTypeFetched = time.Now()
+}
+
+func (h *CMS) fetchDatasetTypes(ctx context.Context) (DatasetTypeList, error) {
 	items, err := h.cmsMain.GetItemsByKeyInParallel(ctx, h.cmsSysProject, datasetTypesModel, true, 100)
 	if err != nil || items == nil {
 		if errors.Is(err, cms.ErrNotFound) || items == nil {

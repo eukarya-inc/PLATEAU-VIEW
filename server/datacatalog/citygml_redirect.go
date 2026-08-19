@@ -34,7 +34,7 @@ func (h *ReposHandler) CityGMLRedirectAPI() echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context()
-		simple, err := FetchSimplePlateauDatasets(ctx, merged, h.host)
+		simple, err := h.fetchSimplePlateauDatasets(ctx, merged, h.host)
 		if err != nil {
 			return err
 		}

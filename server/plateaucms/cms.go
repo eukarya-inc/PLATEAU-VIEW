@@ -75,6 +75,15 @@ type CMS struct {
 	metadataMu       sync.RWMutex
 	metadataCache    MetadataList
 	metadataFetched  time.Time
+
+	// plateau feature type / dataset type cache
+	featureTypeCacheTTL time.Duration
+	featureTypeSF       singleflight.Group
+	featureTypeMu       sync.RWMutex
+	featureTypeCache    PlateauFeatureTypeList
+	featureTypeFetched  time.Time
+	datasetTypeCache    DatasetTypeList
+	datasetTypeFetched  time.Time
 }
 
 func New(c Config) (*CMS, error) {
@@ -92,10 +101,11 @@ func New(c Config) (*CMS, error) {
 		cmsSysProject: c.CMSSystemProject,
 		cmsMain:       cmsMain,
 		// compat
-		cmsMainProject:   c.CMSMainProject,
-		cmsToken:         c.CMSMainToken,
-		adminToken:       c.AdminToken,
-		metadataCacheTTL: defaultMetadataCacheTTL,
+		cmsMainProject:      c.CMSMainProject,
+		cmsToken:            c.CMSMainToken,
+		adminToken:          c.AdminToken,
+		metadataCacheTTL:    defaultMetadataCacheTTL,
+		featureTypeCacheTTL: defaultMetadataCacheTTL,
 	}, nil
 }
 
@@ -116,10 +126,11 @@ func (h *CMS) Clone() *CMS {
 		cmsSysProject: h.cmsSysProject,
 		cmsMain:       h.cmsMain,
 		// compat
-		cmsMainProject:   h.cmsMainProject,
-		cmsToken:         h.cmsToken,
-		adminToken:       h.adminToken,
-		metadataCacheTTL: h.metadataCacheTTL,
+		cmsMainProject:      h.cmsMainProject,
+		cmsToken:            h.cmsToken,
+		adminToken:          h.adminToken,
+		metadataCacheTTL:    h.metadataCacheTTL,
+		featureTypeCacheTTL: h.featureTypeCacheTTL,
 		// Note: singleflight.Group and cache state intentionally not copied —
 		// a clone is a fresh instance that maintains its own cache.
 	}

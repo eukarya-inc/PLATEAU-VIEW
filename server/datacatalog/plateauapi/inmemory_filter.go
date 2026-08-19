@@ -422,3 +422,18 @@ func allowAdminStages(ctx context.Context) []string {
 	b, _ := ctx.Value(allowedAdminStagesKey{}).([]string)
 	return b
 }
+
+// VisibilityKey returns a deterministic token that summarizes the
+// request-scoped visibility flags which decide what a repo exposes: whether
+// admin-only entries are kept, and which admin stages are allowed. Two
+// contexts that produce the same token observe the same data, so the token can
+// safely be part of a cache key for repo-derived responses.
+func VisibilityKey(ctx context.Context) string {
+	stages := append([]string(nil), allowAdminStages(ctx)...)
+	slices.Sort(stages)
+	prefix := "public"
+	if bypassAdminRemoval(ctx) {
+		prefix = "admin"
+	}
+	return prefix + "|" + strings.Join(stages, ",")
+}
