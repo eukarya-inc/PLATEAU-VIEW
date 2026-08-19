@@ -5,9 +5,11 @@ resource "aws_s3_bucket" "reearth_cms_assets" {
 resource "aws_s3_bucket_public_access_block" "reearth_cms_assets" {
   bucket = aws_s3_bucket.reearth_cms_assets.id
 
-  block_public_acls       = false
+  block_public_acls  = true
+  ignore_public_acls = true
+  # The bucket policy intentionally grants anonymous read access to the assets,
+  # so these two have to stay disabled.
   block_public_policy     = false
-  ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
@@ -39,10 +41,10 @@ data "aws_iam_policy_document" "reearth_cms_assets" {
       identifiers = ["*"]
     }
 
+    # Anonymous access is read only. Uploads and deletions are done by the CMS
+    # server and worker with their App Runner instance roles.
     actions = [
       "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
     ]
 
     resources = [

@@ -126,6 +126,7 @@ resource "aws_iam_role_policy" "plateauview_geo_instance" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
+          "s3:DeleteObject",
         ]
         Resource = [
           "${aws_s3_bucket.plateauview_geo_tile.arn}/*",

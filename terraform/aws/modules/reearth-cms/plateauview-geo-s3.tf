@@ -12,9 +12,12 @@ resource "aws_s3_bucket_ownership_controls" "plateauview_geo_tile" {
 resource "aws_s3_bucket_public_access_block" "plateauview_geo_tile" {
   bucket = aws_s3_bucket.plateauview_geo_tile.id
 
-  block_public_acls       = false
+  # Object ownership is BucketOwnerEnforced, so ACLs are not used at all.
+  block_public_acls  = true
+  ignore_public_acls = true
+  # The bucket policy intentionally grants anonymous read access to the tiles,
+  # so these two have to stay disabled.
   block_public_policy     = false
-  ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
@@ -47,10 +50,10 @@ data "aws_iam_policy_document" "plateauview_geo_tile" {
       identifiers = ["*"]
     }
 
+    # Anonymous access is read only. The tile cache is written by the geo service
+    # with its App Runner instance role.
     actions = [
       "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
     ]
 
     resources = [
