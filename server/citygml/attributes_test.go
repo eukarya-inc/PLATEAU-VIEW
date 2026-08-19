@@ -111,7 +111,7 @@ func TestAttributesHandlerCodeOnly(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	assert.NoError(t, attributeHandler("")(c))
+	assert.NoError(t, attributeHandler("example.com")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))
@@ -158,7 +158,7 @@ func TestAttributesHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	assert.NoError(t, attributeHandler("")(c))
+	assert.NoError(t, attributeHandler("example.com")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))

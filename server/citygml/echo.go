@@ -62,22 +62,39 @@ func Echo(conf Config, g *echo.Group) error {
 	return nil
 }
 
+// validateCityGMLURL checks whether the given URL may be fetched by the server.
+// The allowed domain must be configured: when it is empty, every URL is rejected
+// so that this API cannot be used to fetch arbitrary URLs on behalf of the server.
+// It returns a non-zero HTTP status code and an error message when the URL is not allowed.
+func validateCityGMLURL(citygmlURL, domain string) (int, string) {
+	if domain == "" {
+		return http.StatusServiceUnavailable, "citygml domain is not configured"
+	}
+
+	u, err := url.Parse(citygmlURL)
+	if err != nil {
+		return http.StatusBadRequest, "invalid url"
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return http.StatusBadRequest, "invalid url scheme"
+	}
+
+	if u.Host != domain {
+		return http.StatusBadRequest, "invalid domain"
+	}
+
+	return 0, ""
+}
+
 func attributeHandler(domain string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		ctx := c.Request().Context()
 		citygmlURL := c.QueryParam("url")
-		u, err := url.Parse(citygmlURL)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]any{
+		if code, msg := validateCityGMLURL(citygmlURL, domain); code != 0 {
+			return c.JSON(code, map[string]any{
 				"url":   citygmlURL,
-				"error": "invalid url",
-			})
-		}
-
-		if domain != "" && u.Host != domain {
-			return c.JSON(http.StatusBadRequest, map[string]any{
-				"url":   citygmlURL,
-				"error": "invalid domain",
+				"error": msg,
 			})
 		}
 
@@ -240,18 +257,10 @@ func featureHandler(domain string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		ctx := c.Request().Context()
 		citygmlURL := c.QueryParam("url")
-		u, err := url.Parse(citygmlURL)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]any{
+		if code, msg := validateCityGMLURL(citygmlURL, domain); code != 0 {
+			return c.JSON(code, map[string]any{
 				"url":   citygmlURL,
-				"error": "invalid url",
-			})
-		}
-
-		if domain != "" && u.Host != domain {
-			return c.JSON(http.StatusBadRequest, map[string]any{
-				"url":   citygmlURL,
-				"error": "invalid domain",
+				"error": msg,
 			})
 		}
 

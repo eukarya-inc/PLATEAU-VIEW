@@ -31,7 +31,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		ctx = log.WithPrefixMessage(ctx, "cmsintflow webhook: ")
 
 		log.Infofc(ctx, "incoming: type=%s, project=%s, model=%s, item=%s",
-			w.Type, w.ProjectID(), w.ItemData.Model.Key, w.ItemData.Item.ID)
+			w.Type, w.ProjectID(), cmsintegrationcommon.PayloadModelKey(w), cmsintegrationcommon.PayloadItemID(w))
 		log.Debugfc(ctx, "incoming payload: %+v", w)
 		if !cmsintegrationcommon.ValidatePayload(ctx, w, conf.CMSIntegration) {
 			log.Infofc(ctx, "validation failed, skipping")

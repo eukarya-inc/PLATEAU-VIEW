@@ -1,6 +1,9 @@
 package cmsintegration
 
 import (
+	"errors"
+	"net/http"
+
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv2"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationv2/geospatialjpv2"
@@ -13,6 +16,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/geospatialjpv3"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
+	"github.com/reearth/reearthx/log"
 )
 
 type Config = cmsintegrationcommon.Config
@@ -103,11 +107,28 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		return nil, err
 	}
 
-	return cmswebhook.MergeHandlers([]cmswebhook.Handler{
+	return mergeHandlers([]cmswebhook.Handler{
 		hflow, hv3, hv3geo, hmaxlod, hrelated,
 		// compat
 		hv2, hv2geo, hv2dataconv,
 	}), nil
+}
+
+// mergeHandlers merges webhook handlers into a single handler.
+// Unlike cmswebhook.MergeHandlers, it runs every handler even when a preceding
+// handler fails, since each handler processes the event independently.
+// Failures are logged and joined into a single error.
+func mergeHandlers(handlers []cmswebhook.Handler) cmswebhook.Handler {
+	return func(r *http.Request, p *cmswebhook.Payload) error {
+		var errs []error
+		for i, h := range handlers {
+			if err := h(r, p); err != nil {
+				log.Errorfc(r.Context(), "cmsintegration webhook: handler %d failed: %v", i, err)
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
 }
 
 func maxlodConfig(conf Config) cmsintlodstat.Config {

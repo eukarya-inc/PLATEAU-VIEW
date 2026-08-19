@@ -94,7 +94,7 @@ func TestFeaturesHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	assert.NoError(t, featureHandler("")(c))
+	assert.NoError(t, featureHandler("example.com")(c))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get(echo.HeaderContentType))

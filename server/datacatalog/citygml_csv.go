@@ -80,7 +80,7 @@ func fetchCSV(ctx context.Context, url, prefix string) (records [][]string, _ er
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, rerror.ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to request: %w", err)
+		return nil, fmt.Errorf("failed to request: status code %d", resp.StatusCode)
 	}
 
 	// Handle gzip decompression if content is gzip encoded

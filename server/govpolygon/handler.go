@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,19 +20,31 @@ import (
 	"github.com/reearth/reearthx/log"
 	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
+	"golang.org/x/sync/singleflight"
 )
 
-var cahceDuration = 6 * time.Hour
+var cacheDuration = 6 * time.Hour
+
+// failureCacheDuration is how long a failed update is remembered.
+// Without it, every queued request would re-issue the same expensive query
+// against a data catalog that is already struggling.
+var failureCacheDuration = 1 * time.Minute
+
+// errUpdateRecentlyFailed is returned when an update is skipped because a
+// recent attempt failed.
+var errUpdateRecentlyFailed = errors.New("update recently failed")
 
 type Handler struct {
 	// e.g. "http://[::]:8080"
 	gqlEndpoint       string
 	httpClient        *http.Client
 	lock              sync.RWMutex
+	group             singleflight.Group
 	geojson           []byte
 	qt                *Quadtree
 	updateIfNotExists bool
 	updatedAt         time.Time
+	failedAt          time.Time
 }
 
 func New(gqlEndpoint string, updateIfNotExists bool) *Handler {
@@ -51,10 +64,19 @@ func (h *Handler) Route(g *echo.Group) *Handler {
 }
 
 func (h *Handler) updateIfNeed(c echo.Context) {
-	if h.updateIfNotExists && h.geojson == nil {
-		if err := h.Update(c); err != nil {
-			log.Errorfc(c.Request().Context(), "govpolygon: fail to init: %v", err)
-		}
+	if !h.updateIfNotExists {
+		return
+	}
+
+	h.lock.RLock()
+	exists := h.geojson != nil
+	h.lock.RUnlock()
+	if exists {
+		return
+	}
+
+	if err := h.Update(c); err != nil && !errors.Is(err, errUpdateRecentlyFailed) {
+		log.Errorfc(c.Request().Context(), "govpolygon: fail to init: %v", err)
 	}
 }
 
@@ -70,36 +92,65 @@ func (h *Handler) GetGeoJSON(c echo.Context) error {
 }
 
 func (h *Handler) Update(c echo.Context) error {
-	if !h.updatedAt.IsZero() && util.Now().Sub(h.updatedAt) < cahceDuration {
+	ctx := c.Request().Context()
+
+	// Only one update runs at a time; concurrent requests share its result
+	// instead of each issuing the same expensive catalog query.
+	_, err, _ := h.group.Do("update", func() (any, error) {
+		return nil, h.update(ctx)
+	})
+
+	return err
+}
+
+func (h *Handler) update(ctx context.Context) error {
+	h.lock.RLock()
+	updatedAt, failedAt := h.updatedAt, h.failedAt
+	h.lock.RUnlock()
+
+	now := util.Now()
+	if !updatedAt.IsZero() && now.Sub(updatedAt) < cacheDuration {
 		return nil
 	}
-
-	log.Infofc(c.Request().Context(), "govpolygon: updating")
-
-	initial := h.geojson == nil
-	if initial {
-		h.lock.Lock()
-		defer h.lock.Unlock()
-		if h.geojson != nil {
-			return nil
-		}
+	if !failedAt.IsZero() && now.Sub(failedAt) < failureCacheDuration {
+		return errUpdateRecentlyFailed
 	}
 
-	ctx := c.Request().Context()
+	log.Infofc(ctx, "govpolygon: updating")
+
+	// The query and the computation are intentionally done without holding the
+	// write lock: it is taken only to swap the results in.
+	geojsonj, qt, err := h.compute(ctx)
+	if err != nil {
+		h.lock.Lock()
+		h.failedAt = util.Now()
+		h.lock.Unlock()
+		return err
+	}
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	h.geojson = geojsonj
+	h.qt = qt
+	h.updatedAt = util.Now()
+	h.failedAt = time.Time{}
+
+	return nil
+}
+
+func (h *Handler) compute(ctx context.Context) ([]byte, *Quadtree, error) {
 	q, err := h.getCityNames(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	g, notfound, err := ComputeGeoJSON(q)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if len(notfound) > 0 {
-		log.Debugfc(context.Background(), "govpolygon: not found polygon: %v", notfound)
+		log.Debugfc(ctx, "govpolygon: not found polygon: %v", notfound)
 	}
-
-	h.qt = NewQuadtree(g, 0)
 
 	fc := geojson.NewFeatureCollection()
 	for _, f := range g {
@@ -108,18 +159,10 @@ func (h *Handler) Update(c echo.Context) error {
 
 	geojsonj, err := json.Marshal(fc)
 	if err != nil {
-		return fmt.Errorf("failed to marshal geojson: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal geojson: %w", err)
 	}
 
-	if !initial {
-		h.lock.Lock()
-		defer h.lock.Unlock()
-	}
-
-	h.geojson = geojsonj
-	h.updatedAt = util.Now()
-
-	return nil
+	return geojsonj, NewQuadtree(g, 0), nil
 }
 
 func (h *Handler) getCityNames(ctx context.Context) ([]string, error) {

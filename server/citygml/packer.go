@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"path"
 	"slices"
 	"strconv"
@@ -139,17 +138,10 @@ func (p *packer) handlePackRequest(c echo.Context) error {
 
 	// validate urls
 	for _, citygmlURL := range req.URLs {
-		u, err := url.Parse(citygmlURL)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]any{
+		if code, msg := validateCityGMLURL(citygmlURL, p.conf.Domain); code != 0 {
+			return c.JSON(code, map[string]any{
 				"url":   citygmlURL,
-				"error": "invalid url",
-			})
-		}
-		if p.conf.Domain != "" && u.Host != p.conf.Domain {
-			return c.JSON(http.StatusBadRequest, map[string]any{
-				"url":   citygmlURL,
-				"error": "invalid domain",
+				"error": msg,
 			})
 		}
 	}

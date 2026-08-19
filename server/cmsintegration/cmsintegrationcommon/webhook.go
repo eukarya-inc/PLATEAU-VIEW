@@ -8,7 +8,32 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
+// PayloadModelKey returns the model key of the payload.
+// It returns an empty string when the payload has no item data,
+// which is the case for non-item events such as asset uploads.
+func PayloadModelKey(w *cmswebhook.Payload) string {
+	if w == nil || w.ItemData == nil || w.ItemData.Model == nil {
+		return ""
+	}
+	return w.ItemData.Model.Key
+}
+
+// PayloadItemID returns the item ID of the payload.
+// It returns an empty string when the payload has no item data,
+// which is the case for non-item events such as asset uploads.
+func PayloadItemID(w *cmswebhook.Payload) string {
+	if w == nil || w.ItemData == nil || w.ItemData.Item == nil {
+		return ""
+	}
+	return w.ItemData.Item.ID
+}
+
 func ValidatePayload(ctx context.Context, w *cmswebhook.Payload, cmsintegration string) bool {
+	if w == nil {
+		log.Debugfc(ctx, "invalid event: no payload")
+		return false
+	}
+
 	if !w.Operator.IsUser() && w.Operator.IsIntegrationBy(cmsintegration) {
 		log.Debugfc(ctx, "invalid event operator: %+v", w.Operator)
 		return false
