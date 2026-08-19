@@ -147,20 +147,67 @@ interface Cog {
   etag: string;
 }
 
-/** List every `.tif`/`.tiff` under `prefix` (paginated). Empty prefix = whole bucket. */
-async function listCogs(bucket: R2Bucket, prefix: string): Promise<Cog[]> {
-  const cogs: Cog[] = [];
+/**
+ * Hard ceiling on how many COGs one `config.json` may enumerate, across all
+ * prefixes. Workers have a 128 MB per-isolate memory cap and config generation
+ * holds three representations of the document at once (the `Cog[]`, the source /
+ * layer object graph, and the serialized JSON string), so the peak footprint is
+ * a few hundred bytes per COG:
+ *
+ *   30,000 COGs ~= 4-5 MB of `Cog[]`, ~10 MB of layer objects (URL strings shared
+ *   between the per-group and `-all` layers), ~6 MB of compact JSON plus the
+ *   serializer's growth headroom and the Response body copy -> ~30 MB peak,
+ *   under a quarter of the 128 MB cap, i.e. ~4x headroom for runtime overhead.
+ *
+ * Beyond that the trend line runs into the cap and an OOM-killed isolate would
+ * take `/<dataset>/config.json` — and with it the tile server's CONFIG_URL
+ * revalidation — permanently offline. So we stop and fail loudly instead (see
+ * `tooManyCogs`). Raising this needs the mosaic split across several configs
+ * (`?prefix=`), not just a bigger number.
+ */
+const MAX_CONFIG_COGS = 30_000;
+
+/**
+ * Append every `.tif`/`.tiff` under `prefix` to `cogs` (paginated). Empty prefix
+ * = whole bucket. Returns false — leaving `cogs` at the cap — as soon as the
+ * total would exceed `MAX_CONFIG_COGS`, so listing work stays bounded at roughly
+ * the cap plus one 1,000-key page per prefix. Callers must treat false as an
+ * error, never as a usable (truncated) result.
+ */
+async function listCogs(bucket: R2Bucket, prefix: string, cogs: Cog[]): Promise<boolean> {
   let cursor: string | undefined;
   do {
     const res = await bucket.list({ prefix: prefix || undefined, cursor, limit: 1000 });
     for (const o of res.objects) {
       if (o.key.endsWith(".tif") || o.key.endsWith(".tiff")) {
+        if (cogs.length >= MAX_CONFIG_COGS) return false;
         cogs.push({ key: o.key, etag: o.etag });
       }
     }
     cursor = res.truncated ? (res.cursor ?? undefined) : undefined;
   } while (cursor);
-  return cogs;
+  return true;
+}
+
+/**
+ * 500 for a bucket that outgrew `MAX_CONFIG_COGS`. Deliberately an error and not
+ * a truncated config: a short mosaic still parses, so the tile server would
+ * silently render with data missing. `no-store` keeps the failure from being
+ * cached — the fix (splitting by `?prefix=`) should take effect immediately.
+ */
+function tooManyCogs(cors: Headers, dataset: string): Response {
+  const headers = new Headers(cors);
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("cache-control", "no-store");
+  const body = {
+    error: "too_many_cogs",
+    message:
+      `too many COGs for config generation in dataset "${dataset}": more than ` +
+      `${MAX_CONFIG_COGS} match the requested prefixes. Scope the request with ` +
+      `?prefix= and list the resulting config URLs separately.`,
+    limit: MAX_CONFIG_COGS,
+  };
+  return new Response(JSON.stringify(body), { status: 500, headers });
 }
 
 /**
@@ -191,6 +238,11 @@ function demPriority(key: string): number {
  * `ortho-2024`), plus a cumulative `<dataset>-all` stacking every COG with layer
  * `order` = numeric group, so newer groups win where footprints overlap — the
  * COG equivalent of the production all-years ortho mosaic.
+ *
+ * Every COG appears twice (once per-group, once in `-all`), so both passes run in
+ * one loop and each COG's URL string is built once and shared by reference
+ * between the two layer objects — the strings dominate this graph, and
+ * duplicating them would double it (see `MAX_CONFIG_COGS`).
  */
 function rasterSources(
   cogs: Cog[],
@@ -198,28 +250,34 @@ function rasterSources(
   origin: string,
 ): Record<string, TileSource> {
   const sources: Record<string, TileSource> = {};
+  const allLayers: TileCogLayer[] = [];
 
-  // Per-group mosaics.
   for (const o of cogs) {
     const slash = o.key.indexOf("/");
     const group = slash === -1 ? "" : o.key.slice(0, slash);
     const name = group ? `${dataset}-${group}` : dataset;
+    const url = cogUrl(origin, dataset, o.key);
+
+    // Per-group mosaic.
     (sources[name] ??= {
       description: group ? `${dataset} ${group} COG mosaic` : `${dataset} COG mosaic`,
       layers: [],
-    }).layers.push({ type: "cog", url: cogUrl(origin, dataset, o.key) });
+    }).layers.push({ type: "cog", url });
+
+    // Same COG, same URL string, for the cumulative "-all" source below.
+    const layer: TileCogLayer = { type: "cog", url };
+    // A group-less key has no numeric order (matching `Number("<key>.tif")` = NaN).
+    const order = slash === -1 ? NaN : Number(group);
+    if (Number.isFinite(order)) layer.order = order;
+    allLayers.push(layer);
   }
 
-  // Cumulative "-all": every COG, newer group (higher order) on top.
-  if (cogs.length > 0) {
+  // Cumulative "-all": every COG, newer group (higher order) on top. Inserted
+  // after the per-group sources, so key order in the emitted JSON is unchanged.
+  if (allLayers.length > 0) {
     sources[`${dataset}-all`] = {
       description: `${dataset} all groups, newest on top (${cogs.length} COGs)`,
-      layers: cogs.map((o) => {
-        const layer: TileCogLayer = { type: "cog", url: cogUrl(origin, dataset, o.key) };
-        const group = Number(o.key.split("/")[0]);
-        if (Number.isFinite(group)) layer.order = group;
-        return layer;
-      }),
+      layers: allLayers,
     };
   }
 
@@ -271,6 +329,12 @@ function demSource(
  * defaults to `base/,patch/,sea/` in dem mode (skips the quantized-mesh mirror)
  * and the whole bucket otherwise. `version` is an FNV-1a hash of every key+etag,
  * so the tile server's config revalidation picks up any COG add/change/remove.
+ *
+ * Enumeration is bounded by `MAX_CONFIG_COGS` — the default raster prefix is the
+ * whole bucket, and an unbounded listing would eventually OOM the isolate. Past
+ * the cap this returns 500 rather than a short mosaic; the body is emitted
+ * compactly (no pretty-printing) to keep the peak footprint down, since only the
+ * tile server reads it.
  */
 export async function tileConfig(
   bucket: R2Bucket,
@@ -302,7 +366,9 @@ export async function tileConfig(
 
   const cogs: Cog[] = [];
   for (const prefix of prefixes) {
-    cogs.push(...(await listCogs(bucket, prefix)));
+    if (!(await listCogs(bucket, prefix, cogs))) {
+      return tooManyCogs(cors, dataset);
+    }
   }
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
@@ -320,8 +386,10 @@ export async function tileConfig(
   }
   const version = `${dataset}-${cogs.length}-${(h >>> 0).toString(16)}`;
 
+  // Compact, not pretty-printed: indentation would multiply the largest single
+  // allocation in the request for a machine-only document.
   const config: TileConfig = { version, sources };
-  return new Response(JSON.stringify(config, null, 2), { headers });
+  return new Response(JSON.stringify(config), { headers });
 }
 
 interface ListingEntry {
