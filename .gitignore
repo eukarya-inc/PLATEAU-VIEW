@@ -7,3 +7,10 @@ node_modules
 /extension/dist
 /server/server
 /tools/*/target
+/tmp
+
+# Wrangler local state / build cache
+.wrangler/
+
+# rclone remotes: hold live R2 access keys
+rclone*.conf
