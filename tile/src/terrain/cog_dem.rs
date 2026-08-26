@@ -370,6 +370,13 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
                 .map_err(|e| DemError::Http(format!("S3 store init: {e}")))?;
             Ok((Arc::new(store), ObjectPath::from(parsed.path())))
         }
+        "r2" => {
+            // Cloudflare R2 (S3-compatible). Credentials + endpoint from R2_*
+            // env vars via the shared factory.
+            let (store, path, _) = crate::cache::CacheStoreFactory::create(url)
+                .map_err(|e| DemError::Http(format!("R2 store init: {e}")))?;
+            Ok((store, path))
+        }
         other => Err(DemError::Decode(format!(
             "unsupported cog URL scheme: {other}"
         ))),

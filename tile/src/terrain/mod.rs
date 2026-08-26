@@ -16,6 +16,7 @@ pub mod mapterhorn;
 pub mod mesh_gen;
 pub mod mirror;
 pub mod pmtiles;
+pub mod sealevel;
 pub mod settings;
 pub mod webmercator;
 pub mod xyz_dem;

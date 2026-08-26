@@ -15,6 +15,7 @@ use super::mapterhorn::{
     MAPTERHORN_NATIVE_TILE_SIZE, MapterhornSource,
 };
 use super::pmtiles::{PmtilesEncoding, PmtilesSource};
+use super::sealevel::{SeaLevelDem, is_sea_level_url};
 
 const DEFAULT_TERRAIN_TILE_SIZE: u32 = 256;
 const DEFAULT_TERRAIN_MAX_ZOOM: u8 = 18;
@@ -82,6 +83,12 @@ impl TerrainSettings {
             .clone()
             .unwrap_or_else(|| DEFAULT_MAPTERHORN_URL.to_string());
 
+        if is_sea_level_url(&url) {
+            tracing::info!(
+                "Terrain DEM source: sea level (flat 0 m base; Mapterhorn fallback disabled)"
+            );
+            return Arc::new(SeaLevelDem);
+        }
         if is_pmtiles_url(&url) {
             tracing::info!(url = %url, "Terrain DEM source: PMTiles");
             Arc::new(PmtilesSource::new(

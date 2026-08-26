@@ -199,7 +199,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DEM_URL` | No | Mapterhorn public endpoint | DEM source URL. If it ends with `.pmtiles`, the server reads it as a PMTiles archive. Schemes: `https://` (any HTTPS host), `gs://bucket/key` (Google Cloud Storage, supports private via ADC / `GOOGLE_APPLICATION_CREDENTIALS`), `s3://bucket/key` (AWS S3 / S3-compatible), `r2://bucket/key` (Cloudflare R2 — set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), `file:///path/to.pmtiles`. Anything else is treated as a Mapterhorn-style `{z}/{x}/{y}` template |
+| `DEM_URL` | No | Mapterhorn public endpoint | DEM source URL. If it ends with `.pmtiles`, the server reads it as a PMTiles archive. Schemes: `https://` (any HTTPS host), `gs://bucket/key` (Google Cloud Storage, supports private via ADC / `GOOGLE_APPLICATION_CREDENTIALS`), `s3://bucket/key` (AWS S3 / S3-compatible), `r2://bucket/key` (Cloudflare R2 — set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), `file:///path/to.pmtiles`. The sentinel value `sealevel` (aliases: `sea-level`, `none`, `0m`) selects a flat 0 m base instead of a real upstream — terrain then comes solely from the `dem` source's overlays, and uncovered pixels render at the geoid height (mean sea level). Anything else is treated as a Mapterhorn-style `{z}/{x}/{y}` template |
 | `DEM_VERSION` | No | `v1` | Internal version key, mixed into cache keys. Bump for an explicit cache break |
 | `DEM_MAX_ZOOM` | No | `15` | Upstream DEM max zoom (clamps `/terrain/` requests above this) |
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
@@ -222,6 +222,9 @@ R2_ACCOUNT_ID=xxxx R2_ACCESS_KEY_ID=xxxx R2_SECRET_ACCESS_KEY=xxxx \
 
 # Local file
 DEM_URL=file:///abs/path/to/japan-dem-v1.pmtiles cargo run
+
+# Flat 0 m base (no upstream DEM) — terrain comes solely from config-JSON overlays
+DEM_URL=sealevel cargo run
 
 # Default Mapterhorn upstream — fine for development
 cargo run
@@ -470,7 +473,7 @@ Any other CRS (e.g. a JGD2011 *plane rectangular* system in meters, or UTM) is r
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `url` | string | Yes | URL to COG file (HTTP, `gs://`, `s3://`) |
+| `url` | string | Yes | URL to COG file (HTTP, `gs://`, `s3://`, `r2://`) |
 | `nodata` | various | No | NoData value configuration (see below) |
 | `order` | number | No | Layer order (higher = on top, default: 0) |
 
@@ -582,6 +585,7 @@ The default `must-revalidate` ensures that expired cache entries are always reva
 | `http://`, `https://` | `https://example.com/file.tif` | HTTP/HTTPS with range request support |
 | `gs://` | `gs://bucket/path/file.tif` | Google Cloud Storage |
 | `s3://` | `s3://bucket/path/file.tif` | Amazon S3 |
+| `r2://` | `r2://bucket/path/file.tif` | Cloudflare R2 (set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) |
 
 ## Architecture
 
