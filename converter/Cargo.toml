@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["core", "cli"]
+# ui/src-tauri is added here once the Tauri app is scaffolded.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/eukarya-inc/PLATEAU-VIEW"
+rust-version = "1.85"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+quick-xml = "0.42"
+zip = "8"
+tempfile = "3"
+walkdir = "2"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+indexmap = { version = "2", features = ["serde"] }
+encoding_rs = "0.8"
+rayon = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

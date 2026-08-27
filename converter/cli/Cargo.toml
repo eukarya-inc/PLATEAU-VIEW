@@ -1,0 +1,20 @@
+[package]
+name = "plateau-converter-cli"
+description = "CLI for the PLATEAU CityGML 2.0 -> 3.0 converter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "plateau-convert"
+path = "src/main.rs"
+
+[dependencies]
+plateau-converter-core = { path = "../core" }
+anyhow.workspace = true
+clap.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
