@@ -69,7 +69,7 @@ impl BuildingRewrite {
 
         let rewritten = match child.name.local.as_str() {
             "measuredHeight" => self.height(child, warnings),
-            // [3.0] 1.2.1.1: in LOD0.1 the building outline and the ground
+            // In LOD0.1 the building outline and the ground
             // contact outline are told apart by which boundary surface carries
             // the geometry -- the building's orthographic outline goes on a
             // RoofSurface, the ground contact outline on a GroundSurface.
@@ -87,7 +87,7 @@ impl BuildingRewrite {
 
     /// `bldg:measuredHeight` -> `con:height` wrapping a `con:Height` object.
     ///
-    /// [3.0] §1.13.3.1.15 makes `value`, `status`, `lowReference` and
+    /// CityGML 3.0 makes `value`, `status`, `lowReference` and
     /// `highReference` all mandatory, and the two references are code-list
     /// values. CityGML 2.0 records none of them, so they come from the profile's
     /// `[height]` section and every substitution is reported.
@@ -136,9 +136,9 @@ impl BuildingRewrite {
     /// named construction surface, whose geometry is `core:lod0MultiSurface`.
     ///
     /// CityGML 3.0 has a single LOD0 slot per space, so the 2.0 pair cannot both
-    /// stay on the building. [3.0] §1.2.1.1 resolves this for LOD0.1 by putting
-    /// the roof outline on a `RoofSurface` and the ground outline on a
-    /// `GroundSurface`, which is lossless for either or both.
+    /// stay on the building. LOD0.1 resolves that by putting the roof outline
+    /// on a `RoofSurface` and the ground outline on a `GroundSurface`, which is
+    /// lossless whether the input has one of them or both.
     fn lod0_boundary(
         &self,
         src: Element,
@@ -156,7 +156,7 @@ impl BuildingRewrite {
         warnings.add(format!(
             "bldg:{property} became a con:{surface_type} boundary carrying \
              core:lod0MultiSurface; CityGML 3.0 has one LOD0 geometry per space and \
-             tells the outlines apart by surface type ([3.0] 1.2.1.1, LOD0.1)"
+             tells the outlines apart by surface type (LOD0.1)"
         ));
 
         let mut boundary = Element::new(Name::qualified(&self.con, "boundary"));
@@ -264,7 +264,7 @@ mod tests {
             obj.child(ns::CONSTRUCTION_3, "status").unwrap().text(),
             "measured"
         );
-        // The references are code-list values, not free text ([3.0] 1.13.3.1.15).
+        // The references are code-list values, not free text.
         let high = obj.child(ns::CONSTRUCTION_3, "highReference").unwrap();
         assert_eq!(high.text(), "2", "2 = the construction's highest point");
         assert_eq!(

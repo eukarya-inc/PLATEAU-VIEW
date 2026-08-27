@@ -13,8 +13,7 @@ use crate::xml::{Element, Name, Node};
 ///
 /// 2.0 wrote the attribute as a property with a `name` XML attribute
 /// (`<gen:stringAttribute name="x">`). 3.0 wraps a data type instead, and the
-/// name is an element ([3.0] §1.21.3.1.5: `StringAttribute` has `name [1..1]`
-/// and `value [1..1]`).
+/// name is an element: `StringAttribute` has `name [1..1]` and `value [1..1]`.
 const GENERIC_ATTRIBUTES: &[(&str, &str)] = &[
     ("stringAttribute", "StringAttribute"),
     ("intAttribute", "IntAttribute"),
@@ -26,7 +25,7 @@ const GENERIC_ATTRIBUTES: &[(&str, &str)] = &[
 ];
 
 /// Lifespan properties that were `xs:date` in CityGML 2.0 and are `DateTime` in
-/// 3.0 ([3.0] §1.2.3.1.1 vs [2.0] §1.2.3.1.1).
+/// 3.0.
 const LIFESPAN_DATES: &[&str] = &["creationDate", "terminationDate"];
 
 #[derive(Debug, Clone)]

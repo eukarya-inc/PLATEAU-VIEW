@@ -68,7 +68,7 @@ fn lod0_roof_edge_becomes_a_roof_surface_boundary() {
     let (output, _) = convert_fixture();
     assert!(!output.contains("lod0RoofEdge"));
     // con:boundary, not core:boundary: Building inherits the role from
-    // AbstractConstruction, and [3.0] 1.2.3.1.1 requires the subtype's.
+    // AbstractConstruction, and the subtype's role is the one that wins.
     assert!(output.contains("<con:boundary>"));
     assert!(!output.contains("<core:boundary>"));
     assert!(output.contains("<con:RoofSurface"));

@@ -9,7 +9,7 @@ anything here.
 
 A standalone CityGML 2.0 → 3.0 converter for PLATEAU city models: a Rust core, a
 `plateau-convert` CLI, and (later) a Tauri desktop UI. Read `README.md` first —
-it covers the layout, the conversion pipeline and the open questions.
+it covers the layout and the conversion pipeline.
 
 ## It is independent of the monorepo
 
@@ -75,28 +75,10 @@ property.
   value, add a `Warnings` entry saying what and why. `report::Warnings`
   deduplicates with counts, so per-feature messages are fine.
 
-## Cite your source
+## Mapping rules
 
-The mapping is derived from two specification documents, and the profile cites
-the clause behind every group of rules using the markers `[3.0]` and `[iUR4]`.
-
-**The documents themselves are not public and are not in this repo.** What each
-marker refers to, where the PDFs live, and which clauses the mapping leans on are
-recorded in `local/NOTE.md`, which is untracked. Read it before changing a rule.
-It will be absent in a fresh clone — if it is, ask for it rather than guessing at
-the mapping or re-deriving it from the code.
-
-When you add or change a rule, cite the clause the same way. When you cannot find
-one, say `UNVERIFIED` and say what you inferred it from — the profile currently
-does this for intra-class child order and for where i-UR properties sit in the
-sequence. Do not silently upgrade an inference to a fact.
-
-`[3.0]` is a **draft**: it says a profile of recommended options is still to come
-and that feedback may change it. Treat a disagreement between it and reality as
-worth reporting, not as a bug to paper over.
-
-Open questions against the specifications are tracked in `local/NOTE.md` too, not
-in `README.md`.
+Mappring rules are experimental, and this experimental phase continues at least
+until the official PLATEAU spec for CityGML3.0 is released.
 
 ## Testing
 

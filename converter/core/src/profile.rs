@@ -365,31 +365,33 @@ mod tests {
         assert_eq!(r.map_element(&xal).unwrap(), xal);
     }
 
-    /// [iUR4]: i-UR 3.2 and 4.0 are compatible in principle, so the whole ADE
-    /// moves by namespace alone.
+    /// i-UR 3.2 and 4.0 are compatible in principle, so the whole ADE moves by
+    /// namespace alone.
+    ///
+    /// Every published 3.x minor has to be listed. An unmapped namespace has no
+    /// prefix on the output side and its elements are written unqualified — and
+    /// because the `[[review]]` rules match on the 4.0 names, the flags for the
+    /// urc migration go quiet as well. Real data is mostly 3.1 and 3.2.
     #[test]
-    fn bumps_i_ur_to_4_0() {
+    fn bumps_every_i_ur_3_x_minor_to_4_0() {
         let r = rules();
-        let out = r
-            .map_element(&Name::qualified(
-                "https://www.geospatial.jp/iur/uro/3.0",
-                "buildingID",
-            ))
-            .unwrap();
-        assert_eq!(
-            out,
-            Name::qualified("https://www.geospatial.jp/iur/uro/4.0", "buildingID")
-        );
-        let out = r
-            .map_element(&Name::qualified(
-                "https://www.geospatial.jp/iur/urf/3.0",
-                "Zone",
-            ))
-            .unwrap();
-        assert_eq!(
-            out,
-            Name::qualified("https://www.geospatial.jp/iur/urf/4.0", "Zone")
-        );
+        for (module, local) in [
+            ("uro", "buildingID"),
+            ("urf", "Zone"),
+            ("urg", "genericTag"),
+        ] {
+            for minor in ["3.0", "3.1", "3.2"] {
+                let from = Name::qualified(
+                    format!("https://www.geospatial.jp/iur/{module}/{minor}"),
+                    local,
+                );
+                assert_eq!(
+                    r.map_element(&from).unwrap(),
+                    Name::qualified(format!("https://www.geospatial.jp/iur/{module}/4.0"), local),
+                    "{module} {minor}"
+                );
+            }
+        }
     }
 
     #[test]

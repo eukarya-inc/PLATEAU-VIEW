@@ -9,11 +9,8 @@
 # [input.namespaces], prefixes on the `to` side (and in [order_group]) through
 # [output.namespaces].
 #
-# Rules below cite the clause they came from, as [3.0] or [iUR4]. Those two
-# specifications are not public and are not in this repo; what the markers refer
-# to and where the documents live is recorded in the untracked local/NOTE.md.
-# Anything still marked UNVERIFIED could not be confirmed against either
-# document.
+# Anything marked UNVERIFIED below could not be confirmed against a source. The
+# sources are not in this repo; ask for them before changing a rule.
 
 name = "citygml-2.0-to-3.0"
 description = "PLATEAU CityGML 2.0 + i-UR 3.x -> CityGML 3.0 + i-UR 4.0, building module"
@@ -31,7 +28,7 @@ uro = "https://www.geospatial.jp/iur/uro/3.0"
 urf = "https://www.geospatial.jp/iur/urf/3.0"
 urg = "https://www.geospatial.jp/iur/urg/3.0"
 
-# [iUR4] §A.2: namespace identifiers and recommended prefixes.
+# i-UR 4.0 namespace identifiers and recommended prefixes.
 [output.namespaces]
 core = "http://www.opengis.net/citygml/3.0"
 bldg = "http://www.opengis.net/citygml/building/3.0"
@@ -46,9 +43,8 @@ uro = "https://www.geospatial.jp/iur/uro/4.0"
 urf = "https://www.geospatial.jp/iur/urf/4.0"
 urg = "https://www.geospatial.jp/iur/urg/4.0"
 # Urban Core, new in i-UR 4.0. DataQualityAttribute, DisasterRiskAttribute and
-# DmAttribute live here now rather than under uro ([3.0] §A.3.2.9, A.3.2.10,
-# A.3.2.13) — but which uro 3.x elements moved is not encoded below, so they
-# still convert as uro. See "Open questions" in README.md.
+# DmAttribute live here now rather than under uro — but which uro 3.x elements
+# moved is not encoded below, so they still convert as uro.
 urc = "https://www.geospatial.jp/iur/urc/4.0"
 urt = "https://www.geospatial.jp/iur/urt/4.0"
 
@@ -82,23 +78,32 @@ urt = "https://www.geospatial.jp/iur/urt/4.0"
 "http://www.opengis.net/citygml/tunnel/2.0" = "http://www.opengis.net/citygml/tunnel/3.0"
 "http://www.opengis.net/citygml/cityobjectgroup/2.0" = "http://www.opengis.net/citygml/cityobjectgroup/3.0"
 "http://www.opengis.net/gml" = "http://www.opengis.net/gml/3.2"
-# [iUR4] "version 3.2 and version 4.0 are compatible in principle", so i-UR
-# converts as a namespace bump.
+# i-UR 3.2 and 4.0 are compatible in principle, so i-UR converts as a namespace
+# bump. Every 3.x minor gets its own entry: real PLATEAU
+# data is dated 3.0, 3.1 or 3.2 depending on the year it was published, and a
+# namespace missing from this table passes through unmapped -- which then has no
+# prefix on the output side and is written unqualified.
 "https://www.geospatial.jp/iur/uro/3.0" = "https://www.geospatial.jp/iur/uro/4.0"
+"https://www.geospatial.jp/iur/uro/3.1" = "https://www.geospatial.jp/iur/uro/4.0"
+"https://www.geospatial.jp/iur/uro/3.2" = "https://www.geospatial.jp/iur/uro/4.0"
 "https://www.geospatial.jp/iur/urf/3.0" = "https://www.geospatial.jp/iur/urf/4.0"
+"https://www.geospatial.jp/iur/urf/3.1" = "https://www.geospatial.jp/iur/urf/4.0"
+"https://www.geospatial.jp/iur/urf/3.2" = "https://www.geospatial.jp/iur/urf/4.0"
 "https://www.geospatial.jp/iur/urg/3.0" = "https://www.geospatial.jp/iur/urg/4.0"
+"https://www.geospatial.jp/iur/urg/3.1" = "https://www.geospatial.jp/iur/urg/4.0"
+"https://www.geospatial.jp/iur/urg/3.2" = "https://www.geospatial.jp/iur/urg/4.0"
 
 # ---------------------------------------------------------------------------
 # LOD geometry properties.
 #
-# [3.0] §1.2.3.1.1: lod0MultiCurve, lod0MultiSurface, lod0Point, lod1Solid,
+# lod0MultiCurve, lod0MultiSurface, lod0Point, lod1Solid,
 # lod2Solid, lod3Solid, lod2MultiSurface, lod3MultiSurface and the
 # lodNTerrainIntersectionCurve / lodNImplicitRepresentation families are all
 # inherited from core::AbstractSpace / AbstractPhysicalSpace /
 # AbstractOccupiedSpace, so they take the core prefix.
 #
-# [3.0] Table 1-1: the specification covers LOD0 to LOD3 only. CityGML 3.0 has
-# no LOD4; 2.0 interior LOD4 geometry is folded into LOD3 and reported.
+# PLATEAU covers LOD0 to LOD3 only. CityGML 3.0 has no LOD4; 2.0 interior LOD4
+# geometry is folded into LOD3 and reported.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "bldg:lod1Solid"
@@ -158,13 +163,14 @@ to = "core:lod3ImplicitRepresentation"
 # ---------------------------------------------------------------------------
 # Space boundaries.
 #
-# [3.0] §A.5: thematic surfaces are con::AbstractConstructionSurface subtypes.
-# They are defined in the Construction module, so they take the con prefix.
+# Thematic surfaces are con::AbstractConstructionSurface subtypes. They are
+# defined in the Construction module, so they take the con prefix.
 #
-# [3.0] §1.2.3.1.1 note on `boundary`: where a subtype defines its own
-# `boundary` role, that one must be used. Building inherits `boundary` from
-# AbstractConstruction, so the property is con:boundary — not core:boundary.
-# Confirmed by §A.6.4, which writes con:boundary throughout.
+# On `boundary`: where a subtype defines its own `boundary` role, that one must
+# be used. Building inherits `boundary` from AbstractConstruction, so the
+# property is con:boundary — not core:boundary. UNVERIFIED: the OGC schemas
+# disagree, declaring no con:boundary at all, and this is the element that keeps
+# output from validating against them.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "bldg:boundedBy"
@@ -197,9 +203,9 @@ to = "con:FloorSurface"
 from = "bldg:InteriorWallSurface"
 to = "con:InteriorWallSurface"
 
-# Openings. [3.0] §A.6: con::AbstractFillingSurface is the *boundary* of an
-# opening and is reached through the `fillingSurface` role of a construction
-# surface (§A.6.4 b). 2.0's bldg:Window / bldg:Door carry MultiSurface geometry
+# Openings. con::AbstractFillingSurface is the *boundary* of an opening and is
+# reached through the `fillingSurface` role of a construction surface.
+# 2.0's bldg:Window / bldg:Door carry MultiSurface geometry
 # as part of the wall, so they are surfaces — con:WindowSurface and
 # con:DoorSurface — not the solid con:Window / con:Door
 # (con::AbstractFillingElement, which models the door or window itself and has
@@ -215,11 +221,11 @@ from = "bldg:Door"
 to = "con:DoorSurface"
 
 # ---------------------------------------------------------------------------
-# Sub-features. [3.0] §1.2.3.1.1 relation roles.
+# Sub-features: the relation roles.
 # ---------------------------------------------------------------------------
 # Building defines `buildingPart: BuildingPart [0..*]` on itself. The more
 # general `buildingSubdivision: AbstractBuildingSubdivision` is for BuildingUnit
-# and Storey (§A.9.2), so 2.0's consistsOfBuildingPart maps to buildingPart.
+# and Storey, so 2.0's consistsOfBuildingPart maps to buildingPart.
 [[element]]
 from = "bldg:consistsOfBuildingPart"
 to = "bldg:buildingPart"
@@ -245,7 +251,7 @@ to = "bldg:buildingFurniture"
 from = "bldg:roomInstallation"
 to = "bldg:buildingInstallation"
 
-# Address. [3.0] §A.3.2.4 keeps the property as bldg:address, but the object it
+# Address. The property stays bldg:address, but the object it
 # holds moved to the core module: <bldg:address><core:Address><core:xalAddress>.
 [[element]]
 from = "bldg:Address"
@@ -261,43 +267,42 @@ to = "core:xalAddress"
 # still land in the wrong slot. Children not listed keep their relative order
 # and are emitted after the listed ones.
 #
-# The order below follows the inheritance chain in [3.0] §1.2.3.1.1
+# The lists below are the flattened xs:sequence of each 3.0 type, read off the
+# OGC CityGML 3.0 XSDs rather than inferred: derivation by extension emits the
+# base type's content before the extension's, so walking the chain
 # (AbstractFeature -> AbstractFeatureWithLifespan -> AbstractCityObject ->
 # AbstractSpace -> AbstractPhysicalSpace -> AbstractOccupiedSpace ->
-# AbstractConstruction -> AbstractBuilding -> Building). XSD derivation by
-# extension always emits the base type's content first, so the ordering
-# *between* those groups is sound.
+# AbstractConstruction -> AbstractBuilding -> Building) and concatenating gives
+# the exact order a validator expects. The comments name the class each run of
+# properties comes from.
 #
-# UNVERIFIED: the order *within* each group, and where i-UR properties belong.
-# uro/urc properties substitute into adeOfAbstractCityObject,
-# adeOfAbstractConstruction or adeOfBuilding depending on the class
-# ([3.0] §1.2.3.1.1, §A.3.2.15) — since this profile does not encode which hook
-# each one uses, they stay unlisted and are emitted last, as they are in
-# PLATEAU 2.0 data.
+# TODO: where i-UR properties belong. uro/urc properties substitute into
+# adeOfAbstractCityObject, adeOfAbstractConstruction or adeOfBuilding depending
+# on the class — since this profile does not encode which hook each one uses,
+# they stay unlisted and are emitted last, as they are in PLATEAU 2.0 data.
 # ---------------------------------------------------------------------------
 
 [[order_group]]
 types = ["bldg:Building", "bldg:BuildingPart"]
 children = [
-  # gml::AbstractFeatureType
+  # gml::AbstractGML, then gml::AbstractFeature
   "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
   "gml:boundedBy", "gml:location",
   # core::AbstractFeatureWithLifespan
   "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
   # core::AbstractCityObject
-  "core:relativeToTerrain", "core:relativeToWater",
-  "core:appearance", "core:dynamizer", "core:externalReference",
-  "core:generalizesTo", "core:genericAttribute", "core:relatedTo",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
   # core::AbstractSpace
-  "core:spaceType", "core:volume", "core:area",
-  "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod0Point",
-  "core:lod1Solid", "core:lod2Solid", "core:lod3Solid",
-  "core:lod2MultiCurve", "core:lod2MultiSurface",
-  "core:lod3MultiCurve", "core:lod3MultiSurface",
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
   # core::AbstractPhysicalSpace
-  "core:pointCloud",
   "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
-  "core:lod3TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
   # core::AbstractOccupiedSpace
   "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
   "core:lod3ImplicitRepresentation",
@@ -309,16 +314,17 @@ children = [
   "bldg:class", "bldg:function", "bldg:usage", "bldg:roofType",
   "bldg:storeysAboveGround", "bldg:storeysBelowGround",
   "bldg:storeyHeightsAboveGround", "bldg:storeyHeightsBelowGround",
-  "bldg:buildingConstructiveElement", "bldg:buildingFurniture",
-  "bldg:buildingInstallation", "bldg:buildingRoom", "bldg:buildingSubdivision",
+  "bldg:buildingConstructiveElement", "bldg:buildingInstallation",
+  "bldg:buildingRoom", "bldg:buildingFurniture", "bldg:buildingSubdivision",
   "bldg:address",
   # bldg::Building
   "bldg:buildingPart",
 ]
 
 # con::AbstractConstructionSurface and con::AbstractFillingSurface subtypes.
-# [3.0] §1.21.3.1.x lists AbstractThematicSurface with lod0MultiCurve,
-# lod0MultiSurface, lod1MultiSurface, lod2MultiSurface and lod3MultiSurface.
+# core::AbstractThematicSurface carries the LOD0-3 multi-surfaces;
+# con:fillingSurface is on AbstractConstructionSurface only, so a WindowSurface
+# or DoorSurface simply never has one.
 [[order_group]]
 types = [
   "con:RoofSurface", "con:WallSurface", "con:GroundSurface",
@@ -328,47 +334,54 @@ types = [
 ]
 children = [
   "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
   "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
-  "core:relativeToTerrain", "core:relativeToWater",
-  "core:appearance", "core:dynamizer", "core:externalReference",
-  "core:generalizesTo", "core:genericAttribute", "core:relatedTo",
-  "core:pointCloud",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  # core::AbstractThematicSurface
+  "core:area",
   "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
-  "core:lod2MultiSurface", "core:lod3MultiSurface",
+  "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
   "con:fillingSurface",
 ]
 
+# BuildingInstallation and BuildingConstructiveElement are occupied spaces;
+# BuildingRoom and BuildingFurniture are not, so they have no terrain
+# intersection curve or implicit representation. Listing the union is harmless:
+# reorder only moves children that are actually present.
 [[order_group]]
 types = ["bldg:BuildingInstallation", "bldg:BuildingRoom", "bldg:BuildingFurniture", "bldg:BuildingConstructiveElement"]
 children = [
   "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
   "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
-  "core:relativeToTerrain", "core:relativeToWater",
-  "core:appearance", "core:dynamizer", "core:externalReference",
-  "core:generalizesTo", "core:genericAttribute", "core:relatedTo",
-  "core:spaceType", "core:volume", "core:area",
-  "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod0Point",
-  "core:lod1Solid", "core:lod2Solid", "core:lod3Solid",
-  "core:lod2MultiCurve", "core:lod2MultiSurface",
-  "core:lod3MultiCurve", "core:lod3MultiSurface",
-  "core:pointCloud",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
   "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
-  "core:lod3TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
   "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
   "core:lod3ImplicitRepresentation",
+  "con:relationToConstruction",
   "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
   "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
   "con:boundary",
-  "bldg:class", "bldg:function", "bldg:usage",
+  "bldg:class", "bldg:function", "bldg:usage", "bldg:roomHeight",
 ]
 
-# [3.0] §1.13.3.1.15 Height. Every property is [1..1]. The document lists them
-# in this order; UNVERIFIED as the XSD sequence.
+# con:Height. Every property is [1..1]. Confirmed against con:HeightType in the
+# OGC construction.xsd, which sequences them this way.
 [[order_group]]
 types = ["con:Height"]
 children = ["con:highReference", "con:lowReference", "con:status", "con:value"]
 
-# [3.0] §1.21.3.1.5 StringAttribute and siblings: name then value.
+# StringAttribute and siblings: name then value.
 [[order_group]]
 types = [
   "gen:StringAttribute", "gen:IntAttribute", "gen:DoubleAttribute",
@@ -380,13 +393,12 @@ children = ["gen:name", "gen:value", "gen:genericAttribute"]
 # ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.
 #
-# [3.0] §1.13.3.1.15: con::Height has value, status, lowReference and
-# highReference, all [1..1]. lowReference and highReference are codes from
-# Elevation_elevationReference.xml; status is an enumeration and takes no
-# codeSpace.
+# con::Height has value, status, lowReference and highReference, all [1..1].
+# lowReference and highReference are codes from Elevation_elevationReference.xml;
+# status is an enumeration and takes no codeSpace.
 #
-# [3.0] §A.3.2.3 defines 2.0's measuredHeight as a measured height running from
-# the lowest ground point to the construction's highest point. Hence
+# CityGML 2.0's measuredHeight is a measured height running from the lowest
+# ground point to the construction's highest point. Hence
 # status=measured, lowReference=6 (lowest ground point) and highReference=2
 # (highest point of the construction).
 # ---------------------------------------------------------------------------
@@ -403,56 +415,56 @@ reference_code_space = "../../codelists/Elevation_elevationReference.xml"
 # reported once per run with the note below. Names resolve through
 # [output.namespaces], i.e. they are the names as they appear *after* conversion.
 #
-# i-UR 4.0 moves the shared attribute groups into the Urban Core module
-# ([3.0] §A.3.2.9, §A.3.2.10, §A.3.2.13 write them as urc:). For most of them
-# that is a namespace move, but DataQualityAttribute additionally splits into
-# exterior and interior variants — urc:ExteriorDataQualityAttribute for outdoor
-# models and urc:InteriorDataQualityAttribute for indoor ones ([3.0] §A.3.2.10)
-# — and the converter cannot tell which model a file describes. Older PLATEAU 2.0 data also uses per-feature-type class
+# i-UR 4.0 moves the shared attribute groups into the Urban Core module, where
+# they take the urc prefix. For most of them that is a namespace move, but
+# DataQualityAttribute additionally splits into exterior and interior variants —
+# urc:ExteriorDataQualityAttribute for outdoor models and
+# urc:InteriorDataQualityAttribute for indoor ones — and the converter cannot
+# tell which model a file describes. Older PLATEAU 2.0 data also uses per-feature-type class
 # names (uro:BuildingDataQualityAttribute) whose attributes do not map one to one:
 # uro:srcScale has no urc equivalent, because the map information level moves to
 # urc:PublicSurveyDataQualityAttribute.
 # ---------------------------------------------------------------------------
 [[review]]
 element = "uro:DataQualityAttribute"
-note = "i-UR 4.0 moves this to the Urban Core module and splits it into urc:ExteriorDataQualityAttribute (outdoor) and urc:InteriorDataQualityAttribute (indoor) ([3.0] A.3.2.10); pick one and add the rule to the profile"
+note = "i-UR 4.0 moves this to the Urban Core module and splits it into urc:ExteriorDataQualityAttribute (outdoor) and urc:InteriorDataQualityAttribute (indoor); pick one and add the rule to the profile"
 
 [[review]]
 element = "uro:BuildingDataQualityAttribute"
-note = "i-UR 4.0 replaces the per-feature-type quality classes with urc:ExteriorDataQualityAttribute / urc:InteriorDataQualityAttribute, and the attributes do not map one to one (uro:srcScale has no urc equivalent; the map information level moves to urc:PublicSurveyDataQualityAttribute) ([3.0] A.3.2.10)"
+note = "i-UR 4.0 replaces the per-feature-type quality classes with urc:ExteriorDataQualityAttribute / urc:InteriorDataQualityAttribute, and the attributes do not map one to one (uro:srcScale has no urc equivalent; the map information level moves to urc:PublicSurveyDataQualityAttribute)"
 
 [[review]]
 element = "uro:PublicSurveyDataQualityAttribute"
-note = "i-UR 4.0 moves this to urc:PublicSurveyDataQualityAttribute ([3.0] A.3.2.10)"
+note = "i-UR 4.0 moves this to urc:PublicSurveyDataQualityAttribute"
 
 [[review]]
 element = "uro:DisasterRiskAttribute"
-note = "i-UR 4.0 moves this to urc:DisasterRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:DisasterRiskAttribute"
 
 [[review]]
 element = "uro:LandSlideRiskAttribute"
-note = "i-UR 4.0 moves this to urc:LandSlideRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:LandSlideRiskAttribute"
 
 [[review]]
 element = "uro:BuildingLandSlideRiskAttribute"
-note = "i-UR 4.0 replaces the per-feature-type risk classes with urc:LandSlideRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 replaces the per-feature-type risk classes with urc:LandSlideRiskAttribute"
 
 [[review]]
 element = "uro:RiverFloodingRiskAttribute"
-note = "i-UR 4.0 moves this to urc:RiverFloodingRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:RiverFloodingRiskAttribute"
 
 [[review]]
 element = "uro:TsunamiRiskAttribute"
-note = "i-UR 4.0 moves this to urc:TsunamiRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:TsunamiRiskAttribute"
 
 [[review]]
 element = "uro:HighTideRiskAttribute"
-note = "i-UR 4.0 moves this to urc:HighTideRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:HighTideRiskAttribute"
 
 [[review]]
 element = "uro:InlandFloodingRiskAttribute"
-note = "i-UR 4.0 moves this to urc:InlandFloodingRiskAttribute ([3.0] A.3.2.9)"
+note = "i-UR 4.0 moves this to urc:InlandFloodingRiskAttribute"
 
 [[review]]
 element = "uro:DmAttribute"
-note = "i-UR 4.0 moves this to urc:DmAttribute ([3.0] A.3.2.13)"
+note = "i-UR 4.0 moves this to urc:DmAttribute"
