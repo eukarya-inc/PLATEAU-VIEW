@@ -12,7 +12,7 @@ mod read;
 mod write;
 
 pub use node::{Attribute, Element, Name, Node};
-pub use read::{Chunk, Reader, read_to_string};
+pub use read::{Chunk, Reader, read_root_namespaces, read_to_string, root_namespaces};
 pub use write::{Indent, PrefixMap, Writer};
 
 /// Namespace URIs that the converter refers to by name.

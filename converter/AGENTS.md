@@ -37,14 +37,22 @@ cargo run -p plateau-converter-cli -- inspect <input>...
 The single most common mistake here is putting a mapping in the wrong layer.
 
 * **A namespace bump, an element rename, an element to drop, a child order, or a
-  value the converter has to invent** → `profiles/citygml-2.0-to-3.0.toml`. No
-  Rust. This is a table; keep it a table.
+  value the converter has to invent** → `profiles/iur-<version>-to-4.0.toml`. No
+  Rust. This is a table; keep it a table. There is one profile per source i-UR
+  version and they are meant to stay in step, so a rule that is not
+  version-specific belongs in all three.
 * **A mapping you cannot settle** → the profile's `[[review]]` table. The element
   then passes through untouched and is named in the report. Do this instead of
   guessing: half-converted output that *looks* converted is the worst outcome
   here.
+* **An i-UR rule that can be read off the schemas** → do not write it. Run the
+  generator (`cargo run -p plateau-converter-gen -- --source 3.1 --write
+  profiles/iur-3.1-to-4.0.toml`), which rewrites the block between the
+  `# BEGIN/END GENERATED` markers. Everything outside those markers is
+  hand-written and wins: the generator skips any `from` already ruled on.
 * **A rewrite that changes a value or the shape of a subtree** →
-  `core/src/bldg.rs` for building-specific ones,
+  `core/src/bldg.rs` for building-specific ones, `core/src/iur.rs` for i-UR ones
+  (the ADE hook rewrite),
   `common.rs` for those that apply to every feature type (generic attributes,
   lifespan dates). `measuredHeight` → `con:height` belongs in `bldg.rs` because
   it invents a `con:Height` object; `bldg:lod1Solid` → `core:lod1Solid` is a
@@ -52,10 +60,12 @@ The single most common mistake here is putting a mapping in the wrong layer.
 * **A new thematic module** (`tran`, `frn`, …) → a sibling of `bldg.rs` plus its
   own profile rules. Do not grow `bldg.rs` sideways.
 
-`common.rs` and `bldg.rs` run **after** the rename pass, so they speak CityGML
-**3.0** names only. Writing a 2.0 namespace constant in there is a bug. `common`
-runs before `bldg`, so a wrapper it introduces is never mistaken for a building
-property.
+`common.rs`, `bldg.rs` and `iur.rs` run **after** the rename pass, so they speak
+CityGML **3.0** and i-UR **4.0** names only. Writing a 2.0 namespace constant in
+there is a bug. The order is `common` -> `bldg` -> `iur`, and each step is placed
+so that a wrapper it introduces is never mistaken for something the next step
+handles: `common`'s `core:genericAttribute` is not a building property, and
+`iur`'s `bldg:adeOfAbstractBuilding` would be if it ran before `bldg`.
 
 ## Invariants worth not breaking
 
@@ -79,6 +89,15 @@ property.
 
 Mappring rules are experimental, and this experimental phase continues at least
 until the official PLATEAU spec for CityGML3.0 is released.
+
+## Vendored schemas
+
+`schemas/iur/*/4.0/` are the i-UR 4.0 XSDs the converter writes into a converted
+package; `schemas/sources/` are the 3.x revisions the generator reads. Both are
+committed on purpose: i-UR publishes patch revisions **in place** under the same
+minor-version URL and they are not compatible with one another, so fetching at
+build or run time would make the output depend on when it ran. Replacing a set
+means replacing all of it — the modules import one another by exact namespace.
 
 ## Testing
 

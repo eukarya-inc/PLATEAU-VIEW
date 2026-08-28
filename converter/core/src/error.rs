@@ -34,15 +34,18 @@ pub enum Error {
     #[error("profile: {0}")]
     Profile(String),
 
+    /// The input is well-formed but no profile converts it -- the wrong CityGML
+    /// version, or an i-UR version nothing targets. Distinct from `Profile`,
+    /// which means a profile *file* is wrong.
+    #[error("{0}")]
+    Unsupported(String),
+
     #[error("could not parse profile: {0}")]
     ProfileSyntax(#[from] toml::de::Error),
 
     /// The inputs could not be understood as a PLATEAU dataset.
     #[error("unrecognised input layout: {0}")]
     Layout(String),
-
-    #[error("{0}")]
-    Unsupported(String),
 }
 
 impl Error {

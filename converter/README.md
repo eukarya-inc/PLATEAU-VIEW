@@ -11,7 +11,9 @@ CityGML 3.0. It targets Windows, macOS and Linux.
 converter/
 ├── Cargo.toml                     workspace root
 ├── profiles/
-│   └── citygml-2.0-to-3.0.toml    the declarative half of the mapping
+│   ├── iur-3.0-to-4.0.toml        the declarative half of the mapping,
+│   ├── iur-3.1-to-4.0.toml          one profile per source i-UR version
+│   └── iur-3.2-to-4.0.toml
 ├── core/                          library: intake, XML, profile, transforms
 ├── cli/                           the `plateau-convert` binary
 └── ui/                            Tauri desktop app (not started)
@@ -36,7 +38,8 @@ Useful flags:
 | Flag | Effect |
 | --- | --- |
 | `-t, --type bldg` | which `udx/` feature types to convert (repeatable; `all` for everything) |
-| `--profile FILE` | use a different mapping profile instead of the built-in one |
+| `--target-iur VER` | which i-UR version to produce. One choice today (`4.0`); errors listing the rest once there are more |
+| `--profile FILE` | use a mapping profile from disk, overriding detection and `--target-iur` |
 | `--staging DIR` | reassemble multi-part input here instead of a temp dir, and keep it |
 | `--no-gml-ids` | do not mint the `gml:id`s GML 3.2 requires |
 | `--no-reorder` | leave children in input order instead of the 3.0 sequence |
@@ -84,9 +87,19 @@ enclosing feature's own id so a re-run reproduces the same bytes.
 
 ## The mapping profile
 
-`profiles/citygml-2.0-to-3.0.toml` holds everything about the mapping that is a
-table, and cites the clause behind each group of rules:
+The source version is never asked for: every PLATEAU document declares the i-UR
+namespaces it uses, so the converter reads them and picks the matching profile.
+The **target** is the part the data cannot supply — an input says which version
+it is, never which one it should become — so that is what `--target-iur`
+selects. There is one profile per source i-UR version, because the versions do
+not declare the same elements: 3.0 and 3.1 differ by 143 element declarations, and
+five names they share changed the type they hold. The converter reads the i-UR
+namespaces the input declares and picks the matching profile; `inspect` shows
+which one it chose. Each profile holds everything about the mapping that is a
+table:
 
+* `[source]` / `[target]` — the versions the profile accepts and produces, and
+  what detection matches an input against.
 * `[input.namespaces]` / `[output.namespaces]` — prefix tables for the two sides.
 * `[namespace_map]` — the bulk namespace bump, including i-UR 3.x → 4.0.
 * `[[element]]` — per-element renames and drops.
@@ -95,7 +108,11 @@ table, and cites the clause behind each group of rules:
 * `[[review]]` — elements to leave alone and report, because their mapping needs
   a human decision.
 
-It is compiled into the binary and can be replaced wholesale with `--profile`.
+All three are compiled into the binary, and any of them can be replaced
+wholesale with `--profile`. An explicit profile is still checked against the
+input: pointing the 3.0 profile at 3.1 data converts the CityGML half and writes
+every `uro:` element unqualified, so the mismatch is reported rather than left to
+be discovered in the output.
 
 ## Development
 

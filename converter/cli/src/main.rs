@@ -7,8 +7,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use plateau_converter_core::convert::{Converter, Options};
 use plateau_converter_core::dataset::{Dataset, Staging};
 use plateau_converter_core::profile::Rules;
-use plateau_converter_core::xml::Indent;
-use plateau_converter_core::{DEFAULT_PROFILE, report::Report};
+use plateau_converter_core::xml::{self, Indent};
+use plateau_converter_core::{PROFILES, detect, report::Report};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -53,7 +53,12 @@ struct ConvertArgs {
     #[arg(short = 't', long = "type", value_name = "TYPE", default_values_t = [String::from("bldg")])]
     types: Vec<String>,
 
-    /// Conversion profile (TOML). Defaults to the built-in CityGML 2.0 -> 3.0 profile.
+    /// i-UR version to produce. Defaults to the only one a built-in profile
+    /// targets, and errors listing the choices once there is more than one.
+    #[arg(long, value_name = "VERSION")]
+    target_iur: Option<String>,
+
+    /// Conversion profile (TOML), overriding both detection and --target-iur.
     #[arg(long, value_name = "FILE")]
     profile: Option<PathBuf>,
 
@@ -94,6 +99,10 @@ struct ConvertArgs {
 struct InspectArgs {
     #[arg(required = true, value_name = "INPUT")]
     inputs: Vec<PathBuf>,
+
+    /// i-UR version to produce, as for `convert`.
+    #[arg(long, value_name = "VERSION")]
+    target_iur: Option<String>,
 
     /// Reassemble multi-part input here instead of a temporary directory.
     #[arg(long, value_name = "DIR")]
@@ -167,7 +176,6 @@ fn convert(args: &ConvertArgs) -> Result<()> {
             .context("configuring the worker pool")?;
     }
 
-    let rules = load_profile(args.profile.as_deref())?;
     let feature_types = if args.types.iter().any(|t| t == "all") {
         Vec::new()
     } else {
@@ -188,6 +196,20 @@ fn convert(args: &ConvertArgs) -> Result<()> {
     if dataset.is_staged() {
         eprintln!("  (reassembled from {} input(s))", args.inputs.len());
     }
+
+    // The profile depends on the data, so it can only be chosen once the input
+    // has been resolved into a tree.
+    let rules = resolve_profile(
+        args.profile.as_deref(),
+        args.target_iur.as_deref(),
+        &dataset,
+    )?;
+    eprintln!(
+        "profile:      {} ({} -> {})",
+        rules.name(),
+        rules.source().label,
+        rules.target().label
+    );
 
     let converter = Converter::new(rules, options)?;
     let report = converter
@@ -221,6 +243,42 @@ fn inspect(args: &InspectArgs) -> Result<()> {
         let files = dataset.gml_files(&feature_type)?;
         println!("  udx/{feature_type:<6} {} file(s)", files.len());
     }
+
+    let declared = declared_namespaces(&dataset)?;
+    let iur: Vec<&str> = declared
+        .iter()
+        .filter(|ns| ns.starts_with("https://www.geospatial.jp/iur/"))
+        .map(String::as_str)
+        .collect();
+    println!(
+        "i-UR:    {}",
+        if iur.is_empty() {
+            "none declared".to_string()
+        } else {
+            iur.join(", ")
+        }
+    );
+
+    let mut candidates = built_in_profiles()?;
+    println!(
+        "targets: {}",
+        detect::target_versions(&candidates).join(", ")
+    );
+    if let Some(version) = args.target_iur.as_deref() {
+        candidates = detect::with_target(candidates, version)?;
+    }
+    match detect::select(&candidates, &declared) {
+        Ok(found) => {
+            let rules = &candidates[found.index];
+            println!("profile: {} (built-in)", rules.name());
+            println!("source:  {}", rules.source().label);
+            println!("target:  {}", rules.target().label);
+            if found.matched.is_empty() {
+                println!("         (nothing in the data selected it; this is the fallback)");
+            }
+        }
+        Err(error) => println!("profile: none; {error}"),
+    }
     Ok(())
 }
 
@@ -231,15 +289,68 @@ fn staging(path: Option<&std::path::Path>) -> Staging {
     }
 }
 
-fn load_profile(path: Option<&std::path::Path>) -> Result<Rules> {
-    let (source, label) = match path {
-        Some(path) => (
-            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?,
-            path.display().to_string(),
-        ),
-        None => (DEFAULT_PROFILE.to_string(), "built-in profile".to_string()),
-    };
-    Rules::from_toml(&source).with_context(|| format!("loading {label}"))
+/// Resolves which profile to convert `dataset` with.
+///
+/// `--profile` wins outright, but the input is still checked against what the
+/// file says it accepts: a profile aimed at the wrong i-UR version converts the
+/// CityGML half and leaves every `uro:` element behind, which looks like a
+/// successful run. Without `--profile` the version is read from the data.
+fn resolve_profile(
+    explicit: Option<&std::path::Path>,
+    target_iur: Option<&str>,
+    dataset: &Dataset,
+) -> Result<Rules> {
+    let declared = declared_namespaces(dataset)?;
+
+    if let Some(path) = explicit {
+        if target_iur.is_some() {
+            bail!("--profile already fixes the target; drop --target-iur");
+        }
+        let source =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let rules =
+            Rules::from_toml(&source).with_context(|| format!("loading {}", path.display()))?;
+        if let Some(warning) = detect::check(&rules, &declared) {
+            eprintln!("warning: {warning}");
+        }
+        return Ok(rules);
+    }
+
+    let mut candidates = built_in_profiles()?;
+    if let Some(version) = target_iur {
+        candidates = detect::with_target(candidates, version)?;
+    }
+    let found = detect::select(&candidates, &declared)?;
+    let rules = candidates[found.index].clone();
+    if found.matched.is_empty() {
+        eprintln!(
+            "note: the input declares no i-UR namespace; using `{}` ({})",
+            rules.name(),
+            rules.source().label
+        );
+    }
+    Ok(rules)
+}
+
+fn built_in_profiles() -> Result<Vec<Rules>> {
+    PROFILES
+        .iter()
+        .map(|(name, toml)| {
+            Rules::from_toml(toml).with_context(|| format!("loading built-in profile `{name}`"))
+        })
+        .collect()
+}
+
+/// The namespaces the dataset's own documents declare, taken from the first
+/// `.gml` found. Every file in a package shares one i-UR version.
+fn declared_namespaces(dataset: &Dataset) -> Result<Vec<String>> {
+    for feature_type in dataset.feature_types()? {
+        if let Some(path) = dataset.gml_files(&feature_type)?.first() {
+            return xml::read_root_namespaces(path)
+                .with_context(|| format!("reading {}", path.display()));
+        }
+    }
+    Ok(Vec::new())
 }
 
 fn print_report(report: &Report, output: &std::path::Path) {

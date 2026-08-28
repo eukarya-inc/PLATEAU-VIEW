@@ -10,13 +10,18 @@ use crate::bldg::BuildingRewrite;
 use crate::common::CommonRewrite;
 use crate::dataset::Dataset;
 use crate::error::{Error, Result};
+use crate::iur::IurRewrite;
 use crate::profile::Rules;
 use crate::report::{FileReport, Report};
 use crate::transform::{self, IdGen};
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 
 /// Directories copied through unchanged when converting a whole dataset.
-const COPIED_PARTS: &[&str] = &["codelists", "schemas", "metadata", "specification"];
+///
+/// `schemas/` is deliberately absent: the input's copy describes i-UR 3.x, and
+/// carrying it into a 4.0 package would leave a schema tree nothing references.
+/// It is replaced by [`write_iur_schemas`] instead.
+const COPIED_PARTS: &[&str] = &["codelists", "metadata", "specification"];
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -50,6 +55,7 @@ pub struct Converter {
     rules: Rules,
     common: CommonRewrite,
     bldg: BuildingRewrite,
+    iur: IurRewrite,
     gml_ns: String,
     options: Options,
 }
@@ -58,11 +64,13 @@ impl Converter {
     pub fn new(rules: Rules, options: Options) -> Result<Self> {
         let common = CommonRewrite::new(&rules)?;
         let bldg = BuildingRewrite::new(&rules)?;
+        let iur = IurRewrite::new(&rules)?;
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
             rules,
             common,
             bldg,
+            iur,
             gml_ns,
             options,
         })
@@ -125,10 +133,12 @@ impl Converter {
                     report.copied += copy_tree(&source, &out.join(part))?;
                 }
             }
+            report.copied += write_iur_schemas(out)?;
             if dataset.root().join("schemas").is_dir() {
                 report.warnings.add(
-                    "schemas/ was copied unchanged and still describes CityGML 2.0; \
-                     the output references the 3.0 schemas at schemas.opengis.net",
+                    "the input's schemas/ describes i-UR 3.x and was replaced by the \
+                     i-UR 4.0 schemas; CityGML is referenced at schemas.opengis.net, \
+                     as a PLATEAU package does",
                 );
             }
         }
@@ -224,6 +234,10 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
+        // Last of the three: the CityGML hooks it introduces are in thematic
+        // namespaces (`bldg:adeOfAbstractBuilding`), so running it earlier would
+        // offer the building pass a property that is not a building property.
+        self.iur.apply(&mut element, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
         }
@@ -248,6 +262,23 @@ fn first_gml_id(element: &Element, gml_ns: &str) -> Option<String> {
     element
         .elements()
         .find_map(|child| first_gml_id(child, gml_ns))
+}
+
+/// Writes the vendored i-UR 4.0 schemas into `out/schemas/`.
+///
+/// The output's `xsi:schemaLocation` points at these by relative path, so they
+/// have to be there for the package to resolve on its own.
+fn write_iur_schemas(out: &Path) -> Result<usize> {
+    let mut written = 0;
+    for (relative, text) in crate::IUR_4_0_SCHEMAS {
+        let target = out.join("schemas").join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+        }
+        fs::write(&target, text).map_err(|e| Error::io(&target, e))?;
+        written += 1;
+    }
+    Ok(written)
 }
 
 fn copy_tree(from: &Path, to: &Path) -> Result<usize> {

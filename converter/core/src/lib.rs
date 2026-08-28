@@ -18,7 +18,9 @@ pub mod bldg;
 pub mod common;
 pub mod convert;
 pub mod dataset;
+pub mod detect;
 pub mod error;
+pub mod iur;
 pub mod profile;
 pub mod report;
 pub mod transform;
@@ -26,8 +28,57 @@ pub mod xml;
 
 pub use error::{Error, Result};
 
-/// The default conversion profile, compiled into the binary.
+/// The conversion profiles compiled into the binary, newest source version last.
 ///
-/// Override it with [`profile::Profile::from_toml`] to retarget namespaces or
-/// add rules without rebuilding.
-pub const DEFAULT_PROFILE: &str = include_str!("../../profiles/citygml-2.0-to-3.0.toml");
+/// One per source i-UR version, because the versions do not declare the same
+/// elements. [`detect::select`] picks between them by reading the namespaces a
+/// document declares; `--profile` overrides the choice with a file.
+pub const PROFILES: &[(&str, &str)] = &[
+    (
+        "iur-3.0-to-4.0",
+        include_str!("../../profiles/iur-3.0-to-4.0.toml"),
+    ),
+    (
+        "iur-3.1-to-4.0",
+        include_str!("../../profiles/iur-3.1-to-4.0.toml"),
+    ),
+    (
+        "iur-3.2-to-4.0",
+        include_str!("../../profiles/iur-3.2-to-4.0.toml"),
+    ),
+];
+
+/// The i-UR 4.0 schemas written into a converted package's `schemas/`.
+///
+/// A PLATEAU package resolves i-UR through a relative path into its own
+/// `schemas/` folder and CityGML remotely, so a converted package has to carry
+/// the i-UR side to stay self-contained. They are compiled in rather than
+/// fetched: conversion must not depend on a network, and the published files are
+/// updated in place, which would make output vary by when it ran.
+pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
+    (
+        "iur/uro/4.0/urbanObject.xsd",
+        include_str!("../../schemas/iur/uro/4.0/urbanObject.xsd"),
+    ),
+    (
+        "iur/urc/4.0/urbanCore.xsd",
+        include_str!("../../schemas/iur/urc/4.0/urbanCore.xsd"),
+    ),
+    (
+        "iur/urf/4.0/urbanFunction.xsd",
+        include_str!("../../schemas/iur/urf/4.0/urbanFunction.xsd"),
+    ),
+    (
+        "iur/urg/4.0/statisticalGrid.xsd",
+        include_str!("../../schemas/iur/urg/4.0/statisticalGrid.xsd"),
+    ),
+    (
+        "iur/urt/4.0/publicTransit.xsd",
+        include_str!("../../schemas/iur/urt/4.0/publicTransit.xsd"),
+    ),
+];
+
+/// The profile used when a document says nothing about which one it needs.
+///
+/// i-UR 3.1 is the version most PLATEAU packages in circulation carry.
+pub const DEFAULT_PROFILE: &str = PROFILES[1].1;

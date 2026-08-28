@@ -16,6 +16,12 @@ pub struct Profile {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// The CityGML and i-UR versions this profile accepts.
+    #[serde(default)]
+    pub source: Provenance,
+    /// The versions it produces.
+    #[serde(default)]
+    pub target: Provenance,
     #[serde(default)]
     pub input: NamespaceSet,
     pub output: Output,
@@ -27,17 +33,61 @@ pub struct Profile {
     pub element: Vec<ElementRule>,
     #[serde(default)]
     pub order_group: Vec<OrderGroup>,
+    /// i-UR class -> the CityGML property that carries it. See [`Rules::ade_hook`].
+    #[serde(default)]
+    pub ade_hooks: IndexMap<String, String>,
     #[serde(default)]
     pub height: HeightDefaults,
     #[serde(default)]
     pub review: Vec<ReviewNote>,
 }
 
+/// One end of a conversion: what a profile reads, or what it writes.
+///
+/// `iur` is the discriminator. i-UR puts its minor version in the namespace URI,
+/// so the namespaces a document declares say which version it is, and that is
+/// what picks a profile.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Provenance {
+    /// Human-readable, e.g. `CityGML 2.0 + i-UR 3.1`. Shown by `inspect`.
+    pub label: String,
+    pub citygml: Option<String>,
+    /// The i-UR minor version, written plainly rather than parsed back out of
+    /// the URIs below. On the target side this is what `--target-iur` selects.
+    pub iur_version: String,
+    pub iur: Vec<String>,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NamespaceSet {
     #[serde(default)]
-    pub namespaces: IndexMap<String, String>,
+    pub namespaces: IndexMap<String, NamespaceValue>,
+}
+
+/// The namespace URI, or URIs, an input prefix stands for.
+///
+/// i-UR publishes a new minor version most years and PLATEAU data carries
+/// whichever one was current when it was published, so the same element lives
+/// in three namespaces at once across a corpus. Binding a prefix to the whole
+/// family keeps the element table one row per element instead of one row per
+/// version, and stops a rule written against 3.0 from silently missing 3.1 and
+/// 3.2 data.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum NamespaceValue {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl NamespaceValue {
+    pub fn uris(&self) -> &[String] {
+        match self {
+            NamespaceValue::One(uri) => std::slice::from_ref(uri),
+            NamespaceValue::Many(uris) => uris,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +159,8 @@ impl Default for HeightDefaults {
 #[derive(Debug, Clone)]
 pub struct Rules {
     name: String,
+    source: Provenance,
+    target: Provenance,
     namespace_map: HashMap<String, String>,
     /// `None` means "drop this element".
     renames: HashMap<Name, Option<Name>>,
@@ -118,6 +170,7 @@ pub struct Rules {
     schema_location: Option<String>,
     height: HeightDefaults,
     reviews: HashMap<Name, Arc<str>>,
+    ade_hooks: HashMap<Name, Name>,
 }
 
 impl Rules {
@@ -131,7 +184,7 @@ impl Rules {
 
         let mut renames = HashMap::new();
         for rule in &profile.element {
-            let from = parse_name(&rule.from, input)?;
+            let sources = parse_input_names(&rule.from, input)?;
             let to = match (&rule.to, rule.drop) {
                 (Some(_), true) => {
                     return Err(Error::Profile(format!(
@@ -148,11 +201,13 @@ impl Rules {
                     )));
                 }
             };
-            if let Some(previous) = renames.insert(from, to) {
-                return Err(Error::Profile(format!(
-                    "duplicate rule for `{}` (previously mapped to {previous:?})",
-                    rule.from
-                )));
+            for from in sources {
+                if let Some(previous) = renames.insert(from, to.clone()) {
+                    return Err(Error::Profile(format!(
+                        "duplicate rule for `{}` (previously mapped to {previous:?})",
+                        rule.from
+                    )));
+                }
             }
         }
 
@@ -183,6 +238,11 @@ impl Rules {
             }
         }
 
+        let mut ade_hooks = HashMap::new();
+        for (class, hook) in &profile.ade_hooks {
+            ade_hooks.insert(parse_name(class, output)?, parse_name(hook, output)?);
+        }
+
         let mut prefixes = PrefixMap::new();
         for (prefix, uri) in output {
             prefixes.insert(prefix.clone(), uri.clone());
@@ -204,6 +264,8 @@ impl Rules {
 
         Ok(Rules {
             name: profile.name.clone(),
+            source: profile.source.clone(),
+            target: profile.target.clone(),
             namespace_map: profile
                 .namespace_map
                 .iter()
@@ -216,11 +278,22 @@ impl Rules {
             schema_location,
             height: profile.height.clone(),
             reviews,
+            ade_hooks,
         })
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// What this profile accepts.
+    pub fn source(&self) -> &Provenance {
+        &self.source
+    }
+
+    /// What it produces.
+    pub fn target(&self) -> &Provenance {
+        &self.target
     }
 
     /// The output name for an element, or `None` if the profile drops it.
@@ -261,6 +334,16 @@ impl Rules {
         &self.height
     }
 
+    /// The CityGML property an i-UR class hangs off in 3.0.
+    ///
+    /// CityGML 2.0 let an extension name its own property
+    /// (`uro:buildingIDAttribute`); 3.0 declares one general hook per host class
+    /// and the extension substitutes into it, so the wrapper is decided by the
+    /// class inside rather than by the wrapper's own name.
+    pub fn ade_hook(&self, class: &Name) -> Option<&Name> {
+        self.ade_hooks.get(class)
+    }
+
     /// The note to report when this element survives conversion untouched, if
     /// the profile flags it as needing a human decision.
     pub fn review_note(&self, name: &Name) -> Option<&str> {
@@ -293,6 +376,34 @@ impl Rules {
     }
 }
 
+/// Resolves a `prefix:local` name on the *input* side, where one prefix may
+/// stand for a family of namespace URIs. Returns one expanded name per URI, so
+/// a single rule applies to every version in the family.
+fn parse_input_names(
+    text: &str,
+    namespaces: &IndexMap<String, NamespaceValue>,
+) -> Result<Vec<Name>> {
+    let Some((prefix, local)) = text.split_once(':') else {
+        return Ok(vec![Name::unqualified(text)]);
+    };
+    if local.is_empty() {
+        return Err(Error::Profile(format!("`{text}` has no local name")));
+    }
+    let value = namespaces
+        .get(prefix)
+        .ok_or_else(|| Error::Profile(format!("`{text}` uses undeclared prefix `{prefix}`")))?;
+    if value.uris().is_empty() {
+        return Err(Error::Profile(format!(
+            "`{text}` uses prefix `{prefix}`, which is bound to no namespace"
+        )));
+    }
+    Ok(value
+        .uris()
+        .iter()
+        .map(|uri| Name::qualified(uri.clone(), local))
+        .collect())
+}
+
 /// Resolves a `prefix:local` name against a prefix table. A name with no prefix
 /// is unqualified.
 fn parse_name(text: &str, namespaces: &IndexMap<String, String>) -> Result<Name> {
@@ -320,10 +431,97 @@ mod tests {
         Rules::from_toml(DEFAULT_PROFILE).expect("default profile must compile")
     }
 
+    const URO: &str = "https://www.geospatial.jp/iur/uro";
+    const URC_4: &str = "https://www.geospatial.jp/iur/urc/4.0";
+
+    /// One rule, written once, has to match every i-UR minor version in
+    /// circulation -- PLATEAU data is 3.0, 3.1 or 3.2 depending on its year.
+    #[test]
+    fn one_input_prefix_binds_a_whole_version_family() {
+        let profile = r#"
+name = "family"
+[input.namespaces]
+uro = [
+  "https://www.geospatial.jp/iur/uro/3.0",
+  "https://www.geospatial.jp/iur/uro/3.1",
+  "https://www.geospatial.jp/iur/uro/3.2",
+]
+[output.namespaces]
+urc = "https://www.geospatial.jp/iur/urc/4.0"
+[[element]]
+from = "uro:srcScaleLod0"
+to = "urc:srcScaleLod0"
+"#;
+        let rules = Rules::from_toml(profile).unwrap();
+        for version in ["3.0", "3.1", "3.2"] {
+            let from = Name::qualified(format!("{URO}/{version}"), "srcScaleLod0");
+            assert_eq!(
+                rules.map_element(&from),
+                Some(Name::qualified(URC_4, "srcScaleLod0")),
+                "a rule must match uro {version}"
+            );
+        }
+    }
+
+    /// A prefix bound to a single URI keeps working.
+    #[test]
+    fn a_single_namespace_still_binds() {
+        let profile = r#"
+name = "single"
+[input.namespaces]
+bldg = "http://www.opengis.net/citygml/building/2.0"
+[output.namespaces]
+con = "http://www.opengis.net/citygml/construction/3.0"
+[[element]]
+from = "bldg:RoofSurface"
+to = "con:RoofSurface"
+"#;
+        let rules = Rules::from_toml(profile).unwrap();
+        let from = Name::qualified(ns::BUILDING_2, "RoofSurface");
+        assert_eq!(
+            rules.map_element(&from),
+            Some(Name::qualified(ns::CONSTRUCTION_3, "RoofSurface"))
+        );
+    }
+
+    #[test]
+    fn a_prefix_bound_to_nothing_is_an_error() {
+        let profile = r#"
+name = "empty"
+[input.namespaces]
+uro = []
+[output.namespaces]
+urc = "https://www.geospatial.jp/iur/urc/4.0"
+[[element]]
+from = "uro:x"
+to = "urc:x"
+"#;
+        assert!(Rules::from_toml(profile).is_err());
+    }
+
+    /// Every built-in profile declares what it accepts and what it produces, and
+    /// covers all four i-UR modules -- a module missing from the table would be
+    /// written unqualified rather than converted.
+    #[test]
+    fn every_profile_declares_its_source_and_target() {
+        for (name, toml) in crate::PROFILES {
+            let r = Rules::from_toml(toml).unwrap();
+            assert_eq!(&r.name(), name);
+            assert!(!r.source().label.is_empty(), "{name} has no source label");
+            assert!(!r.target().label.is_empty(), "{name} has no target label");
+            assert_eq!(r.source().iur.len(), 4, "{name}: uro, urf, urg, urt");
+            assert_eq!(r.target().iur.len(), 5, "{name}: the four plus urc");
+            assert_eq!(
+                r.source().citygml.as_deref(),
+                Some("http://www.opengis.net/citygml/2.0")
+            );
+        }
+    }
+
     #[test]
     fn default_profile_compiles() {
         let r = rules();
-        assert_eq!(r.name(), "citygml-2.0-to-3.0");
+        assert_eq!(r.name(), "iur-3.1-to-4.0");
         assert_eq!(r.prefixes().prefix_of(ns::CITYGML_3), Some("core"));
         assert!(r.schema_location().is_some());
     }
@@ -372,24 +570,38 @@ mod tests {
     /// prefix on the output side and its elements are written unqualified — and
     /// because the `[[review]]` rules match on the 4.0 names, the flags for the
     /// urc migration go quiet as well. Real data is mostly 3.1 and 3.2.
+    /// Each profile bumps its own i-UR minor and leaves the others alone: an
+    /// unmapped namespace is what makes running the wrong profile visible
+    /// instead of silently partial.
     #[test]
-    fn bumps_every_i_ur_3_x_minor_to_4_0() {
-        let r = rules();
-        for (module, local) in [
-            ("uro", "buildingID"),
-            ("urf", "Zone"),
-            ("urg", "genericTag"),
-        ] {
-            for minor in ["3.0", "3.1", "3.2"] {
-                let from = Name::qualified(
-                    format!("https://www.geospatial.jp/iur/{module}/{minor}"),
-                    local,
-                );
-                assert_eq!(
-                    r.map_element(&from).unwrap(),
-                    Name::qualified(format!("https://www.geospatial.jp/iur/{module}/4.0"), local),
-                    "{module} {minor}"
-                );
+    fn a_profile_bumps_only_its_own_i_ur_minor() {
+        for (name, toml) in crate::PROFILES {
+            let r = Rules::from_toml(toml).unwrap();
+            let own = name.trim_start_matches("iur-").trim_end_matches("-to-4.0");
+            for (module, local) in [
+                ("uro", "buildingID"),
+                ("urf", "Zone"),
+                ("urg", "genericTag"),
+            ] {
+                for minor in ["3.0", "3.1", "3.2"] {
+                    let from = Name::qualified(
+                        format!("https://www.geospatial.jp/iur/{module}/{minor}"),
+                        local,
+                    );
+                    let expected = if minor == own {
+                        Name::qualified(
+                            format!("https://www.geospatial.jp/iur/{module}/4.0"),
+                            local,
+                        )
+                    } else {
+                        from.clone()
+                    };
+                    assert_eq!(
+                        r.map_element(&from).unwrap(),
+                        expected,
+                        "{name}: {module} {minor}"
+                    );
+                }
             }
         }
     }
@@ -406,21 +618,33 @@ mod tests {
     /// i-UR 4.0 consolidations that need a decision are flagged, not guessed at.
     #[test]
     fn flags_elements_that_need_review() {
-        let r = rules();
-        let quality = Name::qualified(
+        // The built-in profiles have no review entries left -- every i-UR class
+        // the building module meets now has a rule -- so exercise the mechanism
+        // on a profile of its own rather than deleting the test with them.
+        let profile = r#"
+name = "review"
+[input.namespaces]
+uro = "https://www.geospatial.jp/iur/uro/3.1"
+[output.namespaces]
+uro = "https://www.geospatial.jp/iur/uro/4.0"
+[[review]]
+element = "uro:SomethingUnsettled"
+note = "decide this before converting it"
+"#;
+        let r = Rules::from_toml(profile).unwrap();
+        let flagged = Name::qualified(
             "https://www.geospatial.jp/iur/uro/4.0",
-            "DataQualityAttribute",
+            "SomethingUnsettled",
         );
-        let note = r
-            .review_note(&quality)
-            .expect("DataQualityAttribute is flagged");
-        assert!(note.contains("urc:ExteriorDataQualityAttribute"), "{note}");
-        // A type with a settled mapping is not flagged.
-        let id = Name::qualified(
+        assert_eq!(
+            r.review_note(&flagged),
+            Some("decide this before converting it")
+        );
+        let settled = Name::qualified(
             "https://www.geospatial.jp/iur/uro/4.0",
             "BuildingIDAttribute",
         );
-        assert!(r.review_note(&id).is_none());
+        assert!(r.review_note(&settled).is_none());
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use quick_xml::XmlVersion;
@@ -10,6 +11,60 @@ use crate::error::{Error, Result};
 
 /// Reads a CityGML file into a `String`, honouring a UTF-8 BOM and falling back
 /// to Shift_JIS for the occasional legacy file.
+/// The namespace URIs declared on a document's root element.
+///
+/// [`Reader`] resolves prefixes away and discards `xmlns` attributes, which is
+/// right for conversion but loses exactly what version detection needs: a
+/// document declares the i-UR namespaces it uses, and those carry the version.
+/// Parsing stops at the root start tag, so this reads the head of the file only.
+pub fn root_namespaces(source: &str) -> Vec<String> {
+    let mut reader = quick_xml::Reader::from_str(source);
+    let mut declared = Vec::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(start)) | Ok(Event::Empty(start)) => {
+                for attr in start.attributes().with_checks(false).flatten() {
+                    if attr.key.as_namespace_binding().is_some() {
+                        let uri = attr.value.to_string();
+                        if !declared.contains(&uri) {
+                            declared.push(uri);
+                        }
+                    }
+                }
+                return declared;
+            }
+            Ok(Event::Eof) | Err(_) => return declared,
+            _ => {}
+        }
+    }
+}
+
+/// How much of a file [`read_root_namespaces`] looks at.
+///
+/// The largest root start tag across a sample of PLATEAU packages is under
+/// 3 KiB; 64 KiB leaves room for one far wider than anything observed.
+const HEAD_BYTES: usize = 64 * 1024;
+
+/// The namespaces declared on the root element of the document at `path`,
+/// reading only the head of the file.
+///
+/// PLATEAU `.gml` files reach the better part of a gigabyte, so the whole point
+/// is not to load one to read its first tag. Namespace URIs are ASCII, so a
+/// truncated read is decoded lossily rather than sniffed for Shift_JIS the way
+/// [`read_to_string`] does: a cut multi-byte character would otherwise flip the
+/// whole buffer to the wrong encoding.
+pub fn read_root_namespaces(path: &Path) -> Result<Vec<String>> {
+    use std::io::Read;
+
+    let file = File::open(path).map_err(|e| Error::io(path, e))?;
+    let mut head = Vec::new();
+    file.take(HEAD_BYTES as u64)
+        .read_to_end(&mut head)
+        .map_err(|e| Error::io(path, e))?;
+    let head = head.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&head);
+    Ok(root_namespaces(&String::from_utf8_lossy(head)))
+}
+
 pub fn read_to_string(path: &Path) -> Result<String> {
     let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
     Ok(decode(&bytes))
@@ -273,6 +328,31 @@ fn tidy(el: &mut Element) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn root_namespaces_are_read_without_the_rest_of_the_document() {
+        let src = r#"<?xml version="1.0"?>
+            <core:CityModel xmlns:core="urn:core" xmlns:uro="https://www.geospatial.jp/iur/uro/3.1"
+                            xsi:schemaLocation="ignored">
+              <core:cityObjectMember/>
+            </core:CityModel>"#;
+        let found = root_namespaces(src);
+        assert!(found.contains(&"urn:core".to_string()));
+        assert!(found.contains(&"https://www.geospatial.jp/iur/uro/3.1".to_string()));
+        assert_eq!(
+            found.len(),
+            2,
+            "only xmlns declarations, not other attributes"
+        );
+    }
+
+    /// Detection must not depend on the document being complete: PLATEAU `.gml`
+    /// files reach hundreds of megabytes and only the head is ever read.
+    #[test]
+    fn a_truncated_document_still_yields_its_root_namespaces() {
+        let src = r#"<core:CityModel xmlns:core="urn:core" xmlns:uro="urn:uro"><core:cityObj"#;
+        assert_eq!(root_namespaces(src), ["urn:core", "urn:uro"]);
+    }
 
     #[test]
     fn resolves_namespaces_and_drops_xmlns_attrs() {
