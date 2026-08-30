@@ -47,6 +47,14 @@ function createAreas(snapshot: AreaQuerySnapshot, searchTokens?: readonly string
   );
 }
 
+// Cap the client-controlled `limit` argument. Without this the resolver
+// forwards the caller's value straight into `.limit(limit * 2)` and
+// `uniqBy([...result, ...createAreas(...)])`, materializing every returned
+// document in memory — a single `limit: 1_000_000` request would pull up to
+// ~2M docs onto the geo Cloud Run service and OOM the instance.
+const ESTAT_AREAS_MAX_LIMIT = 1000;
+const ESTAT_AREAS_DEFAULT_LIMIT = 100;
+
 const searchFields = ["shortAddress", "middleAddress", "fullAddress"];
 const compoundSearchFields = [
   ["properties.S_NAME", "properties.CSS_NAME", "properties.GST_NAME", "properties.PREF_NAME"],
@@ -73,7 +81,19 @@ export class EstatAreasService {
   ) {}
 
   async findAll(params: { searchTokens: readonly string[]; limit?: number }): Promise<EstatArea[]> {
-    const { limit = 100 } = params;
+    const requested = params.limit ?? ESTAT_AREAS_DEFAULT_LIMIT;
+    // Clamp to [1, ESTAT_AREAS_MAX_LIMIT]. Non-finite / non-positive values
+    // fall back to the default; sub-1 positive fractions (e.g. `0.5` → floor
+    // = 0) would otherwise sneak through `> 0` and produce a `.limit(0)`
+    // query that always returns empty — floor first, then re-check the
+    // effective integer against the same lower bound.
+    let limit = ESTAT_AREAS_DEFAULT_LIMIT;
+    if (Number.isFinite(requested) && requested > 0) {
+      const floored = Math.floor(requested);
+      if (floored >= 1) {
+        limit = Math.min(floored, ESTAT_AREAS_MAX_LIMIT);
+      }
+    }
 
     let result: EstatArea[] = [];
     for (const fields of compoundSearchFields) {
