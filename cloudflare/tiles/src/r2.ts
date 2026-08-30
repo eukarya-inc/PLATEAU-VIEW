@@ -55,7 +55,13 @@ export async function serveObject(
     headers.set("content-type", contentTypeFor(key));
   }
   if (!headers.has("cache-control")) {
-    headers.set("cache-control", "public, max-age=86400, immutable");
+    // `immutable` disabled browser/edge revalidation, so after an operator
+    // re-uploaded a corrected `layer.json` or COG at the same key, clients
+    // and the CDN kept serving stale bytes for the full TTL — bypassing the
+    // ETag/If-None-Match handling this same function sets up. Since these
+    // objects are mutable (in-place overwrites happen), use a shorter TTL
+    // with `must-revalidate` so ETag revalidation actually runs.
+    headers.set("cache-control", "public, max-age=3600, must-revalidate");
   }
 
   // `.terrain` tiles are stored pre-gzipped (raw bytes). Declare the encoding so
