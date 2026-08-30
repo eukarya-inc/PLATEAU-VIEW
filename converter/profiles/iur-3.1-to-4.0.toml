@@ -172,8 +172,10 @@ wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 # inherited from core::AbstractSpace / AbstractPhysicalSpace /
 # AbstractOccupiedSpace, so they take the core prefix.
 #
-# PLATEAU covers LOD0 to LOD3 only. CityGML 3.0 has no LOD4; 2.0 interior LOD4
-# geometry is folded into LOD3 and reported.
+# CityGML 3.0 has no LOD4. No lod4* rule appears here on purpose: which LOD an
+# LOD4 element becomes depends on the feature's measurement code, so it is
+# decided per feature by the lod4 pass (core/src/lod4.rs) from the [lod4] table
+# below, and every fold is reported.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "bldg:lod1Solid"
@@ -185,25 +187,16 @@ to = "core:lod2Solid"
 from = "bldg:lod3Solid"
 to = "core:lod3Solid"
 [[element]]
-from = "bldg:lod4Solid"
-to = "core:lod3Solid"
-[[element]]
 from = "bldg:lod2MultiSurface"
 to = "core:lod2MultiSurface"
 [[element]]
 from = "bldg:lod3MultiSurface"
 to = "core:lod3MultiSurface"
 [[element]]
-from = "bldg:lod4MultiSurface"
-to = "core:lod3MultiSurface"
-[[element]]
 from = "bldg:lod2MultiCurve"
 to = "core:lod2MultiCurve"
 [[element]]
 from = "bldg:lod3MultiCurve"
-to = "core:lod3MultiCurve"
-[[element]]
-from = "bldg:lod4MultiCurve"
 to = "core:lod3MultiCurve"
 [[element]]
 from = "bldg:lod1TerrainIntersection"
@@ -215,9 +208,6 @@ to = "core:lod2TerrainIntersectionCurve"
 from = "bldg:lod3TerrainIntersection"
 to = "core:lod3TerrainIntersectionCurve"
 [[element]]
-from = "bldg:lod4TerrainIntersection"
-to = "core:lod3TerrainIntersectionCurve"
-[[element]]
 from = "bldg:lod1ImplicitRepresentation"
 to = "core:lod1ImplicitRepresentation"
 [[element]]
@@ -226,9 +216,6 @@ to = "core:lod2ImplicitRepresentation"
 [[element]]
 from = "bldg:lod3ImplicitRepresentation"
 to = "core:lod3ImplicitRepresentation"
-[[element]]
-from = "bldg:lod4ImplicitRepresentation"
-to = "core:lod3ImplicitRepresentation"
 
 # ---------------------------------------------------------------------------
 # Space boundaries.
@@ -236,15 +223,14 @@ to = "core:lod3ImplicitRepresentation"
 # Thematic surfaces are con::AbstractConstructionSurface subtypes. They are
 # defined in the Construction module, so they take the con prefix.
 #
-# On `boundary`: where a subtype defines its own `boundary` role, that one must
-# be used. Building inherits `boundary` from AbstractConstruction, so the
-# property is con:boundary — not core:boundary. UNVERIFIED: the OGC schemas
-# disagree, declaring no con:boundary at all, and this is the element that keeps
-# output from validating against them.
+# `boundary` is declared once, on core::AbstractSpace (core.xsd), and the
+# Construction module adds no boundary role of its own, so the property is
+# core:boundary on every space -- Building, BuildingRoom, BuildingInstallation.
+# MLIT's CityGML 3.0 Takeshiba sample writes core:boundary throughout.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "bldg:boundedBy"
-to = "con:boundary"
+to = "core:boundary"
 [[element]]
 from = "bldg:RoofSurface"
 to = "con:RoofSurface"
@@ -299,12 +285,10 @@ to = "con:DoorSurface"
 [[element]]
 from = "bldg:consistsOfBuildingPart"
 to = "bldg:buildingPart"
-[[element]]
-from = "bldg:outerBuildingInstallation"
-to = "bldg:buildingInstallation"
-[[element]]
-from = "bldg:interiorBuildingInstallation"
-to = "bldg:buildingInstallation"
+# The three 2.0 installation properties are not table rows: the placement the
+# property name expressed (outer / interior / in a room) moves onto the
+# installation as con:relationToConstruction, which is a rewrite (bldg.rs).
+# Only the class rename stays declarative.
 [[element]]
 from = "bldg:IntBuildingInstallation"
 to = "bldg:BuildingInstallation"
@@ -317,9 +301,6 @@ to = "bldg:BuildingRoom"
 [[element]]
 from = "bldg:interiorFurniture"
 to = "bldg:buildingFurniture"
-[[element]]
-from = "bldg:roomInstallation"
-to = "bldg:buildingInstallation"
 
 # Address. The property stays bldg:address, but the object it
 # holds moved to the core module: <bldg:address><core:Address><core:xalAddress>.
@@ -379,7 +360,6 @@ children = [
   # con::AbstractConstruction
   "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
   "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
-  "con:boundary",
   # bldg::AbstractBuilding
   "bldg:class", "bldg:function", "bldg:usage", "bldg:roofType",
   "bldg:storeysAboveGround", "bldg:storeysBelowGround",
@@ -441,7 +421,6 @@ children = [
   "con:relationToConstruction",
   "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
   "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
-  "con:boundary",
   "bldg:class", "bldg:function", "bldg:usage", "bldg:roomHeight",
 ]
 
@@ -465,7 +444,9 @@ children = ["gen:name", "gen:value", "gen:genericAttribute"]
 #
 # con::Height has value, status, lowReference and highReference, all [1..1].
 # lowReference and highReference are codes from Elevation_elevationReference.xml;
-# status is an enumeration and takes no codeSpace.
+# status is an enumeration and takes no codeSpace. The referenced code list is
+# not part of a PLATEAU 2.0 package, so the converter writes it into the
+# output's codelists/ (see ELEVATION_CODELIST) and the codeSpace below resolves.
 #
 # CityGML 2.0's measuredHeight is a measured height running from the lowest
 # ground point to the construction's highest point. Hence
@@ -494,23 +475,40 @@ reference_code_space = "../../codelists/Elevation_elevationReference.xml"
 from = "uro:DataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
 
-# LOD4 quality descriptions. CityGML 3.0 stops at LOD3 and urc 4.0 declares no
-# Lod4 field, so these fold into Lod3, matching how LOD4 geometry is folded.
-# The Lod3 fields accept repeats, so folding adds a value rather than replacing
-# one. srcScaleLod4 is the exception -- urc:srcScaleLod3 admits a single value,
-# so folding there would be invalid and it is dropped instead, with a warning.
-[[element]]
-from = "uro:geometrySrcDescLod4"
-to = "urc:geometrySrcDescLod3"
-[[element]]
-from = "uro:appearanceSrcDescLod4"
-to = "urc:appearanceSrcDescLod3"
-[[element]]
-from = "uro:publicSurveySrcDescLod4"
-to = "urc:publicSurveySrcDescLod3"
-[[element]]
-from = "uro:srcScaleLod4"
-drop = true
+# ---------------------------------------------------------------------------
+# LOD4.
+#
+# CityGML 3.0 has no LOD4; it splits a building into an exterior and an
+# interior model, each with LOD0-3. CityGML 2.0's LOD4 is the interior model,
+# and which interior LOD it becomes depends on how it was measured: a surveyed
+# interior is interior LOD2, one derived from BIM interior LOD3. The
+# measurement method is the feature's `attribute` code, and the tables below
+# say which codes mean which — they are the survey-method codes (000, 101-121)
+# and the BIM/CAD/drawing code (500) of DataQualityAttribute_geometrySrcDesc.
+# Codes that say nothing about the method (GIS data, ledgers, estimates,
+# 999 = not created) are deliberately unlisted and take `fallback`.
+#
+# The exterior shell at LOD4 (lod4Solid / lod4MultiSurface on the building
+# itself and its exterior surfaces) folds into the exterior LOD3 slot instead,
+# and only where that slot is empty: a building that already carries LOD3
+# keeps it, and the LOD4 shell is dropped and reported.
+#
+# `attribute` is written as it stands after the rename pass. geometrySrcDescLod4
+# has no i-UR 4.0 home, so the bulk bump leaves it in uro 4.0 -- hence the uro
+# prefix although its siblings become urc.
+#
+# A feature with no code, or a code in neither list, takes `fallback` (lod3,
+# lod2 or drop) for its interior content and is reported; `--lod4-fallback`
+# overrides it per run.
+# ---------------------------------------------------------------------------
+[lod4]
+attribute = "uro:geometrySrcDescLod4"
+lod2 = [
+  "000", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+  "111", "112", "113", "114", "115", "116", "117", "118", "119", "120", "121",
+]
+lod3 = ["500"]
+fallback = "lod3"
 
 # ---------------------------------------------------------------------------
 # Elements that need a decision the converter must not make for you.
@@ -904,7 +902,7 @@ to = "urc:visibility"
 #     _StatisticalGrid
 #     fiscalYearOfPublication
 #     language
-#   uro: 156 name(s) declared in 3.1 and in no 4.0 module
+#   uro: 159 name(s) declared in 3.1 and in no 4.0 module
 #     AbstractConstruction
 #     BuildingAttribute
 #     CityFurnitureAttribute
@@ -928,6 +926,7 @@ to = "urc:visibility"
 #     WallSurface
 #     _BoundarySurface
 #     administorator
+#     appearanceSrcDescLod4
 #     bldgDataQualityAttribute
 #     bldgDisasterRiskAttribute
 #     bldgDmAttribute
@@ -981,6 +980,7 @@ to = "urc:visibility"
 #     frnFacilityIdAttribute
 #     frnFacilityTypeAttribute
 #     frnKeyValuePairAttribute
+#     geometrySrcDescLod4
 #     highReference
 #     ifcBoundarySurfaceAttribute
 #     ifcBuildingAttribute
@@ -1019,6 +1019,7 @@ to = "urc:visibility"
 #     numberOfOccupants
 #     occupancy
 #     occupantType
+#     publicSurveySrcDescLod4
 #     railwayRouteAttribute
 #     railwayTrackAttribute
 #     roadStatus
@@ -1081,7 +1082,4 @@ to = "urc:visibility"
 
 # Left to the rule written by hand elsewhere in this file:
 #   uro:DataQualityAttribute
-#   uro:appearanceSrcDescLod4
-#   uro:geometrySrcDescLod4
-#   uro:publicSurveySrcDescLod4
 # END GENERATED -- i-UR rules

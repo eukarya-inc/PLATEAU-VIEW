@@ -9,8 +9,8 @@
 //!   feature can be restructured freely without holding the whole file in memory.
 //! * [`profile`] holds the declarative part of the mapping (namespace bumps,
 //!   element renames, child ordering) loaded from a TOML profile.
-//! * [`transform`] and [`bldg`] apply the profile and the structural rewrites
-//!   that a rename table cannot express.
+//! * [`transform`], [`common`], [`lod4`], [`bldg`] and [`iur`] apply the profile
+//!   and the structural rewrites that a rename table cannot express.
 //!
 //! [`convert`] ties them together and [`report`] carries the diagnostics back out.
 
@@ -21,6 +21,7 @@ pub mod dataset;
 pub mod detect;
 pub mod error;
 pub mod iur;
+pub mod lod4;
 pub mod profile;
 pub mod report;
 pub mod transform;
@@ -77,6 +78,19 @@ pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../../schemas/iur/urt/4.0/publicTransit.xsd"),
     ),
 ];
+
+/// The elevation-reference code list `con:Height` references, written into a
+/// converted package's `codelists/` when the input does not ship it.
+///
+/// PLATEAU 2.0 packages have no use for it — `measuredHeight` carries no
+/// reference points — so the file the output's `codeSpace` names has to come
+/// from somewhere. It is the published i-UR 4.0 list, vendored for the same
+/// reason the schemas are: fetching at run time would make output depend on a
+/// server.
+pub const ELEVATION_CODELIST: (&str, &str) = (
+    "codelists/Elevation_elevationReference.xml",
+    include_str!("../../codelists/Elevation_elevationReference.xml"),
+);
 
 /// The profile used when a document says nothing about which one it needs.
 ///

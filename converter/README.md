@@ -43,6 +43,7 @@ Useful flags:
 | `--staging DIR` | reassemble multi-part input here instead of a temp dir, and keep it |
 | `--no-gml-ids` | do not mint the `gml:id`s GML 3.2 requires |
 | `--no-reorder` | leave children in input order instead of the 3.0 sequence |
+| `--lod4-fallback lod3\|lod2\|drop` | where LOD4 goes when no measurement code decides it (profile default: `lod3`) |
 | `--indent tab\|two\|four\|none` | output indentation |
 | `-j N` | worker threads |
 
@@ -77,8 +78,16 @@ Each member then goes through three passes, in this order:
 
 1. **Rename** (`transform::rename`) — the profile's bulk namespace bump plus its
    per-element rules. Everything downstream therefore speaks 3.0 names only.
-2. **Restructure** (`bldg::BuildingRewrite`) — the rewrites a rename table
-   cannot express, because they change a value or the shape of a subtree.
+2. **Restructure** (`common`, `lod4`, `bldg`, `iur`) — the rewrites a rename
+   table cannot express, because they change a value or the shape of a subtree.
+   `lod4` is where CityGML 2.0 LOD4 goes: 3.0 stops at LOD3 and splits a
+   building into an exterior and an interior model. LOD4 is the interior
+   model, and its LOD follows the measurement method — a surveyed interior is
+   interior LOD2, a BIM-derived one interior LOD3 — read from the feature's
+   `geometrySrcDescLod4` code through the profile's `[lod4]` table, with a
+   configurable fallback when no code decides. The LOD4 exterior shell folds
+   into the exterior LOD3 slot only where that slot is empty. Every fold,
+   fallback and drop is reported.
 3. **Reorder** (`transform::reorder`) — 3.0 content models are `xs:sequence`, so
    a property that was merely renamed can still land in the wrong slot.
 
@@ -105,6 +114,9 @@ table:
 * `[[element]]` — per-element renames and drops.
 * `[[order_group]]` — the child order each 3.0 type requires.
 * `[height]` — the `con:Height` parts CityGML 2.0 does not record.
+* `[lod4]` — the measurement-code attribute, which codes send interior LOD4
+  content to LOD2 or LOD3, and the fallback (`lod3`, `lod2`, `drop`) when no
+  code decides.
 * `[[review]]` — elements to leave alone and report, because their mapping needs
   a human decision.
 

@@ -38,6 +38,9 @@ pub struct Profile {
     pub ade_hooks: IndexMap<String, String>,
     #[serde(default)]
     pub height: HeightDefaults,
+    /// Where CityGML 2.0 LOD4 goes, since 3.0 has no LOD4. See [`Lod4Policy`].
+    #[serde(default)]
+    pub lod4: Lod4Policy,
     #[serde(default)]
     pub review: Vec<ReviewNote>,
 }
@@ -154,6 +157,70 @@ impl Default for HeightDefaults {
     }
 }
 
+/// What to do with an LOD4 element when the data does not say which LOD it
+/// should become.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Lod4Fallback {
+    /// Fold into LOD3, the closest 3.0 has to an interior model.
+    Lod3,
+    /// Fold into LOD2.
+    Lod2,
+    /// Remove the LOD4 geometry and its LOD4 quality descriptors.
+    Drop,
+}
+
+impl Lod4Fallback {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Lod4Fallback::Lod3 => "lod3",
+            Lod4Fallback::Lod2 => "lod2",
+            Lod4Fallback::Drop => "drop",
+        }
+    }
+}
+
+/// How CityGML 2.0 LOD4 is placed in 3.0, which stops at LOD3.
+///
+/// PLATEAU decides a model's LOD by how it was measured, and records that per
+/// LOD in the quality attribute. The `attribute` here is the element holding
+/// the LOD4 measurement code; `lod2` and `lod3` list the codes that send the
+/// LOD4 content to each. A feature with no such code, or one in neither list,
+/// takes `fallback` and is reported.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Lod4Policy {
+    /// The element carrying the LOD4 measurement code, written with *output*
+    /// prefixes as it stands after the rename pass. A profile that names none
+    /// sends every LOD4 feature to `fallback`.
+    pub attribute: Option<String>,
+    /// Codes whose LOD4 becomes LOD2.
+    pub lod2: Vec<String>,
+    /// Codes whose LOD4 becomes LOD3.
+    pub lod3: Vec<String>,
+    pub fallback: Lod4Fallback,
+}
+
+impl Default for Lod4Policy {
+    fn default() -> Self {
+        Lod4Policy {
+            attribute: None,
+            lod2: Vec::new(),
+            lod3: Vec::new(),
+            fallback: Lod4Fallback::Lod3,
+        }
+    }
+}
+
+/// [`Lod4Policy`] with its attribute resolved to an expanded name.
+#[derive(Debug, Clone)]
+pub struct Lod4Rules {
+    pub attribute: Option<Name>,
+    pub lod2: Vec<String>,
+    pub lod3: Vec<String>,
+    pub fallback: Lod4Fallback,
+}
+
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
 /// apply.
 #[derive(Debug, Clone)]
@@ -169,6 +236,7 @@ pub struct Rules {
     prefixes: PrefixMap,
     schema_location: Option<String>,
     height: HeightDefaults,
+    lod4: Lod4Rules,
     reviews: HashMap<Name, Arc<str>>,
     ade_hooks: HashMap<Name, Name>,
 }
@@ -243,6 +311,23 @@ impl Rules {
             ade_hooks.insert(parse_name(class, output)?, parse_name(hook, output)?);
         }
 
+        let lod4 = Lod4Rules {
+            attribute: profile
+                .lod4
+                .attribute
+                .as_deref()
+                .map(|a| parse_name(a, output))
+                .transpose()?,
+            lod2: profile.lod4.lod2.clone(),
+            lod3: profile.lod4.lod3.clone(),
+            fallback: profile.lod4.fallback,
+        };
+        if let Some(code) = lod4.lod2.iter().find(|c| lod4.lod3.contains(c)) {
+            return Err(Error::Profile(format!(
+                "[lod4] lists code `{code}` under both lod2 and lod3"
+            )));
+        }
+
         let mut prefixes = PrefixMap::new();
         for (prefix, uri) in output {
             prefixes.insert(prefix.clone(), uri.clone());
@@ -277,6 +362,7 @@ impl Rules {
             prefixes,
             schema_location,
             height: profile.height.clone(),
+            lod4,
             reviews,
             ade_hooks,
         })
@@ -332,6 +418,11 @@ impl Rules {
 
     pub fn height(&self) -> &HeightDefaults {
         &self.height
+    }
+
+    /// Where LOD4 content goes. See [`Lod4Policy`].
+    pub fn lod4(&self) -> &Lod4Rules {
+        &self.lod4
     }
 
     /// The CityGML property an i-UR class hangs off in 3.0.

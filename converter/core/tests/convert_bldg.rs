@@ -99,16 +99,19 @@ fn measured_height_becomes_a_construction_height() {
     assert!(!output.contains("measuredHeight"));
     assert!(output.contains(r#"<con:value uom="m">14.3</con:value>"#));
     assert!(output.contains("<con:status>measured</con:status>"));
+    assert!(output.contains(
+        r#"<con:highReference codeSpace="../../codelists/Elevation_elevationReference.xml">2</con:highReference>"#
+    ));
 }
 
 #[test]
 fn lod0_roof_edge_becomes_a_roof_surface_boundary() {
     let (output, _) = convert_fixture();
     assert!(!output.contains("lod0RoofEdge"));
-    // con:boundary, not core:boundary: Building inherits the role from
-    // AbstractConstruction, and the subtype's role is the one that wins.
-    assert!(output.contains("<con:boundary>"));
-    assert!(!output.contains("<core:boundary>"));
+    // core:boundary: the role is declared on core::AbstractSpace and nowhere
+    // else, and MLIT's CityGML 3.0 sample writes it so.
+    assert!(output.contains("<core:boundary>"));
+    assert!(!output.contains("<con:boundary>"));
     assert!(output.contains("<con:RoofSurface"));
     assert!(output.contains("<core:lod0MultiSurface>"));
 }
@@ -360,8 +363,14 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
             .join("codelists/Common_urbanPlanType.xml")
             .is_file()
     );
-    // 6 codelists plus the five i-UR 4.0 schemas the converter writes.
-    assert_eq!(report.copied, 11);
+    // 6 input codelists, the elevation code list the converter adds because
+    // con:Height references it, and the five i-UR 4.0 schemas.
+    assert_eq!(report.copied, 12);
+    assert!(
+        out.path()
+            .join("codelists/Elevation_elevationReference.xml")
+            .is_file()
+    );
 }
 
 /// Every element name i-UR 4.0 declares, read from the schemas the converter

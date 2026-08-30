@@ -11,8 +11,9 @@ use crate::common::CommonRewrite;
 use crate::dataset::Dataset;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
-use crate::profile::Rules;
-use crate::report::{FileReport, Report};
+use crate::lod4::Lod4Rewrite;
+use crate::profile::{Lod4Fallback, Rules};
+use crate::report::{FileReport, Report, Warnings};
 use crate::transform::{self, IdGen};
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 
@@ -36,6 +37,9 @@ pub struct Options {
     pub copy_support_files: bool,
     /// Convert files concurrently.
     pub parallel: bool,
+    /// Where LOD4 goes when the data does not say. `None` takes the profile's
+    /// `[lod4] fallback`.
+    pub lod4_fallback: Option<Lod4Fallback>,
 }
 
 impl Default for Options {
@@ -47,6 +51,7 @@ impl Default for Options {
             indent: Indent::Tab,
             copy_support_files: true,
             parallel: true,
+            lod4_fallback: None,
         }
     }
 }
@@ -54,6 +59,7 @@ impl Default for Options {
 pub struct Converter {
     rules: Rules,
     common: CommonRewrite,
+    lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
     iur: IurRewrite,
     gml_ns: String,
@@ -63,12 +69,14 @@ pub struct Converter {
 impl Converter {
     pub fn new(rules: Rules, options: Options) -> Result<Self> {
         let common = CommonRewrite::new(&rules)?;
+        let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let iur = IurRewrite::new(&rules)?;
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
             rules,
             common,
+            lod4,
             bldg,
             iur,
             gml_ns,
@@ -134,6 +142,7 @@ impl Converter {
                 }
             }
             report.copied += write_iur_schemas(out)?;
+            report.copied += write_elevation_codelist(out, &mut report.warnings)?;
             if dataset.root().join("schemas").is_dir() {
                 report.warnings.add(
                     "the input's schemas/ describes i-UR 3.x and was replaced by the \
@@ -232,6 +241,9 @@ impl Converter {
         // `core:genericAttribute` wrapper is not a bldg property), and never
         // the other way round.
         self.common.apply(&mut element, &mut report.warnings);
+        // LOD4 is folded before the building pass so that pass only ever sees
+        // LOD0-3 names and can never emit an LOD4 slot 3.0 does not have.
+        self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
         // Last of the three: the CityGML hooks it introduces are in thematic
@@ -262,6 +274,27 @@ fn first_gml_id(element: &Element, gml_ns: &str) -> Option<String> {
     element
         .elements()
         .find_map(|child| first_gml_id(child, gml_ns))
+}
+
+/// Writes the elevation-reference code list unless the input shipped one.
+///
+/// Every `con:Height` the converter writes points its references at this file,
+/// and a PLATEAU 2.0 package does not carry it.
+fn write_elevation_codelist(out: &Path, warnings: &mut Warnings) -> Result<usize> {
+    let (relative, text) = crate::ELEVATION_CODELIST;
+    let target = out.join(relative);
+    if target.exists() {
+        return Ok(0);
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+    }
+    fs::write(&target, text).map_err(|e| Error::io(&target, e))?;
+    warnings.add(format!(
+        "{relative} was added to the output: con:Height references it and the \
+         input package does not ship it"
+    ));
+    Ok(1)
 }
 
 /// Writes the vendored i-UR 4.0 schemas into `out/schemas/`.

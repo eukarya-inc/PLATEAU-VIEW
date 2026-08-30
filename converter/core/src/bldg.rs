@@ -77,6 +77,13 @@ impl BuildingRewrite {
             "lod0FootPrint" => self.lod0_boundary(child, "GroundSurface", ids, warnings),
             "yearOfConstruction" => self.construction_date(child, "dateOfConstruction", warnings),
             "yearOfDemolition" => self.construction_date(child, "dateOfDemolition", warnings),
+            // 2.0 told an installation's placement apart by the property that
+            // carried it; 3.0 has one property and records the placement on
+            // the installation itself as con:relationToConstruction.
+            "outerBuildingInstallation" => self.installation(child, "outside", warnings),
+            "interiorBuildingInstallation" | "roomInstallation" => {
+                self.installation(child, "inside", warnings)
+            }
             local => match lod_geometry(local) {
                 Some(lod) => self.lod_geometry(child, lod, warnings),
                 None => child,
@@ -132,7 +139,7 @@ impl BuildingRewrite {
         el
     }
 
-    /// `bldg:lod0RoofEdge` / `bldg:lod0FootPrint` -> a `con:boundary` holding the
+    /// `bldg:lod0RoofEdge` / `bldg:lod0FootPrint` -> a `core:boundary` holding the
     /// named construction surface, whose geometry is `core:lod0MultiSurface`.
     ///
     /// CityGML 3.0 has a single LOD0 slot per space, so the 2.0 pair cannot both
@@ -159,9 +166,36 @@ impl BuildingRewrite {
              tells the outlines apart by surface type (LOD0.1)"
         ));
 
-        let mut boundary = Element::new(Name::qualified(&self.con, "boundary"));
+        let mut boundary = Element::new(Name::qualified(&self.core, "boundary"));
         boundary.push(surface);
         boundary
+    }
+
+    /// `bldg:outerBuildingInstallation` / `bldg:interiorBuildingInstallation` /
+    /// `bldg:roomInstallation` -> `bldg:buildingInstallation`, with the
+    /// placement the 2.0 property name expressed moved onto the installation
+    /// as `con:relationToConstruction`.
+    fn installation(&self, src: Element, relation: &str, warnings: &mut Warnings) -> Element {
+        let property = src.name.local.clone();
+        let mut prop = retag(src, Name::qualified(&self.bldg, "buildingInstallation"));
+        let relation_name = Name::qualified(&self.con, "relationToConstruction");
+        for installation in prop.elements_mut() {
+            if installation
+                .child(&self.con, "relationToConstruction")
+                .is_none()
+            {
+                installation.children.insert(
+                    0,
+                    Node::Element(Element::with_text(relation_name.clone(), relation)),
+                );
+            }
+        }
+        warnings.add(format!(
+            "bldg:{property} became bldg:buildingInstallation with \
+             con:relationToConstruction={relation}: CityGML 3.0 has one \
+             installation property and records the placement on the installation"
+        ));
+        prop
     }
 
     /// `bldg:yearOfConstruction` (a `gYear`) -> `con:dateOfConstruction` (a `date`).
@@ -212,11 +246,12 @@ fn retag(mut el: Element, name: Name) -> Element {
     el
 }
 
-/// `lod2Geometry` -> `Some('2')`.
+/// `lod2Geometry` -> `Some('2')`. LOD4 is not accepted: 3.0 has no LOD4 slot,
+/// and [`crate::lod4`] has already decided where `lod4Geometry` went.
 fn lod_geometry(local: &str) -> Option<char> {
     let rest = local.strip_prefix("lod")?;
     let mut chars = rest.chars();
-    let digit = chars.next().filter(|c| c.is_ascii_digit())?;
+    let digit = chars.next().filter(|c| ('0'..='3').contains(c))?;
     (chars.as_str() == "Geometry").then_some(digit)
 }
 
@@ -292,8 +327,8 @@ mod tests {
         let (building, _) = in_building(src);
 
         let boundary = building
-            .child(ns::CONSTRUCTION_3, "boundary")
-            .expect("con:boundary");
+            .child(ns::CITYGML_3, "boundary")
+            .expect("core:boundary");
         let surface = boundary
             .child(ns::CONSTRUCTION_3, "RoofSurface")
             .expect("con:RoofSurface");
@@ -315,8 +350,8 @@ mod tests {
         let (building, _) = in_building(src);
 
         let boundary = building
-            .child(ns::CONSTRUCTION_3, "boundary")
-            .expect("con:boundary");
+            .child(ns::CITYGML_3, "boundary")
+            .expect("core:boundary");
         let surface = boundary
             .child(ns::CONSTRUCTION_3, "GroundSurface")
             .expect("con:GroundSurface");
@@ -342,7 +377,7 @@ mod tests {
 
         let surfaces: Vec<&str> = building
             .elements()
-            .filter(|e| e.is(ns::CONSTRUCTION_3, "boundary"))
+            .filter(|e| e.is(ns::CITYGML_3, "boundary"))
             .filter_map(|b| b.elements().next())
             .map(|s| s.name.local.as_str())
             .collect();
@@ -350,7 +385,7 @@ mod tests {
 
         let ids: Vec<&str> = building
             .elements()
-            .filter(|e| e.is(ns::CONSTRUCTION_3, "boundary"))
+            .filter(|e| e.is(ns::CITYGML_3, "boundary"))
             .filter_map(|b| b.elements().next())
             .filter_map(|s| s.attr(Some(ns::GML_32), "id"))
             .collect();
@@ -388,8 +423,74 @@ mod tests {
     fn recognises_lod_geometry_names() {
         assert_eq!(lod_geometry("lod2Geometry"), Some('2'));
         assert_eq!(lod_geometry("lod2Solid"), None);
+        assert_eq!(
+            lod_geometry("lod4Geometry"),
+            None,
+            "handled by the lod4 pass"
+        );
         assert_eq!(lod_geometry("lodXGeometry"), None);
         assert_eq!(lod_geometry("Geometry"), None);
+    }
+
+    #[test]
+    fn installations_gain_their_relation_to_construction() {
+        for (property, relation) in [
+            ("outerBuildingInstallation", "outside"),
+            ("interiorBuildingInstallation", "inside"),
+            ("roomInstallation", "inside"),
+        ] {
+            let mut inst = Element::new(Name::qualified(ns::BUILDING_3, "BuildingInstallation"));
+            inst.push(Element::with_text(
+                Name::qualified(ns::BUILDING_3, "function"),
+                "1000",
+            ));
+            let mut src = Element::new(Name::qualified(ns::BUILDING_3, property));
+            src.push(inst);
+
+            let (building, warnings) = in_building(src);
+
+            let prop = building
+                .child(ns::BUILDING_3, "buildingInstallation")
+                .expect(property);
+            let inst = prop.elements().next().unwrap();
+            assert_eq!(
+                inst.child(ns::CONSTRUCTION_3, "relationToConstruction")
+                    .unwrap()
+                    .text(),
+                relation,
+                "{property}"
+            );
+            assert!(
+                inst.child(ns::BUILDING_3, "function").is_some(),
+                "existing children survive"
+            );
+            assert!(!warnings.is_empty(), "the invented value is reported");
+        }
+    }
+
+    /// An installation that already records its placement keeps it.
+    #[test]
+    fn an_existing_relation_to_construction_is_kept() {
+        let mut inst = Element::new(Name::qualified(ns::BUILDING_3, "BuildingInstallation"));
+        inst.push(Element::with_text(
+            Name::qualified(ns::CONSTRUCTION_3, "relationToConstruction"),
+            "bothInsideAndOutside",
+        ));
+        let mut src = Element::new(Name::qualified(ns::BUILDING_3, "outerBuildingInstallation"));
+        src.push(inst);
+        let (building, _) = in_building(src);
+        let inst = building
+            .child(ns::BUILDING_3, "buildingInstallation")
+            .unwrap()
+            .elements()
+            .next()
+            .unwrap();
+        let relations: Vec<String> = inst
+            .elements()
+            .filter(|e| e.name.local == "relationToConstruction")
+            .map(|e| e.text())
+            .collect();
+        assert_eq!(relations, ["bothInsideAndOutside"]);
     }
 
     #[test]

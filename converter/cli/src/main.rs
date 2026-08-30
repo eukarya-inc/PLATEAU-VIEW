@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use plateau_converter_core::convert::{Converter, Options};
 use plateau_converter_core::dataset::{Dataset, Staging};
-use plateau_converter_core::profile::Rules;
+use plateau_converter_core::profile::{Lod4Fallback, Rules};
 use plateau_converter_core::xml::{self, Indent};
 use plateau_converter_core::{PROFILES, detect, report::Report};
 
@@ -86,6 +86,11 @@ struct ConvertArgs {
     #[arg(long, value_enum, default_value_t = IndentArg::Tab)]
     indent: IndentArg,
 
+    /// Where LOD4 goes when no measurement code decides it: fold into LOD3
+    /// (the profile's default), into LOD2, or drop it. Always reported.
+    #[arg(long, value_enum, value_name = "MODE")]
+    lod4_fallback: Option<Lod4FallbackArg>,
+
     /// Worker threads. 0 uses one per core.
     #[arg(short = 'j', long, default_value_t = 0)]
     jobs: usize,
@@ -115,6 +120,23 @@ enum IndentArg {
     Two,
     Four,
     None,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum Lod4FallbackArg {
+    Lod3,
+    Lod2,
+    Drop,
+}
+
+impl From<Lod4FallbackArg> for Lod4Fallback {
+    fn from(value: Lod4FallbackArg) -> Self {
+        match value {
+            Lod4FallbackArg::Lod3 => Lod4Fallback::Lod3,
+            Lod4FallbackArg::Lod2 => Lod4Fallback::Lod2,
+            Lod4FallbackArg::Drop => Lod4Fallback::Drop,
+        }
+    }
 }
 
 impl From<IndentArg> for Indent {
@@ -188,6 +210,7 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         indent: args.indent.into(),
         copy_support_files: !args.no_support_files,
         parallel: true,
+        lod4_fallback: args.lod4_fallback.map(Into::into),
     };
 
     let dataset = Dataset::open_with(&args.inputs, &staging(args.staging.as_deref()))
