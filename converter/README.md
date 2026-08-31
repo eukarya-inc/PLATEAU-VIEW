@@ -78,7 +78,7 @@ Each member then goes through three passes, in this order:
 
 1. **Rename** (`transform::rename`) — the profile's bulk namespace bump plus its
    per-element rules. Everything downstream therefore speaks 3.0 names only.
-2. **Restructure** (`common`, `app`, `lod4`, `bldg`, `iur`) — the rewrites a rename
+2. **Restructure** (`common`, `xal`, `app`, `lod4`, `bldg`, `iur`) — the rewrites a rename
    table cannot express, because they change a value or the shape of a subtree.
    `lod4` is where CityGML 2.0 LOD4 goes: 3.0 stops at LOD3 and splits a
    building into an exterior and an interior model. LOD4 is the interior

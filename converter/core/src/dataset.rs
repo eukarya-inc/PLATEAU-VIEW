@@ -396,7 +396,13 @@ fn dir_entries(dir: &Path) -> Vec<String> {
 fn zip_entries(path: &Path) -> Result<Vec<String>> {
     let file = File::open(path).map_err(|e| Error::io(path, e))?;
     let archive = zip::ZipArchive::new(file).map_err(|e| Error::zip(path, e))?;
-    Ok(archive.file_names().map(str::to_owned).collect())
+    // Windows-made archives separate with backslashes; real PLATEAU part zips
+    // do. Normalise here so layout detection sees the same paths `extract`
+    // (which normalises on its own) will write.
+    Ok(archive
+        .file_names()
+        .map(|name| name.replace('\\', "/"))
+        .collect())
 }
 
 fn extract(archive_path: &Path, strip: &str, dest: &Path) -> Result<()> {

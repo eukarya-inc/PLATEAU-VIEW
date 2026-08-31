@@ -55,7 +55,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   (the ADE hook rewrite), `core/src/lod4.rs` for where LOD4 goes (decided per
   feature from its measurement code and the profile's `[lod4]` table, never a
   rename row — a `lod4*` rule in a profile would hide it from that pass),
-  `core/src/app.rs` for the appearance module (the texture-to-surface binding;
+  `core/src/xal.rs` for addresses (the xAL 2.0 content of
+  `core:xalAddress` becomes an xAL 3.0 Address; addresses appear on several
+  feature types, so it is not part of `bldg.rs`), `core/src/app.rs` for the appearance module (the texture-to-surface binding;
   appearance is shared by every thematic module — `bldg`, `tran`, `frn` — so it
   is not part of `bldg.rs`), `common.rs` for those that apply to every feature
   type (generic attributes, lifespan dates). `measuredHeight` → `con:height`
@@ -66,14 +68,15 @@ The single most common mistake here is putting a mapping in the wrong layer.
 
 `common.rs`, `lod4.rs`, `bldg.rs` and `iur.rs` run **after** the rename pass, so
 they speak CityGML **3.0** and i-UR **4.0** names only. Writing a 2.0 namespace
-constant in there is a bug. The order is `common` -> `app` -> `lod4` -> `bldg` -> `iur`,
+constant in there is a bug. The order is `common` -> `xal` -> `app` -> `lod4` -> `bldg` -> `iur`,
 and each step is placed so that a wrapper it introduces is never mistaken for
 something the next step handles: `common`'s `core:genericAttribute` is not a
 building property, `lod4` has retagged every `lod4*` before `bldg` looks at
 geometry so `bldg` can never emit an LOD4 slot, and `iur`'s
 `bldg:adeOfAbstractBuilding` would be a building property if it ran before
-`bldg`. `app` touches only appearance-namespace content, which no later pass
-reads, so its slot is free.
+`bldg`. `xal` and
+`app` touch only address and appearance content respectively, which no later
+pass reads, so their slots are free.
 
 ## Invariants worth not breaking
 

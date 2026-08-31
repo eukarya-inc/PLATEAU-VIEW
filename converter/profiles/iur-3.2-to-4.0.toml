@@ -77,7 +77,9 @@ app = "http://www.opengis.net/citygml/appearance/3.0"
 gml = "http://www.opengis.net/gml/3.2"
 xlink = "http://www.w3.org/1999/xlink"
 xsi = "http://www.w3.org/2001/XMLSchema-instance"
-xAL = "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0"
+# xAL 3.0 — CityGML 3.0 binds core:xalAddress to it; the address
+# rewrite rebuilds 2.0 content in this namespace.
+xAL = "urn:oasis:names:tc:ciq:xal:3"
 uro = "https://www.geospatial.jp/iur/uro/4.0"
 urf = "https://www.geospatial.jp/iur/urf/4.0"
 urg = "https://www.geospatial.jp/iur/urg/4.0"
@@ -138,7 +140,10 @@ wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 
 # Bulk namespace bump: any element or attribute in a listed namespace moves to
 # the mapped one, keeping its local name. Namespaces absent from this table
-# (xlink, xsi, xAL) pass through unchanged. Per-element rules take precedence.
+# (xlink, xsi) pass through unchanged. xAL is also absent on purpose: a
+# namespace bump cannot express the 2.0 -> 3.0 address restructuring, so the
+# address rewrite rebuilds that content instead. Per-element rules take
+# precedence.
 [namespace_map]
 "http://www.opengis.net/citygml/2.0" = "http://www.opengis.net/citygml/3.0"
 "http://www.opengis.net/citygml/building/2.0" = "http://www.opengis.net/citygml/building/3.0"

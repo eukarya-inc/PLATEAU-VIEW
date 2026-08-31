@@ -16,6 +16,7 @@ use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules};
 use crate::report::{FileReport, Report, Warnings};
 use crate::transform::{self, IdGen};
+use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 
 /// Directories copied through unchanged when converting a whole dataset.
@@ -61,6 +62,7 @@ impl Default for Options {
 pub struct Converter {
     rules: Rules,
     common: CommonRewrite,
+    xal: XalRewrite,
     app: AppearanceRewrite,
     lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
@@ -72,6 +74,7 @@ pub struct Converter {
 impl Converter {
     pub fn new(rules: Rules, options: Options) -> Result<Self> {
         let common = CommonRewrite::new(&rules)?;
+        let xal = XalRewrite::new(&rules)?;
         let app = AppearanceRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
@@ -80,6 +83,7 @@ impl Converter {
         Ok(Converter {
             rules,
             common,
+            xal,
             app,
             lod4,
             bldg,
@@ -278,6 +282,9 @@ impl Converter {
         // `core:genericAttribute` wrapper is not a bldg property), and never
         // the other way round.
         self.common.apply(&mut element, &mut report.warnings);
+        // The address rewrite touches only core:xalAddress subtrees, whose
+        // xAL content no later pass reads, so its slot is free.
+        self.xal.apply(&mut element, &mut report.warnings);
         // The appearance rewrite touches only appearance-namespace content,
         // which no later pass reads, so its slot is free.
         self.app.apply(&mut element, &mut ids, &mut report.warnings);

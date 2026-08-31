@@ -235,6 +235,28 @@ fn no_input_is_rejected() {
     assert!(error.contains("no input"), "{error}");
 }
 
+/// Windows-made part zips separate entries with backslashes; the layout must
+/// be recognised exactly as if they used forward slashes.
+#[test]
+fn a_zip_with_backslash_entries_stages_like_a_forward_slash_one() {
+    let dir = TempDir::new().unwrap();
+    let udx = dir.path().join("x_udx.zip");
+    make_zip(&udx, &[("udx/bldg/a.gml", GML)]);
+    let lists = dir.path().join("x_codelists.zip");
+    make_zip(&lists, &[("codelists\\", ""), ("codelists\\a.xml", "<x/>")]);
+    let staging = dir.path().join("staging");
+
+    let dataset = Dataset::open_with(&[udx, lists], &Staging::At(staging.clone())).unwrap();
+
+    assert!(
+        staging.join("codelists/a.xml").is_file(),
+        "the part directory inside the archive is the part root, not a \
+         subdirectory of it"
+    );
+    assert!(!staging.join("codelists/codelists").exists());
+    assert_eq!(dataset.parts(), vec!["udx", "codelists"]);
+}
+
 #[test]
 fn zip_entries_cannot_escape_the_staging_directory() {
     let dir = TempDir::new().unwrap();
