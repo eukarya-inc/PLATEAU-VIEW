@@ -46,6 +46,8 @@ impl CommonRewrite {
 
     /// Rewrites `el` and its descendants in place.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
+        self.code_space(el, warnings);
+
         // A generic attribute nested in a set hangs off the set's own
         // `gen:genericAttribute` role, not the city object's `core:` one.
         let wrapper_ns = if el.is(&self.generics, "GenericAttributeSet") {
@@ -76,6 +78,42 @@ impl CommonRewrite {
 
         for child in el.elements_mut() {
             self.apply(child, warnings);
+        }
+    }
+
+    /// `codeSpace` paths point into `codelists/`; the published i-UR 4.0 set
+    /// renames a few of those files and drops a few codes, and both show up
+    /// here rather than in the written files.
+    fn code_space(&self, el: &mut Element, warnings: &mut Warnings) {
+        let policy = self.rules.codelists();
+        let Some(value) = el.attr(None, "codeSpace").map(str::to_owned) else {
+            return;
+        };
+        let (dir, mut file) = match value.rsplit_once('/') {
+            Some((dir, file)) => (Some(dir), file),
+            None => (None, value.as_str()),
+        };
+        if let Some(new) = policy.retarget.get(file) {
+            warnings.add(format!(
+                "codeSpace {file} became {new}: the published i-UR 4.0 code \
+                 lists carry these codes under the new name"
+            ));
+            let path = match dir {
+                Some(dir) => format!("{dir}/{new}"),
+                None => new.clone(),
+            };
+            el.set_attr(Name::unqualified("codeSpace"), path);
+            file = new.as_str();
+        }
+        if let Some(codes) = policy.kept_codes.get(file) {
+            let text = el.text();
+            let text = text.trim();
+            if codes.iter().any(|code| code == text) {
+                warnings.add(format!(
+                    "code {text} in {file} has no entry in the published i-UR \
+                     4.0 code list; the value was kept"
+                ));
+            }
         }
     }
 
@@ -284,6 +322,51 @@ mod tests {
             "2023-03-01T09:00:00"
         );
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn a_retargeted_code_space_moves_to_the_published_file_name() {
+        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "EF_60");
+        src.set_attr(
+            Name::unqualified("codeSpace"),
+            "../../codelists/IntBuildingInstallation_function.xml",
+        );
+
+        let (building, warnings) = in_building(src);
+
+        let function = building.child(ns::BUILDING_3, "function").unwrap();
+        assert_eq!(
+            function.attr(None, "codeSpace"),
+            Some("../../codelists/BuildingInstallation_function.xml"),
+            "the directory part survives, only the file name moves"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|(m, _)| m.contains("became BuildingInstallation_function.xml"))
+        );
+    }
+
+    #[test]
+    fn a_code_the_published_list_dropped_is_kept_and_reported() {
+        let code_space = "../../codelists/DataQualityAttribute_thematicSrcDesc.xml";
+        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "898");
+        src.set_attr(Name::unqualified("codeSpace"), code_space);
+
+        let (building, warnings) = in_building(src);
+
+        assert_eq!(
+            building.child(ns::BUILDING_3, "function").unwrap().text(),
+            "898",
+            "the value is kept, not mapped"
+        );
+        assert!(warnings.iter().any(|(m, _)| m.contains("code 898")));
+
+        // A code the published list still defines passes silently.
+        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "000");
+        src.set_attr(Name::unqualified("codeSpace"), code_space);
+        let (_, warnings) = in_building(src);
+        assert!(warnings.iter().all(|(m, _)| !m.contains("no entry")));
     }
 
     #[test]

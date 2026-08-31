@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_824fb0f9-ef1e-4482-94a4-7d16af678672">
+<gml:name>QualifiedVolume_typeOfVolume</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="QualifiedVolume_typeOfVolume_1">
+<gml:description>総体積</gml:description>
+<gml:name>1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="QualifiedVolume_typeOfVolume_2">
+<gml:description>正味体積</gml:description>
+<gml:name>2</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="QualifiedVolume_typeOfVolume_3">
+<gml:description>利用可能体積</gml:description>
+<gml:name>3</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="QualifiedVolume_typeOfVolume_4">
+<gml:description>空調対象体積</gml:description>
+<gml:name>4</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="QualifiedVolume_typeOfVolume_5">
+<gml:description>吹抜け等の空隙体積</gml:description>
+<gml:name>5</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

@@ -106,6 +106,7 @@ impl Lod4Rewrite {
     /// applied to every LOD4 element under it: the quality attribute describes
     /// the feature as a whole.
     pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) {
+        self.suffix_lod_types(member, false, warnings);
         let target = if has_lod4_geometry(member, &self.bldg) {
             self.decide(member, warnings)
         } else if has_lod4_quality(member, &self.iur) {
@@ -113,21 +114,99 @@ impl Lod4Rewrite {
         } else {
             return;
         };
+        if matches!(target, Target::Lod(_)) {
+            self.warn_missing_storeys(member, warnings);
+        }
         self.rewrite(member, false, target, warnings);
     }
 
-    /// The interior LOD this member's LOD4 content becomes, from the
-    /// measurement code.
-    fn decide(&self, member: &Element, warnings: &mut Warnings) -> Target {
-        // A member is usually `core:cityObjectMember` wrapping the feature;
-        // name the feature, which is what a reader will look for.
+    /// Rewrites the plain 2.0-era `lodType` codes: the i-UR 4.0
+    /// `Building_lodType` list tells the exterior and interior models apart
+    /// with an `_exterior`/`_interior` suffix instead. A `4.x` value is left
+    /// for the LOD4 fold, which knows which interior LOD it became;
+    /// everything else classifies the exterior.
+    fn suffix_lod_types(&self, el: &mut Element, in_building: bool, warnings: &mut Warnings) {
+        let in_building = in_building || el.name.in_ns(&self.bldg);
+        let children = std::mem::take(&mut el.children);
+        let mut out = Vec::with_capacity(children.len());
+        for child in children {
+            match child {
+                Node::Element(mut child) => {
+                    if in_building && self.is_plain_lod_type(&child) {
+                        let old = child.text().trim().to_owned();
+                        if EXTERIOR_LOD_TYPES.contains(&old.as_str()) {
+                            child.children = vec![Node::Text(format!("{old}_exterior"))];
+                            warnings.add(format!(
+                                "lodType {old} became {old}_exterior: the i-UR 4.0 \
+                                 Building_lodType codes classify the exterior and \
+                                 interior models separately"
+                            ));
+                        } else if old == "8" {
+                            warnings.add(
+                                "lodType 8 (不明) has no entry in the i-UR 4.0 \
+                                 Building_lodType code list and was dropped",
+                            );
+                            continue;
+                        } else {
+                            warnings.add(format!(
+                                "lodType {old} has no entry in the i-UR 4.0 \
+                                 Building_lodType code list; the value was kept"
+                            ));
+                        }
+                    }
+                    self.suffix_lod_types(&mut child, in_building, warnings);
+                    out.push(Node::Element(child));
+                }
+                other => out.push(other),
+            }
+        }
+        el.children = out;
+    }
+
+    /// A `lodType` holding a pre-3.0 plain code — anything but the `4.x`
+    /// values the LOD4 fold owns.
+    fn is_plain_lod_type(&self, el: &Element) -> bool {
+        el.name.local == "lodType"
+            && self.iur.iter().any(|ns| el.name.in_ns(ns))
+            && !el.text().trim().starts_with('4')
+    }
+
+    /// CityGML 3.0 requires `bldg:Storey` in every interior LOD, and CityGML
+    /// 2.0 records nothing to build one from — PLATEAU's per-floor
+    /// CityObjectGroups name the floors but not which rooms are on them — so
+    /// a converted interior model is missing a required feature. That cannot
+    /// be fixed here, only said.
+    fn warn_missing_storeys(&self, member: &Element, warnings: &mut Warnings) {
+        if !has_descendant(member, &self.bldg, "BuildingRoom")
+            || has_descendant(member, &self.bldg, "Storey")
+        {
+            return;
+        }
+        warnings.add(format!(
+            "{}'s interior model has no bldg:Storey, which CityGML 3.0 requires \
+             in every interior LOD; CityGML 2.0 records nothing to derive \
+             storeys from, so none were created",
+            self.feature_name(member)
+        ));
+    }
+
+    /// Names the feature for diagnostics. A member is usually
+    /// `core:cityObjectMember` wrapping the feature; name the feature, which
+    /// is what a reader will look for.
+    fn feature_name(&self, member: &Element) -> String {
         let feature = member
             .elements()
             .next()
             .filter(|_| member.name.local.starts_with(char::is_lowercase))
             .map(|f| &f.name)
             .unwrap_or(&member.name);
-        let feature = self.display.display_name(feature);
+        self.display.display_name(feature)
+    }
+
+    /// The interior LOD this member's LOD4 content becomes, from the
+    /// measurement code.
+    fn decide(&self, member: &Element, warnings: &mut Warnings) -> Target {
+        let feature = self.feature_name(member);
         let fallback = self.rules.fallback;
 
         let Some(attribute) = &self.rules.attribute else {
@@ -337,10 +416,10 @@ impl Lod4Rewrite {
         let old = child.text().trim().to_owned();
         match target {
             Target::Lod(lod) => {
-                let new = format!("{lod}{}", &old[1..]);
+                let new = format!("{lod}{}_interior", &old[1..]);
                 warnings.add(format!(
                     "lodType {old} became {new}: CityGML 3.0 has no LOD4, and the \
-                     interior model it classified is LOD{lod}"
+                     content it classified is the interior model at LOD{lod}"
                 ));
                 // Keep the element (and its codeSpace); only the value moves.
                 let mut child = child;
@@ -425,6 +504,13 @@ impl Lod4Rewrite {
     }
 }
 
+/// Building lodType codes the published i-UR 4.0 list defines for the
+/// exterior model. The 2.0-era plain codes map onto these by suffix; a code
+/// outside this set (3.2, 3.3) has no 4.0 home.
+const EXTERIOR_LOD_TYPES: &[&str] = &[
+    "0.0", "0.1", "1.0", "1.1", "2.0", "2.1", "2.2", "2.3", "3.0", "3.1",
+];
+
 fn target_from(fallback: Lod4Fallback) -> Target {
     match fallback {
         Lod4Fallback::Lod3 => Target::Lod('3'),
@@ -469,6 +555,12 @@ fn has_lod4_quality(el: &Element, iur: &[String]) -> bool {
             && QUALITY_LOD4.contains(&child.name.local.as_str()))
             || has_lod4_quality(child, iur)
     })
+}
+
+/// True when an element named `(ns, local)` sits anywhere under `el`.
+fn has_descendant(el: &Element, ns: &str, local: &str) -> bool {
+    el.elements()
+        .any(|child| child.is(ns, local) || has_descendant(child, ns, local))
 }
 
 /// The text of every `attribute` element under `el`, in document order.
@@ -737,8 +829,46 @@ mod tests {
             .filter(|e| e.name.local == "lodType")
             .map(|e| e.text())
             .collect();
-        assert_eq!(lod_types, ["2.0", "2.1"], "4.1 became 2.1; 2.0 untouched");
-        assert!(w.iter().any(|(m, _)| m.contains("lodType 4.1 became 2.1")));
+        assert_eq!(
+            lod_types,
+            ["2.0_exterior", "2.1_interior"],
+            "4.1 followed the interior decision; 2.0 classifies the exterior"
+        );
+        assert!(
+            w.iter()
+                .any(|(m, _)| m.contains("lodType 4.1 became 2.1_interior"))
+        );
+    }
+
+    /// Plain lodType codes gain the exterior suffix even when the feature has
+    /// no LOD4 content at all; codes the 4.0 list dropped are kept or removed.
+    #[test]
+    fn plain_lod_types_are_suffixed_without_any_lod4() {
+        let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
+        for value in ["2.0", "3.2", "8"] {
+            class.push(Element::with_text(Name::qualified(URC, "lodType"), value));
+        }
+        let mut b = building(vec![class]);
+
+        let mut w = Warnings::new();
+        rewrite(None).apply(&mut b, &mut w);
+
+        let class = b.elements().next().unwrap();
+        let lod_types: Vec<String> = class
+            .elements()
+            .filter(|e| e.name.local == "lodType")
+            .map(|e| e.text())
+            .collect();
+        assert_eq!(
+            lod_types,
+            ["2.0_exterior", "3.2"],
+            "2.0 gains the suffix, 3.2 has no 4.0 home and stays, 8 is dropped"
+        );
+        assert!(
+            w.iter()
+                .any(|(m, _)| m.contains("lodType 3.2 has no entry"))
+        );
+        assert!(w.iter().any(|(m, _)| m.contains("lodType 8 (不明)")));
     }
 
     /// srcScaleLodN admits one value; an existing one wins.
@@ -831,6 +961,38 @@ mod tests {
         assert!(b.child(ns::BUILDING_3, "lod3Solid").is_some(), "untouched");
         assert!(w.iter().any(|(m, _)| m.contains("does not have")));
         assert!(!w.iter().any(|(m, _)| m.contains("neither lod2 nor lod3")));
+    }
+
+    /// 3.0 requires bldg:Storey in every interior LOD and 2.0 has nothing to
+    /// build one from, so a folded interior is reported as missing it.
+    #[test]
+    fn a_folded_interior_without_storeys_is_reported() {
+        let mut b = building(vec![
+            room(vec![geometry("lod4Solid", "Solid")]),
+            quality(Some("L3")),
+        ]);
+        let mut w = Warnings::new();
+        rewrite(None).apply(&mut b, &mut w);
+        assert!(
+            w.iter().any(|(m, _)| m.contains("no bldg:Storey")),
+            "{:?}",
+            w.iter().collect::<Vec<_>>()
+        );
+
+        // No warning when the LOD4 content is exterior-only (no rooms) or
+        // when the interior is dropped outright.
+        let mut b = building(vec![geometry("lod4Solid", "Solid"), quality(Some("L3"))]);
+        let mut w = Warnings::new();
+        rewrite(None).apply(&mut b, &mut w);
+        assert!(!w.iter().any(|(m, _)| m.contains("no bldg:Storey")));
+
+        let mut b = building(vec![
+            room(vec![geometry("lod4Solid", "Solid")]),
+            quality(None),
+        ]);
+        let mut w = Warnings::new();
+        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut w);
+        assert!(!w.iter().any(|(m, _)| m.contains("no bldg:Storey")));
     }
 
     #[test]

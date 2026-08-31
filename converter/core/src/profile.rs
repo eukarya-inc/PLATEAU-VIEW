@@ -41,6 +41,10 @@ pub struct Profile {
     /// Where CityGML 2.0 LOD4 goes, since 3.0 has no LOD4. See [`Lod4Policy`].
     #[serde(default)]
     pub lod4: Lod4Policy,
+    /// How the input's code lists are carried into the output. See
+    /// [`CodelistsPolicy`].
+    #[serde(default)]
+    pub codelists: CodelistsPolicy,
     #[serde(default)]
     pub review: Vec<ReviewNote>,
 }
@@ -221,6 +225,47 @@ pub struct Lod4Rules {
     pub fallback: Lod4Fallback,
 }
 
+/// How the input's `codelists/` is carried into the output.
+///
+/// The published i-UR 4.0 lists replace same-named input files, so the codes a
+/// converted package is checked against are the 4.0 ones. `local` names the
+/// lists a municipality authors itself — replacing those with a published
+/// template would destroy real content — and `retarget`/`kept_codes` record
+/// the places where the published set moved or dropped something.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct CodelistsPolicy {
+    /// File-name patterns (at most one `*`) for municipality-authored lists:
+    /// the input's file always wins, even over a published file of the same
+    /// name.
+    pub local: Vec<String>,
+    /// Code-list file name -> its name in the published 4.0 set, rewritten in
+    /// every `codeSpace` path. Only for renames whose codes carry over
+    /// unchanged.
+    pub retarget: IndexMap<String, String>,
+    /// Codes the published lists no longer define, per file. The values are
+    /// kept and reported, not mapped to something they do not mean.
+    pub kept_codes: IndexMap<String, Vec<String>>,
+}
+
+impl CodelistsPolicy {
+    pub fn is_local(&self, file_name: &str) -> bool {
+        self.local.iter().any(|p| glob_match(p, file_name))
+    }
+}
+
+/// `pattern` equality, with one `*` matching any run of characters.
+fn glob_match(pattern: &str, name: &str) -> bool {
+    match pattern.split_once('*') {
+        Some((prefix, suffix)) => {
+            name.len() >= prefix.len() + suffix.len()
+                && name.starts_with(prefix)
+                && name.ends_with(suffix)
+        }
+        None => pattern == name,
+    }
+}
+
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
 /// apply.
 #[derive(Debug, Clone)]
@@ -237,6 +282,7 @@ pub struct Rules {
     schema_location: Option<String>,
     height: HeightDefaults,
     lod4: Lod4Rules,
+    codelists: CodelistsPolicy,
     reviews: HashMap<Name, Arc<str>>,
     ade_hooks: HashMap<Name, Name>,
 }
@@ -328,6 +374,17 @@ impl Rules {
             )));
         }
 
+        if let Some(pattern) = profile
+            .codelists
+            .local
+            .iter()
+            .find(|p| p.matches('*').count() > 1)
+        {
+            return Err(Error::Profile(format!(
+                "[codelists] local pattern `{pattern}` has more than one `*`"
+            )));
+        }
+
         let mut prefixes = PrefixMap::new();
         for (prefix, uri) in output {
             prefixes.insert(prefix.clone(), uri.clone());
@@ -363,6 +420,7 @@ impl Rules {
             schema_location,
             height: profile.height.clone(),
             lod4,
+            codelists: profile.codelists.clone(),
             reviews,
             ade_hooks,
         })
@@ -431,6 +489,10 @@ impl Rules {
     /// (`uro:buildingIDAttribute`); 3.0 declares one general hook per host class
     /// and the extension substitutes into it, so the wrapper is decided by the
     /// class inside rather than by the wrapper's own name.
+    pub fn codelists(&self) -> &CodelistsPolicy {
+        &self.codelists
+    }
+
     pub fn ade_hook(&self, class: &Name) -> Option<&Name> {
         self.ade_hooks.get(class)
     }

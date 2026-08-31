@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_5fc4cdd4-c918-4cb8-ad1d-9397b7900b01">
+<gml:name>NilReason_nilReasonEnumeration</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="NilReason_nilReasonEnumeration_1">
+<gml:description>データ無</gml:description>
+<gml:name>inapplicable</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="NilReason_nilReasonEnumeration_2">
+<gml:description>欠測</gml:description>
+<gml:name>missing</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="NilReason_nilReasonEnumeration_3">
+<gml:description>追って提供</gml:description>
+<gml:name>template</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="NilReason_nilReasonEnumeration_4">
+<gml:description>不明</gml:description>
+<gml:name>unknown</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="NilReason_nilReasonEnumeration_5">
+<gml:description>保留</gml:description>
+<gml:name>withheld</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

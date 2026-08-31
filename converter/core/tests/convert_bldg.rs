@@ -363,13 +363,39 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
             .join("codelists/Common_urbanPlanType.xml")
             .is_file()
     );
-    // 6 input codelists, the elevation code list the converter adds because
-    // con:Height references it, and the five i-UR 4.0 schemas.
-    assert_eq!(report.copied, 12);
+    // The published i-UR 4.0 code lists (315), the three input lists that are
+    // municipality-authored or have no published counterpart — one of which
+    // takes a published name — and the five i-UR 4.0 schemas.
+    assert_eq!(report.copied, 322);
     assert!(
         out.path()
             .join("codelists/Elevation_elevationReference.xml")
-            .is_file()
+            .is_file(),
+        "con:Height references the elevation list, which only the published set carries"
+    );
+
+    let published: std::collections::HashMap<&str, &str> = plateau_converter_core::CODELISTS_4_0
+        .iter()
+        .copied()
+        .collect();
+    let swapped =
+        std::fs::read_to_string(out.path().join("codelists/Common_urbanPlanType.xml")).unwrap();
+    assert_eq!(
+        swapped, published["Common_urbanPlanType.xml"],
+        "a standard list is replaced by the published 4.0 file"
+    );
+    let kept = std::fs::read_to_string(
+        out.path()
+            .join("codelists/LandSlideRiskAttribute_description.xml"),
+    )
+    .unwrap();
+    let input = std::fs::read_to_string(
+        fixture_root().join("codelists/LandSlideRiskAttribute_description.xml"),
+    )
+    .unwrap();
+    assert_eq!(
+        kept, input,
+        "a municipality-authored list survives as shipped, published template or not"
     );
 }
 

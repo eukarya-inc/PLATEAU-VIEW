@@ -79,18 +79,14 @@ pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
     ),
 ];
 
-/// The elevation-reference code list `con:Height` references, written into a
-/// converted package's `codelists/` when the input does not ship it.
-///
-/// PLATEAU 2.0 packages have no use for it — `measuredHeight` carries no
-/// reference points — so the file the output's `codeSpace` names has to come
-/// from somewhere. It is the published i-UR 4.0 list, vendored for the same
-/// reason the schemas are: fetching at run time would make output depend on a
-/// server.
-pub const ELEVATION_CODELIST: (&str, &str) = (
-    "codelists/Elevation_elevationReference.xml",
-    include_str!("../../codelists/Elevation_elevationReference.xml"),
-);
+// The published i-UR 4.0 code lists (`CODELISTS_4_0`), vendored in
+// `codelists/` and embedded by `build.rs`. A converted package's codes are
+// checked against these, so they replace the input's copies of the same files
+// — vendored for the same reason the schemas are: conversion must not depend
+// on a network, and the published files are updated in place. Lists the input
+// authors itself — the profile's `[codelists] local` patterns — are kept as
+// shipped instead.
+include!(concat!(env!("OUT_DIR"), "/codelists_gen.rs"));
 
 /// The profile used when a document says nothing about which one it needs.
 ///

@@ -21,8 +21,9 @@ use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 ///
 /// `schemas/` is deliberately absent: the input's copy describes i-UR 3.x, and
 /// carrying it into a 4.0 package would leave a schema tree nothing references.
-/// It is replaced by [`write_iur_schemas`] instead.
-const COPIED_PARTS: &[&str] = &["codelists", "metadata", "specification"];
+/// It is replaced by [`write_iur_schemas`] instead. `codelists/` is absent for
+/// the same reason and is rebuilt by [`write_codelists`].
+const COPIED_PARTS: &[&str] = &["metadata", "specification"];
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -142,7 +143,8 @@ impl Converter {
                 }
             }
             report.copied += write_iur_schemas(out)?;
-            report.copied += write_elevation_codelist(out, &mut report.warnings)?;
+            report.copied +=
+                write_codelists(dataset.root(), out, &self.rules, &mut report.warnings)?;
             if dataset.root().join("schemas").is_dir() {
                 report.warnings.add(
                     "the input's schemas/ describes i-UR 3.x and was replaced by the \
@@ -276,25 +278,65 @@ fn first_gml_id(element: &Element, gml_ns: &str) -> Option<String> {
         .find_map(|child| first_gml_id(child, gml_ns))
 }
 
-/// Writes the elevation-reference code list unless the input shipped one.
+/// Writes the output's `codelists/`.
 ///
-/// Every `con:Height` the converter writes points its references at this file,
-/// and a PLATEAU 2.0 package does not carry it.
-fn write_elevation_codelist(out: &Path, warnings: &mut Warnings) -> Result<usize> {
-    let (relative, text) = crate::ELEVATION_CODELIST;
-    let target = out.join(relative);
-    if target.exists() {
-        return Ok(0);
+/// The published i-UR 4.0 lists are what a converted package's codes are
+/// checked against, so they replace the input's copies of the same files.
+/// Input lists with no published counterpart, and the municipality-authored
+/// ones the profile's `[codelists] local` patterns name, are copied verbatim
+/// — a published file never overwrites those.
+fn write_codelists(
+    root: &Path,
+    out: &Path,
+    rules: &Rules,
+    warnings: &mut Warnings,
+) -> Result<usize> {
+    let published: std::collections::HashMap<&str, &str> =
+        crate::CODELISTS_4_0.iter().copied().collect();
+    let target_dir = out.join("codelists");
+    fs::create_dir_all(&target_dir).map_err(|e| Error::io(&target_dir, e))?;
+
+    let mut written = 0;
+    let mut kept = 0;
+    let source = root.join("codelists");
+    if source.is_dir() {
+        for entry in fs::read_dir(&source).map_err(|e| Error::io(&source, e))? {
+            let entry = entry.map_err(|e| Error::io(&source, e))?;
+            if !entry.file_type().is_ok_and(|t| t.is_file()) {
+                continue;
+            }
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if rules.codelists().is_local(name) || !published.contains_key(name) {
+                let target = target_dir.join(name);
+                fs::copy(entry.path(), &target).map_err(|e| Error::io(&target, e))?;
+                kept += 1;
+                written += 1;
+            }
+        }
     }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+
+    for (name, text) in crate::CODELISTS_4_0 {
+        let target = target_dir.join(name);
+        if target.exists() {
+            continue; // a kept input list takes precedence over the published name
+        }
+        fs::write(&target, text).map_err(|e| Error::io(&target, e))?;
+        written += 1;
     }
-    fs::write(&target, text).map_err(|e| Error::io(&target, e))?;
-    warnings.add(format!(
-        "{relative} was added to the output: con:Height references it and the \
-         input package does not ship it"
-    ));
-    Ok(1)
+
+    if kept > 0 {
+        warnings.add(format!(
+            "codelists/ was rebuilt from the published i-UR 4.0 lists; {kept} \
+             municipality-authored or unpublished input lists were kept as shipped"
+        ));
+    } else {
+        warnings.add(
+            "codelists/ was rebuilt from the published i-UR 4.0 lists, replacing \
+             the input's copies of the same files",
+        );
+    }
+    Ok(written)
 }
 
 /// Writes the vendored i-UR 4.0 schemas into `out/schemas/`.

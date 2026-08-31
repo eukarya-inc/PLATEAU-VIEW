@@ -86,13 +86,23 @@ Each member then goes through three passes, in this order:
    interior LOD2, a BIM-derived one interior LOD3 — read from the feature's
    `geometrySrcDescLod4` code through the profile's `[lod4]` table, with a
    configurable fallback when no code decides. The LOD4 exterior shell folds
-   into the exterior LOD3 slot only where that slot is empty. Every fold,
-   fallback and drop is reported.
+   into the exterior LOD3 slot only where that slot is empty. The same pass
+   rewrites the building `lodType` quality codes, which the i-UR 4.0 list
+   splits into `_exterior`/`_interior` variants. Every fold, fallback and drop
+   is reported.
 3. **Reorder** (`transform::reorder`) — 3.0 content models are `xs:sequence`, so
    a property that was merely renamed can still land in the wrong slot.
 
 Then `gml:id`s are minted for geometries that lack them, seeded from the
 enclosing feature's own id so a re-run reproduces the same bytes.
+
+Alongside the converted `udx/`, the output gets the vendored i-UR 4.0 schemas
+and the published i-UR 4.0 code lists — both compiled into the binary, because
+the published files are revised in place and conversion must not depend on a
+network. The published lists replace the input's copies of the same files;
+lists the input authors itself (the profile's `[codelists] local` patterns) and
+lists with no published counterpart are copied verbatim and win any name
+collision with a published file.
 
 ## The mapping profile
 
@@ -117,6 +127,9 @@ table:
 * `[lod4]` — the measurement-code attribute, which codes send interior LOD4
   content to LOD2 or LOD3, and the fallback (`lod3`, `lod2`, `drop`) when no
   code decides.
+* `[codelists]` — which input code lists are municipality-authored and survive
+  as shipped, which file names the published 4.0 set renamed (rewritten in
+  every `codeSpace`), and which codes it dropped (kept and reported).
 * `[[review]]` — elements to leave alone and report, because their mapping needs
   a human decision.
 

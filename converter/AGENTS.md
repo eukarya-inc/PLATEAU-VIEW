@@ -104,6 +104,15 @@ minor-version URL and they are not compatible with one another, so fetching at
 build or run time would make the output depend on when it ran. Replacing a set
 means replacing all of it — the modules import one another by exact namespace.
 
+`/codelists` is vendored for the same reason: the published i-UR 4.0 code
+lists, embedded by `core/build.rs` and written into every converted package in
+place of the input's copies of the same files. Which input lists survive
+instead (the municipality-authored ones), which file names the published set
+moved, and which codes it dropped is the profile's `[codelists]` table — a
+change there is a profile edit, not Rust. Never replace a municipality-authored
+list with a published file of the same name: some published files under those
+names are literal placeholder templates.
+
 ## Testing
 
 `core/tests/fixtures/plateau` is a real PLATEAU 2023

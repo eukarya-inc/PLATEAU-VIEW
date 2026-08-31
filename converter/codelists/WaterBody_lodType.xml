@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_8ae892aa-2825-4e8b-83da-dd174521de7d">
+<gml:name>WaterBody_lodType</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="WaterBody_lodType_1">
+<gml:description>水中構造物を考慮せず、水面・水底面・閉鎖面で表現した立体</gml:description>
+<gml:name>2.0</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="WaterBody_lodType_2">
+<gml:description>水中構造物を考慮し、水面・水底面・閉鎖面で表現した立体</gml:description>
+<gml:name>2.1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="WaterBody_lodType_3">
+<gml:description>水面・水底面・閉鎖面に相当する面の集まりとして表現</gml:description>
+<gml:name>3.0</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="WaterBody_lodType_4">
+<gml:description>水面・水底面・閉鎖面を区分した立体又は面の集まりとして表現</gml:description>
+<gml:name>3.1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

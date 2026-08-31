@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_317388d5-5043-42bf-8ea2-7973db97bbc8">
+<gml:name>UtilityNetworkElement_lodType</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="UtilityNetworkElement_lodType_1">
+<gml:description>外部LOD2.0</gml:description>
+<gml:name>2.0_exterior</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="UtilityNetworkElement_lodType_2">
+<gml:description>外部LOD2.1</gml:description>
+<gml:name>2.1_exterior</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="UtilityNetworkElement_lodType_3">
+<gml:description>外部LOD2.2</gml:description>
+<gml:name>2.2_exterior</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

@@ -112,7 +112,7 @@ fn a_lod2_code_sends_the_interior_to_lod2_and_the_exterior_to_lod3() {
     // Quality follows the interior decision.
     assert!(output.contains("<urc:geometrySrcDescLod2>CODE</urc:geometrySrcDescLod2>"));
     assert!(output.contains("<urc:srcScaleLod2>1</urc:srcScaleLod2>"));
-    assert!(output.contains("<urc:lodType>2.1</urc:lodType>"));
+    assert!(output.contains("<urc:lodType>2.1_interior</urc:lodType>"));
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn a_lod3_code_folds_the_interior_into_lod3_without_duplicating_the_exterior() {
     );
     // Repeatable descriptors accumulate.
     assert_eq!(count(&output, "<urc:geometrySrcDescLod3>"), 2);
-    assert!(output.contains("<urc:lodType>3.1</urc:lodType>"));
+    assert!(output.contains("<urc:lodType>3.1_interior</urc:lodType>"));
 }
 
 #[test]

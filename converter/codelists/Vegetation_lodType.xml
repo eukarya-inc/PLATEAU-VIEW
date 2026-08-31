@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_13ece417-4d12-449f-8f9d-73761ae0f0ed">
+<gml:name>Vegetation_lodType</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Vegetation_lodType_1">
+<gml:description>樹木は樹冠と樹幹を簡略化した立体、植被は高さ差3m以上を表現</gml:description>
+<gml:name>2.0</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Vegetation_lodType_2">
+<gml:description>樹木は一定高さごとの横断面で外形を表現し、植被は高さ差1m以上を表現</gml:description>
+<gml:name>2.1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>
