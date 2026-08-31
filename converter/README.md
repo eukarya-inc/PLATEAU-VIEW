@@ -144,8 +144,6 @@ table:
 * `[codelists]` — which input code lists are municipality-authored and survive
   as shipped, which file names the published 4.0 set renamed (rewritten in
   every `codeSpace`), and which codes it dropped (kept and reported).
-* `[[review]]` — elements to leave alone and report, because their mapping needs
-  a human decision.
 
 All three are compiled into the binary, and any of them can be replaced
 wholesale with `--profile`. An explicit profile is still checked against the

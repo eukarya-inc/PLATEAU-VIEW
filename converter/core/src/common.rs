@@ -67,15 +67,6 @@ impl CommonRewrite {
         }
         el.children = out;
 
-        // Elements the profile flags as needing a human decision survive
-        // untouched; say so rather than let them look converted.
-        if let Some(note) = self.rules.review_note(&el.name) {
-            warnings.add(format!(
-                "{} was left unchanged: {note}",
-                self.rules.display_name(&el.name)
-            ));
-        }
-
         for child in el.elements_mut() {
             self.apply(child, warnings);
         }

@@ -45,8 +45,6 @@ pub struct Profile {
     /// [`CodelistsPolicy`].
     #[serde(default)]
     pub codelists: CodelistsPolicy,
-    #[serde(default)]
-    pub review: Vec<ReviewNote>,
 }
 
 /// One end of a conversion: what a profile reads, or what it writes.
@@ -121,16 +119,6 @@ pub struct ElementRule {
 pub struct OrderGroup {
     pub types: Vec<String>,
     pub children: Vec<String>,
-}
-
-/// An element the profile deliberately leaves alone because converting it needs
-/// a decision the converter must not make on its own.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReviewNote {
-    /// The name as it appears *after* conversion, using output prefixes.
-    pub element: String,
-    pub note: String,
 }
 
 /// The parts of a `con:Height` that CityGML 2.0 does not record and the
@@ -291,7 +279,6 @@ pub struct Rules {
     height: HeightDefaults,
     lod4: Lod4Rules,
     codelists: CodelistsPolicy,
-    reviews: HashMap<Name, Arc<str>>,
     ade_hooks: HashMap<Name, Name>,
 }
 
@@ -343,20 +330,6 @@ impl Rules {
             let children = Arc::new(children);
             for ty in &group.types {
                 order.insert(parse_name(ty, output)?, Arc::clone(&children));
-            }
-        }
-
-        let mut reviews = HashMap::new();
-        for note in &profile.review {
-            let name = parse_name(&note.element, output)?;
-            if reviews
-                .insert(name, Arc::from(note.note.as_str()))
-                .is_some()
-            {
-                return Err(Error::Profile(format!(
-                    "duplicate review note for `{}`",
-                    note.element
-                )));
             }
         }
 
@@ -429,7 +402,6 @@ impl Rules {
             height: profile.height.clone(),
             lod4,
             codelists: profile.codelists.clone(),
-            reviews,
             ade_hooks,
         })
     }
@@ -503,12 +475,6 @@ impl Rules {
 
     pub fn ade_hook(&self, class: &Name) -> Option<&Name> {
         self.ade_hooks.get(class)
-    }
-
-    /// The note to report when this element survives conversion untouched, if
-    /// the profile flags it as needing a human decision.
-    pub fn review_note(&self, name: &Name) -> Option<&str> {
-        self.reviews.get(name).map(|note| &**note)
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.
@@ -728,12 +694,10 @@ to = "urc:x"
     /// namespace alone.
     ///
     /// Every published 3.x minor has to be listed. An unmapped namespace has no
-    /// prefix on the output side and its elements are written unqualified — and
-    /// because the `[[review]]` rules match on the 4.0 names, the flags for the
-    /// urc migration go quiet as well. Real data is mostly 3.1 and 3.2.
-    /// Each profile bumps its own i-UR minor and leaves the others alone: an
-    /// unmapped namespace is what makes running the wrong profile visible
-    /// instead of silently partial.
+    /// prefix on the output side and its elements are written unqualified. Real
+    /// data is mostly 3.1 and 3.2. Each profile bumps its own i-UR minor and
+    /// leaves the others alone: an unmapped namespace is what makes running the
+    /// wrong profile visible instead of silently partial.
     #[test]
     fn a_profile_bumps_only_its_own_i_ur_minor() {
         for (name, toml) in crate::PROFILES {
@@ -774,38 +738,6 @@ to = "urc:x"
             .child_order(&Name::qualified(ns::BUILDING_3, "Building"))
             .expect("order");
         assert!(order.contains(&Name::qualified(ns::CONSTRUCTION_3, "height")));
-    }
-
-    /// i-UR 4.0 consolidations that need a decision are flagged, not guessed at.
-    #[test]
-    fn flags_elements_that_need_review() {
-        // The built-in profiles have no review entries left -- every i-UR class
-        // the building module meets now has a rule -- so exercise the mechanism
-        // on a profile of its own rather than deleting the test with them.
-        let profile = r#"
-name = "review"
-[input.namespaces]
-uro = "https://www.geospatial.jp/iur/uro/3.1"
-[output.namespaces]
-uro = "https://www.geospatial.jp/iur/uro/4.0"
-[[review]]
-element = "uro:SomethingUnsettled"
-note = "decide this before converting it"
-"#;
-        let r = Rules::from_toml(profile).unwrap();
-        let flagged = Name::qualified(
-            "https://www.geospatial.jp/iur/uro/4.0",
-            "SomethingUnsettled",
-        );
-        assert_eq!(
-            r.review_note(&flagged),
-            Some("decide this before converting it")
-        );
-        let settled = Name::qualified(
-            "https://www.geospatial.jp/iur/uro/4.0",
-            "BuildingIDAttribute",
-        );
-        assert!(r.review_note(&settled).is_none());
     }
 
     #[test]

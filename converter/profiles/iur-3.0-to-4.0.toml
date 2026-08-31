@@ -617,19 +617,6 @@ lod2 = [
 lod3 = ["500"]
 fallback = "lod3"
 
-# ---------------------------------------------------------------------------
-# Elements that need a decision the converter must not make for you.
-#
-# A [[review]] entry leaves an element alone and names it in the run's report,
-# for a mapping that cannot be settled without a human. Note that it does not
-# exempt the element from the bulk namespace bump, so it is not a safe harbour
-# for a name that i-UR 4.0 does not declare -- that has to be given a rule or
-# dropped, or it ends up in a namespace where it does not exist.
-#
-# There are none at present. Every i-UR class the building module encounters now
-# has a rule, either read off the schemas or decided above.
-# ---------------------------------------------------------------------------
-
 # How the input's codelists/ is carried into the output (core/src/convert.rs,
 # with the codeSpace rewrites in core/src/common.rs). The published i-UR 4.0
 # code lists replace same-named input files; `local` patterns name the lists a

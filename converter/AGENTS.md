@@ -41,10 +41,12 @@ The single most common mistake here is putting a mapping in the wrong layer.
   Rust. This is a table; keep it a table. There is one profile per source i-UR
   version and they are meant to stay in step, so a rule that is not
   version-specific belongs in all three.
-* **A mapping you cannot settle** → the profile's `[[review]]` table. The element
-  then passes through untouched and is named in the report. Do this instead of
-  guessing: half-converted output that *looks* converted is the worst outcome
-  here.
+* **A mapping you cannot settle** → settle it, or turn it into a choice. An
+  element either gets a rule, or — when the answer turns on the data owner's
+  intent rather than on the schemas — becomes a policy table with a documented
+  default, the way `[lod4]` did. There is deliberately no flag-and-emit escape
+  hatch: emitting output you know is wrong and noting it afterwards is the worst
+  outcome here — half-converted output that *looks* converted.
 * **An i-UR rule that can be read off the schemas** → do not write it. Run the
   generator (`cargo run -p plateau-converter-gen -- --source 3.1 --write
   profiles/iur-3.1-to-4.0.toml`), which rewrites the block between the
