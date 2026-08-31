@@ -216,6 +216,9 @@ impl Converter {
         let mut writer = Writer::new(sink, self.rules.prefixes().clone(), self.options.indent);
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
+        // A truncated file still yields the members it managed to hold, so the
+        // root's end tag is what tells a complete document from a partial one.
+        let mut closed = false;
 
         // The output is always UTF-8, whatever the input declared.
         writer.write_declaration(None)?;
@@ -248,11 +251,23 @@ impl Converter {
                     if let Some(root) = &root {
                         writer.write_root_end(root)?;
                     }
+                    closed = true;
                 }
             }
         }
 
         let root = root.ok_or_else(|| Error::malformed(label, "no root element"))?;
+        if !closed {
+            // Without this the writer's output is an unclosed root element that
+            // no parser will accept, reported as a successful conversion.
+            return Err(Error::malformed(
+                label,
+                format!(
+                    "the document ends inside <{}> without closing it; it is truncated",
+                    self.rules.display_name(&root.name)
+                ),
+            ));
+        }
         if root.children.is_empty() && report.features == 0 {
             // An empty root is legal but almost always a sign of a bad input.
             report.warnings.add("the document held no city objects");
@@ -547,6 +562,29 @@ mod tests {
                 .any(|(m, _)| m.contains("no city objects")),
             "an empty document is still reported"
         );
+    }
+
+    /// A file cut short mid-document used to convert "successfully", writing a
+    /// root element it never closed.
+    #[test]
+    fn a_truncated_document_is_an_error_not_an_unclosed_root() {
+        let converter = Converter::new(
+            Rules::from_toml(DEFAULT_PROFILE).unwrap(),
+            Options::default(),
+        )
+        .unwrap();
+        for src in [
+            r#"<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0">"#,
+            concat!(
+                r#"<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0""#,
+                r#" xmlns:bldg="http://www.opengis.net/citygml/building/2.0">"#,
+                "<core:cityObjectMember><bldg:Building/></core:cityObjectMember>",
+            ),
+        ] {
+            let err = convert_to_string(&converter, "cut", src)
+                .expect_err("a document with no closing root tag must not convert");
+            assert!(err.to_string().contains("truncated"), "{err} for {src:?}");
+        }
     }
 
     use crate::dataset::Dataset;

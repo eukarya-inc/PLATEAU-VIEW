@@ -61,6 +61,14 @@ pub struct IurRewrite {
     rules: Rules,
 }
 
+/// Why an i-UR element in a property position is not an ADE wrapper.
+enum NotAHook {
+    /// A plain attribute or a class element. Expected, and silent.
+    NotAWrapper,
+    /// Shaped like an ADE property, but the hook could not be worked out.
+    Unresolved(String),
+}
+
 impl IurRewrite {
     pub fn new(rules: &Rules) -> Result<Self> {
         let mut modules = Vec::new();
@@ -106,8 +114,24 @@ impl IurRewrite {
         }
         // An ADE property holds exactly one class and nothing else. Anything
         // else is a plain attribute that happens to live in the same namespace.
-        let Some(hook) = self.hook_for(&property) else {
-            return property;
+        let hook = match self.hook_for(&property) {
+            Ok(hook) => hook,
+            // A plain attribute or a class element: nothing to rehome, and
+            // nothing surprising about it.
+            Err(NotAHook::NotAWrapper) => return property,
+            // Shaped like an ADE property, but the hook could not be worked
+            // out. The rename pass has already moved it into an i-UR 4.0
+            // namespace, so passing it through quietly would leave an element
+            // 4.0 does not declare looking converted.
+            Err(NotAHook::Unresolved(why)) => {
+                warnings.add(format!(
+                    "{} carries an i-UR class but its CityGML 3.0 hook could not be \
+                     determined ({why}); it was left as it is, which i-UR 4.0 may not \
+                     declare -- check the result",
+                    self.rules.display_name(&property.name),
+                ));
+                return property;
+            }
         };
 
         warnings.add(format!(
@@ -123,18 +147,40 @@ impl IurRewrite {
     }
 
     /// The CityGML property that should carry `property`'s single class child.
-    fn hook_for(&self, property: &Element) -> Option<Name> {
-        let mut elements = property.elements();
-        let class = elements.next()?;
-        if elements.next().is_some() {
-            return None;
-        }
+    fn hook_for(&self, property: &Element) -> std::result::Result<Name, NotAHook> {
         // A property is lower-case, its class upper-case. Guards against a
         // single-valued attribute being mistaken for a wrapper.
         if property.name.local.starts_with(char::is_uppercase) {
-            return None;
+            return Err(NotAHook::NotAWrapper);
         }
-        self.rules.ade_hook(&class.name).cloned()
+        let mut elements = property.elements();
+        let Some(class) = elements.next() else {
+            // No class to place. An `xlink:href` in place of one is still an
+            // ADE property, just one written by reference; anything else is an
+            // ordinary attribute holding a value.
+            // Matched on the local name: `href` is `xlink:href` in practice,
+            // but the binding is the document's to choose.
+            return if property.attrs.iter().any(|a| a.name.local == "href") {
+                Err(NotAHook::Unresolved(
+                    "it carries a reference rather than a class".to_owned(),
+                ))
+            } else {
+                Err(NotAHook::NotAWrapper)
+            };
+        };
+        let class = class.name.clone();
+        if elements.next().is_some() {
+            let n = property.elements().count();
+            return Err(NotAHook::Unresolved(format!(
+                "it holds {n} elements, and an ADE property holds one class"
+            )));
+        }
+        self.rules.ade_hook(&class).cloned().ok_or_else(|| {
+            NotAHook::Unresolved(format!(
+                "no [ade_hooks] entry for {}",
+                self.rules.display_name(&class)
+            ))
+        })
     }
 
     /// Pads a 3.x year (`2021`) or year-month (`2021-04`) value to the full
@@ -254,13 +300,47 @@ mod tests {
     }
 
     /// A class the profile has no hook for stays where it is rather than being
-    /// rehomed to a guess.
+    /// rehomed to a guess — and says so, because the rename pass has already
+    /// moved it into a 4.0 namespace that may not declare it.
     #[test]
-    fn an_unknown_class_is_left_alone() {
+    fn an_unknown_class_is_left_alone_and_reported() {
         let src = wrapped("mysteryAttribute", "MysteryAttribute", URO);
         let (building, warnings) = in_building(src);
         assert!(building.child(URO, "mysteryAttribute").is_some());
-        assert!(warnings.is_empty());
+        assert!(
+            warnings
+                .iter()
+                .any(|(w, _)| w.contains("no [ade_hooks] entry")),
+            "{warnings:?}"
+        );
+    }
+
+    /// An ADE property written as an `xlink:href` reference carries no class to
+    /// place, so the hook cannot be chosen. It passes through, reported.
+    #[test]
+    fn a_property_by_reference_is_reported() {
+        let mut src = Element::new(Name::qualified(URO, "buildingIDAttribute"));
+        src.set_attr(Name::unqualified("href"), "#shared");
+        let (building, warnings) = in_building(src);
+        assert!(building.child(URO, "buildingIDAttribute").is_some());
+        assert!(
+            warnings.iter().any(|(w, _)| w.contains("reference")),
+            "{warnings:?}"
+        );
+    }
+
+    /// Nor can it be chosen when the property holds more than one class.
+    #[test]
+    fn a_property_holding_two_classes_is_reported() {
+        let mut src = Element::new(Name::qualified(URO, "buildingIDAttribute"));
+        src.push(Element::new(Name::qualified(URO, "BuildingIDAttribute")));
+        src.push(Element::new(Name::qualified(URO, "BuildingIDAttribute")));
+        let (building, warnings) = in_building(src);
+        assert!(building.child(URO, "buildingIDAttribute").is_some());
+        assert!(
+            warnings.iter().any(|(w, _)| w.contains("holds 2 elements")),
+            "{warnings:?}"
+        );
     }
 
     #[test]

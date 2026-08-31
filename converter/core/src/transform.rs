@@ -30,19 +30,40 @@ pub fn rename(rules: &Rules, mut el: Element) -> Option<Element> {
 /// Sorts children into the order the profile declares for their parent's type.
 ///
 /// Children the profile does not mention keep their relative order and follow
-/// the ones it does. Elements that mix text with child elements are left alone:
-/// moving their children would change their value.
+/// the ones it does. Elements that mix character data with child elements are
+/// left alone: moving their children would change their value.
+///
+/// A comment is not character data and so does not block the sort — it travels
+/// with the element it precedes, which is the one it documents.
 pub fn reorder(rules: &Rules, el: &mut Element) {
     if let Some(order) = rules.child_order(&el.name) {
-        let all_elements = el.children.iter().all(|c| matches!(c, Node::Element(_)));
-        if all_elements {
-            el.children.sort_by_key(|child| match child {
-                Node::Element(e) => order
-                    .iter()
-                    .position(|o| *o == e.name)
-                    .unwrap_or(usize::MAX),
-                _ => usize::MAX,
-            });
+        let mixed = el
+            .children
+            .iter()
+            .any(|c| matches!(c, Node::Text(_) | Node::CData(_)));
+        if !mixed {
+            // Each element carries the comments that came before it, so a run
+            // of `<!-- … --><foo/>` stays together wherever `foo` lands.
+            let mut groups: Vec<(usize, Vec<Node>)> = Vec::new();
+            let mut pending: Vec<Node> = Vec::new();
+            for child in std::mem::take(&mut el.children) {
+                match child {
+                    Node::Element(e) => {
+                        let key = order
+                            .iter()
+                            .position(|o| *o == e.name)
+                            .unwrap_or(usize::MAX);
+                        pending.push(Node::Element(e));
+                        groups.push((key, std::mem::take(&mut pending)));
+                    }
+                    other => pending.push(other),
+                }
+            }
+            // `sort_by_key` is stable, so equal keys keep their input order.
+            groups.sort_by_key(|(key, _)| *key);
+            el.children = groups.into_iter().flat_map(|(_, nodes)| nodes).collect();
+            // Comments after the last element have nothing to travel with.
+            el.children.append(&mut pending);
         }
     }
     for child in el.elements_mut() {
@@ -162,6 +183,47 @@ mod tests {
             .expect("lod1Solid moved to core");
         let solid = prop.child(ns::GML_32, "Solid").expect("gml 3.2 Solid");
         assert_eq!(solid.attr(Some(ns::GML_32), "id"), Some("s1"));
+    }
+
+    /// A comment inside a feature used to make `reorder` a no-op for that
+    /// element, leaving its children in 2.0 order and so schema-invalid.
+    #[test]
+    fn a_comment_does_not_disable_the_sort_and_travels_with_its_element() {
+        let mut b = Element::new(Name::qualified(ns::BUILDING_3, "Building"));
+        b.push(Element::new(Name::qualified(ns::CONSTRUCTION_3, "height")));
+        b.children.push(Node::Comment(" the date ".into()));
+        b.push(Element::new(Name::qualified(ns::CITYGML_3, "creationDate")));
+        b.children.push(Node::Comment(" trailing ".into()));
+
+        reorder(&rules(), &mut b);
+
+        let names: Vec<&str> = b.elements().map(|e| e.name.local.as_str()).collect();
+        assert_eq!(names, ["creationDate", "height"], "the sort still ran");
+        // The comment moved with `creationDate`, so it still documents it.
+        let shape: Vec<&str> = b
+            .children
+            .iter()
+            .map(|c| match c {
+                Node::Element(e) => e.name.local.as_str(),
+                Node::Comment(t) => t.trim(),
+                _ => "?",
+            })
+            .collect();
+        assert_eq!(shape, ["the date", "creationDate", "height", "trailing"]);
+    }
+
+    /// Text mixed in means the children are a value, so they stay put.
+    #[test]
+    fn mixed_content_is_still_left_alone() {
+        let mut b = Element::new(Name::qualified(ns::BUILDING_3, "Building"));
+        b.push(Element::new(Name::qualified(ns::CONSTRUCTION_3, "height")));
+        b.children.push(Node::Text("value".into()));
+        b.push(Element::new(Name::qualified(ns::CITYGML_3, "creationDate")));
+
+        reorder(&rules(), &mut b);
+
+        let names: Vec<&str> = b.elements().map(|e| e.name.local.as_str()).collect();
+        assert_eq!(names, ["height", "creationDate"]);
     }
 
     #[test]

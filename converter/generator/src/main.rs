@@ -363,11 +363,15 @@ fn splice(profile: &str, generated: &str) -> Result<String> {
         // First run: append, so a profile need not be prepared by hand.
         return Ok(format!("{}\n{generated}", profile.trim_end()));
     };
-    Ok(format!(
-        "{}{generated}{}",
-        &profile[..start],
-        &profile[end + END.len() + 1..]
-    ))
+    // `generated` ends with its own newline, so the one after the marker is
+    // dropped -- but the marker may be the last thing in the file, in which
+    // case there is none to drop.
+    let tail = &profile[end + END.len()..];
+    let rest = tail
+        .strip_prefix("\r\n")
+        .or_else(|| tail.strip_prefix('\n'))
+        .unwrap_or(tail);
+    Ok(format!("{}{generated}{rest}", &profile[..start]))
 }
 
 #[cfg(test)]
@@ -427,5 +431,25 @@ mod tests {
         let out = splice("only this\n", &format!("{BEGIN}\nnew\n{END}\n")).unwrap();
         assert!(out.starts_with("only this"));
         assert!(out.contains("new"));
+    }
+
+    /// The marker used to be assumed to have a newline after it, so a profile
+    /// whose last byte is the marker panicked on an out-of-range index.
+    #[test]
+    fn splicing_handles_a_profile_that_ends_at_the_marker() {
+        let profile = format!("head\n{BEGIN}\nold\n{END}");
+        let out = splice(&profile, &format!("{BEGIN}\nnew\n{END}\n")).unwrap();
+        assert!(out.starts_with("head\n"));
+        assert!(out.contains("new"));
+        assert!(!out.contains("old"));
+    }
+
+    /// Nor is anything after the marker lost when it is not a newline.
+    #[test]
+    fn splicing_keeps_what_follows_the_marker() {
+        let profile = format!("head\n{BEGIN}\nold\n{END}\ntail\n");
+        let out = splice(&profile, &format!("{BEGIN}\nnew\n{END}\n")).unwrap();
+        assert!(out.ends_with("tail\n"), "{out:?}");
+        assert!(!out.contains("old"));
     }
 }
