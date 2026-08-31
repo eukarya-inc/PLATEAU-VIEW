@@ -592,9 +592,11 @@ mod tests {
     }
 
     fn rules_with(lod2: Vec<String>, lod3: Vec<String>) -> Result<Rules> {
-        let mut profile: Profile = toml::from_str(PROFILES[1].1).unwrap();
-        profile.lod4.lod2 = lod2;
-        profile.lod4.lod3 = lod3;
+        let mut profile = Profile::load(PROFILES[1].1).unwrap();
+        let mut policy = profile.lod4.take().unwrap_or_default();
+        policy.lod2 = lod2;
+        policy.lod3 = lod3;
+        profile.lod4 = Some(policy);
         Rules::compile(&profile)
     }
 

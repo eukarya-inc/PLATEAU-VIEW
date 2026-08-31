@@ -1,4 +1,4 @@
-# CityGML 2.0 + i-UR 3.1 -> CityGML 3.0 + i-UR 4.0 (PLATEAU).
+# i-UR 3.1 -> i-UR 4.0, over CityGML 2.0 -> 3.0 (PLATEAU).
 #
 # One profile per source i-UR version. The versions do not declare the same
 # elements -- 3.0 and 3.1 differ by 143 element declarations, and five of the
@@ -8,20 +8,27 @@
 # The converter picks this file by reading the i-UR namespaces the input declares.
 # Running it against a different version is refused rather than half-applied.
 #
-# This file holds everything about the mapping that is a *table*: which
-# namespaces are bumped, which elements are renamed or dropped, and the child
-# order each 3.0 type requires. Rewrites that change a value or the shape of a
-# subtree cannot live here; they are in `common.rs` and `bldg.rs`.
+# What is left here is only the part that is specific to i-UR 3.1. The two
+# halves that are not -- the CityGML 2.0 -> 3.0 mapping, and everything about
+# producing i-UR 4.0 -- are the fragments named in `base`, folded in ahead of
+# this file's own rules. A rule that is not version-specific belongs in one of
+# them, not here: put it here and the sibling profiles silently do without it.
+#
+# The two sides must stay disjoint. A key this file and a fragment both declare
+# is refused at load rather than resolved by precedence, because there is no
+# reading of "the CityGML fragment and the i-UR profile disagree" that is not a
+# mistake in one of them.
 #
 # Names are written `prefix:local`. Prefixes on the `from` side resolve through
-# [input.namespaces], prefixes on the `to` side (and in [order_group]) through
-# [output.namespaces].
+# [input.namespaces], prefixes on the `to` side through [output.namespaces];
+# both are merged across the fragments before any name is resolved.
 #
 # Anything marked UNVERIFIED below could not be confirmed against a source. The
 # sources are not in this repo; ask for them before changing a rule.
 
 name = "iur-3.1-to-4.0"
 description = "PLATEAU CityGML 2.0 + i-UR 3.1 -> CityGML 3.0 + i-UR 4.0, building module"
+base = ["citygml-2.0-to-3.0", "iur-4.0-target"]
 
 # What this profile accepts and what it produces. `iur` lists the exact
 # source namespaces that identify a document as belonging to this profile;
@@ -38,27 +45,8 @@ iur = [
   "https://www.geospatial.jp/iur/urt/3.1",
 ]
 
-[target]
-label = "CityGML 3.0 + i-UR 4.0"
-citygml = "http://www.opengis.net/citygml/3.0"
-iur_version = "4.0"
-iur = [
-  "https://www.geospatial.jp/iur/uro/4.0",
-  "https://www.geospatial.jp/iur/urf/4.0",
-  "https://www.geospatial.jp/iur/urg/4.0",
-  "https://www.geospatial.jp/iur/urt/4.0",
-  "https://www.geospatial.jp/iur/urc/4.0",
-]
-
+# The i-UR 3.1 input prefixes. The CityGML ones are in `citygml-2.0-to-3.0`.
 [input.namespaces]
-core = "http://www.opengis.net/citygml/2.0"
-bldg = "http://www.opengis.net/citygml/building/2.0"
-gen = "http://www.opengis.net/citygml/generics/2.0"
-app = "http://www.opengis.net/citygml/appearance/2.0"
-gml = "http://www.opengis.net/gml"
-xlink = "http://www.w3.org/1999/xlink"
-xsi = "http://www.w3.org/2001/XMLSchema-instance"
-xAL = "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0"
 # This profile converts i-UR 3.1 only. A sibling profile covers each other
 # minor version; the converter picks between them from the input itself.
 uro = "https://www.geospatial.jp/iur/uro/3.1"
@@ -66,99 +54,9 @@ urf = "https://www.geospatial.jp/iur/urf/3.1"
 urg = "https://www.geospatial.jp/iur/urg/3.1"
 urt = "https://www.geospatial.jp/iur/urt/3.1"
 
-
-# i-UR 4.0 namespace identifiers and recommended prefixes.
-[output.namespaces]
-core = "http://www.opengis.net/citygml/3.0"
-bldg = "http://www.opengis.net/citygml/building/3.0"
-con = "http://www.opengis.net/citygml/construction/3.0"
-gen = "http://www.opengis.net/citygml/generics/3.0"
-app = "http://www.opengis.net/citygml/appearance/3.0"
-gml = "http://www.opengis.net/gml/3.2"
-xlink = "http://www.w3.org/1999/xlink"
-xsi = "http://www.w3.org/2001/XMLSchema-instance"
-# xAL 3.0 — CityGML 3.0 binds core:xalAddress to it; the address
-# rewrite rebuilds 2.0 content in this namespace.
-xAL = "urn:oasis:names:tc:ciq:xal:3"
-uro = "https://www.geospatial.jp/iur/uro/4.0"
-urf = "https://www.geospatial.jp/iur/urf/4.0"
-urg = "https://www.geospatial.jp/iur/urg/4.0"
-# Urban Core, new in i-UR 4.0. DataQualityAttribute, DisasterRiskAttribute and
-# DmAttribute live here now rather than under uro — but which uro 3.x elements
-# moved is not encoded below, so they still convert as uro.
-urc = "https://www.geospatial.jp/iur/urc/4.0"
-urt = "https://www.geospatial.jp/iur/urt/4.0"
-
-# The other CityGML 3.0 modules. i-UR classes attach to hosts across the whole
-# standard -- a bridge attribute hangs off brid:adeOfAbstractBridge -- so a
-# prefix has to exist for each, or [ade_hooks] cannot name them and any element
-# in them would be written unqualified.
-brid = "http://www.opengis.net/citygml/bridge/3.0"
-dem = "http://www.opengis.net/citygml/relief/3.0"
-frn = "http://www.opengis.net/citygml/cityfurniture/3.0"
-grp = "http://www.opengis.net/citygml/cityobjectgroup/3.0"
-luse = "http://www.opengis.net/citygml/landuse/3.0"
-pcl = "http://www.opengis.net/citygml/pointcloud/3.0"
-tran = "http://www.opengis.net/citygml/transportation/3.0"
-tun = "http://www.opengis.net/citygml/tunnel/3.0"
-veg = "http://www.opengis.net/citygml/vegetation/3.0"
-wtr = "http://www.opengis.net/citygml/waterbody/3.0"
-
-# Written verbatim into xsi:schemaLocation on the output root, in this order.
-#
-# i-UR resolves through a relative path into the package's own schemas/, which
-# the converter writes; CityGML is referenced remotely. That is the split a
-# PLATEAU package uses, and the only place a package records which revision of
-# i-UR its data was written against.
-#
-# Every CityGML location below was fetched and returns the schema it claims to. Note
-# that CityGML 3.0 puts each thematic module under its own namespace path
-# (citygml/building/3.0/building.xsd), not flat under citygml/3.0/ the way 2.0
-# did, and that the base module's file is core.xsd, not cityGMLBase.xsd.
-[output.schema_locations]
-"http://www.opengis.net/citygml/3.0" = "http://schemas.opengis.net/citygml/3.0/core.xsd"
-"http://www.opengis.net/citygml/building/3.0" = "http://schemas.opengis.net/citygml/building/3.0/building.xsd"
-"http://www.opengis.net/citygml/construction/3.0" = "http://schemas.opengis.net/citygml/construction/3.0/construction.xsd"
-"http://www.opengis.net/citygml/generics/3.0" = "http://schemas.opengis.net/citygml/generics/3.0/generics.xsd"
-"http://www.opengis.net/citygml/appearance/3.0" = "http://schemas.opengis.net/citygml/appearance/3.0/appearance.xsd"
-"http://www.opengis.net/gml/3.2" = "http://schemas.opengis.net/gml/3.2.1/gml.xsd"
-"http://www.opengis.net/citygml/bridge/3.0" = "http://schemas.opengis.net/citygml/bridge/3.0/bridge.xsd"
-"http://www.opengis.net/citygml/relief/3.0" = "http://schemas.opengis.net/citygml/relief/3.0/relief.xsd"
-"http://www.opengis.net/citygml/cityfurniture/3.0" = "http://schemas.opengis.net/citygml/cityfurniture/3.0/cityFurniture.xsd"
-"http://www.opengis.net/citygml/cityobjectgroup/3.0" = "http://schemas.opengis.net/citygml/cityobjectgroup/3.0/cityObjectGroup.xsd"
-"http://www.opengis.net/citygml/landuse/3.0" = "http://schemas.opengis.net/citygml/landuse/3.0/landUse.xsd"
-"http://www.opengis.net/citygml/pointcloud/3.0" = "http://schemas.opengis.net/citygml/pointcloud/3.0/pointCloud.xsd"
-"http://www.opengis.net/citygml/transportation/3.0" = "http://schemas.opengis.net/citygml/transportation/3.0/transportation.xsd"
-"http://www.opengis.net/citygml/tunnel/3.0" = "http://schemas.opengis.net/citygml/tunnel/3.0/tunnel.xsd"
-"http://www.opengis.net/citygml/vegetation/3.0" = "http://schemas.opengis.net/citygml/vegetation/3.0/vegetation.xsd"
-"http://www.opengis.net/citygml/waterbody/3.0" = "http://schemas.opengis.net/citygml/waterbody/3.0/waterBody.xsd"
-"https://www.geospatial.jp/iur/uro/4.0" = "../../schemas/iur/uro/4.0/urbanObject.xsd"
-"https://www.geospatial.jp/iur/urc/4.0" = "../../schemas/iur/urc/4.0/urbanCore.xsd"
-"https://www.geospatial.jp/iur/urf/4.0" = "../../schemas/iur/urf/4.0/urbanFunction.xsd"
-"https://www.geospatial.jp/iur/urg/4.0" = "../../schemas/iur/urg/4.0/statisticalGrid.xsd"
-"https://www.geospatial.jp/iur/urt/4.0" = "../../schemas/iur/urt/4.0/publicTransit.xsd"
-
-# Bulk namespace bump: any element or attribute in a listed namespace moves to
-# the mapped one, keeping its local name. Namespaces absent from this table
-# (xlink, xsi) pass through unchanged. xAL is also absent on purpose: a
-# namespace bump cannot express the 2.0 -> 3.0 address restructuring, so the
-# address rewrite rebuilds that content instead. Per-element rules take
-# precedence.
+# The i-UR half of the bulk namespace bump. The CityGML rows are in
+# `citygml-2.0-to-3.0`, and fold in ahead of these.
 [namespace_map]
-"http://www.opengis.net/citygml/2.0" = "http://www.opengis.net/citygml/3.0"
-"http://www.opengis.net/citygml/building/2.0" = "http://www.opengis.net/citygml/building/3.0"
-"http://www.opengis.net/citygml/generics/2.0" = "http://www.opengis.net/citygml/generics/3.0"
-"http://www.opengis.net/citygml/appearance/2.0" = "http://www.opengis.net/citygml/appearance/3.0"
-"http://www.opengis.net/citygml/relief/2.0" = "http://www.opengis.net/citygml/relief/3.0"
-"http://www.opengis.net/citygml/transportation/2.0" = "http://www.opengis.net/citygml/transportation/3.0"
-"http://www.opengis.net/citygml/landuse/2.0" = "http://www.opengis.net/citygml/landuse/3.0"
-"http://www.opengis.net/citygml/vegetation/2.0" = "http://www.opengis.net/citygml/vegetation/3.0"
-"http://www.opengis.net/citygml/cityfurniture/2.0" = "http://www.opengis.net/citygml/cityfurniture/3.0"
-"http://www.opengis.net/citygml/waterbody/2.0" = "http://www.opengis.net/citygml/waterbody/3.0"
-"http://www.opengis.net/citygml/bridge/2.0" = "http://www.opengis.net/citygml/bridge/3.0"
-"http://www.opengis.net/citygml/tunnel/2.0" = "http://www.opengis.net/citygml/tunnel/3.0"
-"http://www.opengis.net/citygml/cityobjectgroup/2.0" = "http://www.opengis.net/citygml/cityobjectgroup/3.0"
-"http://www.opengis.net/gml" = "http://www.opengis.net/gml/3.2"
 # i-UR 3.1 -> 4.0. Only this one version is listed: a namespace absent from
 # this table passes through unmapped, which is exactly the outcome wanted if
 # a document from another version somehow reaches this profile.
@@ -166,321 +64,6 @@ wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 "https://www.geospatial.jp/iur/urf/3.1" = "https://www.geospatial.jp/iur/urf/4.0"
 "https://www.geospatial.jp/iur/urg/3.1" = "https://www.geospatial.jp/iur/urg/4.0"
 "https://www.geospatial.jp/iur/urt/3.1" = "https://www.geospatial.jp/iur/urt/4.0"
-
-
-# ---------------------------------------------------------------------------
-# Appearance module.
-#
-# CityGML 3.0 moves the attachment points into the core module -- appearance
-# on the city object, appearanceMember on the CityModel -- and renames the
-# surface-data role. How a ParameterizedTexture binds to geometry changed
-# shape as well; that rewrite is core/src/app.rs, not a table row.
-# ---------------------------------------------------------------------------
-[[element]]
-from = "app:appearance"
-to = "core:appearance"
-[[element]]
-from = "app:appearanceMember"
-to = "core:appearanceMember"
-[[element]]
-from = "app:surfaceDataMember"
-to = "app:surfaceData"
-
-# ---------------------------------------------------------------------------
-# LOD geometry properties.
-#
-# lod0MultiCurve, lod0MultiSurface, lod0Point, lod1Solid,
-# lod2Solid, lod3Solid, lod2MultiSurface, lod3MultiSurface and the
-# lodNTerrainIntersectionCurve / lodNImplicitRepresentation families are all
-# inherited from core::AbstractSpace / AbstractPhysicalSpace /
-# AbstractOccupiedSpace, so they take the core prefix.
-#
-# CityGML 3.0 has no LOD4. No lod4* rule appears here on purpose: which LOD an
-# LOD4 element becomes depends on the feature's measurement code, so it is
-# decided per feature by the lod4 pass (core/src/lod4.rs) from the [lod4] table
-# below, and every fold is reported.
-# ---------------------------------------------------------------------------
-[[element]]
-from = "bldg:lod1Solid"
-to = "core:lod1Solid"
-[[element]]
-from = "bldg:lod2Solid"
-to = "core:lod2Solid"
-[[element]]
-from = "bldg:lod3Solid"
-to = "core:lod3Solid"
-[[element]]
-from = "bldg:lod2MultiSurface"
-to = "core:lod2MultiSurface"
-[[element]]
-from = "bldg:lod3MultiSurface"
-to = "core:lod3MultiSurface"
-[[element]]
-from = "bldg:lod2MultiCurve"
-to = "core:lod2MultiCurve"
-[[element]]
-from = "bldg:lod3MultiCurve"
-to = "core:lod3MultiCurve"
-[[element]]
-from = "bldg:lod1TerrainIntersection"
-to = "core:lod1TerrainIntersectionCurve"
-[[element]]
-from = "bldg:lod2TerrainIntersection"
-to = "core:lod2TerrainIntersectionCurve"
-[[element]]
-from = "bldg:lod3TerrainIntersection"
-to = "core:lod3TerrainIntersectionCurve"
-[[element]]
-from = "bldg:lod1ImplicitRepresentation"
-to = "core:lod1ImplicitRepresentation"
-[[element]]
-from = "bldg:lod2ImplicitRepresentation"
-to = "core:lod2ImplicitRepresentation"
-[[element]]
-from = "bldg:lod3ImplicitRepresentation"
-to = "core:lod3ImplicitRepresentation"
-
-# ---------------------------------------------------------------------------
-# Space boundaries.
-#
-# Thematic surfaces are con::AbstractConstructionSurface subtypes. They are
-# defined in the Construction module, so they take the con prefix.
-#
-# `boundary` is declared once, on core::AbstractSpace (core.xsd), and the
-# Construction module adds no boundary role of its own, so the property is
-# core:boundary on every space -- Building, BuildingRoom, BuildingInstallation.
-# MLIT's CityGML 3.0 Takeshiba sample writes core:boundary throughout.
-# ---------------------------------------------------------------------------
-[[element]]
-from = "bldg:boundedBy"
-to = "core:boundary"
-[[element]]
-from = "bldg:RoofSurface"
-to = "con:RoofSurface"
-[[element]]
-from = "bldg:WallSurface"
-to = "con:WallSurface"
-[[element]]
-from = "bldg:GroundSurface"
-to = "con:GroundSurface"
-[[element]]
-from = "bldg:ClosureSurface"
-to = "con:ClosureSurface"
-[[element]]
-from = "bldg:OuterCeilingSurface"
-to = "con:OuterCeilingSurface"
-[[element]]
-from = "bldg:OuterFloorSurface"
-to = "con:OuterFloorSurface"
-[[element]]
-from = "bldg:CeilingSurface"
-to = "con:CeilingSurface"
-[[element]]
-from = "bldg:FloorSurface"
-to = "con:FloorSurface"
-[[element]]
-from = "bldg:InteriorWallSurface"
-to = "con:InteriorWallSurface"
-
-# Openings. con::AbstractFillingSurface is the *boundary* of an opening and is
-# reached through the `fillingSurface` role of a construction surface.
-# 2.0's bldg:Window / bldg:Door carry MultiSurface geometry
-# as part of the wall, so they are surfaces — con:WindowSurface and
-# con:DoorSurface — not the solid con:Window / con:Door
-# (con::AbstractFillingElement, which models the door or window itself and has
-# thickness).
-[[element]]
-from = "bldg:opening"
-to = "con:fillingSurface"
-[[element]]
-from = "bldg:Window"
-to = "con:WindowSurface"
-[[element]]
-from = "bldg:Door"
-to = "con:DoorSurface"
-
-# ---------------------------------------------------------------------------
-# Sub-features: the relation roles.
-# ---------------------------------------------------------------------------
-# Building defines `buildingPart: BuildingPart [0..*]` on itself. The more
-# general `buildingSubdivision: AbstractBuildingSubdivision` is for BuildingUnit
-# and Storey, so 2.0's consistsOfBuildingPart maps to buildingPart.
-[[element]]
-from = "bldg:consistsOfBuildingPart"
-to = "bldg:buildingPart"
-# The three 2.0 installation properties are not table rows: the placement the
-# property name expressed (outer / interior / in a room) moves onto the
-# installation as con:relationToConstruction, which is a rewrite (bldg.rs).
-# Only the class rename stays declarative.
-[[element]]
-from = "bldg:IntBuildingInstallation"
-to = "bldg:BuildingInstallation"
-[[element]]
-from = "bldg:interiorRoom"
-to = "bldg:buildingRoom"
-[[element]]
-from = "bldg:Room"
-to = "bldg:BuildingRoom"
-[[element]]
-from = "bldg:interiorFurniture"
-to = "bldg:buildingFurniture"
-
-# Address. The property stays bldg:address, but the object it
-# holds moved to the core module: <bldg:address><core:Address><core:xalAddress>.
-[[element]]
-from = "bldg:Address"
-to = "core:Address"
-[[element]]
-from = "bldg:xalAddress"
-to = "core:xalAddress"
-
-# ---------------------------------------------------------------------------
-# Child order.
-#
-# 3.0 content models are xs:sequence, so a property that is merely renamed can
-# still land in the wrong slot. Children not listed keep their relative order
-# and are emitted after the listed ones.
-#
-# The lists below are the flattened xs:sequence of each 3.0 type, read off the
-# OGC CityGML 3.0 XSDs rather than inferred: derivation by extension emits the
-# base type's content before the extension's, so walking the chain
-# (AbstractFeature -> AbstractFeatureWithLifespan -> AbstractCityObject ->
-# AbstractSpace -> AbstractPhysicalSpace -> AbstractOccupiedSpace ->
-# AbstractConstruction -> AbstractBuilding -> Building) and concatenating gives
-# the exact order a validator expects. The comments name the class each run of
-# properties comes from.
-#
-# TODO: where i-UR properties belong. uro/urc properties substitute into
-# adeOfAbstractCityObject, adeOfAbstractConstruction or adeOfBuilding depending
-# on the class — since this profile does not encode which hook each one uses,
-# they stay unlisted and are emitted last, as they are in PLATEAU 2.0 data.
-# ---------------------------------------------------------------------------
-
-[[order_group]]
-types = ["bldg:Building", "bldg:BuildingPart"]
-children = [
-  # gml::AbstractGML, then gml::AbstractFeature
-  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
-  "gml:boundedBy", "gml:location",
-  # core::AbstractFeatureWithLifespan
-  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
-  # core::AbstractCityObject
-  "core:externalReference", "core:generalizesTo",
-  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
-  "core:appearance", "core:genericAttribute", "core:dynamizer",
-  # core::AbstractSpace
-  "core:spaceType", "core:volume", "core:area", "core:boundary",
-  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
-  "core:lod1Solid",
-  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
-  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
-  # core::AbstractPhysicalSpace
-  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
-  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
-  # core::AbstractOccupiedSpace
-  "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
-  "core:lod3ImplicitRepresentation",
-  # con::AbstractConstruction
-  "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
-  "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
-  # bldg::AbstractBuilding
-  "bldg:class", "bldg:function", "bldg:usage", "bldg:roofType",
-  "bldg:storeysAboveGround", "bldg:storeysBelowGround",
-  "bldg:storeyHeightsAboveGround", "bldg:storeyHeightsBelowGround",
-  "bldg:buildingConstructiveElement", "bldg:buildingInstallation",
-  "bldg:buildingRoom", "bldg:buildingFurniture", "bldg:buildingSubdivision",
-  "bldg:address",
-  # bldg::Building
-  "bldg:buildingPart",
-]
-
-# con::AbstractConstructionSurface and con::AbstractFillingSurface subtypes.
-# core::AbstractThematicSurface carries the LOD0-3 multi-surfaces;
-# con:fillingSurface is on AbstractConstructionSurface only, so a WindowSurface
-# or DoorSurface simply never has one.
-[[order_group]]
-types = [
-  "con:RoofSurface", "con:WallSurface", "con:GroundSurface",
-  "con:ClosureSurface", "con:OuterCeilingSurface", "con:OuterFloorSurface",
-  "con:CeilingSurface", "con:FloorSurface", "con:InteriorWallSurface",
-  "con:DoorSurface", "con:WindowSurface",
-]
-children = [
-  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
-  "gml:boundedBy", "gml:location",
-  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
-  "core:externalReference", "core:generalizesTo",
-  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
-  "core:appearance", "core:genericAttribute", "core:dynamizer",
-  # core::AbstractThematicSurface
-  "core:area",
-  "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
-  "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
-  "con:fillingSurface",
-]
-
-# BuildingInstallation and BuildingConstructiveElement are occupied spaces;
-# BuildingRoom and BuildingFurniture are not, so they have no terrain
-# intersection curve or implicit representation. Listing the union is harmless:
-# reorder only moves children that are actually present.
-[[order_group]]
-types = ["bldg:BuildingInstallation", "bldg:BuildingRoom", "bldg:BuildingFurniture", "bldg:BuildingConstructiveElement"]
-children = [
-  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
-  "gml:boundedBy", "gml:location",
-  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
-  "core:externalReference", "core:generalizesTo",
-  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
-  "core:appearance", "core:genericAttribute", "core:dynamizer",
-  "core:spaceType", "core:volume", "core:area", "core:boundary",
-  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
-  "core:lod1Solid",
-  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
-  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
-  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
-  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
-  "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
-  "core:lod3ImplicitRepresentation",
-  "con:relationToConstruction",
-  "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
-  "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
-  "bldg:class", "bldg:function", "bldg:usage", "bldg:roomHeight",
-]
-
-# con:Height. Every property is [1..1]. Confirmed against con:HeightType in the
-# OGC construction.xsd, which sequences them this way.
-[[order_group]]
-types = ["con:Height"]
-children = ["con:highReference", "con:lowReference", "con:status", "con:value"]
-
-# StringAttribute and siblings: name then value.
-[[order_group]]
-types = [
-  "gen:StringAttribute", "gen:IntAttribute", "gen:DoubleAttribute",
-  "gen:DateAttribute", "gen:UriAttribute", "gen:MeasureAttribute",
-  "gen:GenericAttributeSet",
-]
-children = ["gen:name", "gen:value", "gen:genericAttribute"]
-
-# ---------------------------------------------------------------------------
-# Values the converter has to supply because CityGML 2.0 does not record them.
-#
-# con::Height has value, status, lowReference and highReference, all [1..1].
-# lowReference and highReference are codes from Elevation_elevationReference.xml;
-# status is an enumeration and takes no codeSpace. The referenced code list is
-# not part of a PLATEAU 2.0 package, so the converter writes it into the
-# output's codelists/ (see ELEVATION_CODELIST) and the codeSpace below resolves.
-#
-# CityGML 2.0's measuredHeight is a measured height running from the lowest
-# ground point to the construction's highest point. Hence
-# status=measured, lowReference=6 (lowest ground point) and highReference=2
-# (highest point of the construction).
-# ---------------------------------------------------------------------------
-[height]
-status = "measured"
-low_reference = "6"
-high_reference = "2"
-reference_code_space = "../../codelists/Elevation_elevationReference.xml"
 
 # ---------------------------------------------------------------------------
 # i-UR decisions the schemas cannot make.
@@ -497,80 +80,6 @@ reference_code_space = "../../codelists/Elevation_elevationReference.xml"
 [[element]]
 from = "uro:DataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
-
-# ---------------------------------------------------------------------------
-# LOD4.
-#
-# CityGML 3.0 has no LOD4; it splits a building into an exterior and an
-# interior model, each with LOD0-3. CityGML 2.0's LOD4 is the interior model,
-# and which interior LOD it becomes depends on how it was measured: a surveyed
-# interior is interior LOD2, one derived from BIM interior LOD3. The
-# measurement method is the feature's `attribute` code, and the tables below
-# say which codes mean which — they are the survey-method codes (000, 101-121)
-# and the BIM/CAD/drawing code (500) of DataQualityAttribute_geometrySrcDesc.
-# Codes that say nothing about the method (GIS data, ledgers, estimates,
-# 999 = not created) are deliberately unlisted and take `fallback`.
-#
-# The exterior shell at LOD4 (lod4Solid / lod4MultiSurface on the building
-# itself and its exterior surfaces) folds into the exterior LOD3 slot instead,
-# and only where that slot is empty: a building that already carries LOD3
-# keeps it, and the LOD4 shell is dropped and reported.
-#
-# `attribute` is written as it stands after the rename pass. geometrySrcDescLod4
-# has no i-UR 4.0 home, so the bulk bump leaves it in uro 4.0 -- hence the uro
-# prefix although its siblings become urc.
-#
-# A feature with no code, or a code in neither list, takes `fallback` (lod3,
-# lod2 or drop) for its interior content and is reported; `--lod4-fallback`
-# overrides it per run.
-# ---------------------------------------------------------------------------
-[lod4]
-attribute = "uro:geometrySrcDescLod4"
-lod2 = [
-  "000", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
-  "111", "112", "113", "114", "115", "116", "117", "118", "119", "120", "121",
-]
-lod3 = ["500"]
-fallback = "lod3"
-
-# How the input's codelists/ is carried into the output (core/src/convert.rs,
-# with the codeSpace rewrites in core/src/common.rs). The published i-UR 4.0
-# code lists replace same-named input files; `local` patterns name the lists a
-# municipality authors itself, which always survive as shipped — the published
-# set carries template files under some of these names, and a template must
-# never overwrite real content.
-[codelists]
-local = [
-  "KeyValuePairAttribute_*",
-  "*_description.xml",
-  "TsunamiRiskAttribute_rankOrg.xml",
-  "LandUseDetailAttribute_orgLandUse.xml",
-]
-
-# Lists whose values the conversion itself rewrites into the published codes
-# (the building lodType pass adds the exterior/interior suffixes): the
-# published file always wins, or the rewritten values would not resolve.
-superseded = ["Building_lodType.xml"]
-
-# Files the published 4.0 set carries under a new name, with unchanged codes;
-# every codeSpace naming the old file is rewritten.
-[codelists.retarget]
-"IntBuildingInstallation_function.xml" = "BuildingInstallation_function.xml"
-"BridgeConstructionElement_function.xml" = "BridgeConstructiveElement_function.xml"
-"PublicSurveyDataQualityAttribute_publicSurveySrcDesc.xml" = "PublicSurveyDataQualityAttribute_geometrySrcDesc.xml"
-"BuildingDataQualityAttribute_lod1HeightType.xml" = "DataQualityAttribute_lod1HeightType.xml"
-# Renames verified by content: the published 4.0 file under the new name
-# defines the identical code/label set as 2.0-era packages ship under the old
-# one (fireproofStructureType additionally carries every code observed in real
-# data under the old name).
-"Building_fireproofStructureType.xml" = "BuildingDetailAttribute_fireproofStructureType.xml"
-"Common_sex.xml" = "Common_Sex.xml"
-"LengthAttribute_mesureType.xml" = "LengthAttribute_measureType.xml"
-
-# Codes the published lists no longer define. The values are kept and
-# reported: 898 means "unknown source", which no surviving code expresses.
-[codelists.kept_codes]
-"DataQualityAttribute_thematicSrcDesc.xml" = ["898"]
 
 # BEGIN GENERATED -- i-UR rules
 #

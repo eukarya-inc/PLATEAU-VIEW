@@ -1,0 +1,86 @@
+# i-UR 4.0 as a conversion *target*. Folded in by every profile that produces it.
+#
+# This is a *fragment*, not a profile. It is separate from the CityGML fragment
+# because it varies on a different axis: the CityGML mapping is fixed at
+# 2.0 -> 3.0, while the i-UR target is 4.0 only until i-UR publishes another
+# minor. When it does, this file is what gets a sibling -- and each profile then
+# names a different one in `base`, instead of the whole shared half being forked.
+#
+# What belongs here: anything true of producing i-UR 4.0, whichever minor the
+# input came from. The code lists are here rather than in the CityGML fragment
+# for that reason -- they are the published i-UR 4.0 set.
+
+name = "iur-4.0-target"
+description = "The i-UR 4.0 target: namespaces, schema locations and code lists"
+
+[target]
+label = "CityGML 3.0 + i-UR 4.0"
+citygml = "http://www.opengis.net/citygml/3.0"
+iur_version = "4.0"
+iur = [
+  "https://www.geospatial.jp/iur/uro/4.0",
+  "https://www.geospatial.jp/iur/urf/4.0",
+  "https://www.geospatial.jp/iur/urg/4.0",
+  "https://www.geospatial.jp/iur/urt/4.0",
+  "https://www.geospatial.jp/iur/urc/4.0",
+]
+
+# The i-UR 4.0 output prefixes. The CityGML ones are in `citygml-2.0-to-3.0`.
+[output.namespaces]
+uro = "https://www.geospatial.jp/iur/uro/4.0"
+urf = "https://www.geospatial.jp/iur/urf/4.0"
+urg = "https://www.geospatial.jp/iur/urg/4.0"
+# Urban Core, new in i-UR 4.0. DataQualityAttribute, DisasterRiskAttribute and
+# DmAttribute live here now rather than under uro — but which uro 3.x elements
+# moved is not encoded below, so they still convert as uro.
+urc = "https://www.geospatial.jp/iur/urc/4.0"
+urt = "https://www.geospatial.jp/iur/urt/4.0"
+
+# i-UR resolves through a relative path into the package's own schemas/, which
+# the converter writes. The CityGML locations, which are remote, are in
+# `citygml-2.0-to-3.0`.
+[output.schema_locations]
+"https://www.geospatial.jp/iur/uro/4.0" = "../../schemas/iur/uro/4.0/urbanObject.xsd"
+"https://www.geospatial.jp/iur/urc/4.0" = "../../schemas/iur/urc/4.0/urbanCore.xsd"
+"https://www.geospatial.jp/iur/urf/4.0" = "../../schemas/iur/urf/4.0/urbanFunction.xsd"
+"https://www.geospatial.jp/iur/urg/4.0" = "../../schemas/iur/urg/4.0/statisticalGrid.xsd"
+"https://www.geospatial.jp/iur/urt/4.0" = "../../schemas/iur/urt/4.0/publicTransit.xsd"
+
+# How the input's codelists/ is carried into the output (core/src/convert.rs,
+# with the codeSpace rewrites in core/src/common.rs). The published i-UR 4.0
+# code lists replace same-named input files; `local` patterns name the lists a
+# municipality authors itself, which always survive as shipped — the published
+# set carries template files under some of these names, and a template must
+# never overwrite real content.
+[codelists]
+local = [
+  "KeyValuePairAttribute_*",
+  "*_description.xml",
+  "TsunamiRiskAttribute_rankOrg.xml",
+  "LandUseDetailAttribute_orgLandUse.xml",
+]
+
+# Lists whose values the conversion itself rewrites into the published codes
+# (the building lodType pass adds the exterior/interior suffixes): the
+# published file always wins, or the rewritten values would not resolve.
+superseded = ["Building_lodType.xml"]
+
+# Files the published 4.0 set carries under a new name, with unchanged codes;
+# every codeSpace naming the old file is rewritten.
+[codelists.retarget]
+"IntBuildingInstallation_function.xml" = "BuildingInstallation_function.xml"
+"BridgeConstructionElement_function.xml" = "BridgeConstructiveElement_function.xml"
+"PublicSurveyDataQualityAttribute_publicSurveySrcDesc.xml" = "PublicSurveyDataQualityAttribute_geometrySrcDesc.xml"
+"BuildingDataQualityAttribute_lod1HeightType.xml" = "DataQualityAttribute_lod1HeightType.xml"
+# Renames verified by content: the published 4.0 file under the new name
+# defines the identical code/label set as 2.0-era packages ship under the old
+# one (fireproofStructureType additionally carries every code observed in real
+# data under the old name).
+"Building_fireproofStructureType.xml" = "BuildingDetailAttribute_fireproofStructureType.xml"
+"Common_sex.xml" = "Common_Sex.xml"
+"LengthAttribute_mesureType.xml" = "LengthAttribute_measureType.xml"
+
+# Codes the published lists no longer define. The values are kept and
+# reported: 898 means "unknown source", which no surviving code expresses.
+[codelists.kept_codes]
+"DataQualityAttribute_thematicSrcDesc.xml" = ["898"]

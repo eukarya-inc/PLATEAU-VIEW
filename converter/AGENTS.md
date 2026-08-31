@@ -37,10 +37,22 @@ cargo run -p plateau-converter-cli -- inspect <input>...
 The single most common mistake here is putting a mapping in the wrong layer.
 
 * **A namespace bump, an element rename, an element to drop, a child order, or a
-  value the converter has to invent** → `profiles/iur-<version>-to-4.0.toml`. No
-  Rust. This is a table; keep it a table. There is one profile per source i-UR
-  version and they are meant to stay in step, so a rule that is not
-  version-specific belongs in all three.
+  value the converter has to invent** → a file under `profiles/`. No Rust. This
+  is a table; keep it a table. *Which* file follows from what the rule varies
+  with, and getting that wrong is how profiles drift apart:
+  * true of CityGML 2.0 → 3.0 whatever i-UR the input carries →
+    `citygml-2.0-to-3.0.toml`
+  * true of producing i-UR 4.0 whatever version it came from →
+    `iur-4.0-target.toml`, which is also where the code lists live
+  * specific to one source i-UR minor → `iur-<version>-to-4.0.toml`
+
+  The first two are *fragments*, not profiles: each profile names them in `base`
+  and they fold in ahead of its own rules. Prefer a fragment. A rule that is not
+  version-specific, written into one profile, is a rule the other two silently
+  do without — which is the failure the split exists to prevent. The halves are
+  disjoint on purpose, so a key declared on both sides is refused at load
+  instead of resolved by precedence: there is no reading of "the fragment and
+  the profile disagree" that is not a mistake in one of them.
 * **A mapping you cannot settle** → settle it, or turn it into a choice. An
   element either gets a rule, or — when the answer turns on the data owner's
   intent rather than on the schemas — becomes a policy table with a documented

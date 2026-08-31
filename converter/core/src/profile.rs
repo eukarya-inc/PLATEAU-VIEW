@@ -10,20 +10,31 @@ use crate::error::{Error, Result};
 use crate::xml::{Name, PrefixMap};
 
 /// A conversion profile exactly as it appears on disk.
-#[derive(Debug, Deserialize)]
+///
+/// A profile may be written out in full, or assembled from *fragments* it names
+/// in [`base`](Profile::base). The whole-table fields are [`Option`] so that
+/// "not declared" is distinguishable from "declared with its defaults": the
+/// merge refuses a table two files both declare, and cannot see the difference
+/// otherwise.
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// Built-in fragments to fold in before this file's own rules, in the order
+    /// named. See [`Profile::load`].
+    #[serde(default)]
+    pub base: Vec<String>,
     /// The CityGML and i-UR versions this profile accepts.
     #[serde(default)]
-    pub source: Provenance,
+    pub source: Option<Provenance>,
     /// The versions it produces.
     #[serde(default)]
-    pub target: Provenance,
+    pub target: Option<Provenance>,
     #[serde(default)]
     pub input: NamespaceSet,
+    #[serde(default)]
     pub output: Output,
     /// Input namespace URI -> output namespace URI, applied to any name without
     /// a more specific rule.
@@ -37,14 +48,245 @@ pub struct Profile {
     #[serde(default)]
     pub ade_hooks: IndexMap<String, String>,
     #[serde(default)]
-    pub height: HeightDefaults,
+    pub height: Option<HeightDefaults>,
     /// Where CityGML 2.0 LOD4 goes, since 3.0 has no LOD4. See [`Lod4Policy`].
     #[serde(default)]
-    pub lod4: Lod4Policy,
+    pub lod4: Option<Lod4Policy>,
     /// How the input's code lists are carried into the output. See
     /// [`CodelistsPolicy`].
     #[serde(default)]
-    pub codelists: CodelistsPolicy,
+    pub codelists: Option<CodelistsPolicy>,
+}
+
+impl Profile {
+    /// Parses a profile, folding in the built-in fragments its `base` names.
+    ///
+    /// A profile is split along the axes it varies on. The CityGML 2.0 -> 3.0
+    /// mapping is the same whichever i-UR minor the input carries, and the i-UR
+    /// 4.0 target is the same whichever minor it came from; only the i-UR source
+    /// half differs per file. Holding the shared halves once means a rule that
+    /// is not version-specific is written once, instead of being copied into
+    /// every profile and drifting.
+    ///
+    /// Fragments fold in first, in the order named, and the file's own rules
+    /// last. That order is load-bearing: [`Profile::namespace_map`] is an
+    /// [`IndexMap`] the bulk bump iterates, so the fragments' rows have to keep
+    /// their relative position ahead of the overlay's.
+    ///
+    /// A profile that names no `base` is complete in itself and is returned as
+    /// it was written -- which is what `--profile` relies on, so that replacing
+    /// the mapping wholesale stays possible.
+    pub fn load(source: &str) -> Result<Profile> {
+        let overlay: Profile = toml::from_str(source)?;
+        if overlay.base.is_empty() {
+            return Ok(overlay);
+        }
+
+        let mut merge = Merge::default();
+        for name in &overlay.base {
+            let fragment: Profile = toml::from_str(builtin_fragment(name)?)
+                .map_err(|e| Error::Profile(format!("in base `{name}`: {e}")))?;
+            if !fragment.base.is_empty() {
+                return Err(Error::Profile(format!(
+                    "base `{name}` names a base of its own; fragments do not nest"
+                )));
+            }
+            merge.add(name, fragment)?;
+        }
+        let label = overlay.name.clone();
+        merge.add(&label, overlay)?;
+        Ok(merge.profile)
+    }
+}
+
+/// The text of a built-in fragment, by the name a `base` entry gives.
+///
+/// Fragments are named, not paths: a profile loaded from disk with `--profile`
+/// therefore stays one file, and there is no relative path to resolve
+/// differently on Windows.
+fn builtin_fragment(name: &str) -> Result<&'static str> {
+    crate::FRAGMENTS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, text)| *text)
+        .ok_or_else(|| {
+            let available: Vec<&str> = crate::FRAGMENTS.iter().map(|(n, _)| *n).collect();
+            Error::Profile(format!(
+                "unknown base `{name}`; available: {}",
+                available.join(", ")
+            ))
+        })
+}
+
+/// A profile being assembled out of fragments.
+///
+/// The halves are disjoint by construction -- the CityGML fragment and the i-UR
+/// overlay have no key in common -- so there is no override rule to define, and
+/// a key two files both set is a mistake rather than a precedence question.
+/// `origin` remembers which file each key came from, so the error can name both.
+#[derive(Default)]
+struct Merge {
+    profile: Profile,
+    origin: HashMap<(&'static str, String), String>,
+}
+
+impl Merge {
+    fn add(&mut self, label: &str, part: Profile) -> Result<()> {
+        let Merge { profile, origin } = self;
+
+        // Identity is not a mapping rule: the last part named wins, which is
+        // the profile itself rather than one of its fragments.
+        if !part.name.is_empty() {
+            profile.name = part.name;
+        }
+        if !part.description.is_empty() {
+            profile.description = part.description;
+        }
+        if !part.base.is_empty() {
+            profile.base = part.base;
+        }
+
+        table(
+            &mut profile.source,
+            part.source,
+            keys(origin, "source"),
+            label,
+        )?;
+        table(
+            &mut profile.target,
+            part.target,
+            keys(origin, "target"),
+            label,
+        )?;
+        table(
+            &mut profile.height,
+            part.height,
+            keys(origin, "height"),
+            label,
+        )?;
+        table(&mut profile.lod4, part.lod4, keys(origin, "lod4"), label)?;
+        table(
+            &mut profile.codelists,
+            part.codelists,
+            keys(origin, "codelists"),
+            label,
+        )?;
+
+        union(
+            &mut profile.input.namespaces,
+            part.input.namespaces,
+            keys(origin, "input.namespaces"),
+            label,
+        )?;
+        union(
+            &mut profile.output.namespaces,
+            part.output.namespaces,
+            keys(origin, "output.namespaces"),
+            label,
+        )?;
+        union(
+            &mut profile.output.schema_locations,
+            part.output.schema_locations,
+            keys(origin, "output.schema_locations"),
+            label,
+        )?;
+        union(
+            &mut profile.namespace_map,
+            part.namespace_map,
+            keys(origin, "namespace_map"),
+            label,
+        )?;
+        union(
+            &mut profile.ade_hooks,
+            part.ade_hooks,
+            keys(origin, "ade_hooks"),
+            label,
+        )?;
+
+        let mut rules = keys(origin, "element");
+        for rule in part.element {
+            if let Some(previous) = rules.take(&rule.from, label) {
+                return Err(Error::Profile(format!(
+                    "a rule for `{}` is declared in both `{previous}` and `{label}`",
+                    rule.from
+                )));
+            }
+            profile.element.push(rule);
+        }
+
+        let mut orders = keys(origin, "order_group");
+        for group in part.order_group {
+            for ty in &group.types {
+                if let Some(previous) = orders.take(ty, label) {
+                    return Err(Error::Profile(format!(
+                        "a child order for `{ty}` is declared in both `{previous}` and `{label}`"
+                    )));
+                }
+            }
+            profile.order_group.push(group);
+        }
+        Ok(())
+    }
+}
+
+/// The keys of one profile table, and which file claimed each.
+struct Keys<'a> {
+    table: &'static str,
+    seen: &'a mut HashMap<(&'static str, String), String>,
+}
+
+fn keys<'a>(
+    seen: &'a mut HashMap<(&'static str, String), String>,
+    table: &'static str,
+) -> Keys<'a> {
+    Keys { table, seen }
+}
+
+impl Keys<'_> {
+    /// Records `key` as taken by `label`, returning the file that had it before.
+    fn take(&mut self, key: &str, label: &str) -> Option<String> {
+        self.seen
+            .insert((self.table, key.to_string()), label.to_string())
+    }
+}
+
+/// Takes a whole table, refusing one that two files both declare.
+fn table<T>(
+    slot: &mut Option<T>,
+    incoming: Option<T>,
+    mut keys: Keys<'_>,
+    label: &str,
+) -> Result<()> {
+    let Some(value) = incoming else {
+        return Ok(());
+    };
+    if let Some(previous) = keys.take("", label) {
+        return Err(Error::Profile(format!(
+            "[{}] is declared in both `{previous}` and `{label}`",
+            keys.table
+        )));
+    }
+    *slot = Some(value);
+    Ok(())
+}
+
+/// Folds one table's rows in, refusing a key that two files both set.
+fn union<V>(
+    into: &mut IndexMap<String, V>,
+    incoming: IndexMap<String, V>,
+    mut keys: Keys<'_>,
+    label: &str,
+) -> Result<()> {
+    for (key, value) in incoming {
+        if let Some(previous) = keys.take(&key, label) {
+            return Err(Error::Profile(format!(
+                "`{key}` in [{}] is declared in both `{previous}` and `{label}`",
+                keys.table
+            )));
+        }
+        into.insert(key, value);
+    }
+    Ok(())
 }
 
 /// One end of a conversion: what a profile reads, or what it writes.
@@ -95,9 +337,10 @@ impl NamespaceValue {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Output {
+    #[serde(default)]
     pub namespaces: IndexMap<String, String>,
     #[serde(default)]
     pub schema_locations: IndexMap<String, String>,
@@ -284,12 +527,16 @@ pub struct Rules {
 
 impl Rules {
     pub fn from_toml(source: &str) -> Result<Self> {
-        Self::compile(&toml::from_str::<Profile>(source)?)
+        Self::compile(&Profile::load(source)?)
     }
 
     pub fn compile(profile: &Profile) -> Result<Self> {
         let input = &profile.input.namespaces;
         let output = &profile.output.namespaces;
+        // A table no file declared falls back to its documented default, which
+        // is what an absent `[height]` or `[lod4]` has always meant.
+        let policy = profile.lod4.clone().unwrap_or_default();
+        let codelists = profile.codelists.clone().unwrap_or_default();
 
         let mut renames = HashMap::new();
         for rule in &profile.element {
@@ -339,15 +586,14 @@ impl Rules {
         }
 
         let lod4 = Lod4Rules {
-            attribute: profile
-                .lod4
+            attribute: policy
                 .attribute
                 .as_deref()
                 .map(|a| parse_name(a, output))
                 .transpose()?,
-            lod2: profile.lod4.lod2.clone(),
-            lod3: profile.lod4.lod3.clone(),
-            fallback: profile.lod4.fallback,
+            lod2: policy.lod2.clone(),
+            lod3: policy.lod3.clone(),
+            fallback: policy.fallback,
         };
         if let Some(code) = lod4.lod2.iter().find(|c| lod4.lod3.contains(c)) {
             return Err(Error::Profile(format!(
@@ -355,19 +601,21 @@ impl Rules {
             )));
         }
 
-        if let Some(pattern) = profile
-            .codelists
-            .local
-            .iter()
-            .find(|p| p.matches('*').count() > 1)
-        {
+        if let Some(pattern) = codelists.local.iter().find(|p| p.matches('*').count() > 1) {
             return Err(Error::Profile(format!(
                 "[codelists] local pattern `{pattern}` has more than one `*`"
             )));
         }
 
+        // These become the xmlns declarations on the output root, in this
+        // order. Sort them, so the bytes do not depend on how many fragments
+        // the profile was assembled from or which order they folded in --
+        // xmlns declaration order carries no meaning, and letting it track the
+        // file layout would make a profile edit look like an output change.
+        let mut output_namespaces = output.clone();
+        output_namespaces.sort_keys();
         let mut prefixes = PrefixMap::new();
-        for (prefix, uri) in output {
+        for (prefix, uri) in &output_namespaces {
             prefixes.insert(prefix.clone(), uri.clone());
         }
 
@@ -387,8 +635,8 @@ impl Rules {
 
         Ok(Rules {
             name: profile.name.clone(),
-            source: profile.source.clone(),
-            target: profile.target.clone(),
+            source: profile.source.clone().unwrap_or_default(),
+            target: profile.target.clone().unwrap_or_default(),
             namespace_map: profile
                 .namespace_map
                 .iter()
@@ -396,12 +644,12 @@ impl Rules {
                 .collect(),
             renames,
             order,
-            output_namespaces: output.clone(),
+            output_namespaces,
             prefixes,
             schema_location,
-            height: profile.height.clone(),
+            height: profile.height.clone().unwrap_or_default(),
             lod4,
-            codelists: profile.codelists.clone(),
+            codelists,
             ade_hooks,
         })
     }
@@ -757,6 +1005,133 @@ to = "urc:x"
             err.to_string().contains("undeclared prefix `nope`"),
             "{err}"
         );
+    }
+
+    /// A profile written out in full still loads. `--profile` relies on it:
+    /// naming a built-in base is a convenience, not the only way in, so
+    /// replacing the mapping wholesale with one file stays possible.
+    #[test]
+    fn a_profile_that_names_no_base_is_complete_in_itself() {
+        let rules = Rules::from_toml(
+            r#"
+            name = "standalone"
+            [input.namespaces]
+            core = "urn:old"
+            [output.namespaces]
+            core = "urn:new"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(rules.name(), "standalone");
+    }
+
+    #[test]
+    fn every_shipped_profile_is_assembled_from_fragments() {
+        for (name, toml) in crate::PROFILES {
+            let profile = Profile::load(toml).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(
+                !profile.base.is_empty(),
+                "{name} declares no base; the shared halves belong in a fragment"
+            );
+        }
+    }
+
+    /// A fragment is half a mapping, so it must not be mistaken for a profile:
+    /// the CityGML half alone would convert the CityGML side and write every
+    /// i-UR element unqualified.
+    #[test]
+    fn a_fragment_is_not_a_profile_on_its_own() {
+        for (name, toml) in crate::FRAGMENTS {
+            let profile = Profile::load(toml).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(profile.source.is_none(), "{name} declares a [source]");
+        }
+    }
+
+    #[test]
+    fn an_unknown_base_lists_the_ones_there_are() {
+        let err = Rules::from_toml(
+            r#"
+            name = "t"
+            base = ["citygml-9.9"]
+            "#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown base `citygml-9.9`"),
+            "{err}"
+        );
+        assert!(err.to_string().contains("citygml-2.0-to-3.0"), "{err}");
+    }
+
+    /// The halves are disjoint by construction, so a key on both sides is a
+    /// mistake in one of them rather than a question of precedence. The error
+    /// has to name both files, or the reader cannot tell which to edit.
+    #[test]
+    fn a_rule_declared_in_two_files_is_refused() {
+        let err = Rules::from_toml(
+            r#"
+            name = "clash"
+            base = ["citygml-2.0-to-3.0", "iur-4.0-target"]
+            [input.namespaces]
+            uro = "https://www.geospatial.jp/iur/uro/3.1"
+            [[element]]
+            from = "bldg:consistsOfBuildingPart"
+            drop = true
+            "#,
+        )
+        .unwrap_err();
+        let text = err.to_string();
+        assert!(
+            text.contains("a rule for `bldg:consistsOfBuildingPart`"),
+            "{text}"
+        );
+        assert!(text.contains("citygml-2.0-to-3.0"), "{text}");
+        assert!(text.contains("clash"), "{text}");
+    }
+
+    #[test]
+    fn a_namespace_declared_in_two_files_is_refused() {
+        let err = Rules::from_toml(
+            r#"
+            name = "clash"
+            base = ["citygml-2.0-to-3.0"]
+            [namespace_map]
+            "http://www.opengis.net/citygml/2.0" = "urn:elsewhere"
+            "#,
+        )
+        .unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains("in [namespace_map]"), "{text}");
+        assert!(text.contains("citygml-2.0-to-3.0"), "{text}");
+    }
+
+    #[test]
+    fn a_table_declared_in_two_files_is_refused() {
+        let err = Rules::from_toml(
+            r#"
+            name = "clash"
+            base = ["citygml-2.0-to-3.0"]
+            [height]
+            status = "estimated"
+            "#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("[height] is declared in both"),
+            "{err}"
+        );
+    }
+
+    /// The xmlns declarations are emitted in this order, so it must not depend
+    /// on how the profile was split up -- otherwise moving a prefix from one
+    /// fragment to another shows up as a diff in every converted file.
+    #[test]
+    fn output_prefixes_are_ordered_independently_of_the_fragments() {
+        let rules = rules();
+        let prefixes: Vec<&str> = rules.output_namespaces.keys().map(|p| p.as_str()).collect();
+        let mut sorted = prefixes.clone();
+        sorted.sort_unstable();
+        assert_eq!(prefixes, sorted);
     }
 
     #[test]

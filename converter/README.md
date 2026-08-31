@@ -10,9 +10,11 @@ CityGML 3.0. It targets Windows, macOS and Linux.
 ```
 converter/
 ├── Cargo.toml                     workspace root
-├── profiles/
-│   ├── iur-3.0-to-4.0.toml        the declarative half of the mapping,
-│   ├── iur-3.1-to-4.0.toml          one profile per source i-UR version
+├── profiles/                      the declarative half of the mapping
+│   ├── citygml-2.0-to-3.0.toml      shared fragment: the CityGML half
+│   ├── iur-4.0-target.toml          shared fragment: the i-UR 4.0 target
+│   ├── iur-3.0-to-4.0.toml          one profile per source i-UR version,
+│   ├── iur-3.1-to-4.0.toml            each folding in both fragments
 │   └── iur-3.2-to-4.0.toml
 ├── core/                          library: intake, XML, profile, transforms
 ├── cli/                           the `plateau-convert` binary
@@ -128,28 +130,44 @@ selects. There is one profile per source i-UR version, because the versions do
 not declare the same elements: 3.0 and 3.1 differ by 143 element declarations, and
 five names they share changed the type they hold. The converter reads the i-UR
 namespaces the input declares and picks the matching profile; `inspect` shows
-which one it chose. Each profile holds everything about the mapping that is a
-table:
+which one it chose.
 
-* `[source]` / `[target]` — the versions the profile accepts and produces, and
-  what detection matches an input against.
-* `[input.namespaces]` / `[output.namespaces]` — prefix tables for the two sides.
-* `[namespace_map]` — the bulk namespace bump, including i-UR 3.x → 4.0.
-* `[[element]]` — per-element renames and drops.
-* `[[order_group]]` — the child order each 3.0 type requires.
-* `[height]` — the `con:Height` parts CityGML 2.0 does not record.
-* `[lod4]` — the measurement-code attribute, which codes send interior LOD4
-  content to LOD2 or LOD3, and the fallback (`lod3`, `lod2`, `drop`) when no
-  code decides.
-* `[codelists]` — which input code lists are municipality-authored and survive
-  as shipped, which file names the published 4.0 set renamed (rewritten in
-  every `codeSpace`), and which codes it dropped (kept and reported).
+A profile is split along the axes it varies on, so that a rule which is not
+specific to one source version is written once instead of copied three times and
+left to drift. Two **fragments** hold the parts that do not vary, and each
+profile names them in `base`:
 
-All three are compiled into the binary, and any of them can be replaced
-wholesale with `--profile`. An explicit profile is still checked against the
-input: pointing the 3.0 profile at 3.1 data converts the CityGML half and writes
-every `uro:` element unqualified, so the mismatch is reported rather than left to
-be discovered in the output.
+* **`citygml-2.0-to-3.0.toml`** — everything true of CityGML 2.0 → 3.0 whatever
+  i-UR the input carries: the CityGML prefixes on both sides, the CityGML
+  `[namespace_map]` rows and remote `[output.schema_locations]`, the per-element
+  renames and drops (`[[element]]`), the child order each 3.0 type requires
+  (`[[order_group]]`), the `con:Height` parts CityGML 2.0 does not record
+  (`[height]`), and where LOD4 goes (`[lod4]`: the measurement-code attribute,
+  which codes send interior LOD4 content to LOD2 or LOD3, and the fallback —
+  `lod3`, `lod2` or `drop` — when no code decides).
+* **`iur-4.0-target.toml`** — everything true of producing i-UR 4.0 whatever
+  version it came from: `[target]`, the i-UR prefixes and their relative
+  `[output.schema_locations]`, and `[codelists]` — which input code lists are
+  municipality-authored and survive as shipped, which file names the published
+  4.0 set renamed (rewritten in every `codeSpace`), and which codes it dropped
+  (kept and reported). This is the file that gains a sibling when i-UR
+  publishes another minor, rather than the whole shared half being forked.
+* **`iur-<version>-to-4.0.toml`** — what is actually specific to one source
+  minor: `[source]`, that version's `uro`/`urf`/`urg`/`urt` prefixes and their
+  `[namespace_map]` rows, the handful of i-UR rules that are a judgement call,
+  and the generated block the schemas decide.
+
+Fragments fold in ahead of the profile's own rules, and the two sides are
+disjoint: a key declared in both is refused at load, naming both files, rather
+than resolved by precedence. Fragments are named, not paths, so a profile stays
+one file.
+
+All of it is compiled into the binary, and a profile can be replaced wholesale
+with `--profile` — such a file may name the built-in fragments or, declaring no
+`base`, stand entirely on its own. An explicit profile is still checked against
+the input: pointing the 3.0 profile at 3.1 data converts the CityGML half and
+writes every `uro:` element unqualified, so the mismatch is reported rather than
+left to be discovered in the output.
 
 ## Development
 

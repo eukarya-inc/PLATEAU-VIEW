@@ -44,15 +44,17 @@ fn rules(code_under: Option<&str>) -> Rules {
         .iter()
         .find(|(name, _)| *name == "iur-3.1-to-4.0")
         .unwrap();
-    let mut profile: Profile = toml::from_str(toml).unwrap();
+    let mut profile = Profile::load(toml).unwrap();
     // The shipped tables are irrelevant here: the test says where CODE goes.
-    profile.lod4.lod2.clear();
-    profile.lod4.lod3.clear();
+    let mut policy = profile.lod4.take().unwrap_or_default();
+    policy.lod2.clear();
+    policy.lod3.clear();
     match code_under {
-        Some("lod2") => profile.lod4.lod2 = vec!["CODE".into()],
-        Some("lod3") => profile.lod4.lod3 = vec!["CODE".into()],
+        Some("lod2") => policy.lod2 = vec!["CODE".into()],
+        Some("lod3") => policy.lod3 = vec!["CODE".into()],
         _ => {}
     }
+    profile.lod4 = Some(policy);
     Rules::compile(&profile).unwrap()
 }
 

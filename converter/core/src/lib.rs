@@ -32,6 +32,26 @@ pub mod xml;
 
 pub use error::{Error, Result};
 
+/// The profile fragments compiled into the binary, named as a profile's `base`
+/// names them.
+///
+/// A profile is split along the axes it varies on, so that a rule which is not
+/// specific to one source version is written once. The CityGML 2.0 -> 3.0
+/// mapping is one fragment and the i-UR 4.0 target is another; what is left in
+/// each profile below is the i-UR source half, which is the only part that
+/// actually differs between them. Adding a second i-UR target is then a
+/// fragment beside `iur-4.0-target`, not a fork of everything.
+pub const FRAGMENTS: &[(&str, &str)] = &[
+    (
+        "citygml-2.0-to-3.0",
+        include_str!("../../profiles/citygml-2.0-to-3.0.toml"),
+    ),
+    (
+        "iur-4.0-target",
+        include_str!("../../profiles/iur-4.0-target.toml"),
+    ),
+];
+
 /// The conversion profiles compiled into the binary, newest source version last.
 ///
 /// One per source i-UR version, because the versions do not declare the same
