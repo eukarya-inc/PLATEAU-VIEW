@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 
+use crate::app::AppearanceRewrite;
 use crate::bldg::BuildingRewrite;
 use crate::common::CommonRewrite;
 use crate::dataset::Dataset;
@@ -60,6 +61,7 @@ impl Default for Options {
 pub struct Converter {
     rules: Rules,
     common: CommonRewrite,
+    app: AppearanceRewrite,
     lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
     iur: IurRewrite,
@@ -70,6 +72,7 @@ pub struct Converter {
 impl Converter {
     pub fn new(rules: Rules, options: Options) -> Result<Self> {
         let common = CommonRewrite::new(&rules)?;
+        let app = AppearanceRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let iur = IurRewrite::new(&rules)?;
@@ -77,6 +80,7 @@ impl Converter {
         Ok(Converter {
             rules,
             common,
+            app,
             lod4,
             bldg,
             iur,
@@ -260,6 +264,9 @@ impl Converter {
         // `core:genericAttribute` wrapper is not a bldg property), and never
         // the other way round.
         self.common.apply(&mut element, &mut report.warnings);
+        // The appearance rewrite touches only appearance-namespace content,
+        // which no later pass reads, so its slot is free.
+        self.app.apply(&mut element, &mut ids, &mut report.warnings);
         // LOD4 is folded before the building pass so that pass only ever sees
         // LOD0-3 names and can never emit an LOD4 slot 3.0 does not have.
         self.lod4.apply(&mut element, &mut report.warnings);

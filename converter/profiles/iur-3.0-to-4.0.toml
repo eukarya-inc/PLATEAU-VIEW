@@ -164,6 +164,24 @@ wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 
 
 # ---------------------------------------------------------------------------
+# Appearance module.
+#
+# CityGML 3.0 moves the attachment points into the core module -- appearance
+# on the city object, appearanceMember on the CityModel -- and renames the
+# surface-data role. How a ParameterizedTexture binds to geometry changed
+# shape as well; that rewrite is core/src/app.rs, not a table row.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "app:appearance"
+to = "core:appearance"
+[[element]]
+from = "app:appearanceMember"
+to = "core:appearanceMember"
+[[element]]
+from = "app:surfaceDataMember"
+to = "app:surfaceData"
+
+# ---------------------------------------------------------------------------
 # LOD geometry properties.
 #
 # lod0MultiCurve, lod0MultiSurface, lod0Point, lod1Solid,
