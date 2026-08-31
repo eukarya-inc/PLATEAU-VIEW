@@ -275,89 +275,6 @@ mod tests {
         (building, warnings)
     }
 
-    #[test]
-    fn measured_height_becomes_a_construction_height() {
-        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "measuredHeight"), "14.3");
-        src.set_attr(Name::unqualified("uom"), "m");
-
-        let (building, warnings) = in_building(src);
-
-        let height = building
-            .child(ns::CONSTRUCTION_3, "height")
-            .expect("con:height");
-        let obj = height
-            .child(ns::CONSTRUCTION_3, "Height")
-            .expect("con:Height");
-        let value = obj.child(ns::CONSTRUCTION_3, "value").unwrap();
-        assert_eq!(value.text(), "14.3");
-        assert_eq!(
-            value.attr(None, "uom"),
-            Some("m"),
-            "uom moves onto con:value"
-        );
-        assert_eq!(
-            obj.child(ns::CONSTRUCTION_3, "status").unwrap().text(),
-            "measured"
-        );
-        // The references are code-list values, not free text.
-        let high = obj.child(ns::CONSTRUCTION_3, "highReference").unwrap();
-        assert_eq!(high.text(), "2", "2 = the construction's highest point");
-        assert_eq!(
-            high.attr(None, "codeSpace"),
-            Some("../../codelists/Elevation_elevationReference.xml")
-        );
-        assert_eq!(
-            obj.child(ns::CONSTRUCTION_3, "lowReference")
-                .unwrap()
-                .text(),
-            "6",
-            "6 = the lowest ground point"
-        );
-        assert!(
-            !warnings.is_empty(),
-            "the assumed references must be reported"
-        );
-    }
-
-    #[test]
-    fn roof_edge_becomes_a_roof_surface_boundary() {
-        let mut src = Element::new(Name::qualified(ns::BUILDING_3, "lod0RoofEdge"));
-        src.push(Element::new(Name::qualified(ns::GML_32, "MultiSurface")));
-
-        let (building, _) = in_building(src);
-
-        let boundary = building
-            .child(ns::CITYGML_3, "boundary")
-            .expect("core:boundary");
-        let surface = boundary
-            .child(ns::CONSTRUCTION_3, "RoofSurface")
-            .expect("con:RoofSurface");
-        assert_eq!(surface.attr(Some(ns::GML_32), "id"), Some("bldg_1_1"));
-        let geom = surface
-            .child(ns::CITYGML_3, "lod0MultiSurface")
-            .expect("lod0MultiSurface");
-        assert!(
-            geom.child(ns::GML_32, "MultiSurface").is_some(),
-            "geometry is carried through"
-        );
-    }
-
-    #[test]
-    fn foot_print_becomes_a_ground_surface_boundary() {
-        let mut src = Element::new(Name::qualified(ns::BUILDING_3, "lod0FootPrint"));
-        src.push(Element::new(Name::qualified(ns::GML_32, "MultiSurface")));
-
-        let (building, _) = in_building(src);
-
-        let boundary = building
-            .child(ns::CITYGML_3, "boundary")
-            .expect("core:boundary");
-        let surface = boundary
-            .child(ns::CONSTRUCTION_3, "GroundSurface")
-            .expect("con:GroundSurface");
-        assert!(surface.child(ns::CITYGML_3, "lod0MultiSurface").is_some());
-    }
-
     /// Both 2.0 outlines can be present; each keeps its own surface, and the
     /// generated ids stay distinct.
     #[test]
@@ -420,19 +337,6 @@ mod tests {
     }
 
     #[test]
-    fn recognises_lod_geometry_names() {
-        assert_eq!(lod_geometry("lod2Geometry"), Some('2'));
-        assert_eq!(lod_geometry("lod2Solid"), None);
-        assert_eq!(
-            lod_geometry("lod4Geometry"),
-            None,
-            "handled by the lod4 pass"
-        );
-        assert_eq!(lod_geometry("lodXGeometry"), None);
-        assert_eq!(lod_geometry("Geometry"), None);
-    }
-
-    #[test]
     fn installations_gain_their_relation_to_construction() {
         for (property, relation) in [
             ("outerBuildingInstallation", "outside"),
@@ -491,16 +395,5 @@ mod tests {
             .map(|e| e.text())
             .collect();
         assert_eq!(relations, ["bothInsideAndOutside"]);
-    }
-
-    #[test]
-    fn leaves_untouched_properties_alone() {
-        let src = Element::with_text(Name::qualified(ns::BUILDING_3, "roofType"), "2100");
-        let (building, warnings) = in_building(src);
-        assert_eq!(
-            building.child(ns::BUILDING_3, "roofType").unwrap().text(),
-            "2100"
-        );
-        assert!(warnings.is_empty());
     }
 }

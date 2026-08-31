@@ -172,7 +172,7 @@ left to be discovered in the output.
 ## Development
 
 ```bash
-cargo test                                 # 71 tests, including the real PLATEAU fixture
+cargo test                                 # unit + integration, incl. the real PLATEAU fixture
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings  # warnings are errors
 ```

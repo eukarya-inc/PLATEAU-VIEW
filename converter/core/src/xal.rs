@@ -22,6 +22,10 @@
 //! CityGML 3.0. The xAL 2.0 namespace is deliberately absent from the
 //! profile's `[namespace_map]` — a namespace bump cannot express this change,
 //! so the whole subtree is rebuilt here instead.
+//!
+//! [`SLOTS`] is the whole mapping: one row per flat 3.0 slot, in the order
+//! `AddressType` requires, saying which 2.0 container fills it, what its
+//! `Type` attribute may say, and which name children it owns.
 
 use crate::error::Result;
 use crate::profile::Rules;
@@ -31,22 +35,180 @@ use crate::xml::{Element, Name, Node};
 /// The namespace of the address fragments CityGML 2.0 data carries.
 pub const XAL_2_0: &str = "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0";
 
-/// xAL 3.0 closed `Type` lists, per container. A 2.0 `Type` value is carried
-/// over case-insensitively when the list admits it and dropped (reported)
-/// when it does not. Containers with an open list accept any value.
-const LOCALITY_TYPES: &[&str] = &[
-    "Municipality",
-    "PostTown",
-    "Place",
-    "Suburb",
-    "Town",
-    "Village",
-    "Area",
-    "Zone",
+/// One flat xAL 3.0 slot under `Address`.
+struct Slot {
+    /// The 3.0 element, and the 2.0 container that fills it.
+    to: &'static str,
+    from: &'static str,
+    /// The slot this one nests inside, as an index into [`SLOTS`]. A sub
+    /// container is emitted after its parent's own names.
+    parent: Option<usize>,
+    /// The 3.0 `Type` list. Empty means open — any 2.0 `Type` is carried as
+    /// written; `None` means the 3.0 element has no `Type` at all.
+    types: Option<&'static [&'static str]>,
+    /// A fixed `Type`, for a 2.0 container that became one case of a general
+    /// 3.0 element.
+    fixed_type: Option<&'static str>,
+    /// The 2.0 name children this container owns, each with the `NameType`
+    /// (or, in the postal slots, `Identifier` `Type`) it converts to. An empty
+    /// value means the 3.0 lists cannot express it and the attribute is left off.
+    names: &'static [(&'static str, &'static str)],
+    /// Postal slots hold `Identifier`s with a `Type`; everything else
+    /// `NameElement`s with a `NameType`.
+    identifier: bool,
+    /// How many names 3.0 allows here; the rest become free text.
+    limit: usize,
+}
+
+impl Slot {
+    const fn new(
+        to: &'static str,
+        from: &'static str,
+        names: &'static [(&'static str, &'static str)],
+    ) -> Slot {
+        Slot {
+            to,
+            from,
+            names,
+            parent: None,
+            types: None,
+            fixed_type: None,
+            identifier: false,
+            limit: usize::MAX,
+        }
+    }
+
+    const fn under(mut self, parent: usize) -> Slot {
+        self.parent = Some(parent);
+        self
+    }
+
+    const fn types(mut self, types: &'static [&'static str]) -> Slot {
+        self.types = Some(types);
+        self
+    }
+
+    const fn always(mut self, ty: &'static str) -> Slot {
+        self.fixed_type = Some(ty);
+        self
+    }
+
+    const fn identifiers(mut self) -> Slot {
+        self.identifier = true;
+        self
+    }
+
+    const fn at_most(mut self, limit: usize) -> Slot {
+        self.limit = limit;
+        self
+    }
+}
+
+const ADMIN: usize = 1;
+const LOCALITY: usize = 3;
+const THOROUGHFARE: usize = 5;
+const PREMISES: usize = 7;
+
+/// The flat 3.0 slots, in the order `AddressType` requires. A sub container
+/// follows its parent, which is what lets [`XalRewrite::assemble`] walk this
+/// once and emit the address.
+const SLOTS: &[Slot] = &[
+    Slot::new(
+        "Country",
+        "Country",
+        &[("CountryName", "Name"), ("CountryNameCode", "")],
+    ),
+    Slot::new(
+        "AdministrativeArea",
+        "AdministrativeArea",
+        &[("AdministrativeAreaName", "Name")],
+    )
+    .types(&["City", "State", "Territory", "Province"]),
+    Slot::new(
+        "SubAdministrativeArea",
+        "SubAdministrativeArea",
+        &[("SubAdministrativeAreaName", "Name")],
+    )
+    .under(ADMIN)
+    .types(&["County", "District", "Province", "Region"]),
+    Slot::new("Locality", "Locality", &[("LocalityName", "Name")]).types(&[
+        "Municipality",
+        "PostTown",
+        "Place",
+        "Suburb",
+        "Town",
+        "Village",
+        "Area",
+        "Zone",
+    ]),
+    Slot::new(
+        "SubLocality",
+        "DependentLocality",
+        &[
+            ("DependentLocalityName", "Name"),
+            ("DependentLocalityNumber", "Number"),
+        ],
+    )
+    .under(LOCALITY)
+    .types(&["Municipality", "Village"]),
+    Slot::new("Thoroughfare", "Thoroughfare", THOROUGHFARE_NAMES).types(&[]),
+    Slot::new(
+        "SubThoroughfare",
+        "DependentThoroughfare",
+        THOROUGHFARE_NAMES,
+    )
+    .under(THOROUGHFARE)
+    .at_most(5),
+    Slot::new("Premises", "Premise", PREMISES_NAMES).types(PREMISES_TYPES),
+    Slot::new("SubPremises", "SubPremise", PREMISES_NAMES).under(PREMISES),
+    Slot::new(
+        "PostCode",
+        "PostalCode",
+        &[
+            ("PostalCodeNumber", ""),
+            ("PostalCodeNumberExtension", "Extension"),
+        ],
+    )
+    .identifiers(),
+    Slot::new(
+        "PostalDeliveryPoint",
+        "PostBox",
+        &[
+            ("PostBoxNumber", "Number"),
+            ("PostBoxNumberPrefix", "Prefix"),
+            ("PostBoxNumberSuffix", "Suffix"),
+            ("PostBoxNumberExtension", "Extension"),
+        ],
+    )
+    .always("POBox")
+    .identifiers(),
+    Slot::new(
+        "PostOffice",
+        "PostOffice",
+        &[("PostOfficeName", "Name"), ("PostOfficeNumber", "Number")],
+    )
+    .identifiers(),
 ];
-const SUB_LOCALITY_TYPES: &[&str] = &["Municipality", "Village"];
-const ADMIN_AREA_TYPES: &[&str] = &["City", "State", "Territory", "Province"];
-const SUB_ADMIN_AREA_TYPES: &[&str] = &["County", "District", "Province", "Region"];
+
+/// A 2.0 thoroughfare and its dependent one own the same name children, as do
+/// a premise and its sub premise.
+const THOROUGHFARE_NAMES: &[(&str, &str)] = &[
+    ("ThoroughfareName", "NameOnly"),
+    ("ThoroughfareNumber", ""),
+    ("ThoroughfareNumberPrefix", ""),
+    ("ThoroughfareNumberSuffix", ""),
+];
+const PREMISES_NAMES: &[(&str, &str)] = &[
+    ("PremiseName", "Name"),
+    ("SubPremiseName", "Name"),
+    ("PremiseNumber", ""),
+    ("PremiseNumberPrefix", ""),
+    ("PremiseNumberSuffix", ""),
+    ("SubPremiseNumber", ""),
+    ("SubPremiseNumberPrefix", ""),
+    ("SubPremiseNumberSuffix", ""),
+    ("BuildingName", ""),
+];
 const PREMISES_TYPES: &[&str] = &[
     "Airport",
     "Area",
@@ -63,35 +225,22 @@ const PREMISES_TYPES: &[&str] = &[
     "Unit",
 ];
 
+/// 2.0 elements whose children are what matter; the element itself has no 3.0
+/// counterpart and needs none.
+const TRANSPARENT: &[&str] = &["AddressDetails", "AddressLines", "Address"];
+
+/// What one slot captured while walking an address.
+#[derive(Default, Clone)]
+struct Filled {
+    names: Vec<Element>,
+    ty: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct XalRewrite {
     core: String,
     /// The output xAL namespace — xAL 3.0.
     xal: String,
-}
-
-/// One flat xAL 3.0 address under construction.
-#[derive(Default)]
-struct Builder {
-    free: Vec<Element>,
-    country: Vec<Element>,
-    admin: Vec<Element>,
-    admin_type: Option<String>,
-    sub_admin: Vec<Element>,
-    sub_admin_type: Option<String>,
-    locality: Vec<Element>,
-    locality_type: Option<String>,
-    sub_locality: Vec<Element>,
-    sub_locality_type: Option<String>,
-    thoroughfare: Vec<Element>,
-    thoroughfare_type: Option<String>,
-    sub_thoroughfare: Vec<Element>,
-    premises: Vec<Element>,
-    premises_type: Option<String>,
-    sub_premises: Vec<Element>,
-    post_code: Vec<Element>,
-    postal_delivery: Vec<Element>,
-    post_office: Vec<Element>,
 }
 
 impl XalRewrite {
@@ -114,18 +263,18 @@ impl XalRewrite {
     }
 
     fn convert(&self, el: &mut Element, warnings: &mut Warnings) {
-        let has_2_0 = el.elements().any(|c| c.name.in_ns(XAL_2_0));
-        if !has_2_0 {
+        if !el.elements().any(|c| c.name.in_ns(XAL_2_0)) {
             // Already xAL 3.0, or empty: nothing to rebuild.
             return;
         }
 
-        let mut b = Builder::default();
+        let mut slots = vec![Filled::default(); SLOTS.len()];
+        let mut free = Vec::new();
         let mut foreign = Vec::new();
         for node in std::mem::take(&mut el.children) {
             match node {
                 Node::Element(child) if child.name.in_ns(XAL_2_0) => {
-                    self.walk(child, &mut b, warnings);
+                    self.walk(child, &mut slots, &mut free, warnings);
                 }
                 Node::Element(child) => {
                     warnings.add(format!(
@@ -138,8 +287,7 @@ impl XalRewrite {
                 other => drop(other),
             }
         }
-        el.children = Vec::new();
-        el.push(self.assemble(b, warnings));
+        el.push(self.assemble(slots, free, warnings));
         el.children.extend(foreign);
         warnings.add(
             "an xAL 2.0 address became an xAL 3.0 Address: CityGML 3.0 binds \
@@ -147,58 +295,52 @@ impl XalRewrite {
         );
     }
 
-    /// Dispatches one xAL 2.0 element into the flat 3.0 buckets.
-    fn walk(&self, el: Element, b: &mut Builder, warnings: &mut Warnings) {
-        match el.name.local.as_str() {
-            // Transparent wrappers: only their children matter.
-            "AddressDetails" | "AddressLines" | "Address" => {
-                self.recurse(el, b, warnings);
+    /// Dispatches one xAL 2.0 element into the flat 3.0 slots.
+    fn walk(
+        &self,
+        el: Element,
+        slots: &mut [Filled],
+        free: &mut Vec<Element>,
+        warnings: &mut Warnings,
+    ) {
+        let local = el.name.local.as_str();
+        if let Some(at) = SLOTS.iter().position(|s| s.from == local) {
+            return self.container(el, at, slots, free, warnings);
+        }
+        if TRANSPARENT.contains(&local) {
+            for child in into_elements(el) {
+                self.walk(child, slots, free, warnings);
             }
-            "Country" => self.container(el, b, warnings, Bucket::Country),
-            "AdministrativeArea" => self.container(el, b, warnings, Bucket::Admin),
-            "SubAdministrativeArea" => self.container(el, b, warnings, Bucket::SubAdmin),
-            "Locality" => self.container(el, b, warnings, Bucket::Locality),
-            "DependentLocality" => self.container(el, b, warnings, Bucket::SubLocality),
-            "Thoroughfare" => self.container(el, b, warnings, Bucket::Thoroughfare),
-            "DependentThoroughfare" => self.container(el, b, warnings, Bucket::SubThoroughfare),
-            "Premise" => self.container(el, b, warnings, Bucket::Premises),
-            "SubPremise" => self.container(el, b, warnings, Bucket::SubPremises),
-            "PostalCode" => self.container(el, b, warnings, Bucket::PostCode),
-            "PostBox" => self.container(el, b, warnings, Bucket::PostalDelivery),
-            "PostOffice" => self.container(el, b, warnings, Bucket::PostOffice),
-            "AddressLine" => {
-                let line = self.element("AddressLine", el.text().trim());
-                b.free.push(line);
-            }
-            other => {
-                warnings.add(format!(
-                    "xAL 2.0 {other} has no xAL 3.0 counterpart; its text was \
-                     kept as FreeTextAddress"
-                ));
-                for line in text_lines(&el) {
-                    b.free.push(self.element("AddressLine", &line));
-                }
+        } else if local == "AddressLine" {
+            free.push(self.element("AddressLine", el.text().trim()));
+        } else {
+            warnings.add(format!(
+                "xAL 2.0 {local} has no xAL 3.0 counterpart; its text was kept \
+                 as FreeTextAddress"
+            ));
+            for line in text_lines(&el) {
+                free.push(self.element("AddressLine", &line));
             }
         }
     }
 
-    fn recurse(&self, mut el: Element, b: &mut Builder, warnings: &mut Warnings) {
-        for node in std::mem::take(&mut el.children) {
-            if let Node::Element(child) = node {
-                if child.name.in_ns(XAL_2_0) {
-                    self.walk(child, b, warnings);
-                }
-            }
-        }
-    }
-
-    /// Converts one 2.0 container: its name children fill the bucket, its
-    /// `Type` attribute is carried when the 3.0 list admits it, and nested
-    /// containers recurse to their own flat buckets.
-    fn container(&self, mut el: Element, b: &mut Builder, warnings: &mut Warnings, into: Bucket) {
+    /// Converts one 2.0 container: its name children fill the slot, its `Type`
+    /// attribute is carried when the 3.0 list admits it, and anything else it
+    /// holds is dispatched to its own slot.
+    fn container(
+        &self,
+        el: Element,
+        at: usize,
+        slots: &mut [Filled],
+        free: &mut Vec<Element>,
+        warnings: &mut Warnings,
+    ) {
+        let slot = &SLOTS[at];
         if let Some(value) = el.attr(None, "Type").map(str::to_owned) {
-            match into.carry_type(&value) {
-                Some(carried) => into.set_type(b, carried),
+            match carry_type(slot, &value) {
+                Some(carried) => {
+                    slots[at].ty.get_or_insert(carried);
+                }
                 None => warnings.add(format!(
                     "the Type=\"{value}\" attribute of xAL 2.0 {} has no xAL \
                      3.0 equivalent and was dropped",
@@ -206,17 +348,17 @@ impl XalRewrite {
                 )),
             }
         }
-        for node in std::mem::take(&mut el.children) {
-            let Node::Element(child) = node else { continue };
-            if !child.name.in_ns(XAL_2_0) {
-                continue;
-            }
-            match into.name_of(child.name.local.as_str()) {
-                Some(name_type) => {
-                    let converted = self.name_like(&child, into, name_type, warnings);
-                    into.bucket(b).push(converted);
+        for child in into_elements(el) {
+            match slot
+                .names
+                .iter()
+                .find(|(from, _)| *from == child.name.local)
+            {
+                Some((_, name_type)) => {
+                    let name = self.name_like(&child, slot, name_type, warnings);
+                    slots[at].names.push(name);
                 }
-                None => self.walk(child, b, warnings),
+                None => self.walk(child, slots, free, warnings),
             }
         }
     }
@@ -225,22 +367,17 @@ impl XalRewrite {
     fn name_like(
         &self,
         src: &Element,
-        into: Bucket,
-        name_type: Option<&str>,
+        slot: &Slot,
+        name_type: &str,
         warnings: &mut Warnings,
     ) -> Element {
-        let local = if into.uses_identifier() {
-            "Identifier"
+        let (local, attr) = if slot.identifier {
+            ("Identifier", "Type")
         } else {
-            "NameElement"
+            ("NameElement", "NameType")
         };
         let mut out = self.element(local, src.text().trim());
-        let attr = if into.uses_identifier() {
-            "Type"
-        } else {
-            "NameType"
-        };
-        if let Some(name_type) = name_type {
+        if !name_type.is_empty() {
             out.set_attr(Name::qualified(&self.xal, attr), name_type);
         }
         for attr in &src.attrs {
@@ -261,234 +398,96 @@ impl XalRewrite {
         }
     }
 
-    /// Lays the buckets out in the order `AddressType` requires.
-    fn assemble(&self, mut b: Builder, warnings: &mut Warnings) -> Element {
-        // A container must hold at least one name, so a sub container whose
-        // parent captured none donates its names to the parent.
-        for (parent, sub, what) in [
-            (&mut b.admin, &mut b.sub_admin, "SubAdministrativeArea"),
-            (&mut b.locality, &mut b.sub_locality, "SubLocality"),
-            (
-                &mut b.thoroughfare,
-                &mut b.sub_thoroughfare,
-                "SubThoroughfare",
-            ),
-            (&mut b.premises, &mut b.sub_premises, "SubPremises"),
-        ] {
-            if parent.is_empty() && !sub.is_empty() {
-                parent.append(sub);
+    /// Lays the slots out in the order `AddressType` requires.
+    fn assemble(
+        &self,
+        mut slots: Vec<Filled>,
+        mut free: Vec<Element>,
+        warnings: &mut Warnings,
+    ) -> Element {
+        for (at, slot) in SLOTS.iter().enumerate() {
+            let Some(parent) = slot.parent else { continue };
+            // A container must hold at least one name, so a sub container
+            // whose parent captured none donates its names to the parent.
+            if slots[parent].names.is_empty() && !slots[at].names.is_empty() {
+                let donated = std::mem::take(&mut slots[at]);
+                slots[parent].names = donated.names;
                 warnings.add(format!(
-                    "an xAL 3.0 {what} cannot stand without its parent's own \
-                     name, so the names moved up one level"
+                    "an xAL 3.0 {} cannot stand without its parent's own name, \
+                     so the names moved up one level",
+                    slot.to
                 ));
             }
-        }
-        if b.sub_thoroughfare.len() > 5 {
-            warnings.add(
-                "xAL 3.0 allows five SubThoroughfare names; the rest were \
-                 kept as FreeTextAddress",
-            );
-            for extra in b.sub_thoroughfare.split_off(5) {
-                b.free
-                    .push(self.element("AddressLine", extra.text().trim()));
+            if slots[at].names.len() > slot.limit {
+                warnings.add(format!(
+                    "xAL 3.0 allows {} {} names; the rest were kept as \
+                     FreeTextAddress",
+                    slot.limit, slot.to
+                ));
+                for extra in slots[at].names.split_off(slot.limit) {
+                    free.push(self.element("AddressLine", extra.text().trim()));
+                }
             }
         }
 
         let mut address = Element::new(Name::qualified(&self.xal, "Address"));
-        if !b.free.is_empty() {
-            let mut free = Element::new(Name::qualified(&self.xal, "FreeTextAddress"));
-            free.children = b.free.into_iter().map(Node::Element).collect();
-            address.push(free);
+        if !free.is_empty() {
+            let mut text = Element::new(Name::qualified(&self.xal, "FreeTextAddress"));
+            text.children = free.into_iter().map(Node::Element).collect();
+            address.push(text);
         }
-        if !b.country.is_empty() {
-            address.push(self.filled("Country", b.country, None, vec![]));
-        }
-        if !b.admin.is_empty() {
-            let sub = self.sub("SubAdministrativeArea", b.sub_admin, b.sub_admin_type);
-            address.push(self.filled("AdministrativeArea", b.admin, b.admin_type, sub));
-        }
-        if !b.locality.is_empty() {
-            let sub = self.sub("SubLocality", b.sub_locality, b.sub_locality_type);
-            address.push(self.filled("Locality", b.locality, b.locality_type, sub));
-        }
-        if !b.thoroughfare.is_empty() {
-            let sub = self.sub("SubThoroughfare", b.sub_thoroughfare, None);
-            address.push(self.filled("Thoroughfare", b.thoroughfare, b.thoroughfare_type, sub));
-        }
-        if !b.premises.is_empty() {
-            let sub = self.sub("SubPremises", b.sub_premises, None);
-            address.push(self.filled("Premises", b.premises, b.premises_type, sub));
-        }
-        if !b.post_code.is_empty() {
-            address.push(self.filled("PostCode", b.post_code, None, vec![]));
-        }
-        if !b.postal_delivery.is_empty() {
-            address.push(self.filled(
-                "PostalDeliveryPoint",
-                b.postal_delivery,
-                Some("POBox".to_owned()),
-                vec![],
-            ));
-        }
-        if !b.post_office.is_empty() {
-            address.push(self.filled("PostOffice", b.post_office, None, vec![]));
+        for (at, slot) in SLOTS.iter().enumerate() {
+            if slot.parent.is_some() || slots[at].names.is_empty() {
+                continue;
+            }
+            let mut out = self.build(at, &mut slots);
+            // Its sub container, if it captured anything, goes after its names.
+            for (sub, _) in SLOTS
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.parent == Some(at))
+            {
+                if !slots[sub].names.is_empty() {
+                    let nested = self.build(sub, &mut slots);
+                    out.push(nested);
+                }
+            }
+            address.push(out);
         }
         address
     }
 
-    /// A wrapped sub container, or nothing when it captured no names.
-    fn sub(&self, local: &str, names: Vec<Element>, type_attr: Option<String>) -> Vec<Element> {
-        if names.is_empty() {
-            vec![]
-        } else {
-            vec![self.filled(local, names, type_attr, vec![])]
-        }
-    }
-
-    fn filled(
-        &self,
-        local: &str,
-        names: Vec<Element>,
-        type_attr: Option<String>,
-        tail: Vec<Element>,
-    ) -> Element {
-        let mut out = Element::new(Name::qualified(&self.xal, local));
-        if let Some(value) = type_attr {
+    /// One slot as its 3.0 element, names and all.
+    fn build(&self, at: usize, slots: &mut [Filled]) -> Element {
+        let slot = &SLOTS[at];
+        let filled = std::mem::take(&mut slots[at]);
+        let mut out = Element::new(Name::qualified(&self.xal, slot.to));
+        if let Some(value) = filled.ty.or_else(|| slot.fixed_type.map(str::to_owned)) {
             out.set_attr(Name::qualified(&self.xal, "Type"), value);
         }
-        out.children = names.into_iter().map(Node::Element).collect();
-        for extra in tail {
-            out.push(extra);
-        }
+        out.children = filled.names.into_iter().map(Node::Element).collect();
         out
     }
 }
 
-/// Which flat 3.0 bucket a 2.0 container fills, and how its names convert.
-#[derive(Clone, Copy, PartialEq)]
-enum Bucket {
-    Country,
-    Admin,
-    SubAdmin,
-    Locality,
-    SubLocality,
-    Thoroughfare,
-    SubThoroughfare,
-    Premises,
-    SubPremises,
-    PostCode,
-    PostalDelivery,
-    PostOffice,
+/// Carries a 2.0 container `Type` into the 3.0 `Type` list, matching
+/// case-insensitively; an open list accepts the value as written.
+fn carry_type(slot: &Slot, value: &str) -> Option<String> {
+    match slot.types? {
+        [] => Some(value.to_owned()),
+        closed => closed
+            .iter()
+            .find(|allowed| allowed.eq_ignore_ascii_case(value))
+            .map(|allowed| (*allowed).to_owned()),
+    }
 }
 
-impl Bucket {
-    fn bucket(self, b: &mut Builder) -> &mut Vec<Element> {
-        match self {
-            Bucket::Country => &mut b.country,
-            Bucket::Admin => &mut b.admin,
-            Bucket::SubAdmin => &mut b.sub_admin,
-            Bucket::Locality => &mut b.locality,
-            Bucket::SubLocality => &mut b.sub_locality,
-            Bucket::Thoroughfare => &mut b.thoroughfare,
-            Bucket::SubThoroughfare => &mut b.sub_thoroughfare,
-            Bucket::Premises => &mut b.premises,
-            Bucket::SubPremises => &mut b.sub_premises,
-            Bucket::PostCode => &mut b.post_code,
-            Bucket::PostalDelivery => &mut b.postal_delivery,
-            Bucket::PostOffice => &mut b.post_office,
-        }
-    }
-
-    /// The postal elements hold `Identifier`s; everything else `NameElement`s.
-    fn uses_identifier(self) -> bool {
-        matches!(
-            self,
-            Bucket::PostCode | Bucket::PostalDelivery | Bucket::PostOffice
-        )
-    }
-
-    /// The 2.0 name children this container owns, with the `NameType` (or
-    /// `Identifier` `Type`) each maps to — `None` marking values the closed
-    /// 3.0 lists cannot express, which convert without the attribute.
-    fn name_of(self, local: &str) -> Option<Option<&'static str>> {
-        let name = |t| Some(Some(t));
-        let bare = Some(None);
-        match (self, local) {
-            (Bucket::Country, "CountryName") => name("Name"),
-            (Bucket::Country, "CountryNameCode") => bare,
-            (Bucket::Admin, "AdministrativeAreaName") => name("Name"),
-            (Bucket::SubAdmin, "SubAdministrativeAreaName") => name("Name"),
-            (Bucket::Locality, "LocalityName") => name("Name"),
-            (Bucket::SubLocality, "DependentLocalityName") => name("Name"),
-            (Bucket::SubLocality, "DependentLocalityNumber") => name("Number"),
-            (Bucket::Thoroughfare | Bucket::SubThoroughfare, "ThoroughfareName") => {
-                name("NameOnly")
-            }
-            (
-                Bucket::Thoroughfare | Bucket::SubThoroughfare,
-                "ThoroughfareNumber" | "ThoroughfareNumberPrefix" | "ThoroughfareNumberSuffix",
-            ) => bare,
-            (Bucket::Premises | Bucket::SubPremises, "PremiseName" | "SubPremiseName") => {
-                name("Name")
-            }
-            (
-                Bucket::Premises | Bucket::SubPremises,
-                "PremiseNumber"
-                | "PremiseNumberPrefix"
-                | "PremiseNumberSuffix"
-                | "SubPremiseNumber"
-                | "SubPremiseNumberPrefix"
-                | "SubPremiseNumberSuffix"
-                | "BuildingName",
-            ) => bare,
-            (Bucket::PostCode, "PostalCodeNumber") => bare,
-            (Bucket::PostCode, "PostalCodeNumberExtension") => name("Extension"),
-            (Bucket::PostalDelivery, "PostBoxNumber") => name("Number"),
-            (Bucket::PostalDelivery, "PostBoxNumberPrefix") => name("Prefix"),
-            (Bucket::PostalDelivery, "PostBoxNumberSuffix") => name("Suffix"),
-            (Bucket::PostalDelivery, "PostBoxNumberExtension") => name("Extension"),
-            (Bucket::PostOffice, "PostOfficeName") => name("Name"),
-            (Bucket::PostOffice, "PostOfficeNumber") => name("Number"),
-            _ => None,
-        }
-    }
-
-    /// Carries a 2.0 container `Type` into the 3.0 `Type` list, matching
-    /// case-insensitively; open lists accept the value as written.
-    fn carry_type(self, value: &str) -> Option<String> {
-        let closed: Option<&[&str]> = match self {
-            Bucket::Locality => Some(LOCALITY_TYPES),
-            Bucket::SubLocality => Some(SUB_LOCALITY_TYPES),
-            Bucket::Admin => Some(ADMIN_AREA_TYPES),
-            Bucket::SubAdmin => Some(SUB_ADMIN_AREA_TYPES),
-            Bucket::Premises | Bucket::SubPremises => Some(PREMISES_TYPES),
-            // ThoroughfareTypeList and the postal lists are open.
-            Bucket::Thoroughfare | Bucket::SubThoroughfare | Bucket::PostOffice => None,
-            Bucket::Country | Bucket::PostCode | Bucket::PostalDelivery => {
-                return None;
-            }
-        };
-        match closed {
-            None => Some(value.to_owned()),
-            Some(list) => list
-                .iter()
-                .find(|allowed| allowed.eq_ignore_ascii_case(value))
-                .map(|allowed| (*allowed).to_owned()),
-        }
-    }
-
-    fn set_type(self, b: &mut Builder, value: String) {
-        let slot = match self {
-            Bucket::Locality => &mut b.locality_type,
-            Bucket::SubLocality => &mut b.sub_locality_type,
-            Bucket::Admin => &mut b.admin_type,
-            Bucket::SubAdmin => &mut b.sub_admin_type,
-            Bucket::Thoroughfare => &mut b.thoroughfare_type,
-            Bucket::Premises => &mut b.premises_type,
-            _ => return,
-        };
-        slot.get_or_insert(value);
-    }
+/// The xAL 2.0 element children of `el`, taking ownership.
+fn into_elements(el: Element) -> impl Iterator<Item = Element> {
+    el.children.into_iter().filter_map(|node| match node {
+        Node::Element(child) if child.name.in_ns(XAL_2_0) => Some(child),
+        _ => None,
+    })
 }
 
 /// Every non-empty text run under `el`, in document order.

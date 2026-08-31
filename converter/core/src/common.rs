@@ -201,29 +201,6 @@ mod tests {
     }
 
     #[test]
-    fn string_attribute_becomes_a_wrapped_data_type() {
-        let mut src = Element::with_text(Name::qualified(GEN3, "stringAttribute"), "");
-        src.set_attr(Name::unqualified("name"), "風致地区");
-        src.children.clear();
-        src.push(Element::with_text(Name::qualified(GEN3, "value"), "第1種"));
-
-        let (building, _) = in_building(src);
-
-        let property = building
-            .child(ns::CITYGML_3, "genericAttribute")
-            .expect("wrapper");
-        let object = property
-            .child(GEN3, "StringAttribute")
-            .expect("StringAttribute");
-        assert_eq!(object.child(GEN3, "name").unwrap().text(), "風致地区");
-        assert_eq!(object.child(GEN3, "value").unwrap().text(), "第1種");
-        assert!(
-            object.attr(None, "name").is_none(),
-            "the XML attribute is consumed"
-        );
-    }
-
-    #[test]
     fn each_generic_attribute_flavour_maps_to_its_data_type() {
         for (property, data_type) in GENERIC_ATTRIBUTES {
             let src = Element::new(Name::qualified(GEN3, *property));
@@ -299,23 +276,6 @@ mod tests {
     }
 
     #[test]
-    fn a_value_that_is_already_a_date_time_is_left_alone() {
-        let src = Element::with_text(
-            Name::qualified(ns::CITYGML_3, "creationDate"),
-            "2023-03-01T09:00:00",
-        );
-        let (building, warnings) = in_building(src);
-        assert_eq!(
-            building
-                .child(ns::CITYGML_3, "creationDate")
-                .unwrap()
-                .text(),
-            "2023-03-01T09:00:00"
-        );
-        assert!(warnings.is_empty());
-    }
-
-    #[test]
     fn a_retargeted_code_space_moves_to_the_published_file_name() {
         let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "EF_60");
         src.set_attr(
@@ -339,29 +299,6 @@ mod tests {
     }
 
     #[test]
-    fn a_renamed_fireproof_list_moves_to_the_detail_attribute_name() {
-        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "1001");
-        src.set_attr(
-            Name::unqualified("codeSpace"),
-            "../../codelists/Building_fireproofStructureType.xml",
-        );
-
-        let (building, warnings) = in_building(src);
-
-        let function = building.child(ns::BUILDING_3, "function").unwrap();
-        assert_eq!(
-            function.attr(None, "codeSpace"),
-            Some("../../codelists/BuildingDetailAttribute_fireproofStructureType.xml"),
-        );
-        assert!(
-            warnings
-                .iter()
-                .any(|(m, _)| m
-                    .contains("became BuildingDetailAttribute_fireproofStructureType.xml"))
-        );
-    }
-
-    #[test]
     fn a_code_the_published_list_dropped_is_kept_and_reported() {
         let code_space = "../../codelists/DataQualityAttribute_thematicSrcDesc.xml";
         let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "898");
@@ -381,13 +318,5 @@ mod tests {
         src.set_attr(Name::unqualified("codeSpace"), code_space);
         let (_, warnings) = in_building(src);
         assert!(warnings.iter().all(|(m, _)| !m.contains("no entry")));
-    }
-
-    #[test]
-    fn recognises_date_only_values() {
-        assert!(is_date_only("2023-03-01"));
-        assert!(!is_date_only("2023-03-01T00:00:00"));
-        assert!(!is_date_only("2023-3-1"));
-        assert!(!is_date_only(""));
     }
 }

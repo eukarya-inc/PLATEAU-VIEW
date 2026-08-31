@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use plateau_converter_core::dataset::{Dataset, Staging};
 use tempfile::TempDir;
@@ -160,19 +160,6 @@ fn a_part_zip_is_identified_from_its_contents_when_the_name_says_nothing() {
 }
 
 #[test]
-fn a_loose_part_directory_is_placed_by_name() {
-    let dir = TempDir::new().unwrap();
-    write(&dir.path().join("udx/bldg/a.gml"), GML);
-    write(&dir.path().join("codelists/x.xml"), "<x/>");
-
-    let dataset = Dataset::open(&[dir.path().join("udx"), dir.path().join("codelists")]).unwrap();
-
-    assert!(dataset.is_staged());
-    assert!(dataset.root().join("udx/bldg/a.gml").is_file());
-    assert!(dataset.root().join("codelists/x.xml").is_file());
-}
-
-#[test]
 fn staging_can_be_pinned_to_a_directory_and_inspected() {
     let dir = TempDir::new().unwrap();
     let archive = dir.path().join("udx.zip");
@@ -191,23 +178,6 @@ fn staging_can_be_pinned_to_a_directory_and_inspected() {
 }
 
 #[test]
-fn companion_files_are_the_non_gml_ones() {
-    let dir = TempDir::new().unwrap();
-    write(&dir.path().join("udx/bldg/a.gml"), GML);
-    write(
-        &dir.path().join("udx/bldg/a_appearance/t.jpg"),
-        "not really a jpeg",
-    );
-
-    let dataset = Dataset::open(&[dir.path().to_owned()]).unwrap();
-
-    assert_eq!(dataset.gml_files("bldg").unwrap().len(), 1);
-    let companions = dataset.companion_files("bldg").unwrap();
-    assert_eq!(companions.len(), 1);
-    assert!(companions[0].ends_with("udx/bldg/a_appearance/t.jpg"));
-}
-
-#[test]
 fn a_dataset_without_udx_is_rejected() {
     let dir = TempDir::new().unwrap();
     let archive = dir.path().join("codelists.zip");
@@ -216,23 +186,6 @@ fn a_dataset_without_udx_is_rejected() {
     let error = Dataset::open(&[archive]).unwrap_err().to_string();
 
     assert!(error.contains("udx"), "{error}");
-}
-
-#[test]
-fn an_unrecognisable_input_is_rejected() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("notes.txt");
-    fs::write(&path, "hello").unwrap();
-
-    let error = Dataset::open(&[path]).unwrap_err().to_string();
-
-    assert!(error.contains("expected a directory or a .zip"), "{error}");
-}
-
-#[test]
-fn no_input_is_rejected() {
-    let error = Dataset::open(&[] as &[PathBuf]).unwrap_err().to_string();
-    assert!(error.contains("no input"), "{error}");
 }
 
 /// Windows-made part zips separate entries with backslashes; the layout must

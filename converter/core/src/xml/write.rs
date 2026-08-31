@@ -265,19 +265,6 @@ mod tests {
     }
 
     #[test]
-    fn writes_nested_elements_with_indentation() {
-        let mut inner = Element::with_text(Name::qualified("urn:gml", "posList"), "1 2 3");
-        inner.set_attr(Name::unqualified("srsDimension"), "3");
-        let mut outer = Element::new(Name::qualified("urn:core", "Thing"));
-        outer.push(inner);
-
-        assert_eq!(
-            render(&outer, Indent::Tab),
-            "\n<core:Thing>\n\t<gml:posList srsDimension=\"3\">1 2 3</gml:posList>\n</core:Thing>"
-        );
-    }
-
-    #[test]
     fn escapes_text_and_attributes() {
         let mut el = Element::with_text(Name::qualified("urn:core", "v"), "a < b & c");
         el.attrs
@@ -286,12 +273,6 @@ mod tests {
             render(&el, Indent::None),
             "<core:v q=\"&quot;x&quot;\">a &lt; b &amp; c</core:v>"
         );
-    }
-
-    #[test]
-    fn empty_element_is_self_closing() {
-        let el = Element::new(Name::qualified("urn:core", "v"));
-        assert_eq!(render(&el, Indent::None), "<core:v/>");
     }
 
     #[test]

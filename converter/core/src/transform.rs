@@ -277,16 +277,6 @@ mod tests {
     }
 
     #[test]
-    fn existing_ids_are_left_alone() {
-        let mut poly = Element::new(Name::qualified(ns::GML_32, "Polygon"));
-        poly.set_attr(Name::qualified(ns::GML_32, "id"), "keep-me");
-        let mut ids = IdGen::new("seed");
-        assign_gml_ids(&mut poly, ns::GML_32, &mut ids);
-        assert_eq!(poly.attr(Some(ns::GML_32), "id"), Some("keep-me"));
-        assert_eq!(ids.mint(), "seed_1");
-    }
-
-    #[test]
     fn id_seeds_never_start_with_a_digit() {
         assert_eq!(id_seed("52382287_bldg"), "_52382287_bldg");
         assert_eq!(id_seed("bldg_53e2"), "bldg_53e2");

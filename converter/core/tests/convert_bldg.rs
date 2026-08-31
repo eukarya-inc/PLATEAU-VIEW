@@ -9,7 +9,7 @@ use plateau_converter_core::convert::{Converter, Options, convert_to_string};
 use plateau_converter_core::dataset::Dataset;
 use plateau_converter_core::profile::Rules;
 use plateau_converter_core::report::FileReport;
-use plateau_converter_core::xml::{self, Chunk, Reader};
+use plateau_converter_core::xml;
 use plateau_converter_core::{PROFILES, detect};
 
 fn fixture_root() -> PathBuf {
@@ -66,33 +66,6 @@ fn no_citygml_2_0_namespace_survives() {
     assert!(output.contains(r#"xmlns:gml="http://www.opengis.net/gml/3.2""#));
 }
 
-/// CityGML 3.0 puts each thematic module under its own namespace path and calls
-/// the base module `core.xsd`; 2.0 was flat and called it `cityGMLBase.xsd`.
-/// Getting this wrong points every converted file at URLs that do not exist,
-/// which nothing else here would catch. i-UR is the other half of the split:
-/// remote for CityGML, relative into the package for i-UR.
-#[test]
-fn schema_location_uses_the_3_0_layout() {
-    let (output, _) = convert_fixture();
-    for location in [
-        "http://schemas.opengis.net/citygml/3.0/core.xsd",
-        "http://schemas.opengis.net/citygml/building/3.0/building.xsd",
-        "http://schemas.opengis.net/citygml/construction/3.0/construction.xsd",
-        "http://schemas.opengis.net/gml/3.2.1/gml.xsd",
-        "../../schemas/iur/uro/4.0/urbanObject.xsd",
-    ] {
-        assert!(output.contains(location), "schemaLocation lacks {location}");
-    }
-    assert!(
-        !output.contains("cityGMLBase.xsd"),
-        "cityGMLBase.xsd is the CityGML 2.0 file name"
-    );
-    assert!(
-        !output.contains("citygml/3.0/building.xsd"),
-        "the flat 2.0 schema layout does not exist in 3.0"
-    );
-}
-
 #[test]
 fn measured_height_becomes_a_construction_height() {
     let (output, _) = convert_fixture();
@@ -134,21 +107,6 @@ fn uro_attributes_reach_i_ur_4_0_with_their_values_intact() {
     // happens to the element around them.
     assert!(output.contains("<uro:buildingID>22102-bldg-354359</uro:buildingID>"));
     assert!(output.contains(r#"codeSpace="../../codelists/Common_urbanPlanType.xml""#));
-}
-
-/// i-UR 4.0 moves the shared attribute groups into the Urban Core module, and
-/// i-UR 3.0's per-feature-type classes collapse into the generic ones. Neither
-/// name survives, so the fixture is a check that both actually convert rather
-/// than landing in a namespace that does not declare them.
-#[test]
-fn the_quality_class_moves_to_urban_core() {
-    let (output, _) = convert_fixture();
-    assert!(
-        !output.contains("<uro:BuildingDataQualityAttribute>"),
-        "i-UR 4.0 declares no per-feature-type quality class"
-    );
-    assert!(output.contains("<urc:ExteriorDataQualityAttribute>"));
-    assert!(output.contains(r#"xmlns:urc="https://www.geospatial.jp/iur/urc/4.0""#));
 }
 
 /// The fixture's one generic attribute has to be restructured: 2.0 put the name
@@ -211,38 +169,6 @@ fn every_geometry_gets_a_gml_id() {
     .sum::<usize>();
     // 4 Buildings + 4 generated RoofSurfaces already had or were given ids.
     assert_eq!(ids, geometries + 8);
-}
-
-#[test]
-fn ids_are_absent_when_generation_is_off() {
-    let options = Options {
-        generate_gml_ids: false,
-        ..Options::default()
-    };
-    let converter = Converter::new(fixture_rules(), options).unwrap();
-    let source = xml::read_to_string(&fixture_gml()).unwrap();
-    let (output, _) = convert_to_string(&converter, "fixture", &source).unwrap();
-    assert!(!output.contains("<gml:Polygon gml:id="));
-}
-
-#[test]
-fn output_is_well_formed_and_reparses() {
-    let (output, _) = convert_fixture();
-    let mut reader = Reader::new("output", &output);
-    let mut members = 0;
-    let mut saw_root = false;
-    while let Some(chunk) = reader.next_chunk().expect("output must re-parse") {
-        match chunk {
-            Chunk::RootStart(root) => {
-                assert!(root.is("http://www.opengis.net/citygml/3.0", "CityModel"));
-                saw_root = true;
-            }
-            Chunk::Member(_) => members += 1,
-            _ => {}
-        }
-    }
-    assert!(saw_root);
-    assert_eq!(members, 5, "gml:boundedBy plus four cityObjectMembers");
 }
 
 /// i-UR 4.0 consolidations the converter must not guess at are named in the

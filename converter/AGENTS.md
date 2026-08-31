@@ -141,3 +141,11 @@ Shizuoka package. Convert it in tests rather than hand-writing CityGML: a
 regression in the mapping should surface as a failing assertion, not as a bad
 output file someone notices later. Add a fixture only when the existing one
 cannot exercise the path (LOD2 surfaces, `BuildingPart`, appearances).
+
+That makes `core/tests/convert_*.rs` the place a mapping is tested, and a
+`#[cfg(test)]` unit test over hand-built `Element`s the exception. Write one
+only for a branch a document cannot reach — a fallback, an error path, an
+edge the fixture has no data for. Do not write one that restates a mapping an
+integration test already asserts, that pins a value the profile owns (the
+mapping rules are experimental, so those move), or that reads back a table or
+a three-line helper: the code says it more clearly than an assertion does.

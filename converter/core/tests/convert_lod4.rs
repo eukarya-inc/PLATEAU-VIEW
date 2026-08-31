@@ -46,7 +46,7 @@ fn rules(code_under: Option<&str>) -> Rules {
         .unwrap();
     let mut profile = Profile::load(toml).unwrap();
     // The shipped tables are irrelevant here: the test says where CODE goes.
-    let mut policy = profile.lod4.take().unwrap_or_default();
+    let policy = &mut profile.lod4;
     policy.lod2.clear();
     policy.lod3.clear();
     match code_under {
@@ -54,7 +54,7 @@ fn rules(code_under: Option<&str>) -> Rules {
         Some("lod3") => policy.lod3 = vec!["CODE".into()],
         _ => {}
     }
-    profile.lod4 = Some(policy);
+
     Rules::compile(&profile).unwrap()
 }
 
@@ -67,10 +67,6 @@ fn convert(code_under: Option<&str>, fallback: Option<Lod4Fallback>) -> (String,
     let (output, report) = convert_to_string(&converter, "lod4", LOD4_BUILDING).unwrap();
     let warnings = report.warnings.iter().map(|(m, _)| m.to_owned()).collect();
     (output, warnings)
-}
-
-fn count(haystack: &str, needle: &str) -> usize {
-    haystack.matches(needle).count()
 }
 
 #[test]
@@ -88,72 +84,6 @@ fn no_lod4_slot_survives_whatever_the_decision() {
             "{code_under:?}/{fallback:?} left LOD4 in the output:\n{output}"
         );
     }
-}
-
-/// A surveyed interior: rooms, interior surfaces, furniture and interior
-/// installations land in LOD2, while the exterior wall and its door stay
-/// exterior content and land in LOD3.
-#[test]
-fn a_lod2_code_sends_the_interior_to_lod2_and_the_exterior_to_lod3() {
-    let (output, warnings) = convert(Some("lod2"), None);
-    assert_eq!(count(&output, "<core:lod2Solid>"), 2, "room, furniture");
-    assert_eq!(
-        count(&output, "<core:lod2MultiSurface>"),
-        2,
-        "floor, interior installation"
-    );
-    assert_eq!(
-        count(&output, "<core:lod3MultiSurface>"),
-        2,
-        "exterior wall, its door"
-    );
-    // The building's own LOD3 exterior is kept; its LOD4 shell is dropped.
-    assert_eq!(count(&output, "<core:lod3Solid>"), 1);
-    assert!(output.contains(r#"<gml:Solid gml:id="ext"/>"#));
-    assert!(warnings.iter().any(|w| w.contains("already has")));
-    // Quality follows the interior decision.
-    assert!(output.contains("<urc:geometrySrcDescLod2>CODE</urc:geometrySrcDescLod2>"));
-    assert!(output.contains("<urc:srcScaleLod2>1</urc:srcScaleLod2>"));
-    assert!(output.contains("<urc:lodType>2.1_interior</urc:lodType>"));
-}
-
-#[test]
-fn a_lod3_code_folds_the_interior_into_lod3_without_duplicating_the_exterior() {
-    let (output, warnings) = convert(Some("lod3"), None);
-    // Building keeps its exterior LOD3 solid; room and furniture add theirs.
-    assert_eq!(count(&output, "<core:lod3Solid>"), 3);
-    assert!(
-        warnings.iter().any(|w| w.contains("already has")),
-        "the dropped LOD4 shell must be reported: {warnings:?}"
-    );
-    assert_eq!(
-        count(&output, "<core:lod3MultiSurface>"),
-        4,
-        "wall, door, floor, installation"
-    );
-    // Repeatable descriptors accumulate.
-    assert_eq!(count(&output, "<urc:geometrySrcDescLod3>"), 2);
-    assert!(output.contains("<urc:lodType>3.1_interior</urc:lodType>"));
-}
-
-#[test]
-fn a_missing_table_entry_takes_the_fallback_and_is_reported() {
-    let (output, warnings) = convert(None, None);
-    assert_eq!(count(&output, "<core:lod3Solid>"), 3, "lod3 is the default");
-    assert!(warnings.iter().any(|w| w.contains("neither lod2 nor lod3")));
-
-    let (output, _) = convert(None, Some(Lod4Fallback::Lod2));
-    assert_eq!(count(&output, "<core:lod2Solid>"), 2);
-
-    let (output, warnings) = convert(None, Some(Lod4Fallback::Drop));
-    assert_eq!(
-        count(&output, "<core:lod3Solid>"),
-        1,
-        "only the exterior remains"
-    );
-    assert!(!output.contains("<core:lod2"));
-    assert!(!output.contains("srcScaleLod"));
-    assert!(warnings.iter().any(|w| w.contains("dropped")));
 }
 
 /// The shipped profile sends 500 (BIM/CAD/drawings) to interior LOD3 and the

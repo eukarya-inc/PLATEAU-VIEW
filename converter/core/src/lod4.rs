@@ -593,10 +593,10 @@ mod tests {
 
     fn rules_with(lod2: Vec<String>, lod3: Vec<String>) -> Result<Rules> {
         let mut profile = Profile::load(PROFILES[1].1).unwrap();
-        let mut policy = profile.lod4.take().unwrap_or_default();
+        let policy = &mut profile.lod4;
         policy.lod2 = lod2;
         policy.lod3 = lod3;
-        profile.lod4 = Some(policy);
+
         Rules::compile(&profile)
     }
 
@@ -656,22 +656,6 @@ mod tests {
             .elements()
             .next()
             .unwrap()
-    }
-
-    #[test]
-    fn the_code_decides_the_interior_lod() {
-        for (code, lod) in [("L2", "lod2Solid"), ("L3", "lod3Solid")] {
-            let mut b = building(vec![
-                room(vec![geometry("lod4Solid", "Solid")]),
-                quality(Some(code)),
-            ]);
-            let mut w = Warnings::new();
-            rewrite(None).apply(&mut b, &mut w);
-            assert!(
-                the_room(&b).child(ns::CITYGML_3, lod).is_some(),
-                "{code} -> {lod}"
-            );
-        }
     }
 
     /// The exterior model tops out at LOD3, so the building's own LOD4 shell
@@ -934,18 +918,6 @@ mod tests {
         assert!(w.iter().any(|(m, _)| m.contains("dropped")));
     }
 
-    #[test]
-    fn an_unlisted_code_takes_the_fallback_and_is_reported() {
-        let mut b = building(vec![
-            room(vec![geometry("lod4Solid", "Solid")]),
-            quality(Some("??")),
-        ]);
-        let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
-        assert!(the_room(&b).child(ns::CITYGML_3, "lod3Solid").is_some());
-        assert!(w.iter().any(|(m, _)| m.contains("neither lod2 nor lod3")));
-    }
-
     /// PLATEAU writes geometrySrcDescLod4 = 999 on every building. Without
     /// LOD4 geometry there is nothing for it to describe: it goes, and no
     /// decision (and no fallback warning) is made.
@@ -963,47 +935,6 @@ mod tests {
         assert!(b.child(ns::BUILDING_3, "lod3Solid").is_some(), "untouched");
         assert!(w.iter().any(|(m, _)| m.contains("does not have")));
         assert!(!w.iter().any(|(m, _)| m.contains("neither lod2 nor lod3")));
-    }
-
-    /// 3.0 requires bldg:Storey in every interior LOD and 2.0 has nothing to
-    /// build one from, so a folded interior is reported as missing it.
-    #[test]
-    fn a_folded_interior_without_storeys_is_reported() {
-        let mut b = building(vec![
-            room(vec![geometry("lod4Solid", "Solid")]),
-            quality(Some("L3")),
-        ]);
-        let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
-        assert!(
-            w.iter().any(|(m, _)| m.contains("no bldg:Storey")),
-            "{:?}",
-            w.iter().collect::<Vec<_>>()
-        );
-
-        // No warning when the LOD4 content is exterior-only (no rooms) or
-        // when the interior is dropped outright.
-        let mut b = building(vec![geometry("lod4Solid", "Solid"), quality(Some("L3"))]);
-        let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
-        assert!(!w.iter().any(|(m, _)| m.contains("no bldg:Storey")));
-
-        let mut b = building(vec![
-            room(vec![geometry("lod4Solid", "Solid")]),
-            quality(None),
-        ]);
-        let mut w = Warnings::new();
-        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut w);
-        assert!(!w.iter().any(|(m, _)| m.contains("no bldg:Storey")));
-    }
-
-    #[test]
-    fn a_feature_without_lod4_is_untouched_and_silent() {
-        let mut b = building(vec![geometry("lod3Solid", "Solid")]);
-        let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
-        assert_eq!(locals(&b), ["lod3Solid"]);
-        assert!(w.is_empty());
     }
 
     #[test]

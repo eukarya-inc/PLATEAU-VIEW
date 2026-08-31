@@ -226,7 +226,6 @@ mod tests {
     use crate::xml::ns;
 
     const URO: &str = "https://www.geospatial.jp/iur/uro/4.0";
-    const URC: &str = "https://www.geospatial.jp/iur/urc/4.0";
 
     fn rewrite() -> IurRewrite {
         IurRewrite::new(&Rules::from_toml(PROFILES[1].1).unwrap()).unwrap()
@@ -268,35 +267,6 @@ mod tests {
             "08220-bldg-1"
         );
         assert!(!warnings.is_empty(), "a rehomed property must be reported");
-    }
-
-    /// A class that reaches the hook through an i-UR parent resolves to the
-    /// general city-object hook, not a building one.
-    #[test]
-    fn a_quality_attribute_hangs_off_the_city_object_hook() {
-        let mut inner = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
-        inner.push(Element::with_text(
-            Name::qualified(URC, "lod1HeightType"),
-            "2",
-        ));
-        let mut outer = Element::new(Name::qualified(URO, "bldgDataQualityAttribute"));
-        outer.push(inner);
-
-        let (building, _) = in_building(outer);
-        let hook = building
-            .child(ns::CITYGML_3, "adeOfAbstractCityObject")
-            .expect("core:adeOfAbstractCityObject");
-        assert!(hook.child(URC, "ExteriorDataQualityAttribute").is_some());
-    }
-
-    /// A plain attribute is not a wrapper, even though it is in the same
-    /// namespace and holds one child.
-    #[test]
-    fn a_leaf_attribute_is_left_alone() {
-        let src = Element::with_text(Name::qualified(URO, "buildingID"), "08220-bldg-1");
-        let (building, warnings) = in_building(src);
-        assert!(building.child(URO, "buildingID").is_some());
-        assert!(warnings.is_empty());
     }
 
     /// A class the profile has no hook for stays where it is rather than being
@@ -354,40 +324,5 @@ mod tests {
                 .iter()
                 .any(|(m, _)| m.contains("became 2021-01-01"))
         );
-    }
-
-    #[test]
-    fn a_year_month_becomes_a_date_where_4_0_requires_one() {
-        let src = Element::with_text(Name::qualified(URO, "updateDate"), "2023-04");
-        let (building, warnings) = in_building(src);
-        assert_eq!(
-            building.child(URO, "updateDate").unwrap().text(),
-            "2023-04-01"
-        );
-        assert!(
-            warnings
-                .iter()
-                .any(|(m, _)| m.contains("became 2023-04-01"))
-        );
-    }
-
-    #[test]
-    fn a_statistical_grid_year_stays_a_g_year() {
-        const URG: &str = "https://www.geospatial.jp/iur/urg/4.0";
-        let src = Element::with_text(Name::qualified(URG, "surveyYear"), "2021");
-        let (building, warnings) = in_building(src);
-        assert_eq!(building.child(URG, "surveyYear").unwrap().text(), "2021");
-        assert!(warnings.is_empty(), "urg keeps gYear in 4.0: {warnings}");
-    }
-
-    #[test]
-    fn a_full_date_passes_through_silently() {
-        let src = Element::with_text(Name::qualified(URO, "surveyYear"), "2021-04-01");
-        let (building, warnings) = in_building(src);
-        assert_eq!(
-            building.child(URO, "surveyYear").unwrap().text(),
-            "2021-04-01"
-        );
-        assert!(warnings.is_empty(), "{warnings}");
     }
 }

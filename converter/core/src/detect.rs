@@ -188,16 +188,6 @@ mod tests {
         }
     }
 
-    /// Several modules of the same version still resolve to one profile.
-    #[test]
-    fn several_modules_of_one_version_agree() {
-        let c = candidates();
-        let declared = vec![iur("uro", "3.1"), iur("urf", "3.1"), iur("urt", "3.1")];
-        let found = select(&c, &declared).unwrap();
-        assert_eq!(c[found.index].name(), "iur-3.1-to-4.0");
-        assert_eq!(found.matched.len(), 3);
-    }
-
     #[test]
     fn mixed_versions_are_refused() {
         let c = candidates();
@@ -235,32 +225,10 @@ mod tests {
     }
 
     #[test]
-    fn the_targets_on_offer_are_read_from_the_profiles() {
-        // One target today. The point of the flag is that adding another is a
-        // profile to write, not a code change -- so this reads, never hardcodes.
-        assert_eq!(target_versions(&candidates()), ["4.0"]);
-    }
-
-    #[test]
-    fn narrowing_to_the_available_target_keeps_every_profile() {
-        let kept = with_target(candidates(), "4.0").unwrap();
-        assert_eq!(kept.len(), PROFILES.len());
-    }
-
-    #[test]
     fn narrowing_to_a_target_nothing_produces_is_an_error() {
         let error = with_target(candidates(), "4.1").unwrap_err().to_string();
         assert!(error.contains("no profile produces i-UR 4.1"), "{error}");
         assert!(error.contains("available: 4.0"), "{error}");
-    }
-
-    /// Narrowing by target must not disturb source detection.
-    #[test]
-    fn a_target_and_a_source_resolve_together() {
-        let kept = with_target(candidates(), "4.0").unwrap();
-        let declared = vec![iur("uro", "3.2")];
-        let found = select(&kept, &declared).unwrap();
-        assert_eq!(kept[found.index].name(), "iur-3.2-to-4.0");
     }
 
     #[test]

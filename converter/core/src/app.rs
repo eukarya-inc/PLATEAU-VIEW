@@ -163,7 +163,6 @@ mod tests {
     use crate::DEFAULT_PROFILE;
 
     const APP3: &str = "http://www.opengis.net/citygml/appearance/3.0";
-    const GML3: &str = "http://www.opengis.net/gml/3.2";
 
     fn rewrite() -> AppearanceRewrite {
         AppearanceRewrite::new(&Rules::from_toml(DEFAULT_PROFILE).unwrap()).unwrap()
@@ -200,69 +199,6 @@ mod tests {
         target.set_attr(Name::unqualified("uri"), uri);
         target.push(list);
         target
-    }
-
-    #[test]
-    fn a_texture_target_becomes_an_association_object() {
-        let (texture, warnings) = applied(texture(vec![target_20("#s1", Some("#r1"))]));
-
-        assert!(
-            texture.child(APP3, "target").is_none(),
-            "no bare target remains on the texture"
-        );
-        let prop = texture
-            .child(APP3, "textureParameterization")
-            .expect("the property wrapper");
-        let assoc = prop
-            .child(APP3, "TextureAssociation")
-            .expect("the association object");
-        assert_eq!(
-            assoc.attr(Some(GML3), "id"),
-            Some("ap_1_1"),
-            "a created GML object gets an id"
-        );
-        assert_eq!(assoc.child(APP3, "target").unwrap().text(), "#s1");
-        let inner = assoc
-            .child(APP3, "textureParameterization")
-            .expect("the parameterization moves inside");
-        let list = inner.child(APP3, "TexCoordList").expect("TexCoordList");
-        let coords = list.child(APP3, "textureCoordinates").unwrap();
-        assert!(
-            coords.attr(None, "ring").is_none(),
-            "the ring attribute is consumed"
-        );
-        assert_eq!(list.child(APP3, "ring").unwrap().text(), "#r1");
-        // Coordinates come before rings, as the 3.0 sequence requires.
-        let locals: Vec<&str> = list.elements().map(|e| e.name.local.as_str()).collect();
-        assert_eq!(locals, ["textureCoordinates", "ring"]);
-        assert!(
-            warnings
-                .iter()
-                .any(|(m, _)| m.contains("TextureAssociation"))
-        );
-    }
-
-    #[test]
-    fn several_targets_keep_their_order_and_get_distinct_ids() {
-        let (texture, _) = applied(texture(vec![
-            target_20("#s1", Some("#r1")),
-            target_20("#s2", Some("#r2")),
-        ]));
-        let ids: Vec<&str> = texture
-            .elements()
-            .filter(|e| e.is(APP3, "textureParameterization"))
-            .filter_map(|p| p.elements().next())
-            .filter_map(|a| a.attr(Some(GML3), "id"))
-            .collect();
-        assert_eq!(ids, ["ap_1_1", "ap_1_2"]);
-        let targets: Vec<String> = texture
-            .elements()
-            .filter(|e| e.is(APP3, "textureParameterization"))
-            .filter_map(|p| p.elements().next())
-            .filter_map(|a| a.child(APP3, "target"))
-            .map(|t| t.text())
-            .collect();
-        assert_eq!(targets, ["#s1", "#s2"]);
     }
 
     #[test]
