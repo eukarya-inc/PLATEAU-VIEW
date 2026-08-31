@@ -56,7 +56,7 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     write: Option<PathBuf>,
 
-    /// Repository root holding `schemas/`.
+    /// Repository root holding `fixtures/schemas/`.
     #[arg(long, value_name = "DIR", default_value = ".")]
     root: PathBuf,
 }
@@ -88,10 +88,10 @@ fn main() -> Result<()> {
 
 /// Every vendored patch revision of one source minor, keyed by module.
 ///
-/// `schemas/sources` holds files named `<module>-<patch>-<hash>.xsd`; a module's
+/// `fixtures/schemas/sources` holds files named `<module>-<patch>-<hash>.xsd`; a module's
 /// declarations are the union across its revisions of the requested minor.
 fn read_sources(root: &Path, minor: &str) -> Result<BTreeMap<String, (Schema, Vec<String>)>> {
-    let dir = root.join("schemas/sources");
+    let dir = root.join("fixtures/schemas/sources");
     let mut out: BTreeMap<String, (Schema, Vec<String>)> = BTreeMap::new();
     for entry in std::fs::read_dir(&dir)
         .with_context(|| format!("reading {}", dir.display()))?
@@ -129,7 +129,7 @@ fn read_sources(root: &Path, minor: &str) -> Result<BTreeMap<String, (Schema, Ve
 fn read_targets(root: &Path, minor: &str) -> Result<BTreeMap<String, Schema>> {
     let mut out = BTreeMap::new();
     for (module, file) in MODULES {
-        let path = root.join(format!("schemas/iur/{module}/{minor}/{file}.xsd"));
+        let path = root.join(format!("fixtures/schemas/iur/{module}/{minor}/{file}.xsd"));
         if path.is_file() {
             out.insert((*module).to_owned(), Schema::read(&path)?);
         }

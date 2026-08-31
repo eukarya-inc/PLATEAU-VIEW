@@ -61,28 +61,28 @@ pub const PROFILES: &[(&str, &str)] = &[
 pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
     (
         "iur/uro/4.0/urbanObject.xsd",
-        include_str!("../../schemas/iur/uro/4.0/urbanObject.xsd"),
+        include_str!("../../fixtures/schemas/iur/uro/4.0/urbanObject.xsd"),
     ),
     (
         "iur/urc/4.0/urbanCore.xsd",
-        include_str!("../../schemas/iur/urc/4.0/urbanCore.xsd"),
+        include_str!("../../fixtures/schemas/iur/urc/4.0/urbanCore.xsd"),
     ),
     (
         "iur/urf/4.0/urbanFunction.xsd",
-        include_str!("../../schemas/iur/urf/4.0/urbanFunction.xsd"),
+        include_str!("../../fixtures/schemas/iur/urf/4.0/urbanFunction.xsd"),
     ),
     (
         "iur/urg/4.0/statisticalGrid.xsd",
-        include_str!("../../schemas/iur/urg/4.0/statisticalGrid.xsd"),
+        include_str!("../../fixtures/schemas/iur/urg/4.0/statisticalGrid.xsd"),
     ),
     (
         "iur/urt/4.0/publicTransit.xsd",
-        include_str!("../../schemas/iur/urt/4.0/publicTransit.xsd"),
+        include_str!("../../fixtures/schemas/iur/urt/4.0/publicTransit.xsd"),
     ),
 ];
 
 // The published i-UR 4.0 code lists (`CODELISTS_4_0`), vendored in
-// `codelists/` and embedded by `build.rs`. A converted package's codes are
+// `fixtures/codelists/` and embedded by `build.rs`. A converted package's codes are
 // checked against these, so they replace the input's copies of the same files
 // — vendored for the same reason the schemas are: conversion must not depend
 // on a network, and the published files are updated in place. Lists the input

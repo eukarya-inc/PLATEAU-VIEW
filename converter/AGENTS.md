@@ -100,14 +100,15 @@ until the official PLATEAU spec for CityGML3.0 is released.
 
 ## Vendored schemas
 
-`schemas/iur/*/4.0/` are the i-UR 4.0 XSDs the converter writes into a converted
-package; `schemas/sources/` are the 3.x revisions the generator reads. Both are
+`fixtures/schemas/iur/*/4.0/` are the i-UR 4.0 XSDs the converter writes into a
+converted package; `fixtures/schemas/sources/` are the 3.x revisions the
+generator reads. Both are
 committed on purpose: i-UR publishes patch revisions **in place** under the same
 minor-version URL and they are not compatible with one another, so fetching at
 build or run time would make the output depend on when it ran. Replacing a set
 means replacing all of it — the modules import one another by exact namespace.
 
-`/codelists` is vendored for the same reason: the published i-UR 4.0 code
+`/fixtures/codelists` is vendored for the same reason: the published i-UR 4.0 code
 lists, embedded by `core/build.rs` and written into every converted package in
 place of the input's copies of the same files. Which input lists survive
 instead (the municipality-authored ones), which file names the published set
