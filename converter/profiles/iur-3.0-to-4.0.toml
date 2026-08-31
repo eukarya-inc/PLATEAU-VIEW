@@ -639,6 +639,11 @@ local = [
   "LandUseDetailAttribute_orgLandUse.xml",
 ]
 
+# Lists whose values the conversion itself rewrites into the published codes
+# (the building lodType pass adds the exterior/interior suffixes): the
+# published file always wins, or the rewritten values would not resolve.
+superseded = ["Building_lodType.xml"]
+
 # Files the published 4.0 set carries under a new name, with unchanged codes;
 # every codeSpace naming the old file is rewritten.
 [codelists.retarget]
@@ -646,6 +651,13 @@ local = [
 "BridgeConstructionElement_function.xml" = "BridgeConstructiveElement_function.xml"
 "PublicSurveyDataQualityAttribute_publicSurveySrcDesc.xml" = "PublicSurveyDataQualityAttribute_geometrySrcDesc.xml"
 "BuildingDataQualityAttribute_lod1HeightType.xml" = "DataQualityAttribute_lod1HeightType.xml"
+# Renames verified by content: the published 4.0 file under the new name
+# defines the identical code/label set as 2.0-era packages ship under the old
+# one (fireproofStructureType additionally carries every code observed in real
+# data under the old name).
+"Building_fireproofStructureType.xml" = "BuildingDetailAttribute_fireproofStructureType.xml"
+"Common_sex.xml" = "Common_Sex.xml"
+"LengthAttribute_mesureType.xml" = "LengthAttribute_measureType.xml"
 
 # Codes the published lists no longer define. The values are kept and
 # reported: 898 means "unknown source", which no surviving code expresses.

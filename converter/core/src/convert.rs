@@ -173,6 +173,20 @@ impl Converter {
                      as a PLATEAU package does",
                 );
             }
+
+            // A conversion cannot invent a code list it never saw, but it can
+            // say which references will not resolve rather than leaving that
+            // for a validator to find.
+            let target_dir = out.join("codelists");
+            for name in &report.code_spaces {
+                if !target_dir.join(name).is_file() {
+                    report.warnings.add(format!(
+                        "codeSpace references codelists/{name}, which is not in the \
+                         output package: the input did not ship it and the published \
+                         i-UR 4.0 set does not carry it"
+                    ));
+                }
+            }
         }
 
         Ok(report)
@@ -288,7 +302,24 @@ impl Converter {
         if !element.name.in_ns(&self.gml_ns) {
             report.features += 1;
         }
+        collect_code_spaces(&element, &mut report.code_spaces);
         Some(element)
+    }
+}
+
+/// Records the file names of every code list `element` references through a
+/// relative `codelists/` path, so the dataset conversion can verify each one
+/// resolves inside the output package.
+fn collect_code_spaces(element: &Element, out: &mut std::collections::BTreeSet<String>) {
+    if let Some(value) = element.attr(None, "codeSpace") {
+        if let Some((dir, file)) = value.rsplit_once('/') {
+            if dir.ends_with("codelists") && !file.is_empty() {
+                out.insert(file.to_owned());
+            }
+        }
+    }
+    for child in element.elements() {
+        collect_code_spaces(child, out);
     }
 }
 
@@ -331,7 +362,42 @@ fn write_codelists(
             }
             let name = entry.file_name();
             let Some(name) = name.to_str() else { continue };
-            if rules.codelists().is_local(name) || !published.contains_key(name) {
+            let keep = if rules.codelists().is_local(name) {
+                true
+            } else if rules.codelists().is_superseded(name) {
+                // The conversion rewrote this list's values into the
+                // published codes; the input's codes no longer occur.
+                false
+            } else {
+                match published.get(name) {
+                    None => true,
+                    // A municipality may lawfully edit certain lists in place
+                    // under the standard name. Codes only the input defines are
+                    // in use by that package, so the published copy must not
+                    // replace them.
+                    Some(text) => {
+                        let input = fs::read_to_string(entry.path())
+                            .map_err(|e| Error::io(entry.path(), e))?;
+                        let extra: Vec<String> = definition_codes(&input)
+                            .difference(&definition_codes(text))
+                            .cloned()
+                            .collect();
+                        if extra.is_empty() {
+                            false
+                        } else {
+                            warnings.add(format!(
+                                "{name} defines {} code(s) the published i-UR 4.0 \
+                                 list does not ({}); the input's copy was kept in \
+                                 place of the published one",
+                                extra.len(),
+                                summarize(&extra),
+                            ));
+                            true
+                        }
+                    }
+                }
+            };
+            if keep {
                 let target = target_dir.join(name);
                 fs::copy(entry.path(), &target).map_err(|e| Error::io(&target, e))?;
                 kept += 1;
@@ -361,6 +427,39 @@ fn write_codelists(
         );
     }
     Ok(written)
+}
+
+/// The codes a code list defines: every `<gml:name>` inside a
+/// `<gml:Definition>`. The dictionary's own `<gml:name>` (the list title) is
+/// outside any Definition and so excluded.
+fn definition_codes(text: &str) -> std::collections::BTreeSet<String> {
+    let mut codes = std::collections::BTreeSet::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("<gml:Definition") {
+        let block = &rest[start..];
+        let end = block.find("</gml:Definition>").unwrap_or(block.len());
+        let block = &block[..end];
+        let mut inner = block;
+        while let Some(open) = inner.find("<gml:name>") {
+            let after = &inner[open + "<gml:name>".len()..];
+            let Some(close) = after.find("</gml:name>") else {
+                break;
+            };
+            codes.insert(after[..close].trim().to_owned());
+            inner = &after[close..];
+        }
+        rest = &rest[start + end..];
+    }
+    codes
+}
+
+/// At most five codes, then an ellipsis — a warning line, not a data dump.
+fn summarize(codes: &[String]) -> String {
+    let mut shown: Vec<&str> = codes.iter().take(5).map(String::as_str).collect();
+    if codes.len() > 5 {
+        shown.push("...");
+    }
+    shown.join(", ")
 }
 
 /// Writes the vendored i-UR 4.0 schemas into `out/schemas/`.
@@ -440,6 +539,143 @@ mod tests {
                 .iter()
                 .any(|(m, _)| m.contains("no city objects")),
             "an empty document is still reported"
+        );
+    }
+
+    use crate::dataset::Dataset;
+    use std::path::PathBuf;
+
+    const MINI: &str = r#"<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"
+        xmlns:bldg="http://www.opengis.net/citygml/building/2.0"
+        xmlns:gml="http://www.opengis.net/gml">
+        <core:cityObjectMember>
+            <bldg:Building gml:id="b1">
+                <bldg:usage codeSpace="../../codelists/Building_usage.xml">402</bldg:usage>
+                <bldg:function codeSpace="../../codelists/KeyValuePairAttribute_key200.xml">1</bldg:function>
+            </bldg:Building>
+        </core:cityObjectMember>
+    </core:CityModel>"#;
+
+    /// Lays out `root/udx/bldg/x.gml` (+ optional codelists) and converts it.
+    fn convert_mini(codelists: &[(&str, &str)]) -> (tempfile::TempDir, Report) {
+        let root = tempfile::TempDir::new().unwrap();
+        let bldg = root.path().join("udx/bldg");
+        std::fs::create_dir_all(&bldg).unwrap();
+        std::fs::write(bldg.join("x.gml"), MINI).unwrap();
+        for (name, text) in codelists {
+            let dir = root.path().join("codelists");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(name), text).unwrap();
+        }
+        let out = tempfile::TempDir::new().unwrap();
+        let converter = Converter::new(
+            Rules::from_toml(DEFAULT_PROFILE).unwrap(),
+            Options::default(),
+        )
+        .unwrap();
+        let dataset = Dataset::open(&[PathBuf::from(root.path())]).unwrap();
+        let report = converter
+            .convert_dataset(&dataset, &out.path().join("pkg"))
+            .unwrap();
+        (out, report)
+    }
+
+    /// A `codeSpace` naming a list that is neither shipped by the input nor
+    /// part of the published set must be called out, not left for a validator.
+    #[test]
+    fn a_dangling_code_space_reference_is_reported() {
+        let (_out, report) = convert_mini(&[]);
+        assert!(
+            report.warnings.iter().any(|(m, _)| {
+                m.contains("codeSpace references codelists/KeyValuePairAttribute_key200.xml")
+            }),
+            "{}",
+            report.warnings
+        );
+        assert!(
+            !report
+                .warnings
+                .iter()
+                .any(|(m, _)| m.contains("codelists/Building_usage.xml,")),
+            "a reference the published set resolves is not reported: {}",
+            report.warnings
+        );
+    }
+
+    const EDITED_USAGE: &str = r#"<gml:Dictionary xmlns:gml="http://www.opengis.net/gml" gml:id="cl1">
+        <gml:name>Building_usage</gml:name>
+        <gml:dictionaryEntry>
+            <gml:Definition gml:id="d1">
+                <gml:description>a locally added class</gml:description>
+                <gml:name>9001</gml:name>
+            </gml:Definition>
+        </gml:dictionaryEntry>
+    </gml:Dictionary>"#;
+
+    /// An input list that defines codes the published file lacks was edited by
+    /// the municipality; the published copy must not replace it.
+    #[test]
+    fn an_edited_input_list_survives_the_published_one() {
+        let (out, report) = convert_mini(&[("Building_usage.xml", EDITED_USAGE)]);
+        let written =
+            std::fs::read_to_string(out.path().join("pkg/codelists/Building_usage.xml")).unwrap();
+        assert!(
+            written.contains("9001"),
+            "the input's copy is the one written"
+        );
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|(m, _)| m.contains("Building_usage.xml defines 1 code(s)")),
+            "{}",
+            report.warnings
+        );
+    }
+
+    /// The building lodType pass rewrites values into the published codes, so
+    /// the input's list must not win however many extra codes it defines.
+    #[test]
+    fn a_superseded_list_is_replaced_despite_extra_codes() {
+        let edited = EDITED_USAGE.replace("Building_usage", "Building_lodType");
+        let (out, report) = convert_mini(&[("Building_lodType.xml", &edited)]);
+        let written =
+            std::fs::read_to_string(out.path().join("pkg/codelists/Building_lodType.xml")).unwrap();
+        assert!(
+            !written.contains("9001"),
+            "the published copy replaces the edited input"
+        );
+        assert!(
+            !report
+                .warnings
+                .iter()
+                .any(|(m, _)| m.contains("Building_lodType.xml defines")),
+            "{}",
+            report.warnings
+        );
+    }
+
+    /// An input list whose codes are all in the published file is edition
+    /// drift, and the published copy replaces it silently.
+    #[test]
+    fn an_unedited_input_list_is_replaced_by_the_published_one() {
+        let subset: String = EDITED_USAGE
+            .replace("9001", "402")
+            .replace("a locally added class", "商業施設");
+        let (out, report) = convert_mini(&[("Building_usage.xml", &subset)]);
+        let written =
+            std::fs::read_to_string(out.path().join("pkg/codelists/Building_usage.xml")).unwrap();
+        assert!(
+            !written.contains("cl1"),
+            "the published copy replaces the input's"
+        );
+        assert!(
+            !report
+                .warnings
+                .iter()
+                .any(|(m, _)| m.contains("defines 1 code(s)")),
+            "{}",
+            report.warnings
         );
     }
 }

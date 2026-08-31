@@ -106,7 +106,13 @@ the published files are revised in place and conversion must not depend on a
 network. The published lists replace the input's copies of the same files;
 lists the input authors itself (the profile's `[codelists] local` patterns) and
 lists with no published counterpart are copied verbatim and win any name
-collision with a published file.
+collision with a published file. An input list that defines codes its published
+counterpart lacks was edited by the municipality, which some lists exist for —
+it is kept in place of the published copy and reported. The exception is the
+profile's `[codelists] superseded` patterns, lists whose values the conversion
+itself rewrites into the published codes. After everything is written, any
+`codeSpace` that resolves to no file in the output's `codelists/` is reported
+rather than left for a validator to find.
 
 Non-GML files inside a converted feature type — texture images above all, which
 the documents reference by relative path — are copied verbatim into the

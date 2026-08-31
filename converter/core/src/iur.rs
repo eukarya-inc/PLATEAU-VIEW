@@ -21,23 +21,61 @@ use crate::profile::Rules;
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
+/// i-UR elements that were a `gYear` or `gYearMonth` in 3.x and are a full
+/// date in the 4.0 schemas. `urg` is deliberately absent: its statistical-grid
+/// types keep `gYear`, and it is the only module that does.
+const YEAR_TO_DATE: &[&str] = &[
+    "acquisitionYear",
+    "assessmentFiscalYear",
+    "completionYear",
+    "constructionStartYear",
+    "creationDate",
+    "enactmentFiscalYear",
+    "expectedRenewalYearWithMeasures",
+    "expirationFiscalYear",
+    "fiscalYear",
+    "fiscalYearForCountermeasures",
+    "installationYear",
+    "maintenanceFiscalYear",
+    "maintenanceYear",
+    "measurementYearMonth",
+    "repairFiscalYear",
+    "startFiscalYear",
+    "surveyYear",
+    "terminationDate",
+    "updateDate",
+    "year",
+    "yearClosed",
+    "yearOfConstruction",
+    "yearOfDiversion",
+    "yearOpened",
+];
+
 #[derive(Debug, Clone)]
 pub struct IurRewrite {
     /// The i-UR namespaces whose properties are candidates for rehoming.
     modules: Vec<String>,
+    /// The subset of [`IurRewrite::modules`] whose year-valued elements became
+    /// dates in 4.0 — everything but `urg`.
+    date_modules: Vec<String>,
     rules: Rules,
 }
 
 impl IurRewrite {
     pub fn new(rules: &Rules) -> Result<Self> {
         let mut modules = Vec::new();
+        let mut date_modules = Vec::new();
         for prefix in ["uro", "urc", "urf", "urg", "urt"] {
             if let Ok(uri) = rules.output_ns(prefix) {
                 modules.push(uri.to_owned());
+                if prefix != "urg" {
+                    date_modules.push(uri.to_owned());
+                }
             }
         }
         Ok(IurRewrite {
             modules,
+            date_modules,
             rules: rules.clone(),
         })
     }
@@ -48,7 +86,10 @@ impl IurRewrite {
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
-                Node::Element(child) => out.push(Node::Element(self.rewrite(child, warnings))),
+                Node::Element(child) => {
+                    let child = self.year_to_date(child, warnings);
+                    out.push(Node::Element(self.rewrite(child, warnings)));
+                }
                 other => out.push(other),
             }
         }
@@ -94,6 +135,37 @@ impl IurRewrite {
             return None;
         }
         self.rules.ade_hook(&class.name).cloned()
+    }
+
+    /// Pads a 3.x year (`2021`) or year-month (`2021-04`) value to the full
+    /// date the 4.0 schemas require, on the elements they retyped.
+    fn year_to_date(&self, mut el: Element, warnings: &mut Warnings) -> Element {
+        if !self.date_modules.iter().any(|uri| el.name.in_ns(uri))
+            || !YEAR_TO_DATE.contains(&el.name.local.as_str())
+        {
+            return el;
+        }
+        let raw = el.text().trim().to_owned();
+        let bytes = raw.as_bytes();
+        let year_only = bytes.len() == 4 && bytes.iter().all(u8::is_ascii_digit);
+        let year_month = bytes.len() == 7
+            && bytes[4] == b'-'
+            && [0, 1, 2, 3, 5, 6]
+                .iter()
+                .all(|&i| bytes[i].is_ascii_digit());
+        let value = if year_only {
+            format!("{raw}-01-01")
+        } else if year_month {
+            format!("{raw}-01")
+        } else {
+            return el;
+        };
+        warnings.add(format!(
+            "{} held {raw} and i-UR 4.0 types it as a date, so it became {value}",
+            self.rules.display_name(&el.name),
+        ));
+        el.children = vec![Node::Text(value)];
+        el
     }
 
     fn is_iur(&self, name: &Name) -> bool {
@@ -189,5 +261,53 @@ mod tests {
         let (building, warnings) = in_building(src);
         assert!(building.child(URO, "mysteryAttribute").is_some());
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn a_year_becomes_a_date_where_4_0_requires_one() {
+        let src = Element::with_text(Name::qualified(URO, "surveyYear"), "2021");
+        let (building, warnings) = in_building(src);
+        let survey = building.child(URO, "surveyYear").unwrap();
+        assert_eq!(survey.text(), "2021-01-01");
+        assert!(
+            warnings
+                .iter()
+                .any(|(m, _)| m.contains("became 2021-01-01"))
+        );
+    }
+
+    #[test]
+    fn a_year_month_becomes_a_date_where_4_0_requires_one() {
+        let src = Element::with_text(Name::qualified(URO, "updateDate"), "2023-04");
+        let (building, warnings) = in_building(src);
+        assert_eq!(
+            building.child(URO, "updateDate").unwrap().text(),
+            "2023-04-01"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|(m, _)| m.contains("became 2023-04-01"))
+        );
+    }
+
+    #[test]
+    fn a_statistical_grid_year_stays_a_g_year() {
+        const URG: &str = "https://www.geospatial.jp/iur/urg/4.0";
+        let src = Element::with_text(Name::qualified(URG, "surveyYear"), "2021");
+        let (building, warnings) = in_building(src);
+        assert_eq!(building.child(URG, "surveyYear").unwrap().text(), "2021");
+        assert!(warnings.is_empty(), "urg keeps gYear in 4.0: {warnings}");
+    }
+
+    #[test]
+    fn a_full_date_passes_through_silently() {
+        let src = Element::with_text(Name::qualified(URO, "surveyYear"), "2021-04-01");
+        let (building, warnings) = in_building(src);
+        assert_eq!(
+            building.child(URO, "surveyYear").unwrap().text(),
+            "2021-04-01"
+        );
+        assert!(warnings.is_empty(), "{warnings}");
     }
 }

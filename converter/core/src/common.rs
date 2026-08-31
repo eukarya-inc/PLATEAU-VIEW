@@ -348,6 +348,29 @@ mod tests {
     }
 
     #[test]
+    fn a_renamed_fireproof_list_moves_to_the_detail_attribute_name() {
+        let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "1001");
+        src.set_attr(
+            Name::unqualified("codeSpace"),
+            "../../codelists/Building_fireproofStructureType.xml",
+        );
+
+        let (building, warnings) = in_building(src);
+
+        let function = building.child(ns::BUILDING_3, "function").unwrap();
+        assert_eq!(
+            function.attr(None, "codeSpace"),
+            Some("../../codelists/BuildingDetailAttribute_fireproofStructureType.xml"),
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|(m, _)| m
+                    .contains("became BuildingDetailAttribute_fireproofStructureType.xml"))
+        );
+    }
+
+    #[test]
     fn a_code_the_published_list_dropped_is_kept_and_reported() {
         let code_space = "../../codelists/DataQualityAttribute_thematicSrcDesc.xml";
         let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "898");

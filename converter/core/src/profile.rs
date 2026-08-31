@@ -239,6 +239,10 @@ pub struct CodelistsPolicy {
     /// the input's file always wins, even over a published file of the same
     /// name.
     pub local: Vec<String>,
+    /// File-name patterns for lists whose values the conversion itself
+    /// rewrites into the published codes: the published file always wins,
+    /// or the rewritten values would not resolve.
+    pub superseded: Vec<String>,
     /// Code-list file name -> its name in the published 4.0 set, rewritten in
     /// every `codeSpace` path. Only for renames whose codes carry over
     /// unchanged.
@@ -251,6 +255,10 @@ pub struct CodelistsPolicy {
 impl CodelistsPolicy {
     pub fn is_local(&self, file_name: &str) -> bool {
         self.local.iter().any(|p| glob_match(p, file_name))
+    }
+
+    pub fn is_superseded(&self, file_name: &str) -> bool {
+        self.superseded.iter().any(|p| glob_match(p, file_name))
     }
 }
 

@@ -1,6 +1,6 @@
 //! Diagnostics and counters produced by a conversion run.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 /// Deduplicated warnings with occurrence counts.
@@ -59,6 +59,9 @@ impl fmt::Display for Warnings {
 pub struct FileReport {
     pub features: usize,
     pub warnings: Warnings,
+    /// Code-list file names the output references through a `codelists/`
+    /// `codeSpace` path, so a dataset conversion can check they all resolve.
+    pub code_spaces: BTreeSet<String>,
 }
 
 /// The outcome of converting a whole dataset.
@@ -68,6 +71,8 @@ pub struct Report {
     pub copied: usize,
     pub features: usize,
     pub warnings: Warnings,
+    /// Union of every converted file's referenced code-list names.
+    pub code_spaces: BTreeSet<String>,
 }
 
 impl Report {
@@ -75,6 +80,7 @@ impl Report {
         self.converted += 1;
         self.features += file.features;
         self.warnings.merge(&file.warnings);
+        self.code_spaces.extend(file.code_spaces.iter().cloned());
     }
 }
 
