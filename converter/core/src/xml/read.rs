@@ -105,6 +105,8 @@ pub struct Reader<'i> {
     inner: NsReader<&'i [u8]>,
     path: PathBuf,
     in_root: bool,
+    /// A self-closing root was reported; its `RootEnd` is owed on the next call.
+    pending_root_end: bool,
     finished: bool,
 }
 
@@ -116,12 +118,18 @@ impl<'i> Reader<'i> {
             inner,
             path: path.into(),
             in_root: false,
+            pending_root_end: false,
             finished: false,
         }
     }
 
     /// Returns the next chunk, or `None` once the document is exhausted.
     pub fn next_chunk(&mut self) -> Result<Option<Chunk>> {
+        if self.pending_root_end {
+            self.pending_root_end = false;
+            self.finished = true;
+            return Ok(Some(Chunk::RootEnd));
+        }
         if self.finished {
             return Ok(None);
         }
@@ -166,8 +174,10 @@ impl<'i> Reader<'i> {
                     if self.in_root {
                         return Ok(Some(Chunk::Member(el)));
                     }
-                    // An empty root element: report the start and stop.
-                    self.finished = true;
+                    // A self-closing root: report the start now and its end on
+                    // the next call, so the caller sees the same chunk sequence
+                    // an empty <root></root> produces.
+                    self.pending_root_end = true;
                     return Ok(Some(Chunk::RootStart(el)));
                 }
                 Event::End(_) => {
@@ -387,6 +397,20 @@ mod tests {
             "unprefixed attrs stay unqualified"
         );
 
+        assert!(matches!(r.next_chunk().unwrap(), Some(Chunk::RootEnd)));
+        assert!(r.next_chunk().unwrap().is_none());
+    }
+
+    /// A self-closing root must produce the same chunk sequence as an empty
+    /// <root></root>: without the RootEnd, the writer never closes the root
+    /// tag it wrote and the output is not well-formed.
+    #[test]
+    fn a_self_closing_root_still_yields_its_end() {
+        let mut r = Reader::new("t.gml", r#"<a xmlns="urn:x"/>"#);
+        let Some(Chunk::RootStart(root)) = r.next_chunk().unwrap() else {
+            panic!("root")
+        };
+        assert!(root.is("urn:x", "a"));
         assert!(matches!(r.next_chunk().unwrap(), Some(Chunk::RootEnd)));
         assert!(r.next_chunk().unwrap().is_none());
     }

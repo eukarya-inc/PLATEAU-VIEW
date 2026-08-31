@@ -127,6 +127,16 @@ impl Dataset {
 
     /// The `.gml` files of one feature type, sorted so runs are reproducible.
     pub fn gml_files(&self, feature_type: &str) -> Result<Vec<PathBuf>> {
+        self.feature_files(feature_type, true)
+    }
+
+    /// The files of one feature type that are *not* CityGML — texture images
+    /// above all, which the documents reference by relative path — sorted.
+    pub fn companion_files(&self, feature_type: &str) -> Result<Vec<PathBuf>> {
+        self.feature_files(feature_type, false)
+    }
+
+    fn feature_files(&self, feature_type: &str, gml: bool) -> Result<Vec<PathBuf>> {
         let dir = self.udx().join(feature_type);
         if !dir.is_dir() {
             return Ok(Vec::new());
@@ -137,7 +147,7 @@ impl Dataset {
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
             .map(|e| e.into_path())
-            .filter(|p| has_extension(p, "gml"))
+            .filter(|p| has_extension(p, "gml") == gml)
             .collect();
         files.sort();
         Ok(files)

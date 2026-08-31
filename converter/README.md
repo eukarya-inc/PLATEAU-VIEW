@@ -104,6 +104,10 @@ lists the input authors itself (the profile's `[codelists] local` patterns) and
 lists with no published counterpart are copied verbatim and win any name
 collision with a published file.
 
+Non-GML files inside a converted feature type — texture images above all, which
+the documents reference by relative path — are copied verbatim into the
+mirrored tree, so appearances keep resolving.
+
 ## The mapping profile
 
 The source version is never asked for: every PLATEAU document declares the i-UR

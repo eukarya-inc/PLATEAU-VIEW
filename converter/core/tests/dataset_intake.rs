@@ -191,6 +191,23 @@ fn staging_can_be_pinned_to_a_directory_and_inspected() {
 }
 
 #[test]
+fn companion_files_are_the_non_gml_ones() {
+    let dir = TempDir::new().unwrap();
+    write(&dir.path().join("udx/bldg/a.gml"), GML);
+    write(
+        &dir.path().join("udx/bldg/a_appearance/t.jpg"),
+        "not really a jpeg",
+    );
+
+    let dataset = Dataset::open(&[dir.path().to_owned()]).unwrap();
+
+    assert_eq!(dataset.gml_files("bldg").unwrap().len(), 1);
+    let companions = dataset.companion_files("bldg").unwrap();
+    assert_eq!(companions.len(), 1);
+    assert!(companions[0].ends_with("udx/bldg/a_appearance/t.jpg"));
+}
+
+#[test]
 fn a_dataset_without_udx_is_rejected() {
     let dir = TempDir::new().unwrap();
     let archive = dir.path().join("codelists.zip");

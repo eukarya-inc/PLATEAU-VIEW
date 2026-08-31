@@ -125,6 +125,23 @@ impl Converter {
             report.absorb(&result?);
         }
 
+        // The documents reference their non-GML companions — texture images
+        // above all — by relative path, so a converted tree without them would
+        // render untextured. They are copied verbatim to the mirrored path.
+        for feature_type in &requested {
+            for input in dataset.companion_files(feature_type)? {
+                let relative = input.strip_prefix(dataset.root()).map_err(|_| {
+                    Error::Layout(format!("{} is outside the dataset root", input.display()))
+                })?;
+                let target = out.join(relative);
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+                }
+                fs::copy(&input, &target).map_err(|e| Error::io(&target, e))?;
+                report.copied += 1;
+            }
+        }
+
         // Untouched feature types would leave a tree that is half 2.0 and half
         // 3.0, so say so rather than copying them in silently.
         for feature_type in dataset.feature_types()? {
@@ -390,4 +407,32 @@ pub fn convert_to_string(
     let text = String::from_utf8(out)
         .map_err(|e| Error::RawIo(io::Error::new(io::ErrorKind::InvalidData, e)))?;
     Ok((text, report))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DEFAULT_PROFILE;
+    use crate::profile::Rules;
+
+    /// A self-closing root is legal XML; the output must still close the root
+    /// tag it wrote, and the empty document is reported.
+    #[test]
+    fn a_self_closing_root_produces_a_closed_root() {
+        let converter = Converter::new(
+            Rules::from_toml(DEFAULT_PROFILE).unwrap(),
+            Options::default(),
+        )
+        .unwrap();
+        let src = r#"<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"/>"#;
+        let (out, report) = convert_to_string(&converter, "t", src).unwrap();
+        assert!(out.contains("</core:CityModel>"), "{out}");
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|(m, _)| m.contains("no city objects")),
+            "an empty document is still reported"
+        );
+    }
 }

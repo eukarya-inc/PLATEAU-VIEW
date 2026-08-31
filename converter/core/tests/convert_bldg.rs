@@ -365,8 +365,9 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
     );
     // The published i-UR 4.0 code lists (315), the three input lists that are
     // municipality-authored or have no published counterpart — one of which
-    // takes a published name — and the five i-UR 4.0 schemas.
-    assert_eq!(report.copied, 322);
+    // takes a published name — the five i-UR 4.0 schemas, and the fixture's
+    // appearance image.
+    assert_eq!(report.copied, 323);
     assert!(
         out.path()
             .join("codelists/Elevation_elevationReference.xml")
@@ -397,6 +398,22 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
         kept, input,
         "a municipality-authored list survives as shipped, published template or not"
     );
+}
+
+/// Texture images (and any other non-GML file under a converted feature type)
+/// are referenced by the documents by relative path, so they are copied
+/// verbatim into the mirrored tree — without them an LOD2+ package renders
+/// untextured.
+#[test]
+fn non_gml_companions_are_copied_verbatim() {
+    let out = tempfile::tempdir().unwrap();
+    let dataset = Dataset::open(&[fixture_root()]).unwrap();
+    converter().convert_dataset(&dataset, out.path()).unwrap();
+
+    let relative = "udx/bldg/52382287_bldg_6697_appearance/hnap0001.jpg";
+    let copied = std::fs::read(out.path().join(relative)).unwrap();
+    let original = std::fs::read(fixture_root().join(relative)).unwrap();
+    assert_eq!(copied, original, "companions must be copied byte for byte");
 }
 
 /// Every element name i-UR 4.0 declares, read from the schemas the converter
