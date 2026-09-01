@@ -97,7 +97,7 @@ pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
 ];
 
 // The published i-UR 4.0 code lists (`CODELISTS_4_0`), vendored in
-// `fixtures/codelists/` and embedded by `build.rs`. They replace the input's
+// `fixtures/codelists/4.0/` and embedded by `build.rs`. They replace the input's
 // copies of the same files. Lists the input authors itself, matched by the
 // profile's `[codelists] local` patterns, are kept as shipped.
 include!(concat!(env!("OUT_DIR"), "/codelists_gen.rs"));
