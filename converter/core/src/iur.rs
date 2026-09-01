@@ -17,7 +17,7 @@
 //! ```
 
 use crate::error::Result;
-use crate::profile::Rules;
+use crate::profile::{QualityRules, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
@@ -58,6 +58,8 @@ pub struct IurRewrite {
     /// The subset of [`IurRewrite::modules`] whose year-valued elements became
     /// dates in 4.0, meaning everything but `urg`.
     date_modules: Vec<String>,
+    /// The child a data quality attribute must carry, and what to put in it.
+    quality: QualityRules,
     rules: Rules,
 }
 
@@ -84,12 +86,14 @@ impl IurRewrite {
         Ok(IurRewrite {
             modules,
             date_modules,
+            quality: rules.quality().clone(),
             rules: rules.clone(),
         })
     }
 
     /// Rewrites `el` and its descendants in place.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
+        self.required_quality_child(el, warnings);
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
@@ -201,6 +205,44 @@ impl IurRewrite {
         ));
         el.children = vec![Node::Text(value)];
         el
+    }
+
+    /// Supplies the child a data quality attribute must carry when the source
+    /// recorded none.
+    ///
+    /// i-UR records provenance per LOD and makes one of those children
+    /// mandatory. A source that records it without an LOD leaves the slot
+    /// empty, and the profile's `[quality]` value fills it.
+    fn required_quality_child(&self, el: &mut Element, warnings: &mut Warnings) {
+        let Some(child) = &self.quality.child else {
+            return;
+        };
+        if !self.quality.classes.contains(&el.name) || el.elements().any(|e| e.name == *child) {
+            return;
+        }
+
+        let mut supplied = Element::with_text(child.clone(), &self.quality.value);
+        if let Some(code_space) = &self.quality.code_space {
+            supplied.set_attr(Name::unqualified("codeSpace"), code_space.clone());
+        }
+
+        // The type is a sequence and the profile declares no order for i-UR
+        // classes, so the child goes after the ones it must follow.
+        let at = el
+            .children
+            .iter()
+            .rposition(|n| matches!(n, Node::Element(e) if self.quality.after.contains(&e.name)))
+            .map_or(0, |i| i + 1);
+        el.children.insert(at, Node::Element(supplied));
+
+        warnings.add(format!(
+            "{} carried no {}, which i-UR 4.0 requires, so it was written as {} \
+             (未作成); the source records provenance without an LOD, and no LOD \
+             can be read off one value",
+            self.rules.display_name(&el.name),
+            self.rules.display_name(child),
+            self.quality.value,
+        ));
     }
 
     fn is_iur(&self, name: &Name) -> bool {

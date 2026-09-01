@@ -56,6 +56,9 @@ pub struct Profile {
     /// [`CodelistsPolicy`].
     #[serde(default)]
     pub codelists: CodelistsPolicy,
+    /// The child a data quality attribute must carry. See [`QualityPolicy`].
+    #[serde(default)]
+    pub quality: QualityPolicy,
 }
 
 impl Profile {
@@ -426,6 +429,32 @@ fn glob_match(pattern: &str, name: &str) -> bool {
     }
 }
 
+/// The child i-UR requires on a data quality attribute, and the value to
+/// supply when the source records none.
+///
+/// `classes` are the concrete classes carrying the requirement, `child` the
+/// element to supply, `value` and `code_space` its content, and `after` the
+/// children `child` must follow, since the type is a sequence.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct QualityPolicy {
+    pub classes: Vec<String>,
+    pub child: Option<String>,
+    pub value: String,
+    pub code_space: Option<String>,
+    pub after: Vec<String>,
+}
+
+/// [`QualityPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct QualityRules {
+    pub classes: Vec<Name>,
+    pub child: Option<Name>,
+    pub value: String,
+    pub code_space: Option<String>,
+    pub after: Vec<Name>,
+}
+
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
 /// apply.
 #[derive(Debug, Clone)]
@@ -444,6 +473,7 @@ pub struct Rules {
     lod4: Lod4Rules,
     codelists: CodelistsPolicy,
     ade_hooks: HashMap<Name, Name>,
+    quality: QualityRules,
 }
 
 impl Rules {
@@ -497,6 +527,34 @@ impl Rules {
             for ty in &group.types {
                 order.insert(parse_name(ty, output)?, Arc::clone(&children));
             }
+        }
+
+        let quality = QualityRules {
+            classes: profile
+                .quality
+                .classes
+                .iter()
+                .map(|c| parse_name(c, output))
+                .collect::<Result<_>>()?,
+            child: profile
+                .quality
+                .child
+                .as_deref()
+                .map(|c| parse_name(c, output))
+                .transpose()?,
+            value: profile.quality.value.clone(),
+            code_space: profile.quality.code_space.clone(),
+            after: profile
+                .quality
+                .after
+                .iter()
+                .map(|a| parse_name(a, output))
+                .collect::<Result<_>>()?,
+        };
+        if quality.child.is_some() && quality.value.is_empty() {
+            return Err(Error::Profile(
+                "[quality] names a child to supply but no value".into(),
+            ));
         }
 
         let mut ade_hooks = HashMap::new();
@@ -568,6 +626,7 @@ impl Rules {
             lod4,
             codelists,
             ade_hooks,
+            quality,
         })
     }
 
@@ -636,6 +695,11 @@ impl Rules {
 
     pub fn ade_hook(&self, class: &Name) -> Option<&Name> {
         self.ade_hooks.get(class)
+    }
+
+    /// The child a data quality attribute must carry. See [`QualityPolicy`].
+    pub fn quality(&self) -> &QualityRules {
+        &self.quality
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.

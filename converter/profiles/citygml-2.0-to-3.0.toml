@@ -208,7 +208,7 @@ from = "bldg:GroundSurface"
 to = "con:GroundSurface"
 [[element]]
 from = "bldg:ClosureSurface"
-to = "con:ClosureSurface"
+to = "core:ClosureSurface"
 [[element]]
 from = "bldg:OuterCeilingSurface"
 to = "con:OuterCeilingSurface"
@@ -311,6 +311,7 @@ children = [
   "core:externalReference", "core:generalizesTo",
   "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
   "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
   # core::AbstractSpace
   "core:spaceType", "core:volume", "core:area", "core:boundary",
   "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
@@ -326,13 +327,14 @@ children = [
   # con::AbstractConstruction
   "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
   "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
+  "con:adeOfAbstractConstruction",
   # bldg::AbstractBuilding
   "bldg:class", "bldg:function", "bldg:usage", "bldg:roofType",
   "bldg:storeysAboveGround", "bldg:storeysBelowGround",
   "bldg:storeyHeightsAboveGround", "bldg:storeyHeightsBelowGround",
   "bldg:buildingConstructiveElement", "bldg:buildingInstallation",
   "bldg:buildingRoom", "bldg:buildingFurniture", "bldg:buildingSubdivision",
-  "bldg:address",
+  "bldg:address", "bldg:adeOfAbstractBuilding",
   # bldg::Building
   "bldg:buildingPart",
 ]
@@ -359,7 +361,8 @@ children = [
   "core:area",
   "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
   "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
-  "con:fillingSurface",
+  "core:adeOfAbstractCityObject",
+  "con:fillingSurface", "con:adeOfAbstractConstructionSurface",
 ]
 
 # BuildingInstallation and BuildingConstructiveElement are occupied spaces and
@@ -387,6 +390,7 @@ children = [
   "con:relationToConstruction",
   "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
   "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
+  "con:adeOfAbstractConstruction",
   "bldg:class", "bldg:function", "bldg:usage", "bldg:roomHeight",
 ]
 

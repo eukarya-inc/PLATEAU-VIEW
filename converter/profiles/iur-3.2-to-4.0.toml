@@ -82,6 +82,27 @@ urt = "https://www.geospatial.jp/iur/urt/3.2"
 from = "uro:DataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
 
+
+# Nested properties of the risk and key-value classes, which move to urc with
+# the class that holds them. The generator cannot derive these: it keys a
+# declaration by its bare local name, so a name uro 4.0 still declares under a
+# different class, or one two target modules spell the same way, is left alone.
+[[element]]
+from = "uro:depth"
+to = "urc:depth"
+[[element]]
+from = "uro:scale"
+to = "urc:scale"
+[[element]]
+from = "uro:description"
+to = "urc:description"
+[[element]]
+from = "uro:adminType"
+to = "urc:adminType"
+[[element]]
+from = "uro:areaType"
+to = "urc:areaType"
+
 # BEGIN GENERATED -- i-UR rules
 #
 # Derived from the schemas, not written by hand. Regenerate with:
