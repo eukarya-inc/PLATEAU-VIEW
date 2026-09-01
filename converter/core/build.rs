@@ -1,7 +1,6 @@
-//! Embeds the vendored published i-UR 4.0 code lists (`../fixtures/codelists/`) as
-//! `CODELISTS_4_0`, one `(file name, content)` entry per list. A generated
-//! include beats 315 hand-written `include_str!` lines and cannot drift from
-//! the directory.
+//! Embeds the vendored published i-UR 4.0 code lists
+//! (`../fixtures/codelists/`) as `CODELISTS_4_0`, one `(file name, content)`
+//! entry per list.
 
 use std::env;
 use std::fmt::Write as _;

@@ -3,10 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-/// Deduplicated warnings with occurrence counts.
-///
-/// A conversion emits the same handful of caveats once per feature; collapsing
-/// them keeps a whole-city run readable.
+/// Deduplicated warning messages with occurrence counts.
 #[derive(Debug, Default, Clone)]
 pub struct Warnings {
     counts: BTreeMap<String, usize>,
@@ -60,7 +57,7 @@ pub struct FileReport {
     pub features: usize,
     pub warnings: Warnings,
     /// Code-list file names the output references through a `codelists/`
-    /// `codeSpace` path, so a dataset conversion can check they all resolve.
+    /// `codeSpace` path.
     pub code_spaces: BTreeSet<String>,
 }
 

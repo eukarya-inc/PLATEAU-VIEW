@@ -12,8 +12,8 @@ use crate::xml::{Name, PrefixMap};
 
 /// A conversion profile exactly as it appears on disk.
 ///
-/// A profile may be written out in full, or assembled from *fragments* it names
-/// in [`base`](Profile::base); see [`Profile::load`]. Every table has a
+/// A profile may be written out in full, or assembled from *fragments* it
+/// names in [`base`](Profile::base). See [`Profile::load`]. Every table has a
 /// documented default, so a profile declares only what it changes.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,15 +35,16 @@ pub struct Profile {
     pub input: NamespaceSet,
     #[serde(default)]
     pub output: Output,
-    /// Input namespace URI -> output namespace URI, applied to any name without
-    /// a more specific rule.
+    /// Input namespace URI to output namespace URI, applied to any name
+    /// without a more specific rule.
     #[serde(default)]
     pub namespace_map: IndexMap<String, String>,
     #[serde(default)]
     pub element: Vec<ElementRule>,
     #[serde(default)]
     pub order_group: Vec<OrderGroup>,
-    /// i-UR class -> the CityGML property that carries it. See [`Rules::ade_hook`].
+    /// i-UR class to the CityGML property that carries it. See
+    /// [`Rules::ade_hook`].
     #[serde(default)]
     pub ade_hooks: IndexMap<String, String>,
     #[serde(default)]
@@ -60,23 +61,14 @@ pub struct Profile {
 impl Profile {
     /// Parses a profile, folding in the built-in fragments its `base` names.
     ///
-    /// A profile is split along the axes it varies on. The CityGML 2.0 -> 3.0
-    /// mapping is the same whichever i-UR minor the input carries, and the i-UR
-    /// 4.0 target is the same whichever minor it came from; only the i-UR source
-    /// half differs per file. Holding the shared halves once means a rule that
-    /// is not version-specific is written once, instead of being copied into
-    /// every profile and drifting.
+    /// The fold is a plain TOML merge over the parsed documents. Fragments
+    /// fold in first, in the order named, and the file's own rules last, so
+    /// the fragments' [`namespace_map`](Profile::namespace_map) rows keep
+    /// their relative position ahead of the overlay's. A key two files both
+    /// declare is an error, not an override.
     ///
-    /// The fold is a plain TOML merge over the parsed documents, so it knows
-    /// nothing about the fields above and needs no upkeep when one is added.
-    /// Fragments fold in first, in the order named, and the file's own rules
-    /// last: [`namespace_map`](Profile::namespace_map) is an [`IndexMap`] the
-    /// bulk bump iterates, so the fragments' rows have to keep their relative
-    /// position ahead of the overlay's.
-    ///
-    /// A profile that names no `base` is complete in itself and is parsed as it
-    /// was written -- which is what `--profile` relies on, so that replacing the
-    /// mapping wholesale stays possible.
+    /// A profile that names no `base` is complete in itself and is parsed as
+    /// it was written.
     pub fn load(source: &str) -> Result<Profile> {
         let doc: Table = toml::from_str(source)?;
         let bases = base_names(&doc);
@@ -99,7 +91,6 @@ impl Profile {
                     "base `{name}` names a base of its own; fragments do not nest"
                 )));
             }
-            // Which profile this is, rather than what it maps: the profile's own.
             for key in ["name", "description", "base"] {
                 fragment.remove(key);
             }
@@ -112,9 +103,8 @@ impl Profile {
 
 /// The text of a built-in fragment, by the name a `base` entry gives.
 ///
-/// Fragments are named, not paths: a profile loaded from disk with `--profile`
-/// therefore stays one file, and there is no relative path to resolve
-/// differently on Windows.
+/// Fragments are named rather than pathed, so a profile loaded from disk with
+/// `--profile` stays one file.
 fn builtin_fragment(name: &str) -> Result<&'static str> {
     crate::FRAGMENTS
         .iter()
@@ -145,12 +135,9 @@ fn base_names(doc: &Table) -> Vec<String> {
 
 /// Folds one profile document into another, refusing anything both declare.
 ///
-/// Tables merge key by key and arrays of rules accumulate; everything else is a
-/// leaf. The halves are disjoint by construction -- the CityGML fragment and
-/// the i-UR overlay have no key in common -- so there is no override rule to
-/// define, and a leaf two files both write is a mistake rather than a
-/// precedence question. `origin` remembers which file each one came from, so
-/// the error can name both.
+/// Tables merge key by key and arrays of rules accumulate. Everything else is
+/// a leaf, and a leaf two files both write is an error. `origin` remembers
+/// which file each one came from, so the error can name both.
 fn merge(
     into: &mut Table,
     from: Table,
@@ -174,8 +161,6 @@ fn merge(
                 };
                 merge(dst, src, label, &at, origin)?;
             }
-            // `[[element]]` and `[[order_group]]`: rows accumulate, each
-            // claimed by the name it rules on rather than by its position.
             Value::Array(src) if src.iter().all(Value::is_table) => {
                 let Value::Array(dst) = into.entry(key).or_insert_with(|| Value::Array(Vec::new()))
                 else {
@@ -232,15 +217,14 @@ fn clash(at: &str, origin: &HashMap<String, String>, label: &str) -> Error {
     ))
 }
 
-/// One end of a conversion: what a profile reads, or what it writes.
+/// One end of a conversion, meaning what a profile reads or what it writes.
 ///
-/// `iur` is the discriminator. i-UR puts its minor version in the namespace URI,
-/// so the namespaces a document declares say which version it is, and that is
-/// what picks a profile.
+/// `iur` is the discriminator. i-UR puts its minor version in the namespace
+/// URI, so the namespaces a document declares say which version it is.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Provenance {
-    /// Human-readable, e.g. `CityGML 2.0 + i-UR 3.1`. Shown by `inspect`.
+    /// Human-readable, such as `CityGML 2.0 + i-UR 3.1`. Shown by `inspect`.
     pub label: String,
     pub citygml: Option<String>,
     /// The i-UR minor version, written plainly rather than parsed back out of
@@ -258,12 +242,9 @@ pub struct NamespaceSet {
 
 /// The namespace URI, or URIs, an input prefix stands for.
 ///
-/// i-UR publishes a new minor version most years and PLATEAU data carries
-/// whichever one was current when it was published, so the same element lives
-/// in three namespaces at once across a corpus. Binding a prefix to the whole
-/// family keeps the element table one row per element instead of one row per
-/// version, and stops a rule written against 3.0 from silently missing 3.1 and
-/// 3.2 data.
+/// Binding a prefix to a whole i-UR minor-version family keeps the element
+/// table at one row per element, and makes a rule written against 3.0 match
+/// 3.1 and 3.2 data as well.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum NamespaceValue {
@@ -295,7 +276,7 @@ pub struct ElementRule {
     pub from: String,
     #[serde(default)]
     pub to: Option<String>,
-    /// Remove the element (and its subtree) instead of renaming it.
+    /// Remove the element, and its subtree, instead of renaming it.
     #[serde(default)]
     pub drop: bool,
 }
@@ -307,8 +288,8 @@ pub struct OrderGroup {
     pub children: Vec<String>,
 }
 
-/// The parts of a `con:Height` that CityGML 2.0 does not record and the
-/// converter therefore has to assume.
+/// The parts of a `con:Height` that CityGML 2.0 does not record, which the
+/// converter supplies.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct HeightDefaults {
@@ -316,7 +297,8 @@ pub struct HeightDefaults {
     pub status: String,
     /// `con:lowReference`, a code from the elevation-reference code list.
     pub low_reference: String,
-    /// `con:highReference`, likewise.
+    /// `con:highReference`, also a code from the elevation-reference code
+    /// list.
     pub high_reference: String,
     /// `codeSpace` written on both reference elements.
     pub reference_code_space: Option<String>,
@@ -360,11 +342,9 @@ impl Lod4Fallback {
 
 /// How CityGML 2.0 LOD4 is placed in 3.0, which stops at LOD3.
 ///
-/// PLATEAU decides a model's LOD by how it was measured, and records that per
-/// LOD in the quality attribute. The `attribute` here is the element holding
-/// the LOD4 measurement code; `lod2` and `lod3` list the codes that send the
-/// LOD4 content to each. A feature with no such code, or one in neither list,
-/// takes `fallback` and is reported.
+/// `attribute` is the element holding the LOD4 measurement code. `lod2` and
+/// `lod3` list the codes that send the LOD4 content to each. A feature with no
+/// such code, or one in neither list, takes `fallback` and is reported.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Lod4Policy {
@@ -401,28 +381,26 @@ pub struct Lod4Rules {
 
 /// How the input's `codelists/` is carried into the output.
 ///
-/// The published i-UR 4.0 lists replace same-named input files, so the codes a
-/// converted package is checked against are the 4.0 ones. `local` names the
-/// lists a municipality authors itself — replacing those with a published
-/// template would destroy real content — and `retarget`/`kept_codes` record
-/// the places where the published set moved or dropped something.
+/// The published i-UR 4.0 lists replace same-named input files. `local` names
+/// the lists a municipality authors itself, which are kept as shipped, while
+/// `retarget` and `kept_codes` record where the published set moved or dropped
+/// something.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct CodelistsPolicy {
-    /// File-name patterns (at most one `*`) for municipality-authored lists:
-    /// the input's file always wins, even over a published file of the same
-    /// name.
+    /// File-name patterns, each with at most one `*`, for
+    /// municipality-authored lists. The input's file always wins, even over a
+    /// published file of the same name.
     pub local: Vec<String>,
     /// File-name patterns for lists whose values the conversion itself
-    /// rewrites into the published codes: the published file always wins,
-    /// or the rewritten values would not resolve.
+    /// rewrites into the published codes. The published file always wins.
     pub superseded: Vec<String>,
-    /// Code-list file name -> its name in the published 4.0 set, rewritten in
+    /// Code-list file name to its name in the published 4.0 set, rewritten in
     /// every `codeSpace` path. Only for renames whose codes carry over
     /// unchanged.
     pub retarget: IndexMap<String, String>,
     /// Codes the published lists no longer define, per file. The values are
-    /// kept and reported, not mapped to something they do not mean.
+    /// kept and reported rather than mapped.
     pub kept_codes: IndexMap<String, Vec<String>>,
 }
 
@@ -549,10 +527,8 @@ impl Rules {
         }
 
         // These become the xmlns declarations on the output root, in this
-        // order. Sort them, so the bytes do not depend on how many fragments
-        // the profile was assembled from or which order they folded in --
-        // xmlns declaration order carries no meaning, and letting it track the
-        // file layout would make a profile edit look like an output change.
+        // order. Sorting keeps the bytes independent of how the profile was
+        // split into fragments.
         let mut output_namespaces = output.clone();
         output_namespaces.sort_keys();
         let mut prefixes = PrefixMap::new();
@@ -617,8 +593,8 @@ impl Rules {
         }
     }
 
-    /// The output name for an attribute. Element rules do not apply; only the
-    /// namespace bump does.
+    /// The output name for an attribute. Element rules do not apply, only the
+    /// namespace bump.
     pub fn map_attribute(&self, name: &Name) -> Name {
         self.bump_namespace(name)
     }
@@ -652,12 +628,8 @@ impl Rules {
         &self.lod4
     }
 
-    /// The CityGML property an i-UR class hangs off in 3.0.
-    ///
-    /// CityGML 2.0 let an extension name its own property
-    /// (`uro:buildingIDAttribute`); 3.0 declares one general hook per host class
-    /// and the extension substitutes into it, so the wrapper is decided by the
-    /// class inside rather than by the wrapper's own name.
+    /// The CityGML property an i-UR class hangs off in 3.0, keyed by the
+    /// class rather than by the 2.0 wrapper's own name.
     pub fn codelists(&self) -> &CodelistsPolicy {
         &self.codelists
     }
@@ -750,8 +722,8 @@ mod tests {
     const URO: &str = "https://www.geospatial.jp/iur/uro";
     const URC_4: &str = "https://www.geospatial.jp/iur/urc/4.0";
 
-    /// One rule, written once, has to match every i-UR minor version in
-    /// circulation -- PLATEAU data is 3.0, 3.1 or 3.2 depending on its year.
+    /// One rule, written once, matches every i-UR minor version the prefix
+    /// stands for.
     #[test]
     fn one_input_prefix_binds_a_whole_version_family() {
         let profile = r#"
@@ -779,9 +751,8 @@ to = "urc:srcScaleLod0"
         }
     }
 
-    /// Every built-in profile declares what it accepts and what it produces, and
-    /// covers all four i-UR modules -- a module missing from the table would be
-    /// written unqualified rather than converted.
+    /// Every built-in profile declares what it accepts and what it produces,
+    /// and covers all four i-UR modules.
     #[test]
     fn every_profile_declares_its_source_and_target() {
         for (name, toml) in crate::PROFILES {
@@ -801,12 +772,11 @@ to = "urc:srcScaleLod0"
     #[test]
     fn bumps_namespaces_by_default() {
         let r = rules();
-        // No rule for CityModel: only its namespace changes.
+        // No rule for CityModel, so only its namespace changes.
         let out = r
             .map_element(&Name::qualified(ns::CITYGML_2, "CityModel"))
             .unwrap();
         assert_eq!(out, Name::qualified(ns::CITYGML_3, "CityModel"));
-        // gml 3.1.1 -> 3.2
         let out = r.map_attribute(&Name::qualified(ns::GML_31, "id"));
         assert_eq!(out, Name::qualified(ns::GML_32, "id"));
     }
@@ -824,14 +794,9 @@ to = "urc:srcScaleLod0"
         assert_eq!(out, Name::qualified(ns::CONSTRUCTION_3, "WallSurface"));
     }
 
-    /// i-UR 3.2 and 4.0 are compatible in principle, so the whole ADE moves by
-    /// namespace alone.
-    ///
-    /// Every published 3.x minor has to be listed. An unmapped namespace has no
-    /// prefix on the output side and its elements are written unqualified. Real
-    /// data is mostly 3.1 and 3.2. Each profile bumps its own i-UR minor and
-    /// leaves the others alone: an unmapped namespace is what makes running the
-    /// wrong profile visible instead of silently partial.
+    /// Each profile bumps its own i-UR minor and leaves the others unmapped,
+    /// so running the wrong profile shows up as elements written
+    /// unqualified.
     #[test]
     fn a_profile_bumps_only_its_own_i_ur_minor() {
         for (name, toml) in crate::PROFILES {
@@ -884,9 +849,7 @@ to = "urc:srcScaleLod0"
         );
     }
 
-    /// A profile written out in full still loads. `--profile` relies on it:
-    /// naming a built-in base is a convenience, not the only way in, so
-    /// replacing the mapping wholesale with one file stays possible.
+    /// A profile written out in full still loads, with no `base` named.
     #[test]
     fn a_profile_that_names_no_base_is_complete_in_itself() {
         let rules = Rules::from_toml(
@@ -913,9 +876,8 @@ to = "urc:srcScaleLod0"
         }
     }
 
-    /// A fragment is half a mapping, so it must not be mistaken for a profile:
-    /// the CityGML half alone would convert the CityGML side and write every
-    /// i-UR element unqualified.
+    /// A fragment is half a mapping and is refused where a profile is
+    /// expected.
     #[test]
     fn a_fragment_is_not_a_profile_on_its_own() {
         for (name, toml) in crate::FRAGMENTS {
@@ -940,17 +902,13 @@ to = "urc:srcScaleLod0"
         assert!(err.to_string().contains("citygml-2.0-to-3.0"), "{err}");
     }
 
-    /// The halves are disjoint by construction, so a key on both sides is a
-    /// mistake in one of them rather than a question of precedence. The error
-    /// has to name both files, or the reader cannot tell which to edit.
+    /// A key declared in both a fragment and the profile is an error naming
+    /// both files.
     #[test]
     fn anything_declared_in_two_files_is_refused() {
         let cases = [
-            // A rule the CityGML fragment already makes.
             "[[element]]\nfrom = \"bldg:consistsOfBuildingPart\"\ndrop = true",
-            // A row of a table the fragment fills.
             "[namespace_map]\n\"http://www.opengis.net/citygml/2.0\" = \"urn:elsewhere\"",
-            // A whole table the fragment declares.
             "[height]\nstatus = \"estimated\"",
         ];
         for case in cases {
@@ -964,9 +922,8 @@ to = "urc:srcScaleLod0"
         }
     }
 
-    /// The xmlns declarations are emitted in this order, so it must not depend
-    /// on how the profile was split up -- otherwise moving a prefix from one
-    /// fragment to another shows up as a diff in every converted file.
+    /// The order the xmlns declarations are emitted in does not depend on how
+    /// the profile was split into fragments.
     #[test]
     fn output_prefixes_are_ordered_independently_of_the_fragments() {
         let rules = rules();

@@ -1,14 +1,9 @@
-//! Choosing a conversion profile from the document itself.
+//! Chooses a conversion profile from the document itself.
 //!
 //! i-UR puts its minor version in the namespace URI, so a CityGML file states
-//! which version it uses simply by declaring it. There is one profile per source
-//! version, and picking between them is therefore a lookup rather than a
-//! question for the user.
-//!
-//! The point of doing this in the converter rather than leaving it to the caller
-//! is the failure mode it removes: running the 3.0 profile over 3.1 data
-//! converts the CityGML half and silently leaves every `uro:` element behind,
-//! which looks like a successful run.
+//! which version it uses by declaring it. There is one profile per source
+//! version, and [`select`] matches a document's declared namespaces against
+//! each profile's `[source]`.
 
 use crate::error::{Error, Result};
 use crate::profile::Rules;
@@ -23,18 +18,18 @@ pub struct Detection {
     pub matched: Vec<String>,
 }
 
-/// Picks the profile whose `[source]` matches the namespaces a document declares.
+/// Picks the profile whose `[source]` matches the namespaces a document
+/// declares.
 ///
-/// A document that declares no i-UR namespace at all matches any profile — there
-/// is nothing to tell them apart — so the first candidate is used and `matched`
-/// comes back empty for the caller to report.
+/// A document declaring no i-UR namespace matches every profile, so the first
+/// candidate is used and `matched` comes back empty. An input already
+/// declaring a profile's target CityGML namespace, several i-UR versions at
+/// once, or several profiles that all fit is an [`Error::Unsupported`].
 pub fn select(candidates: &[Rules], declared: &[String]) -> Result<Detection> {
     if candidates.is_empty() {
         return Err(Error::Profile("no profiles to choose from".into()));
     }
 
-    // Refuse input that is already converted before blaming the i-UR version for
-    // the mismatch: it is the likelier mistake and the confusing one to debug.
     for rules in candidates {
         if let Some(target) = &rules.target().citygml
             && declared.iter().any(|ns| ns == target)
@@ -74,17 +69,11 @@ pub fn select(candidates: &[Rules], declared: &[String]) -> Result<Detection> {
             index: *index,
             matched: present,
         }),
-        // Several i-UR versions in one document. The schemas import each other
-        // by exact namespace, so there is no version pairing that could be
-        // right; converting it would have to invent one.
         [] => Err(Error::Unsupported(format!(
             "the input mixes i-UR versions ({}), which no profile converts; \
              every module in a package must be the same version",
             present.join(", ")
         ))),
-        // With more than one target version in play this is not a defect, it is
-        // an unanswered question: the data says what it is, never what it
-        // should become.
         many => Err(Error::Unsupported(format!(
             "{} profiles accept this input, producing i-UR {}; choose one",
             many.len(),
@@ -110,10 +99,8 @@ pub fn target_versions(candidates: &[Rules]) -> Vec<&str> {
 
 /// Keeps only the profiles producing i-UR `version`.
 ///
-/// Selecting a target is the one part of the choice the data cannot make: an
-/// input says which version it *is*, never which one it should become. Today
-/// every profile targets 4.0, so this narrows nothing -- it exists so that
-/// adding a target is a profile to generate rather than a CLI to redesign.
+/// Errors when no candidate produces `version`, naming the versions that are
+/// available.
 pub fn with_target(candidates: Vec<Rules>, version: &str) -> Result<Vec<Rules>> {
     let available = target_versions(&candidates).join(", ");
     let kept: Vec<Rules> = candidates
@@ -128,11 +115,11 @@ pub fn with_target(candidates: Vec<Rules>, version: &str) -> Result<Vec<Rules>> 
     Ok(kept)
 }
 
-/// Checks that a profile the caller chose explicitly actually fits the document.
+/// Checks that a profile the caller chose explicitly fits the document.
 ///
-/// `--profile` is an override, so this reports rather than refuses when the
-/// profile declares no `[source]` at all: a hand-written profile is allowed to
-/// say nothing about what it accepts.
+/// Returns a message naming the i-UR namespaces the document declares that
+/// `rules` does not accept, or `None` when they all fit or when the profile
+/// declares no `[source]`.
 pub fn check(rules: &Rules, declared: &[String]) -> Option<String> {
     let source = rules.source();
     if source.iur.is_empty() {
@@ -199,7 +186,6 @@ mod tests {
     #[test]
     fn an_unknown_version_is_refused() {
         let c = candidates();
-        // i-UR 2.0 is real but unsupported; it must not fall back to a near miss.
         let declared = vec![iur("uro", "2.0")];
         let found = select(&c, &declared).unwrap();
         assert!(

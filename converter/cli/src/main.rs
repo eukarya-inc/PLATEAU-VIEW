@@ -1,4 +1,5 @@
-//! `plateau-convert` — a CityGML 2.0 -> 3.0 converter for PLATEAU city models.
+//! `plateau-convert`, a CityGML 2.0 -> 3.0 converter for PLATEAU city
+//! models.
 
 use std::path::PathBuf;
 
@@ -49,7 +50,8 @@ struct ConvertArgs {
     #[arg(short, long, value_name = "DIR")]
     output: PathBuf,
 
-    /// udx feature types to convert. Repeatable. `all` converts everything present.
+    /// udx feature types to convert. Repeatable. `all` converts everything
+    /// present.
     #[arg(short = 't', long = "type", value_name = "TYPE", default_values_t = [String::from("bldg")])]
     types: Vec<String>,
 
@@ -86,8 +88,9 @@ struct ConvertArgs {
     #[arg(long, value_enum, default_value_t = IndentArg::Tab)]
     indent: IndentArg,
 
-    /// Where LOD4 goes when no measurement code decides it: fold into LOD3
-    /// (the profile's default), into LOD2, or drop it. Always reported.
+    /// Where LOD4 goes when no measurement code decides it, namely: fold into
+    /// LOD3 (the profile's default), fold into LOD2, or drop it. Always
+    /// reported.
     #[arg(long, value_enum, value_name = "MODE")]
     lod4_fallback: Option<Lod4FallbackArg>,
 
@@ -220,8 +223,6 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         eprintln!("  (reassembled from {} input(s))", args.inputs.len());
     }
 
-    // The profile depends on the data, so it can only be chosen once the input
-    // has been resolved into a tree.
     let rules = resolve_profile(
         args.profile.as_deref(),
         args.target_iur.as_deref(),
@@ -314,10 +315,9 @@ fn staging(path: Option<&std::path::Path>) -> Staging {
 
 /// Resolves which profile to convert `dataset` with.
 ///
-/// `--profile` wins outright, but the input is still checked against what the
-/// file says it accepts: a profile aimed at the wrong i-UR version converts the
-/// CityGML half and leaves every `uro:` element behind, which looks like a
-/// successful run. Without `--profile` the version is read from the data.
+/// `--profile` wins outright, and the input is still checked against what that
+/// file says it accepts. Without `--profile` the version is read from the
+/// data.
 fn resolve_profile(
     explicit: Option<&std::path::Path>,
     target_iur: Option<&str>,
@@ -385,7 +385,7 @@ fn print_report(report: &Report, output: &std::path::Path) {
         output.display()
     );
     if !report.warnings.is_empty() {
-        eprintln!("\n{} caveat(s):", report.warnings.len());
+        eprintln!("\n{} warning(s):", report.warnings.len());
         eprint!("{}", report.warnings);
     }
 }

@@ -1,31 +1,29 @@
-//! The address rewrite: xAL 2.0 content becomes an xAL 3.0 `Address`.
+//! The address rewrite, turning xAL 2.0 content into an xAL 3.0 `Address`.
 //!
 //! CityGML 3.0 binds `core:xalAddress` to OASIS xAL 3.0, whose model differs
 //! from the xAL 2.0 fragments CityGML 2.0 data carries in three ways:
 //!
 //! * the root is `Address`, not `AddressDetails`;
-//! * containers no longer nest — `Country`, `AdministrativeArea`, `Locality`,
-//!   `Thoroughfare`, `Premises` and the postal elements are laid out flat
-//!   under `Address` in a fixed order, each holding its own sub container
-//!   (`SubLocality`, `SubThoroughfare`, ...);
+//! * containers no longer nest, so `Country`, `AdministrativeArea`,
+//!   `Locality`, `Thoroughfare`, `Premises` and the postal elements are laid
+//!   out flat under `Address` in a fixed order, each holding its own sub
+//!   container (`SubLocality`, `SubThoroughfare`, ...);
 //! * every name becomes a `NameElement` (or an `Identifier` in the postal
 //!   elements) whose `NameType`/`Type` attributes are closed enumerations,
 //!   and free-form text lives in `FreeTextAddress/AddressLine`.
 //!
-//! The rewrite is structure-preserving where xAL 3.0 has a counterpart, and
-//! lossless where it does not: an element with no counterpart keeps its text
-//! as `FreeTextAddress/AddressLine` and is reported, so no address content is
-//! silently dropped and the output always has somewhere valid to stand.
-//! Content already in the xAL 3.0 namespace passes through untouched.
+//! The rewrite is structure-preserving where xAL 3.0 has a counterpart. An
+//! element with no counterpart keeps its text as `FreeTextAddress/AddressLine`
+//! and is reported, so no address content is dropped. Content already in the
+//! xAL 3.0 namespace passes through untouched.
 //!
-//! Like the other passes this runs after the rename pass; `core` names are
-//! CityGML 3.0. The xAL 2.0 namespace is deliberately absent from the
-//! profile's `[namespace_map]` — a namespace bump cannot express this change,
-//! so the whole subtree is rebuilt here instead.
+//! Like the other passes this runs after the rename pass, so `core` names are
+//! CityGML 3.0. The xAL 2.0 namespace is absent from the profile's
+//! `[namespace_map]`, and the whole subtree is rebuilt here instead.
 //!
-//! [`SLOTS`] is the whole mapping: one row per flat 3.0 slot, in the order
-//! `AddressType` requires, saying which 2.0 container fills it, what its
-//! `Type` attribute may say, and which name children it owns.
+//! [`SLOTS`] holds the whole mapping, one row per flat 3.0 slot, in the order
+//! `AddressType` requires. Each row says which 2.0 container fills the slot,
+//! what its `Type` attribute may say, and which name children it owns.
 
 use crate::error::Result;
 use crate::profile::Rules;
@@ -43,20 +41,21 @@ struct Slot {
     /// The slot this one nests inside, as an index into [`SLOTS`]. A sub
     /// container is emitted after its parent's own names.
     parent: Option<usize>,
-    /// The 3.0 `Type` list. Empty means open — any 2.0 `Type` is carried as
-    /// written; `None` means the 3.0 element has no `Type` at all.
+    /// The 3.0 `Type` list. An empty list is open, so any 2.0 `Type` is
+    /// carried as written. `None` means the 3.0 element has no `Type` at
+    /// all.
     types: Option<&'static [&'static str]>,
     /// A fixed `Type`, for a 2.0 container that became one case of a general
     /// 3.0 element.
     fixed_type: Option<&'static str>,
     /// The 2.0 name children this container owns, each with the `NameType`
-    /// (or, in the postal slots, `Identifier` `Type`) it converts to. An empty
-    /// value means the 3.0 lists cannot express it and the attribute is left off.
+    /// it converts to, or the `Identifier` `Type` in the postal slots. An
+    /// empty value leaves the attribute off.
     names: &'static [(&'static str, &'static str)],
-    /// Postal slots hold `Identifier`s with a `Type`; everything else
-    /// `NameElement`s with a `NameType`.
+    /// True in the postal slots, which hold `Identifier`s with a `Type`.
+    /// Everything else holds `NameElement`s with a `NameType`.
     identifier: bool,
-    /// How many names 3.0 allows here; the rest become free text.
+    /// How many names 3.0 allows here. The rest become free text.
     limit: usize,
 }
 
@@ -110,8 +109,7 @@ const THOROUGHFARE: usize = 5;
 const PREMISES: usize = 7;
 
 /// The flat 3.0 slots, in the order `AddressType` requires. A sub container
-/// follows its parent, which is what lets [`XalRewrite::assemble`] walk this
-/// once and emit the address.
+/// follows its parent, so one walk of this table emits the address.
 const SLOTS: &[Slot] = &[
     Slot::new(
         "Country",
@@ -225,8 +223,8 @@ const PREMISES_TYPES: &[&str] = &[
     "Unit",
 ];
 
-/// 2.0 elements whose children are what matter; the element itself has no 3.0
-/// counterpart and needs none.
+/// 2.0 elements that have no 3.0 counterpart and whose children are
+/// dispatched in their place.
 const TRANSPARENT: &[&str] = &["AddressDetails", "AddressLines", "Address"];
 
 /// What one slot captured while walking an address.
@@ -239,7 +237,7 @@ struct Filled {
 #[derive(Debug, Clone)]
 pub struct XalRewrite {
     core: String,
-    /// The output xAL namespace — xAL 3.0.
+    /// The output xAL namespace, which is xAL 3.0.
     xal: String,
 }
 
@@ -264,7 +262,6 @@ impl XalRewrite {
 
     fn convert(&self, el: &mut Element, warnings: &mut Warnings) {
         if !el.elements().any(|c| c.name.in_ns(XAL_2_0)) {
-            // Already xAL 3.0, or empty: nothing to rebuild.
             return;
         }
 
@@ -324,9 +321,9 @@ impl XalRewrite {
         }
     }
 
-    /// Converts one 2.0 container: its name children fill the slot, its `Type`
-    /// attribute is carried when the 3.0 list admits it, and anything else it
-    /// holds is dispatched to its own slot.
+    /// Converts one 2.0 container. Its name children fill the slot, its
+    /// `Type` attribute is carried when the 3.0 list admits it, and anything
+    /// else it holds is dispatched to its own slot.
     fn container(
         &self,
         el: Element,
@@ -407,8 +404,6 @@ impl XalRewrite {
     ) -> Element {
         for (at, slot) in SLOTS.iter().enumerate() {
             let Some(parent) = slot.parent else { continue };
-            // A container must hold at least one name, so a sub container
-            // whose parent captured none donates its names to the parent.
             if slots[parent].names.is_empty() && !slots[at].names.is_empty() {
                 let donated = std::mem::take(&mut slots[at]);
                 slots[parent].names = donated.names;
@@ -441,7 +436,6 @@ impl XalRewrite {
                 continue;
             }
             let mut out = self.build(at, &mut slots);
-            // Its sub container, if it captured anything, goes after its names.
             for (sub, _) in SLOTS
                 .iter()
                 .enumerate()
@@ -471,7 +465,7 @@ impl XalRewrite {
 }
 
 /// Carries a 2.0 container `Type` into the 3.0 `Type` list, matching
-/// case-insensitively; an open list accepts the value as written.
+/// case-insensitively. An open list accepts the value as written.
 fn carry_type(slot: &Slot, value: &str) -> Option<String> {
     match slot.types? {
         [] => Some(value.to_owned()),

@@ -8,7 +8,7 @@ use plateau_converter_core::dataset::{Dataset, Staging};
 use tempfile::TempDir;
 use zip::write::SimpleFileOptions;
 
-/// Writes `files` (relative path -> contents) into a new zip.
+/// Writes `files`, given as relative path and contents, into a new zip.
 fn make_zip(path: &Path, files: &[(&str, &str)]) {
     let file = fs::File::create(path).unwrap();
     let mut writer = zip::ZipWriter::new(file);
@@ -82,7 +82,7 @@ fn a_zipped_package_is_extracted_and_unwrapped() {
     let dataset = Dataset::open(&[archive]).unwrap();
 
     assert!(dataset.is_staged());
-    // The wrapping directory is stripped: udx sits at the root.
+    // The wrapping directory is stripped, so udx sits at the root.
     assert!(dataset.root().join("udx/bldg/a.gml").is_file());
     assert!(dataset.root().join("codelists/x.xml").is_file());
     assert_eq!(dataset.gml_files("bldg").unwrap().len(), 1);
@@ -188,8 +188,8 @@ fn a_dataset_without_udx_is_rejected() {
     assert!(error.contains("udx"), "{error}");
 }
 
-/// Windows-made part zips separate entries with backslashes; the layout must
-/// be recognised exactly as if they used forward slashes.
+/// A Windows-made part zip separating entries with backslashes is recognised
+/// exactly as one using forward slashes.
 #[test]
 fn a_zip_with_backslash_entries_stages_like_a_forward_slash_one() {
     let dir = TempDir::new().unwrap();

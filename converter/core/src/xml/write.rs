@@ -7,12 +7,12 @@ use crate::error::Result;
 
 /// Maps namespace URIs to the prefixes the output document declares for them.
 ///
-/// The writer never invents a prefix: an element whose namespace is missing from
-/// the map is a bug in the conversion profile, and is reported rather than
-/// silently emitted unqualified.
+/// The writer never invents a prefix. An element whose namespace is missing
+/// from the map is written unqualified and reported through
+/// [`Writer::undeclared`].
 #[derive(Clone, Debug, Default)]
 pub struct PrefixMap {
-    /// Declaration order is preserved so output stays byte-stable.
+    /// Declaration order, preserved so output stays byte-stable.
     entries: Vec<(String, String)>,
 }
 
@@ -133,7 +133,7 @@ impl<W: io::Write> Writer<W> {
             }
         }
 
-        // Skip any inherited schemaLocation; the caller supplies the 3.0 one.
+        // Skip any inherited schemaLocation. The caller supplies the 3.0 one.
         let xsi = super::ns::XSI;
         for attr in &root.attrs {
             if attr.name.is(xsi, "schemaLocation") {
@@ -183,7 +183,7 @@ impl<W: io::Write> Writer<W> {
         }
         write!(self.out, ">")?;
 
-        // An element that mixes text with elements must be written verbatim;
+        // An element mixing text with elements is written as-is, since
         // re-indenting it would change its value.
         let breakable = el.has_element_children();
         for child in &el.children {
@@ -212,8 +212,7 @@ impl<W: io::Write> Writer<W> {
         Ok(())
     }
 
-    /// Namespaces that were written without a declaration. Non-empty means the
-    /// profile is incomplete for this dataset.
+    /// Namespaces that were written without a declaration.
     pub fn missing_namespaces(&self) -> &[String] {
         &self.missing
     }
@@ -232,7 +231,7 @@ impl<W: io::Write> Writer<W> {
             return name.local.clone();
         };
         match self.prefixes.prefix_of(uri).map(str::to_owned) {
-            // The default namespace: no prefix to write.
+            // The default namespace, so there is no prefix to write.
             Some(p) if p.is_empty() => name.local.clone(),
             Some(p) => format!("{p}:{}", name.local),
             None => {

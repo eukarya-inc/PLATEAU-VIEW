@@ -42,8 +42,8 @@ app = "http://www.opengis.net/citygml/appearance/3.0"
 gml = "http://www.opengis.net/gml/3.2"
 xlink = "http://www.w3.org/1999/xlink"
 xsi = "http://www.w3.org/2001/XMLSchema-instance"
-# xAL 3.0 — CityGML 3.0 binds core:xalAddress to it; the address
-# rewrite rebuilds 2.0 content in this namespace.
+# xAL 3.0, which CityGML 3.0 binds core:xalAddress to. The address rewrite
+# rebuilds 2.0 content in this namespace.
 xAL = "urn:oasis:names:tc:ciq:xal:3"
 # The other CityGML 3.0 modules. i-UR classes attach to hosts across the whole
 # standard -- a bridge attribute hangs off brid:adeOfAbstractBridge -- so a
@@ -60,10 +60,10 @@ tun = "http://www.opengis.net/citygml/tunnel/3.0"
 veg = "http://www.opengis.net/citygml/vegetation/3.0"
 wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 
-# Written verbatim into xsi:schemaLocation on the output root, in this order.
+# Written unchanged into xsi:schemaLocation on the output root, in this order.
 #
 # i-UR resolves through a relative path into the package's own schemas/, which
-# the converter writes; CityGML is referenced remotely. That is the split a
+# the converter writes. CityGML is referenced remotely. That is the split a
 # PLATEAU package uses, and the only place a package records which revision of
 # i-UR its data was written against.
 #
@@ -117,7 +117,7 @@ wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 # CityGML 3.0 moves the attachment points into the core module -- appearance
 # on the city object, appearanceMember on the CityModel -- and renames the
 # surface-data role. How a ParameterizedTexture binds to geometry changed
-# shape as well; that rewrite is core/src/app.rs, not a table row.
+# shape as well, and that rewrite is core/src/app.rs rather than a table row.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "app:appearance"
@@ -227,9 +227,9 @@ to = "con:InteriorWallSurface"
 
 # Openings. con::AbstractFillingSurface is the *boundary* of an opening and is
 # reached through the `fillingSurface` role of a construction surface.
-# 2.0's bldg:Window / bldg:Door carry MultiSurface geometry
-# as part of the wall, so they are surfaces — con:WindowSurface and
-# con:DoorSurface — not the solid con:Window / con:Door
+# 2.0's bldg:Window and bldg:Door carry MultiSurface geometry as part of the
+# wall, so they are surfaces, namely con:WindowSurface and con:DoorSurface,
+# rather than the solid con:Window and con:Door
 # (con::AbstractFillingElement, which models the door or window itself and has
 # thickness).
 [[element]]
@@ -295,7 +295,7 @@ to = "core:xalAddress"
 #
 # TODO: where i-UR properties belong. uro/urc properties substitute into
 # adeOfAbstractCityObject, adeOfAbstractConstruction or adeOfBuilding depending
-# on the class — since this profile does not encode which hook each one uses,
+# on the class. Since this profile does not encode which hook each one uses,
 # they stay unlisted and are emitted last, as they are in PLATEAU 2.0 data.
 # ---------------------------------------------------------------------------
 
@@ -338,7 +338,7 @@ children = [
 ]
 
 # con::AbstractConstructionSurface and con::AbstractFillingSurface subtypes.
-# core::AbstractThematicSurface carries the LOD0-3 multi-surfaces;
+# core::AbstractThematicSurface carries the LOD0-3 multi-surfaces, and
 # con:fillingSurface is on AbstractConstructionSurface only, so a WindowSurface
 # or DoorSurface simply never has one.
 [[order_group]]
@@ -362,10 +362,10 @@ children = [
   "con:fillingSurface",
 ]
 
-# BuildingInstallation and BuildingConstructiveElement are occupied spaces;
+# BuildingInstallation and BuildingConstructiveElement are occupied spaces and
 # BuildingRoom and BuildingFurniture are not, so they have no terrain
-# intersection curve or implicit representation. Listing the union is harmless:
-# reorder only moves children that are actually present.
+# intersection curve or implicit representation. Listing the union is harmless,
+# because reorder only moves children that are actually present.
 [[order_group]]
 types = ["bldg:BuildingInstallation", "bldg:BuildingRoom", "bldg:BuildingFurniture", "bldg:BuildingConstructiveElement"]
 children = [
@@ -409,7 +409,7 @@ children = ["gen:name", "gen:value", "gen:genericAttribute"]
 # Values the converter has to supply because CityGML 2.0 does not record them.
 #
 # con::Height has value, status, lowReference and highReference, all [1..1].
-# lowReference and highReference are codes from Elevation_elevationReference.xml;
+# lowReference and highReference are codes from Elevation_elevationReference.xml.
 # status is an enumeration and takes no codeSpace. The referenced code list is
 # not part of a PLATEAU 2.0 package, so the converter writes it into the
 # output's codelists/ (see ELEVATION_CODELIST) and the codeSpace below resolves.
@@ -428,27 +428,27 @@ reference_code_space = "../../codelists/Elevation_elevationReference.xml"
 # ---------------------------------------------------------------------------
 # LOD4.
 #
-# CityGML 3.0 has no LOD4; it splits a building into an exterior and an
+# CityGML 3.0 has no LOD4, and splits a building into an exterior and an
 # interior model, each with LOD0-3. CityGML 2.0's LOD4 is the interior model,
-# and which interior LOD it becomes depends on how it was measured: a surveyed
+# and which interior LOD it becomes depends on how it was measured. A surveyed
 # interior is interior LOD2, one derived from BIM interior LOD3. The
 # measurement method is the feature's `attribute` code, and the tables below
-# say which codes mean which — they are the survey-method codes (000, 101-121)
+# say which codes mean which. They are the survey-method codes (000, 101-121)
 # and the BIM/CAD/drawing code (500) of DataQualityAttribute_geometrySrcDesc.
 # Codes that say nothing about the method (GIS data, ledgers, estimates,
 # 999 = not created) are deliberately unlisted and take `fallback`.
 #
 # The exterior shell at LOD4 (lod4Solid / lod4MultiSurface on the building
 # itself and its exterior surfaces) folds into the exterior LOD3 slot instead,
-# and only where that slot is empty: a building that already carries LOD3
-# keeps it, and the LOD4 shell is dropped and reported.
+# and only where that slot is empty, so a building that already carries LOD3
+# keeps it and the LOD4 shell is dropped and reported.
 #
 # `attribute` is written as it stands after the rename pass. geometrySrcDescLod4
 # has no i-UR 4.0 home, so the bulk bump leaves it in uro 4.0 -- hence the uro
 # prefix although its siblings become urc.
 #
 # A feature with no code, or a code in neither list, takes `fallback` (lod3,
-# lod2 or drop) for its interior content and is reported; `--lod4-fallback`
+# lod2 or drop) for its interior content and is reported. `--lod4-fallback`
 # overrides it per run.
 # ---------------------------------------------------------------------------
 [lod4]

@@ -1,11 +1,9 @@
 //! A minimal, namespace-aware XML tree plus a streaming reader and a
 //! pretty-printing writer.
 //!
-//! Names are kept *expanded* — `(namespace uri, local name)` — never as raw
-//! `prefix:local` strings. Prefixes are an encoding detail: the reader resolves
-//! them away and the writer re-invents them from the output profile. That is
-//! what makes a namespace bump (`citygml/2.0` -> `citygml/3.0`) a data change
-//! rather than a string-substitution hazard.
+//! Names are kept *expanded*, as `(namespace uri, local name)`, never as raw
+//! `prefix:local` strings. The reader resolves prefixes away and the writer
+//! re-invents them from the output profile.
 
 mod node;
 mod read;

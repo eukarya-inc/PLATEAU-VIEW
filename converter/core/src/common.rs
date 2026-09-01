@@ -11,9 +11,10 @@ use crate::xml::{Element, Name, Node};
 /// CityGML 2.0 generic-attribute properties and the 3.0 data type each one
 /// becomes.
 ///
-/// 2.0 wrote the attribute as a property with a `name` XML attribute
-/// (`<gen:stringAttribute name="x">`). 3.0 wraps a data type instead, and the
-/// name is an element: `StringAttribute` has `name [1..1]` and `value [1..1]`.
+/// 2.0 wrote the attribute as a property with a `name` XML attribute, as in
+/// `<gen:stringAttribute name="x">`. 3.0 wraps a data type instead and makes
+/// the name an element, so `StringAttribute` has `name [1..1]` and
+/// `value [1..1]`.
 const GENERIC_ATTRIBUTES: &[(&str, &str)] = &[
     ("stringAttribute", "StringAttribute"),
     ("intAttribute", "IntAttribute"),
@@ -48,8 +49,6 @@ impl CommonRewrite {
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
         self.code_space(el, warnings);
 
-        // A generic attribute nested in a set hangs off the set's own
-        // `gen:genericAttribute` role, not the city object's `core:` one.
         let wrapper_ns = if el.is(&self.generics, "GenericAttributeSet") {
             &self.generics
         } else {
@@ -72,9 +71,9 @@ impl CommonRewrite {
         }
     }
 
-    /// `codeSpace` paths point into `codelists/`; the published i-UR 4.0 set
-    /// renames a few of those files and drops a few codes, and both show up
-    /// here rather than in the written files.
+    /// Rewrites a `codeSpace` path pointing into `codelists/` to the name the
+    /// published i-UR 4.0 set gives that list, and reports a value the list no
+    /// longer defines.
     fn code_space(&self, el: &mut Element, warnings: &mut Warnings) {
         let policy = self.rules.codelists();
         let Some(value) = el.attr(None, "codeSpace").map(str::to_owned) else {
@@ -133,7 +132,7 @@ impl CommonRewrite {
         out.push(Node::Element(child));
     }
 
-    /// `<gen:stringAttribute name="x">v</gen:stringAttribute>` ->
+    /// Rewrites `<gen:stringAttribute name="x">v</gen:stringAttribute>` into
     /// `<core:genericAttribute><gen:StringAttribute><gen:name>x</gen:name>...`
     fn generic_attribute(&self, mut src: Element, data_type: &str, wrapper: &Name) -> Element {
         let name = src.take_attr(None, "name");
@@ -228,7 +227,6 @@ mod tests {
         let outer = building.child(ns::CITYGML_3, "genericAttribute").unwrap();
         let set = outer.child(GEN3, "GenericAttributeSet").unwrap();
         assert_eq!(set.child(GEN3, "name").unwrap().text(), "outer");
-        // Inside a set the wrapper is gen:genericAttribute, not core:.
         let nested = set
             .child(GEN3, "genericAttribute")
             .expect("gen:genericAttribute");
@@ -313,7 +311,6 @@ mod tests {
         );
         assert!(warnings.iter().any(|(m, _)| m.contains("code 898")));
 
-        // A code the published list still defines passes silently.
         let mut src = Element::with_text(Name::qualified(ns::BUILDING_3, "function"), "000");
         src.set_attr(Name::unqualified("codeSpace"), code_space);
         let (_, warnings) = in_building(src);

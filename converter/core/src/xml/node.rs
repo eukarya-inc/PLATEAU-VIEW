@@ -1,7 +1,7 @@
 use std::fmt;
 
-/// An expanded XML name: namespace URI (`None` for an unqualified name) plus a
-/// local name.
+/// An expanded XML name, holding a namespace URI (`None` for an unqualified
+/// name) and a local name.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Name {
     pub ns: Option<String>,
@@ -100,8 +100,7 @@ impl Element {
         self.name.is(ns, local)
     }
 
-    /// True when this element has at least one element child. Used to decide
-    /// whether the writer may re-indent its content.
+    /// True when this element has at least one element child.
     pub fn has_element_children(&self) -> bool {
         self.children.iter().any(|c| matches!(c, Node::Element(_)))
     }

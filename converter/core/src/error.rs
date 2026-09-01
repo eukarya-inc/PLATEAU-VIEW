@@ -34,9 +34,9 @@ pub enum Error {
     #[error("profile: {0}")]
     Profile(String),
 
-    /// The input is well-formed but no profile converts it -- the wrong CityGML
-    /// version, or an i-UR version nothing targets. Distinct from `Profile`,
-    /// which means a profile *file* is wrong.
+    /// The input is well-formed but no profile converts it, such as the wrong
+    /// CityGML version or an i-UR version nothing targets. Distinct from
+    /// `Profile`, which means a profile *file* is wrong.
     #[error("{0}")]
     Unsupported(String),
 

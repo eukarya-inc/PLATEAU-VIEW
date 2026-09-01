@@ -1,7 +1,8 @@
 //! End-to-end conversion of a real PLATEAU 2023 bldg file.
 //!
-//! The fixture under `tests/fixtures/plateau` is a LOD0 roof edge + LOD1 solid
-//! package with `uro:` 3.0 attributes — the shape most of PLATEAU is in.
+//! The fixture under `tests/fixtures/plateau` is a LOD0 roof edge and LOD1
+//! solid package with `uro:` 3.0 attributes, which is the shape most of
+//! PLATEAU is in.
 
 use std::path::{Path, PathBuf};
 
@@ -20,8 +21,8 @@ fn fixture_gml() -> PathBuf {
     fixture_root().join("udx/bldg/52382287_bldg_6697_psc_op.gml")
 }
 
-/// The profile the fixture's own namespaces select. The fixture is i-UR 3.0, so
-/// this also asserts that detection does not quietly fall back to the default.
+/// The profile the fixture's own namespaces select. The fixture is i-UR 3.0,
+/// so this also asserts that detection does not fall back to the default.
 fn fixture_rules() -> Rules {
     let source = xml::read_to_string(&fixture_gml()).unwrap();
     let declared = xml::root_namespaces(&source);
@@ -47,7 +48,8 @@ fn convert_fixture() -> (String, FileReport) {
 #[test]
 fn converts_every_building_in_the_fixture() {
     let (_, report) = convert_fixture();
-    // Four buildings; `gml:boundedBy` is a CityModel property, not a feature.
+    // Four buildings. `gml:boundedBy` is a CityModel property rather than a
+    // feature.
     assert_eq!(report.features, 4);
 }
 
@@ -81,8 +83,8 @@ fn measured_height_becomes_a_construction_height() {
 fn lod0_roof_edge_becomes_a_roof_surface_boundary() {
     let (output, _) = convert_fixture();
     assert!(!output.contains("lod0RoofEdge"));
-    // core:boundary: the role is declared on core::AbstractSpace and nowhere
-    // else, and MLIT's CityGML 3.0 sample writes it so.
+    // The core:boundary role is declared on core::AbstractSpace and nowhere
+    // else.
     assert!(output.contains("<core:boundary>"));
     assert!(!output.contains("<con:boundary>"));
     assert!(output.contains("<con:RoofSurface"));
@@ -96,21 +98,19 @@ fn lod1_solid_moves_to_the_core_module() {
     assert!(output.contains("<core:lod1Solid>"));
 }
 
-/// i-UR moves 3.x -> 4.0 by namespace alone; element names and codeSpace paths
-/// are left exactly as they were.
+/// i-UR moves 3.x -> 4.0 by namespace alone, leaving element names and
+/// codeSpace paths exactly as they were.
 #[test]
 fn uro_attributes_reach_i_ur_4_0_with_their_values_intact() {
     let (output, _) = convert_fixture();
     assert!(output.contains(r#"xmlns:uro="https://www.geospatial.jp/iur/uro/4.0""#));
     assert!(!output.contains("iur/uro/3.0"));
-    // Values and codeSpace paths are carried through untouched, whatever
-    // happens to the element around them.
     assert!(output.contains("<uro:buildingID>22102-bldg-354359</uro:buildingID>"));
     assert!(output.contains(r#"codeSpace="../../codelists/Common_urbanPlanType.xml""#));
 }
 
-/// The fixture's one generic attribute has to be restructured: 2.0 put the name
-/// in an XML attribute, 3.0 makes it an element inside a wrapped data type.
+/// The fixture's one generic attribute is restructured, moving the name from
+/// an XML attribute into an element inside a wrapped data type.
 #[test]
 fn generic_attributes_are_wrapped_and_renamed() {
     let (output, _) = convert_fixture();
@@ -122,7 +122,7 @@ fn generic_attributes_are_wrapped_and_renamed() {
 }
 
 #[test]
-fn geometry_coordinates_are_carried_through_verbatim() {
+fn geometry_coordinates_are_carried_through_unchanged() {
     let source = xml::read_to_string(&fixture_gml()).unwrap();
     let (output, _) = convert_to_string(&converter(), "fixture", &source).unwrap();
 
@@ -134,8 +134,8 @@ fn geometry_coordinates_are_carried_through_verbatim() {
             })
             .collect()
     };
-    // Reordering moves the roof edge after lod1Solid, so compare as a multiset:
-    // the point is that no coordinate string is rewritten, reformatted or lost.
+    // Reordering moves the roof edge after lod1Solid, so the comparison is a
+    // multiset one.
     let mut before = pos_lists(&source);
     let mut after = pos_lists(&output);
     assert_eq!(before.len(), 30, "the fixture's geometry count");
@@ -156,7 +156,7 @@ fn every_geometry_gets_a_gml_id() {
         let opens = output.matches(&format!("<{geometry} ")).count();
         assert!(opens > 0, "no {geometry} in the output");
     }
-    // Every opening geometry tag carries an id; count them against the tags.
+    // Every opening geometry tag carries an id, counted against the tags.
     let ids = output.matches("gml:id=").count();
     let geometries = [
         "gml:Solid ",
@@ -167,19 +167,20 @@ fn every_geometry_gets_a_gml_id() {
     .iter()
     .map(|g| output.matches(&format!("<{g}")).count())
     .sum::<usize>();
-    // 4 Buildings + 4 generated RoofSurfaces already had or were given ids.
+    // 4 Buildings and 4 generated RoofSurfaces already had or were given
+    // ids.
     assert_eq!(ids, geometries + 8);
 }
 
-/// i-UR 4.0 consolidations the converter must not guess at are named in the
+/// i-UR 4.0 consolidations the converter does not guess at are named in the
 /// report, and the elements themselves are left intact.
 #[test]
 fn every_i_ur_name_in_the_output_exists_in_i_ur_4_0() {
     let (output, _) = convert_fixture();
 
-    // The failure this guards against is quiet: an element bumped into a
-    // namespace that does not declare it still looks converted, and the writer
-    // has no prefix for it, so it is emitted with no namespace at all.
+    // An element bumped into a namespace that does not declare it still looks
+    // converted, and the writer has no prefix for it, so it would be emitted
+    // with no namespace at all.
     let declared = i_ur_4_0_element_names();
     let mut undeclared: Vec<String> = Vec::new();
     for prefix in ["uro", "urc", "urf", "urg", "urt"] {
@@ -230,8 +231,8 @@ fn reports_the_assumptions_it_had_to_make() {
 }
 
 /// A converted package resolves i-UR through its own `schemas/`, the way a
-/// PLATEAU package does -- so the schemas have to be written, and the reference
-/// to them has to be the relative path that finds them.
+/// PLATEAU package does, so the schemas are written and referenced by a
+/// relative path that finds them.
 #[test]
 fn the_i_ur_4_0_schemas_are_written_and_referenced_relatively() {
     let out = tempfile::tempdir().unwrap();
@@ -283,15 +284,16 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
             .join("udx/bldg/52382287_bldg_6697_psc_op.gml")
             .is_file()
     );
-    // Codelists are referenced by relative path from the gml, so they must come along.
+    // Codelists are referenced by relative path from the gml, so they come
+    // along.
     assert!(
         out.path()
             .join("codelists/Common_urbanPlanType.xml")
             .is_file()
     );
     // The published i-UR 4.0 code lists (315), the three input lists that are
-    // municipality-authored or have no published counterpart — one of which
-    // takes a published name — the five i-UR 4.0 schemas, and the fixture's
+    // municipality-authored or have no published counterpart, one of which
+    // takes a published name, the five i-UR 4.0 schemas, and the fixture's
     // appearance image.
     assert_eq!(report.copied, 323);
     assert!(
@@ -326,12 +328,10 @@ fn converts_a_whole_dataset_into_a_mirrored_tree() {
     );
 }
 
-/// Texture images (and any other non-GML file under a converted feature type)
-/// are referenced by the documents by relative path, so they are copied
-/// verbatim into the mirrored tree — without them an LOD2+ package renders
-/// untextured.
+/// Texture images, and any other non-GML file under a converted feature type,
+/// are copied byte for byte into the mirrored tree.
 #[test]
-fn non_gml_companions_are_copied_verbatim() {
+fn non_gml_companions_are_copied_unchanged() {
     let out = tempfile::tempdir().unwrap();
     let dataset = Dataset::open(&[fixture_root()]).unwrap();
     converter().convert_dataset(&dataset, out.path()).unwrap();
@@ -343,8 +343,7 @@ fn non_gml_companions_are_copied_verbatim() {
 }
 
 /// Every element name i-UR 4.0 declares, read from the schemas the converter
-/// ships. Reading them rather than listing them keeps the check honest when the
-/// vendored schemas are updated.
+/// ships.
 fn i_ur_4_0_element_names() -> std::collections::BTreeSet<String> {
     let mut names = std::collections::BTreeSet::new();
     for (_, text) in plateau_converter_core::IUR_4_0_SCHEMAS {

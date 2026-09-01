@@ -1,18 +1,18 @@
 //! Structural rewrites for the appearance module.
 //!
 //! Like [`crate::bldg`] this runs *after* [`crate::transform::rename`], so the
-//! elements arrive in the CityGML 3.0 appearance namespace. The pure renames —
-//! the attachment properties moving into `core`, `surfaceDataMember` becoming
-//! `surfaceData` — are profile rows; this pass handles the change a rename
-//! table cannot express: how a texture binds to geometry.
+//! elements arrive in the CityGML 3.0 appearance namespace. The pure renames,
+//! such as the attachment properties moving into `core` and
+//! `surfaceDataMember` becoming `surfaceData`, are profile rows. This pass
+//! handles how a texture binds to geometry.
 //!
 //! CityGML 2.0 bound a `ParameterizedTexture` to a surface with a `target`
 //! property whose `uri` XML attribute named the geometry and whose content was
 //! the parameterization, and each `textureCoordinates` list named its ring in
-//! a `ring` XML attribute. CityGML 3.0 makes the association an object: a
-//! `textureParameterization` property holds an `app:TextureAssociation` — a
-//! GML object, so it needs a `gml:id` — carrying `target` as an element, and
-//! `TexCoordList` lists coordinates and rings as parallel elements.
+//! a `ring` XML attribute. CityGML 3.0 makes the association an object. A
+//! `textureParameterization` property holds an `app:TextureAssociation`, which
+//! is a GML object and so takes a `gml:id`, carrying `target` as an element,
+//! and `TexCoordList` lists coordinates and rings as parallel elements.
 //!
 //! ```text
 //! 2.0   <app:target uri="#s"><app:TexCoordList>
@@ -28,10 +28,7 @@
 //! ```
 //!
 //! `GeoreferencedTexture` and `X3DMaterial` already wrote `target` as a plain
-//! URI element in 2.0 and still do in 3.0, so they pass through untouched. The
-//! appearance module is shared by every thematic module (`bldg`, `tran`,
-//! `frn`, …), which is why this is its own pass rather than part of
-//! [`crate::bldg`].
+//! URI element in 2.0 and still do in 3.0, so they pass through untouched.
 
 use crate::error::Result;
 use crate::profile::Rules;
@@ -67,10 +64,10 @@ impl AppearanceRewrite {
         }
     }
 
-    /// `app:target[@uri]` on a `ParameterizedTexture` ->
+    /// Rewrites `app:target[@uri]` on a `ParameterizedTexture` into an
     /// `app:textureParameterization` holding an `app:TextureAssociation`
     /// object. A `target` without the 2.0 `uri` attribute is left alone and
-    /// reported: there is no geometry reference to build the object from.
+    /// reported.
     fn texture_targets(&self, el: &mut Element, ids: &mut IdGen, warnings: &mut Warnings) {
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
@@ -123,8 +120,9 @@ impl AppearanceRewrite {
         el.children = out;
     }
 
-    /// `textureCoordinates[@ring]` -> parallel `textureCoordinates` and `ring`
-    /// elements, rings in the same order as the coordinate lists they belong to.
+    /// Rewrites `textureCoordinates[@ring]` into parallel `textureCoordinates`
+    /// and `ring` elements, rings in the same order as the coordinate lists
+    /// they belong to.
     fn split_rings(&self, el: &mut Element, warnings: &mut Warnings) {
         let mut rings: Vec<String> = Vec::new();
         let mut missing = false;
@@ -228,8 +226,8 @@ mod tests {
         );
     }
 
-    /// Georeferenced textures and materials wrote `target` as a URI element in
-    /// 2.0 already; they must pass through silently.
+    /// Georeferenced textures and materials, whose `target` was already a URI
+    /// element in 2.0, pass through silently.
     #[test]
     fn material_and_georeferenced_targets_are_left_alone() {
         for kind in ["X3DMaterial", "GeoreferencedTexture"] {
@@ -241,8 +239,7 @@ mod tests {
         }
     }
 
-    /// Applying the pass to its own output must change nothing: the created
-    /// target has no uri attribute and the rings are already elements.
+    /// Applying the pass to its own output changes nothing.
     #[test]
     fn the_rewrite_is_idempotent() {
         let (once, _) = applied(texture(vec![target_20("#s1", Some("#r1"))]));

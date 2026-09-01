@@ -1,20 +1,16 @@
 //! Derives the i-UR half of a conversion profile from the schemas themselves.
 //!
-//! The mapping from i-UR 3.x to 4.0 is not a judgement call: both sides are
-//! published XML Schema documents, and what moved where is written in them. Six
-//! hundred hand-written rules would be unreviewable and would rot; this reads
-//! them instead, and records which schema revisions it read.
+//! Both sides are published XML Schema documents, so what moved where is read
+//! off them. The generated block records which schema revisions it read.
 //!
-//! Two things it deliberately does *not* do:
+//! Two things it does *not* do:
 //!
-//! * **Guess.** A name that is absent from 4.0 entirely, or present in both `uro`
-//!   and `urc`, is reported for a human rather than mapped.
+//! * **Guess.** A name that is absent from 4.0 entirely, or present in both
+//!   `uro` and `urc`, is reported for a human rather than mapped.
 //! * **Read one revision.** i-UR publishes patch revisions in place under the
-//!   same minor-version URL, and they are not compatible with one another --
-//!   `uro` 3.0.4 and 3.0.5 differ by 34 names. Rules are therefore generated
-//!   from the *union* of every known patch of a minor: a rule for a name absent
-//!   from the revision at hand never fires, whereas a missing rule silently
-//!   writes the element with no namespace.
+//!   same minor-version URL, and they are not compatible with one another.
+//!   Rules are generated from the *union* of every known patch of a minor, so
+//!   a rule for a name absent from the revision at hand simply never fires.
 
 mod xsd;
 
@@ -43,7 +39,7 @@ const END: &str = "# END GENERATED -- i-UR rules";
     about = "Generate the i-UR rules of a conversion profile from the schemas"
 )]
 struct Cli {
-    /// Source i-UR minor version, e.g. `3.1`.
+    /// Source i-UR minor version, such as `3.1`.
     #[arg(long, value_name = "MINOR")]
     source: String,
 
@@ -88,8 +84,9 @@ fn main() -> Result<()> {
 
 /// Every vendored patch revision of one source minor, keyed by module.
 ///
-/// `fixtures/schemas/sources` holds files named `<module>-<patch>-<hash>.xsd`; a module's
-/// declarations are the union across its revisions of the requested minor.
+/// `fixtures/schemas/sources` holds files named `<module>-<patch>-<hash>.xsd`.
+/// A module's declarations are the union across its revisions of the requested
+/// minor.
 fn read_sources(root: &Path, minor: &str) -> Result<BTreeMap<String, (Schema, Vec<String>)>> {
     let dir = root.join("fixtures/schemas/sources");
     let mut out: BTreeMap<String, (Schema, Vec<String>)> = BTreeMap::new();
@@ -140,13 +137,8 @@ fn read_targets(root: &Path, minor: &str) -> Result<BTreeMap<String, Schema>> {
     Ok(out)
 }
 
-/// The `from` names of `[[element]]` rules written by hand, i.e. outside the
-/// generated block.
-///
-/// A generated rule must never overrule a decision someone made deliberately --
-/// the schemas cannot know that `uro:DataQualityAttribute` should become the
-/// *Exterior* variant, for instance -- and two rules for one name is an error,
-/// so the generator yields.
+/// The `from` names of `[[element]]` rules written by hand, meaning outside
+/// the generated block. The generator skips any name in this set.
 fn hand_written_rules(profile: &Path) -> Result<BTreeMap<String, String>> {
     let Ok(text) = std::fs::read_to_string(profile) else {
         return Ok(BTreeMap::new());
@@ -155,7 +147,8 @@ fn hand_written_rules(profile: &Path) -> Result<BTreeMap<String, String>> {
         (Some(start), Some(end)) => format!("{}{}", &text[..start], &text[end..]),
         _ => text,
     };
-    // `from` and `to` sit on consecutive lines in every rule this file writes.
+    // `from` and `to` sit on consecutive lines in every rule this file
+    // writes.
     let lines: Vec<&str> = outside.lines().map(str::trim).collect();
     let mut rules = BTreeMap::new();
     for pair in lines.windows(2) {
@@ -192,10 +185,9 @@ fn generate(
             if home.has(name) {
                 continue; // the bulk namespace bump already handles it
             }
-            // A global declaration is an ADE property in its own right; a nested
-            // one is a field of some class. They are different things that
-            // happen to share a spelling, so a global never moves to a nested
-            // name or the reverse.
+            // A global declaration is an ADE property in its own right and a
+            // nested one is a field of some class, so a global never moves to
+            // a nested name or the reverse.
             let elsewhere: Vec<&String> = targets
                 .iter()
                 .filter(|(m, s)| {
@@ -205,20 +197,19 @@ fn generate(
                 .collect();
 
             // A nested name is only evidence of a move when the class holding
-            // it moved the same way. Several modules declare `lod1MultiSurface`
-            // and `language`; that a name happens to exist in one other module
-            // says nothing about where *this* one belongs.
+            // it moved the same way. Several modules declare
+            // `lod1MultiSurface` and `language`, so the bare name settles
+            // nothing.
             let coherent = |to: &str| match (&decl.owner, decl.global) {
                 (_, true) => true,
                 (Some(owner), _) => {
-                    // Types are declared as `<name>Type`; the class element that
-                    // carries them is the bare name.
+                    // Types are declared as `<name>Type`, and the class
+                    // element carrying them is the bare name.
                     let class = owner.strip_suffix("Type").unwrap_or(owner);
                     let moved_in_schema =
                         |n: &str| !home.has(n) && targets.get(to).is_some_and(|s| s.has(n));
-                    // A class may have been placed by hand -- i-UR 3.0's
-                    // per-feature-type classes have no counterpart to read off --
-                    // and its fields follow it just the same.
+                    // A class may have been placed by hand, and its fields
+                    // follow it just the same.
                     let moved_by_hand = hand_written
                         .get(&format!("{module}:{class}"))
                         .is_some_and(|target| target.starts_with(&format!("{to}:")));
@@ -232,8 +223,8 @@ fn generate(
                 continue;
             }
 
-            // Several modules may spell a nested name the same way -- `key` is
-            // declared by both urc and urg. The class holding it settles which
+            // Several modules may spell a nested name the same way, such as
+            // `key` in both urc and urg. The class holding it settles which
             // one is meant, so narrow before giving up.
             let fits: Vec<&String> = elsewhere
                 .iter()
@@ -333,10 +324,9 @@ consistent with the class holding it\n"
 /// The CityGML property an i-UR class hangs off, following `substitutionGroup`
 /// up to a CityGML `ADEOf…` head.
 ///
-/// The head is a class; the property that carries it is the same name with a
-/// lower-case first letter (`bldg:ADEOfAbstractBuilding` ->
-/// `bldg:adeOfAbstractBuilding`), which holds for every hook CityGML 3.0
-/// declares.
+/// The head is a class, and the property carrying it is the same name with a
+/// lower-case first letter, so `bldg:ADEOfAbstractBuilding` gives
+/// `bldg:adeOfAbstractBuilding`.
 fn resolve_hook(
     schema: &Schema,
     targets: &BTreeMap<String, Schema>,
@@ -350,7 +340,7 @@ fn resolve_hook(
             property.push_str(rest);
             return Some(format!("{prefix}:{property}"));
         }
-        // Still inside i-UR: climb to the parent class.
+        // Still inside i-UR, so climb to the parent class.
         let owner = targets.get(prefix).unwrap_or(schema);
         group = owner.decls.get(local)?.substitution_group.clone()?;
     }
@@ -360,12 +350,12 @@ fn resolve_hook(
 /// Replaces the generated block of `profile`, keeping everything else.
 fn splice(profile: &str, generated: &str) -> Result<String> {
     let (Some(start), Some(end)) = (profile.find(BEGIN), profile.find(END)) else {
-        // First run: append, so a profile need not be prepared by hand.
+        // First run, so append rather than splice.
         return Ok(format!("{}\n{generated}", profile.trim_end()));
     };
     // `generated` ends with its own newline, so the one after the marker is
-    // dropped -- but the marker may be the last thing in the file, in which
-    // case there is none to drop.
+    // dropped. The marker may be the last thing in the file, in which case
+    // there is none to drop.
     let tail = &profile[end + END.len()..];
     let rest = tail
         .strip_prefix("\r\n")
@@ -397,8 +387,8 @@ mod tests {
         );
     }
 
-    /// A class may substitute into another i-UR class; the hook is the one at
-    /// the top of the chain.
+    /// A class may substitute into another i-UR class, and the hook is the
+    /// one at the top of the chain.
     #[test]
     fn a_hook_is_followed_through_an_i_ur_parent() {
         let urc = schema(

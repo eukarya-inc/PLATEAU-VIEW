@@ -1,12 +1,13 @@
-//! End-to-end: xAL 2.0 addresses become xAL 3.0 through a real profile.
+//! End-to-end conversion of xAL 2.0 addresses into xAL 3.0 through a real
+//! profile.
 
 use plateau_converter_core::convert::{Converter, Options, convert_to_string};
 use plateau_converter_core::profile::Rules;
 use plateau_converter_core::{DEFAULT_PROFILE, PROFILES};
 
-/// The structured-address shape 2.0-era packages carry, including the pieces
-/// the corpus actually uses: nested Country > Locality > DependentLocality,
-/// typed name elements, and a number.
+/// The structured-address shape 2.0-era packages carry, namely: nested
+/// Country > Locality > DependentLocality, typed name elements, and a
+/// number.
 const ADDRESSED: &str = r##"<core:CityModel
     xmlns:core="http://www.opengis.net/citygml/2.0"
     xmlns:bldg="http://www.opengis.net/citygml/building/2.0"

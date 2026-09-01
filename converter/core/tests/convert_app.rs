@@ -1,6 +1,6 @@
-//! End-to-end conversion of appearance content: the attachment properties, the
-//! surface-data role, and the texture-to-surface binding. The fixture package
-//! is untextured and cannot exercise this.
+//! End-to-end conversion of appearance content, covering the attachment
+//! properties, the surface-data role, and the texture-to-surface binding. The
+//! fixture package is untextured and cannot exercise this.
 
 use plateau_converter_core::PROFILES;
 use plateau_converter_core::convert::{Converter, Options, convert_to_string};
@@ -108,7 +108,7 @@ fn rings_move_from_attribute_to_parallel_elements() {
         output.contains(
             "<app:textureCoordinates>0.1 0.1 0.9 0.1 0.9 0.9 0.1 0.1</app:textureCoordinates>"
         ),
-        "coordinate values are carried through verbatim"
+        "coordinate values are carried through unchanged"
     );
 }
 

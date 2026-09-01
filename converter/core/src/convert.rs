@@ -1,4 +1,4 @@
-//! The top-level driver: dataset in, converted tree out.
+//! The top-level driver, taking a dataset in and writing a converted tree out.
 
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
@@ -21,10 +21,8 @@ use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 
 /// Directories copied through unchanged when converting a whole dataset.
 ///
-/// `schemas/` is deliberately absent: the input's copy describes i-UR 3.x, and
-/// carrying it into a 4.0 package would leave a schema tree nothing references.
-/// It is replaced by [`write_iur_schemas`] instead. `codelists/` is absent for
-/// the same reason and is rebuilt by [`write_codelists`].
+/// `schemas/` and `codelists/` are absent. They are rebuilt by
+/// [`write_iur_schemas`] and [`write_codelists`].
 const COPIED_PARTS: &[&str] = &["metadata", "specification"];
 
 #[derive(Debug, Clone)]
@@ -97,8 +95,10 @@ impl Converter {
         &self.options
     }
 
-    /// Converts the selected feature types of `dataset` into `out`, mirroring the
-    /// input's directory layout.
+    /// Converts the selected feature types of `dataset` into `out`, mirroring
+    /// the input's directory layout. Non-GML companion files are copied to the
+    /// mirrored path, and a feature type present but not requested is
+    /// reported.
     pub fn convert_dataset(&self, dataset: &Dataset, out: &Path) -> Result<Report> {
         let requested = if self.options.feature_types.is_empty() {
             dataset.feature_types()?
@@ -133,9 +133,6 @@ impl Converter {
             report.absorb(&result?);
         }
 
-        // The documents reference their non-GML companions — texture images
-        // above all — by relative path, so a converted tree without them would
-        // render untextured. They are copied verbatim to the mirrored path.
         for feature_type in &requested {
             for input in dataset.companion_files(feature_type)? {
                 let relative = input.strip_prefix(dataset.root()).map_err(|_| {
@@ -150,8 +147,6 @@ impl Converter {
             }
         }
 
-        // Untouched feature types would leave a tree that is half 2.0 and half
-        // 3.0, so say so rather than copying them in silently.
         for feature_type in dataset.feature_types()? {
             if !requested.contains(&feature_type) {
                 report.warnings.add(format!(
@@ -178,9 +173,6 @@ impl Converter {
                 );
             }
 
-            // A conversion cannot invent a code list it never saw, but it can
-            // say which references will not resolve rather than leaving that
-            // for a validator to find.
             let target_dir = out.join("codelists");
             for name in &report.code_spaces {
                 if !target_dir.join(name).is_file() {
@@ -210,17 +202,16 @@ impl Converter {
         Ok(report)
     }
 
-    /// Converts one CityGML document. `label` names the input in diagnostics.
+    /// Converts one CityGML document into `sink`. `label` names the input in
+    /// diagnostics. A document whose root element never closes is a
+    /// [`Error::MalformedXml`].
     pub fn convert(&self, label: &str, source: &str, sink: impl Write) -> Result<FileReport> {
         let mut reader = Reader::new(label, source);
         let mut writer = Writer::new(sink, self.rules.prefixes().clone(), self.options.indent);
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
-        // A truncated file still yields the members it managed to hold, so the
-        // root's end tag is what tells a complete document from a partial one.
         let mut closed = false;
 
-        // The output is always UTF-8, whatever the input declared.
         writer.write_declaration(None)?;
 
         while let Some(chunk) = reader.next_chunk()? {
@@ -258,8 +249,6 @@ impl Converter {
 
         let root = root.ok_or_else(|| Error::malformed(label, "no root element"))?;
         if !closed {
-            // Without this the writer's output is an unclosed root element that
-            // no parser will accept, reported as a successful conversion.
             return Err(Error::malformed(
                 label,
                 format!(
@@ -269,7 +258,6 @@ impl Converter {
             ));
         }
         if root.children.is_empty() && report.features == 0 {
-            // An empty root is legal but almost always a sign of a bad input.
             report.warnings.add("the document held no city objects");
         }
         for namespace in writer.missing_namespaces() {
@@ -283,34 +271,24 @@ impl Converter {
     }
 
     /// Renames, restructures and reorders one top-level member.
+    ///
+    /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
+    /// `app`, `lod4`, `bldg`, `iur`. Generated `gml:id` values are seeded from
+    /// the member's own `gml:id`, so they are unique across a dataset and
+    /// stable across runs.
     fn convert_member(&self, element: Element, report: &mut FileReport) -> Option<Element> {
         let mut element = transform::rename(&self.rules, element)?;
 
-        // Seeding ids from the feature's own gml:id keeps generated ids unique
-        // across a dataset and stable across runs.
         let seed = first_gml_id(&element, &self.gml_ns)
             .unwrap_or_else(|| format!("{}_{}", element.name.local, report.features + 1));
         let mut ids = IdGen::new(&seed);
 
-        // Module-independent rewrites run first: they introduce elements the
-        // building pass must not mistake for building properties (a
-        // `core:genericAttribute` wrapper is not a bldg property), and never
-        // the other way round.
         self.common.apply(&mut element, &mut report.warnings);
-        // The address rewrite touches only core:xalAddress subtrees, whose
-        // xAL content no later pass reads, so its slot is free.
         self.xal.apply(&mut element, &mut report.warnings);
-        // The appearance rewrite touches only appearance-namespace content,
-        // which no later pass reads, so its slot is free.
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
-        // LOD4 is folded before the building pass so that pass only ever sees
-        // LOD0-3 names and can never emit an LOD4 slot 3.0 does not have.
         self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
-        // Last of the three: the CityGML hooks it introduces are in thematic
-        // namespaces (`bldg:adeOfAbstractBuilding`), so running it earlier would
-        // offer the building pass a property that is not a building property.
         self.iur.apply(&mut element, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
@@ -319,8 +297,6 @@ impl Converter {
             transform::reorder(&self.rules, &mut element);
         }
 
-        // `gml:boundedBy` and friends are properties of the CityModel, not city
-        // objects, so they must not inflate the feature count.
         if !element.name.in_ns(&self.gml_ns) {
             report.features += 1;
         }
@@ -330,8 +306,7 @@ impl Converter {
 }
 
 /// Records the file names of every code list `element` references through a
-/// relative `codelists/` path, so the dataset conversion can verify each one
-/// resolves inside the output package.
+/// relative `codelists/` path.
 fn collect_code_spaces(element: &Element, out: &mut std::collections::BTreeSet<String>) {
     if let Some(value) = element.attr(None, "codeSpace") {
         if let Some((dir, file)) = value.rsplit_once('/') {
@@ -357,11 +332,11 @@ fn first_gml_id(element: &Element, gml_ns: &str) -> Option<String> {
 
 /// Writes the output's `codelists/`.
 ///
-/// The published i-UR 4.0 lists are what a converted package's codes are
-/// checked against, so they replace the input's copies of the same files.
-/// Input lists with no published counterpart, and the municipality-authored
-/// ones the profile's `[codelists] local` patterns name, are copied verbatim
-/// — a published file never overwrites those.
+/// The published i-UR 4.0 lists replace the input's copies of the same files.
+/// Two kinds of input list are kept instead, namely: one with no published
+/// counterpart, and one the profile's `[codelists] local` patterns name. A
+/// published file never overwrites those. Returns how many files were
+/// written.
 fn write_codelists(
     root: &Path,
     out: &Path,
@@ -387,16 +362,10 @@ fn write_codelists(
             let keep = if rules.codelists().is_local(name) {
                 true
             } else if rules.codelists().is_superseded(name) {
-                // The conversion rewrote this list's values into the
-                // published codes; the input's codes no longer occur.
                 false
             } else {
                 match published.get(name) {
                     None => true,
-                    // A municipality may lawfully edit certain lists in place
-                    // under the standard name. Codes only the input defines are
-                    // in use by that package, so the published copy must not
-                    // replace them.
                     Some(text) => {
                         let input = fs::read_to_string(entry.path())
                             .map_err(|e| Error::io(entry.path(), e))?;
@@ -451,9 +420,9 @@ fn write_codelists(
     Ok(written)
 }
 
-/// The codes a code list defines: every `<gml:name>` inside a
-/// `<gml:Definition>`. The dictionary's own `<gml:name>` (the list title) is
-/// outside any Definition and so excluded.
+/// The codes a code list defines, meaning every `<gml:name>` inside a
+/// `<gml:Definition>`. The dictionary's own `<gml:name>`, which is the list
+/// title, sits outside any Definition and is excluded.
 fn definition_codes(text: &str) -> std::collections::BTreeSet<String> {
     let mut codes = std::collections::BTreeSet::new();
     let mut rest = text;
@@ -475,7 +444,7 @@ fn definition_codes(text: &str) -> std::collections::BTreeSet<String> {
     codes
 }
 
-/// At most five codes, then an ellipsis — a warning line, not a data dump.
+/// At most five codes, followed by an ellipsis when more were given.
 fn summarize(codes: &[String]) -> String {
     let mut shown: Vec<&str> = codes.iter().take(5).map(String::as_str).collect();
     if codes.len() > 5 {
@@ -484,10 +453,9 @@ fn summarize(codes: &[String]) -> String {
     shown.join(", ")
 }
 
-/// Writes the vendored i-UR 4.0 schemas into `out/schemas/`.
-///
-/// The output's `xsi:schemaLocation` points at these by relative path, so they
-/// have to be there for the package to resolve on its own.
+/// Writes the vendored i-UR 4.0 schemas into `out/schemas/`, where the
+/// output's `xsi:schemaLocation` points at them by relative path. Returns how
+/// many files were written.
 fn write_iur_schemas(out: &Path) -> Result<usize> {
     let mut written = 0;
     for (relative, text) in crate::IUR_4_0_SCHEMAS {
@@ -543,8 +511,8 @@ mod tests {
     use crate::DEFAULT_PROFILE;
     use crate::profile::Rules;
 
-    /// A self-closing root is legal XML; the output must still close the root
-    /// tag it wrote, and the empty document is reported.
+    /// A self-closing root is legal XML, and the output still closes the root
+    /// tag it wrote. The empty document is reported.
     #[test]
     fn a_self_closing_root_produces_a_closed_root() {
         let converter = Converter::new(
@@ -564,8 +532,8 @@ mod tests {
         );
     }
 
-    /// A file cut short mid-document used to convert "successfully", writing a
-    /// root element it never closed.
+    /// A file cut short mid-document is an error rather than output with an
+    /// unclosed root element.
     #[test]
     fn a_truncated_document_is_an_error_not_an_unclosed_root() {
         let converter = Converter::new(
@@ -626,7 +594,7 @@ mod tests {
     }
 
     /// A `codeSpace` naming a list that is neither shipped by the input nor
-    /// part of the published set must be called out, not left for a validator.
+    /// part of the published set is reported.
     #[test]
     fn a_dangling_code_space_reference_is_reported() {
         let (_out, report) = convert_mini(&[]);
@@ -657,8 +625,8 @@ mod tests {
         </gml:dictionaryEntry>
     </gml:Dictionary>"#;
 
-    /// An input list that defines codes the published file lacks was edited by
-    /// the municipality; the published copy must not replace it.
+    /// An input list defining codes the published file lacks is kept, and the
+    /// published copy does not replace it.
     #[test]
     fn an_edited_input_list_survives_the_published_one() {
         let (out, report) = convert_mini(&[("Building_usage.xml", EDITED_USAGE)]);
@@ -678,8 +646,7 @@ mod tests {
         );
     }
 
-    /// The building lodType pass rewrites values into the published codes, so
-    /// the input's list must not win however many extra codes it defines.
+    /// A superseded list is replaced however many extra codes it defines.
     #[test]
     fn a_superseded_list_is_replaced_despite_extra_codes() {
         let edited = EDITED_USAGE.replace("Building_usage", "Building_lodType");
@@ -700,8 +667,8 @@ mod tests {
         );
     }
 
-    /// An input list whose codes are all in the published file is edition
-    /// drift, and the published copy replaces it silently.
+    /// An input list whose codes are all in the published file is replaced by
+    /// the published copy, with no warning.
     #[test]
     fn an_unedited_input_list_is_replaced_by_the_published_one() {
         let subset: String = EDITED_USAGE

@@ -11,12 +11,10 @@ use crate::error::{Error, Result};
 
 /// Reads a CityGML file into a `String`, honouring a UTF-8 BOM and falling back
 /// to Shift_JIS for the occasional legacy file.
-/// The namespace URIs declared on a document's root element.
+/// The namespace URIs declared on a document's root element, in declaration
+/// order.
 ///
-/// [`Reader`] resolves prefixes away and discards `xmlns` attributes, which is
-/// right for conversion but loses exactly what version detection needs: a
-/// document declares the i-UR namespaces it uses, and those carry the version.
-/// Parsing stops at the root start tag, so this reads the head of the file only.
+/// Parsing stops at the root start tag, so only the head of `src` is read.
 pub fn root_namespaces(source: &str) -> Vec<String> {
     let mut reader = quick_xml::Reader::from_str(source);
     let mut declared = Vec::new();
@@ -39,20 +37,15 @@ pub fn root_namespaces(source: &str) -> Vec<String> {
     }
 }
 
-/// How much of a file [`read_root_namespaces`] looks at.
-///
-/// The largest root start tag across a sample of PLATEAU packages is under
-/// 3 KiB; 64 KiB leaves room for one far wider than anything observed.
+/// How many bytes of a file [`read_root_namespaces`] looks at.
 const HEAD_BYTES: usize = 64 * 1024;
 
 /// The namespaces declared on the root element of the document at `path`,
-/// reading only the head of the file.
+/// reading only the first `HEAD_BYTES` bytes.
 ///
-/// PLATEAU `.gml` files reach the better part of a gigabyte, so the whole point
-/// is not to load one to read its first tag. Namespace URIs are ASCII, so a
-/// truncated read is decoded lossily rather than sniffed for Shift_JIS the way
-/// [`read_to_string`] does: a cut multi-byte character would otherwise flip the
-/// whole buffer to the wrong encoding.
+/// The head is decoded lossily as UTF-8 rather than sniffed for Shift_JIS the
+/// way [`read_to_string`] does, so a namespace URI outside ASCII is not
+/// supported here.
 pub fn read_root_namespaces(path: &Path) -> Result<Vec<String>> {
     use std::io::Read;
 
@@ -80,18 +73,17 @@ fn decode(bytes: &[u8]) -> String {
 
 /// One unit of document structure handed out by [`Reader`].
 ///
-/// The root element arrives on its own ([`Chunk::RootStart`]) so that the caller
-/// can rewrite and emit it before any feature is read; everything directly
-/// inside it arrives one subtree at a time. Peak memory is therefore one feature,
-/// not one file.
+/// The root element arrives on its own as [`Chunk::RootStart`], before any
+/// feature is read. Everything directly inside it arrives one subtree at a
+/// time, so peak memory is one feature rather than one file.
 #[derive(Debug)]
 pub enum Chunk {
-    /// The XML declaration. Its contents are deliberately dropped: the output is
-    /// always UTF-8, so repeating the input's `encoding` would be a lie.
+    /// The XML declaration. Its contents are dropped, since the output is
+    /// always UTF-8.
     Decl,
     /// A comment sitting outside the root element.
     Prologue(Node),
-    /// The root element's start tag; `children` is always empty.
+    /// The root element's start tag. `children` is always empty.
     RootStart(Element),
     /// A complete direct child of the root element.
     Member(Element),
@@ -105,7 +97,8 @@ pub struct Reader<'i> {
     inner: NsReader<&'i [u8]>,
     path: PathBuf,
     in_root: bool,
-    /// A self-closing root was reported; its `RootEnd` is owed on the next call.
+    /// A self-closing root was reported, and its `RootEnd` is owed on the next
+    /// call.
     pending_root_end: bool,
     finished: bool,
 }
@@ -149,9 +142,6 @@ impl<'i> Reader<'i> {
                     }));
                 }
                 Event::Text(t) => {
-                    // Inter-element whitespace carries no information; the writer
-                    // re-indents. Anything else at this level is a document error
-                    // we simply pass through as content.
                     let text = t.xml10_content();
                     if text.trim().is_empty() {
                         continue;
@@ -174,14 +164,10 @@ impl<'i> Reader<'i> {
                     if self.in_root {
                         return Ok(Some(Chunk::Member(el)));
                     }
-                    // A self-closing root: report the start now and its end on
-                    // the next call, so the caller sees the same chunk sequence
-                    // an empty <root></root> produces.
                     self.pending_root_end = true;
                     return Ok(Some(Chunk::RootStart(el)));
                 }
                 Event::End(_) => {
-                    // The only End we can see here is the root's own.
                     self.finished = true;
                     return Ok(Some(Chunk::RootEnd));
                 }
@@ -212,8 +198,8 @@ impl<'i> Reader<'i> {
                 Event::Start(e) => stack.push(self.element(&e)?),
                 Event::Empty(e) => {
                     let el = self.element(&e)?;
-                    // `stack` is never empty: it starts with one element and only
-                    // an `End` pops it, at which point we return.
+                    // `stack` is never empty. It starts with one element and
+                    // only an `End` pops it, at which point we return.
                     stack.last_mut().expect("non-empty stack").push(el);
                 }
                 Event::End(_) => {
@@ -244,8 +230,6 @@ impl<'i> Reader<'i> {
                     .expect("non-empty stack")
                     .children
                     .push(Node::Comment(c.into_inner().into_owned())),
-                // quick-xml reports `&amp;` and `&#12345;` as their own events
-                // rather than folding them into the surrounding text.
                 Event::GeneralRef(reference) => {
                     let name = reference.into_inner();
                     let resolved = resolve_entity(&name).ok_or_else(|| {
@@ -305,9 +289,8 @@ impl<'i> Reader<'i> {
 
 /// Expands an entity reference by name (`amp`, `#38`, `#x26`).
 ///
-/// CityGML has no DTD, so anything beyond the predefined entities and numeric
-/// character references cannot be resolved — and guessing would silently corrupt
-/// the document.
+/// Returns `None` for anything but the predefined entities and numeric
+/// character references.
 fn resolve_entity(name: &str) -> Option<String> {
     quick_xml::escape::unescape(&format!("&{name};"))
         .ok()
@@ -317,9 +300,6 @@ fn resolve_entity(name: &str) -> Option<String> {
 fn namespace(result: &ResolveResult<'_>) -> Option<String> {
     match result {
         ResolveResult::Bound(ns) => Some(ns.0.to_owned()),
-        // An unresolvable prefix is a defect in the source document. Treating it
-        // as unqualified keeps the element (and a diffable output) rather than
-        // aborting the whole file.
         ResolveResult::Unbound | ResolveResult::Unknown(_) => None,
     }
 }
@@ -356,8 +336,8 @@ mod tests {
         );
     }
 
-    /// Detection must not depend on the document being complete: PLATEAU `.gml`
-    /// files reach hundreds of megabytes and only the head is ever read.
+    /// Detection does not depend on the document being complete, since only
+    /// the head is ever read.
     #[test]
     fn a_truncated_document_still_yields_its_root_namespaces() {
         let src = r#"<core:CityModel xmlns:core="urn:core" xmlns:uro="urn:uro"><core:cityObj"#;
@@ -401,9 +381,8 @@ mod tests {
         assert!(r.next_chunk().unwrap().is_none());
     }
 
-    /// A self-closing root must produce the same chunk sequence as an empty
-    /// <root></root>: without the RootEnd, the writer never closes the root
-    /// tag it wrote and the output is not well-formed.
+    /// A self-closing root produces the same chunk sequence as an empty
+    /// <root></root>, RootEnd included.
     #[test]
     fn a_self_closing_root_still_yields_its_end() {
         let mut r = Reader::new("t.gml", r#"<a xmlns="urn:x"/>"#);

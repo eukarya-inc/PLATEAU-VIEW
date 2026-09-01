@@ -1,9 +1,9 @@
 //! Structural rewrites for the Building module that a rename table cannot
-//! express — the ones that change a value or the shape of a subtree.
+//! express, meaning the ones that change a value or the shape of a subtree.
 //!
-//! Everything here speaks CityGML **3.0** names: [`crate::transform::rename`]
-//! has already run, so `bldg:measuredHeight` arrives in the 3.0 building
-//! namespace and leaves as `con:height`.
+//! Everything here speaks CityGML **3.0** names, since
+//! [`crate::transform::rename`] has already run. `bldg:measuredHeight` arrives
+//! in the 3.0 building namespace and leaves as `con:height`.
 
 use crate::error::Result;
 use crate::profile::{HeightDefaults, Rules};
@@ -48,8 +48,6 @@ impl BuildingRewrite {
         }
         el.children = out;
 
-        // Recurse afterwards: nothing we produce is itself in the building
-        // namespace, so a rewritten child is never rewritten twice.
         for child in el.elements_mut() {
             self.apply(child, ids, warnings);
         }
@@ -69,17 +67,10 @@ impl BuildingRewrite {
 
         let rewritten = match child.name.local.as_str() {
             "measuredHeight" => self.height(child, warnings),
-            // In LOD0.1 the building outline and the ground
-            // contact outline are told apart by which boundary surface carries
-            // the geometry -- the building's orthographic outline goes on a
-            // RoofSurface, the ground contact outline on a GroundSurface.
             "lod0RoofEdge" => self.lod0_boundary(child, "RoofSurface", ids, warnings),
             "lod0FootPrint" => self.lod0_boundary(child, "GroundSurface", ids, warnings),
             "yearOfConstruction" => self.construction_date(child, "dateOfConstruction", warnings),
             "yearOfDemolition" => self.construction_date(child, "dateOfDemolition", warnings),
-            // 2.0 told an installation's placement apart by the property that
-            // carried it; 3.0 has one property and records the placement on
-            // the installation itself as con:relationToConstruction.
             "outerBuildingInstallation" => self.installation(child, "outside", warnings),
             "interiorBuildingInstallation" | "roomInstallation" => {
                 self.installation(child, "inside", warnings)
@@ -92,12 +83,13 @@ impl BuildingRewrite {
         out.push(Node::Element(rewritten));
     }
 
-    /// `bldg:measuredHeight` -> `con:height` wrapping a `con:Height` object.
+    /// Rewrites `bldg:measuredHeight` into a `con:height` wrapping a
+    /// `con:Height` object.
     ///
     /// CityGML 3.0 makes `value`, `status`, `lowReference` and
-    /// `highReference` all mandatory, and the two references are code-list
-    /// values. CityGML 2.0 records none of them, so they come from the profile's
-    /// `[height]` section and every substitution is reported.
+    /// `highReference` all mandatory. CityGML 2.0 records none of them, so
+    /// they come from the profile's `[height]` section and every substitution
+    /// is reported.
     fn height(&self, src: Element, warnings: &mut Warnings) -> Element {
         let uom = src.attr(None, "uom").map(str::to_owned);
         let mut value = Element::with_text(
@@ -129,8 +121,8 @@ impl BuildingRewrite {
         prop
     }
 
-    /// A `con:lowReference` / `con:highReference` carrying a code and, when the
-    /// profile gives one, the code list it came from.
+    /// A `con:lowReference` or `con:highReference` carrying a code and, when
+    /// the profile gives one, the code list it came from.
     fn height_reference(&self, local: &str, code: &str) -> Element {
         let mut el = Element::with_text(Name::qualified(&self.con, local), code);
         if let Some(code_space) = &self.height.reference_code_space {
@@ -139,13 +131,12 @@ impl BuildingRewrite {
         el
     }
 
-    /// `bldg:lod0RoofEdge` / `bldg:lod0FootPrint` -> a `core:boundary` holding the
-    /// named construction surface, whose geometry is `core:lod0MultiSurface`.
+    /// Rewrites `bldg:lod0RoofEdge` or `bldg:lod0FootPrint` into a
+    /// `core:boundary` holding the construction surface named by `surface`,
+    /// whose geometry is `core:lod0MultiSurface`.
     ///
-    /// CityGML 3.0 has a single LOD0 slot per space, so the 2.0 pair cannot both
-    /// stay on the building. LOD0.1 resolves that by putting the roof outline
-    /// on a `RoofSurface` and the ground outline on a `GroundSurface`, which is
-    /// lossless whether the input has one of them or both.
+    /// The roof outline goes on a `RoofSurface` and the ground outline on a
+    /// `GroundSurface`, so an input carrying both keeps both.
     fn lod0_boundary(
         &self,
         src: Element,
@@ -171,10 +162,10 @@ impl BuildingRewrite {
         boundary
     }
 
-    /// `bldg:outerBuildingInstallation` / `bldg:interiorBuildingInstallation` /
-    /// `bldg:roomInstallation` -> `bldg:buildingInstallation`, with the
-    /// placement the 2.0 property name expressed moved onto the installation
-    /// as `con:relationToConstruction`.
+    /// Rewrites `bldg:outerBuildingInstallation`,
+    /// `bldg:interiorBuildingInstallation` and `bldg:roomInstallation` into
+    /// `bldg:buildingInstallation`, moving the placement the 2.0 property name
+    /// expressed onto the installation as `con:relationToConstruction`.
     fn installation(&self, src: Element, relation: &str, warnings: &mut Warnings) -> Element {
         let property = src.name.local.clone();
         let mut prop = retag(src, Name::qualified(&self.bldg, "buildingInstallation"));
@@ -198,7 +189,8 @@ impl BuildingRewrite {
         prop
     }
 
-    /// `bldg:yearOfConstruction` (a `gYear`) -> `con:dateOfConstruction` (a `date`).
+    /// Rewrites `bldg:yearOfConstruction`, a `gYear`, into
+    /// `con:dateOfConstruction`, a `date`.
     fn construction_date(&self, src: Element, local: &str, warnings: &mut Warnings) -> Element {
         let raw = src.text().trim().to_owned();
         let value = if raw.len() == 4 && raw.bytes().all(|b| b.is_ascii_digit()) {
@@ -213,8 +205,8 @@ impl BuildingRewrite {
         Element::with_text(Name::qualified(&self.con, local), value)
     }
 
-    /// `bldg:lodNGeometry` -> `core:lodNSolid` or `core:lodNMultiSurface`,
-    /// depending on what geometry it actually holds.
+    /// Rewrites `bldg:lodNGeometry` into `core:lodNSolid` or
+    /// `core:lodNMultiSurface`, depending on the geometry it holds.
     fn lod_geometry(&self, src: Element, lod: char, warnings: &mut Warnings) -> Element {
         let inner = src.elements().next().map(|g| g.name.local.clone());
         let solid = inner.as_deref().is_some_and(|g| SOLIDS.contains(&g));
@@ -246,8 +238,9 @@ fn retag(mut el: Element, name: Name) -> Element {
     el
 }
 
-/// `lod2Geometry` -> `Some('2')`. LOD4 is not accepted: 3.0 has no LOD4 slot,
-/// and [`crate::lod4`] has already decided where `lod4Geometry` went.
+/// The LOD digit of a `lodNGeometry` local name, so `lod2Geometry` gives
+/// `Some('2')`. LOD4 is not accepted, since [`crate::lod4`] has already
+/// decided where `lod4Geometry` went.
 fn lod_geometry(local: &str) -> Option<char> {
     let rest = local.strip_prefix("lod")?;
     let mut chars = rest.chars();
@@ -275,7 +268,7 @@ mod tests {
         (building, warnings)
     }
 
-    /// Both 2.0 outlines can be present; each keeps its own surface, and the
+    /// Both 2.0 outlines can be present. Each keeps its own surface, and the
     /// generated ids stay distinct.
     #[test]
     fn both_lod0_outlines_survive_together() {

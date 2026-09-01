@@ -4,14 +4,14 @@
 //!
 //! * [`dataset`] resolves whatever the user handed us (a PLATEAU folder, a zip of
 //!   one, or a loose set of per-part zips) into a single on-disk PLATEAU tree.
-//! * [`xml`] is a small namespace-aware XML tree: it streams a CityGML document
+//! * [`xml`] is a small namespace-aware XML tree. It streams a CityGML document
 //!   and hands out one fully-materialised subtree per top-level member, so a
-//!   feature can be restructured freely without holding the whole file in memory.
+//!   feature can be restructured without holding the whole file in memory.
 //! * [`profile`] holds the declarative part of the mapping (namespace bumps,
 //!   element renames, child ordering) loaded from a TOML profile.
-//! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`] and [`iur`] apply
-//!   the profile
-//!   and the structural rewrites that a rename table cannot express.
+//! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`] and [`iur`]
+//!   apply the profile and the structural rewrites a rename table cannot
+//!   express.
 //!
 //! [`convert`] ties them together and [`report`] carries the diagnostics back out.
 
@@ -35,12 +35,9 @@ pub use error::{Error, Result};
 /// The profile fragments compiled into the binary, named as a profile's `base`
 /// names them.
 ///
-/// A profile is split along the axes it varies on, so that a rule which is not
-/// specific to one source version is written once. The CityGML 2.0 -> 3.0
-/// mapping is one fragment and the i-UR 4.0 target is another; what is left in
-/// each profile below is the i-UR source half, which is the only part that
-/// actually differs between them. Adding a second i-UR target is then a
-/// fragment beside `iur-4.0-target`, not a fork of everything.
+/// One fragment carries the CityGML 2.0 -> 3.0 mapping and another the i-UR 4.0
+/// target. What is left in each profile of [`PROFILES`] is the i-UR source
+/// half.
 pub const FRAGMENTS: &[(&str, &str)] = &[
     (
         "citygml-2.0-to-3.0",
@@ -52,11 +49,11 @@ pub const FRAGMENTS: &[(&str, &str)] = &[
     ),
 ];
 
-/// The conversion profiles compiled into the binary, newest source version last.
+/// The conversion profiles compiled into the binary, newest source version
+/// last, one per source i-UR version.
 ///
-/// One per source i-UR version, because the versions do not declare the same
-/// elements. [`detect::select`] picks between them by reading the namespaces a
-/// document declares; `--profile` overrides the choice with a file.
+/// [`detect::select`] picks between them by reading the namespaces a document
+/// declares. `--profile` overrides the choice with a file.
 pub const PROFILES: &[(&str, &str)] = &[
     (
         "iur-3.0-to-4.0",
@@ -75,10 +72,7 @@ pub const PROFILES: &[(&str, &str)] = &[
 /// The i-UR 4.0 schemas written into a converted package's `schemas/`.
 ///
 /// A PLATEAU package resolves i-UR through a relative path into its own
-/// `schemas/` folder and CityGML remotely, so a converted package has to carry
-/// the i-UR side to stay self-contained. They are compiled in rather than
-/// fetched: conversion must not depend on a network, and the published files are
-/// updated in place, which would make output vary by when it ran.
+/// `schemas/` folder, so a converted package carries the i-UR side itself.
 pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
     (
         "iur/uro/4.0/urbanObject.xsd",
@@ -103,15 +97,10 @@ pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
 ];
 
 // The published i-UR 4.0 code lists (`CODELISTS_4_0`), vendored in
-// `fixtures/codelists/` and embedded by `build.rs`. A converted package's codes are
-// checked against these, so they replace the input's copies of the same files
-// — vendored for the same reason the schemas are: conversion must not depend
-// on a network, and the published files are updated in place. Lists the input
-// authors itself — the profile's `[codelists] local` patterns — are kept as
-// shipped instead.
+// `fixtures/codelists/` and embedded by `build.rs`. They replace the input's
+// copies of the same files. Lists the input authors itself, matched by the
+// profile's `[codelists] local` patterns, are kept as shipped.
 include!(concat!(env!("OUT_DIR"), "/codelists_gen.rs"));
 
 /// The profile used when a document says nothing about which one it needs.
-///
-/// i-UR 3.1 is the version most PLATEAU packages in circulation carry.
 pub const DEFAULT_PROFILE: &str = PROFILES[1].1;

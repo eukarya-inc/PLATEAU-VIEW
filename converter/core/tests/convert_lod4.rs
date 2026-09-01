@@ -1,6 +1,6 @@
-//! End-to-end conversion of an LOD4 building: interior rooms, installations,
-//! furniture and per-LOD quality descriptors, the shape of a PLATEAU indoor
-//! dataset. The fixture package is LOD1 and cannot exercise this.
+//! End-to-end conversion of an LOD4 building, covering interior rooms,
+//! installations, furniture and per-LOD quality descriptors. The fixture
+//! package is LOD1 and cannot exercise this.
 
 use plateau_converter_core::PROFILES;
 use plateau_converter_core::convert::{Converter, Options, convert_to_string};
@@ -45,7 +45,7 @@ fn rules(code_under: Option<&str>) -> Rules {
         .find(|(name, _)| *name == "iur-3.1-to-4.0")
         .unwrap();
     let mut profile = Profile::load(toml).unwrap();
-    // The shipped tables are irrelevant here: the test says where CODE goes.
+    // The shipped tables are replaced, so the test says where CODE goes.
     let policy = &mut profile.lod4;
     policy.lod2.clear();
     policy.lod3.clear();
@@ -87,8 +87,8 @@ fn no_lod4_slot_survives_whatever_the_decision() {
 }
 
 /// The shipped profile sends 500 (BIM/CAD/drawings) to interior LOD3 and the
-/// survey codes to interior LOD2, and the 2.0 installation properties come out
-/// as bldg:buildingInstallation carrying con:relationToConstruction.
+/// survey codes to interior LOD2. The 2.0 installation properties come out as
+/// bldg:buildingInstallation carrying con:relationToConstruction.
 #[test]
 fn the_shipped_profile_decides_by_measurement_method() {
     let (_, toml) = PROFILES

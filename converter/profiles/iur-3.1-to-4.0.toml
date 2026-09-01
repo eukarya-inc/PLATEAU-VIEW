@@ -12,7 +12,8 @@
 # halves that are not -- the CityGML 2.0 -> 3.0 mapping, and everything about
 # producing i-UR 4.0 -- are the fragments named in `base`, folded in ahead of
 # this file's own rules. A rule that is not version-specific belongs in one of
-# them, not here: put it here and the sibling profiles silently do without it.
+# them rather than here. Put it here and the sibling profiles silently do
+# without it.
 #
 # The two sides must stay disjoint. A key this file and a fragment both declare
 # is refused at load rather than resolved by precedence, because there is no
@@ -20,19 +21,19 @@
 # mistake in one of them.
 #
 # Names are written `prefix:local`. Prefixes on the `from` side resolve through
-# [input.namespaces], prefixes on the `to` side through [output.namespaces];
-# both are merged across the fragments before any name is resolved.
+# [input.namespaces], prefixes on the `to` side through [output.namespaces].
+# Both are merged across the fragments before any name is resolved.
 #
 # Anything marked UNVERIFIED below could not be confirmed against a source. The
-# sources are not in this repo; ask for them before changing a rule.
+# sources are not in this repo, so ask for them before changing a rule.
 
 name = "iur-3.1-to-4.0"
 description = "PLATEAU CityGML 2.0 + i-UR 3.1 -> CityGML 3.0 + i-UR 4.0, building module"
 base = ["citygml-2.0-to-3.0", "iur-4.0-target"]
 
 # What this profile accepts and what it produces. `iur` lists the exact
-# source namespaces that identify a document as belonging to this profile;
-# the converter matches an input against them to choose a profile, and
+# source namespaces that identify a document as belonging to this profile.
+# The converter matches an input against them to choose a profile, and
 # refuses a mismatch instead of converting half of it.
 [source]
 label = "CityGML 2.0 + i-UR 3.1"
@@ -48,7 +49,7 @@ iur = [
 # The i-UR 3.1 input prefixes. The CityGML ones are in `citygml-2.0-to-3.0`.
 [input.namespaces]
 # This profile converts i-UR 3.1 only. A sibling profile covers each other
-# minor version; the converter picks between them from the input itself.
+# minor version, and the converter picks between them from the input itself.
 uro = "https://www.geospatial.jp/iur/uro/3.1"
 urf = "https://www.geospatial.jp/iur/urf/3.1"
 urg = "https://www.geospatial.jp/iur/urg/3.1"
@@ -57,7 +58,7 @@ urt = "https://www.geospatial.jp/iur/urt/3.1"
 # The i-UR half of the bulk namespace bump. The CityGML rows are in
 # `citygml-2.0-to-3.0`, and fold in ahead of these.
 [namespace_map]
-# i-UR 3.1 -> 4.0. Only this one version is listed: a namespace absent from
+# i-UR 3.1 -> 4.0. Only this one version is listed, and a namespace absent from
 # this table passes through unmapped, which is exactly the outcome wanted if
 # a document from another version somehow reaches this profile.
 "https://www.geospatial.jp/iur/uro/3.1" = "https://www.geospatial.jp/iur/uro/4.0"
@@ -68,9 +69,9 @@ urt = "https://www.geospatial.jp/iur/urt/3.1"
 # ---------------------------------------------------------------------------
 # i-UR decisions the schemas cannot make.
 #
-# Everything below is a choice; everything in the generated block further down is
-# read off the schemas. Rules here win: the generator skips any name already
-# ruled on above it.
+# Everything below is a choice, and everything in the generated block further
+# down is read off the schemas. Rules here win, and the generator skips any name
+# already ruled on above it.
 # ---------------------------------------------------------------------------
 
 # The quality attribute. urc:DataQualityAttribute is concrete, so it would
@@ -314,8 +315,9 @@ from = "uro:visibility"
 to = "urc:visibility"
 
 # Where an i-UR class attaches in CityGML 3.0. 2.0 used a property named by
-# the extension (uro:buildingIDAttribute); 3.0 uses one general hook per host class, so the
-# wrapper is chosen by the class inside it rather than by its own name.
+# the extension (uro:buildingIDAttribute). 3.0 uses one general hook per host
+# class, so the wrapper is chosen by the class inside it rather than by its own
+# name.
 [ade_hooks]
 "urc:DataQualityAttribute" = "core:adeOfAbstractCityObject"
 "urc:DisasterRiskAttribute" = "core:adeOfAbstractCityObject"

@@ -1,6 +1,6 @@
 //! Just enough XML Schema reading to answer the questions the mapping asks.
 //!
-//! Not a schema processor: it reads element declarations and their
+//! This is not a schema processor. It reads element declarations and their
 //! `substitutionGroup`, which is all the i-UR mapping is derived from.
 
 use std::collections::BTreeMap;
@@ -16,10 +16,7 @@ pub struct Decl {
     pub global: bool,
     pub substitution_group: Option<String>,
     /// The named `xs:complexType` this declaration sits inside, if any.
-    ///
-    /// A nested name means nothing on its own -- `lod1MultiSurface` is declared
-    /// by several modules -- so what decides where it moves is whether the class
-    /// holding it moved.
+    /// `None` for a global declaration.
     pub owner: Option<String>,
 }
 
@@ -40,7 +37,8 @@ impl Schema {
     pub fn parse(text: &str) -> Schema {
         let mut reader = quick_xml::Reader::from_str(text);
         let mut schema = Schema::default();
-        // Depth 1 is a direct child of xs:schema, i.e. a global declaration.
+        // Depth 1 is a direct child of xs:schema, meaning a global
+        // declaration.
         let mut depth = 0usize;
         // (depth, name) of the named complexType currently open, if any.
         let mut owner: Option<(usize, String)> = None;

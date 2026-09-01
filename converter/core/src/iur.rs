@@ -3,12 +3,12 @@
 //! Like [`crate::bldg`] this runs *after* [`crate::transform::rename`], so every
 //! name here is already i-UR 4.0.
 //!
-//! CityGML 2.0 let an extension declare its own property to hang a class off:
-//! `uro:buildingIDAttribute` held a `uro:BuildingIDAttribute`, and there was one
-//! such property per host feature type. CityGML 3.0 declares a single general
-//! hook on each host class instead, and the extension's class substitutes into
-//! it. The wrapper is therefore chosen by the class inside it rather than by its
-//! own name, which is why this is a rewrite and the profile only supplies the
+//! CityGML 2.0 let an extension declare its own property to hang a class off,
+//! so `uro:buildingIDAttribute` held a `uro:BuildingIDAttribute` and there was
+//! one such property per host feature type. CityGML 3.0 declares a single
+//! general hook on each host class instead, and the extension's class
+//! substitutes into it. The wrapper is chosen by the class inside it rather
+//! than by its own name, and the profile supplies only the class-to-hook
 //! table.
 //!
 //! ```text
@@ -22,8 +22,8 @@ use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
 /// i-UR elements that were a `gYear` or `gYearMonth` in 3.x and are a full
-/// date in the 4.0 schemas. `urg` is deliberately absent: its statistical-grid
-/// types keep `gYear`, and it is the only module that does.
+/// date in the 4.0 schemas. `urg` is absent, since its statistical-grid types
+/// keep `gYear`.
 const YEAR_TO_DATE: &[&str] = &[
     "acquisitionYear",
     "assessmentFiscalYear",
@@ -56,14 +56,14 @@ pub struct IurRewrite {
     /// The i-UR namespaces whose properties are candidates for rehoming.
     modules: Vec<String>,
     /// The subset of [`IurRewrite::modules`] whose year-valued elements became
-    /// dates in 4.0 — everything but `urg`.
+    /// dates in 4.0, meaning everything but `urg`.
     date_modules: Vec<String>,
     rules: Rules,
 }
 
 /// Why an i-UR element in a property position is not an ADE wrapper.
 enum NotAHook {
-    /// A plain attribute or a class element. Expected, and silent.
+    /// A plain attribute or a class element, which is reported nowhere.
     NotAWrapper,
     /// Shaped like an ADE property, but the hook could not be worked out.
     Unresolved(String),
@@ -112,17 +112,9 @@ impl IurRewrite {
         if !self.is_iur(&property.name) {
             return property;
         }
-        // An ADE property holds exactly one class and nothing else. Anything
-        // else is a plain attribute that happens to live in the same namespace.
         let hook = match self.hook_for(&property) {
             Ok(hook) => hook,
-            // A plain attribute or a class element: nothing to rehome, and
-            // nothing surprising about it.
             Err(NotAHook::NotAWrapper) => return property,
-            // Shaped like an ADE property, but the hook could not be worked
-            // out. The rename pass has already moved it into an i-UR 4.0
-            // namespace, so passing it through quietly would leave an element
-            // 4.0 does not declare looking converted.
             Err(NotAHook::Unresolved(why)) => {
                 warnings.add(format!(
                     "{} carries an i-UR class but its CityGML 3.0 hook could not be \
@@ -146,20 +138,17 @@ impl IurRewrite {
         wrapper
     }
 
-    /// The CityGML property that should carry `property`'s single class child.
+    /// The CityGML property that should carry `property`'s single class
+    /// child. An element whose own name is upper-case, one holding no class,
+    /// or one holding several is a [`NotAHook`].
     fn hook_for(&self, property: &Element) -> std::result::Result<Name, NotAHook> {
-        // A property is lower-case, its class upper-case. Guards against a
-        // single-valued attribute being mistaken for a wrapper.
         if property.name.local.starts_with(char::is_uppercase) {
             return Err(NotAHook::NotAWrapper);
         }
         let mut elements = property.elements();
         let Some(class) = elements.next() else {
-            // No class to place. An `xlink:href` in place of one is still an
-            // ADE property, just one written by reference; anything else is an
-            // ordinary attribute holding a value.
-            // Matched on the local name: `href` is `xlink:href` in practice,
-            // but the binding is the document's to choose.
+            // Matched on the local name, since `href` is `xlink:href` in
+            // practice but the binding is the document's to choose.
             return if property.attrs.iter().any(|a| a.name.local == "href") {
                 Err(NotAHook::Unresolved(
                     "it carries a reference rather than a class".to_owned(),
@@ -269,9 +258,8 @@ mod tests {
         assert!(!warnings.is_empty(), "a rehomed property must be reported");
     }
 
-    /// A class the profile has no hook for stays where it is rather than being
-    /// rehomed to a guess — and says so, because the rename pass has already
-    /// moved it into a 4.0 namespace that may not declare it.
+    /// A class the profile has no hook for stays where it is, and is
+    /// reported.
     #[test]
     fn an_unknown_class_is_left_alone_and_reported() {
         let src = wrapped("mysteryAttribute", "MysteryAttribute", URO);
@@ -285,8 +273,8 @@ mod tests {
         );
     }
 
-    /// An ADE property written as an `xlink:href` reference carries no class to
-    /// place, so the hook cannot be chosen. It passes through, reported.
+    /// An ADE property written as an `xlink:href` reference carries no class
+    /// to place, so it passes through and is reported.
     #[test]
     fn a_property_by_reference_is_reported() {
         let mut src = Element::new(Name::qualified(URO, "buildingIDAttribute"));

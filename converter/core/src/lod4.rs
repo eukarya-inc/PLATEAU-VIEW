@@ -1,49 +1,38 @@
-//! Where CityGML 2.0 LOD4 goes, since CityGML 3.0 stops at LOD3.
+//! Folds CityGML 2.0 LOD4 content into the CityGML 3.0 LOD slots.
 //!
 //! Like [`crate::bldg`] this runs *after* [`crate::transform::rename`] and so
-//! speaks 3.0 / i-UR 4.0 names. The profile deliberately has no rename rule for
-//! any `lod4*` element, so they reach this pass still spelled `lod4` — a
-//! `bldg:lod4Solid` in the 3.0 building namespace — and are the only thing
+//! speaks 3.0 / i-UR 4.0 names. The profile carries no rename rule for any
+//! `lod4*` element, so they reach this pass still spelled `lod4`, such as a
+//! `bldg:lod4Solid` in the 3.0 building namespace, and are the only elements
 //! this pass touches.
 //!
-//! CityGML 3.0 splits a building into an *exterior* model and an *interior*
-//! model, each with its own LOD0–3. CityGML 2.0's LOD4 is the interior model,
-//! and which LOD it becomes depends on how it was measured: a surveyed
-//! interior is an interior LOD2, one derived from BIM an interior LOD3. The
-//! measurement method is recorded per feature in the data quality attribute
-//! (`geometrySrcDescLod4`), and the profile's `[lod4]` table says which codes
-//! mean which. A feature whose code decides nothing takes the configured
-//! fallback — LOD3, LOD2 or drop — and is reported.
+//! One decision is made per top-level member, from the data quality attribute
+//! named by the profile's `[lod4]` table. Codes listed under `lod2` send the
+//! member's interior model to LOD2, codes under `lod3` to LOD3, and a code
+//! that decides neither takes the configured fallback of `lod3`, `lod2` or
+//! `drop`.
 //!
-//! So the fold is two mappings, chosen by where an element sits:
+//! The decision applies differently by position:
 //!
-//! * **Interior content** — rooms, interior surfaces, furniture, interior
-//!   installations — folds to the decided LOD (2 or 3). It never collides:
-//!   2.0 gave these features no geometry outside LOD4.
-//! * **The exterior shell at LOD4** — `lod4Solid` / `lod4MultiSurface` on the
-//!   building itself and on its exterior surfaces — folds into the LOD3 slot,
-//!   the highest the exterior model has, and only where that slot is empty;
-//!   a building that already carries LOD3 keeps it and the LOD4 shell is
-//!   dropped and reported.
+//! * **Interior content**, meaning rooms, interior surfaces, furniture and
+//!   interior installations, folds to the decided LOD.
+//! * **The exterior shell at LOD4**, meaning `lod4Solid` and
+//!   `lod4MultiSurface` on the building itself and on its exterior surfaces,
+//!   folds into the LOD3 slot and only where that slot is empty.
 //!
-//! Only LOD4 *geometry* triggers a decision. PLATEAU writes the LOD4 quality
-//! descriptors on every building — `geometrySrcDescLod4 = 999` (未作成) on one
-//! that has no LOD4 — so a descriptor without geometry describes nothing and
-//! is dropped rather than folded into a real LOD.
+//! A member holding LOD4 quality descriptors but no LOD4 geometry has those
+//! descriptors dropped rather than folded. Every fold, drop and fallback is
+//! recorded in [`Warnings`].
 
 use crate::error::Result;
 use crate::profile::{Lod4Fallback, Lod4Rules, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
-/// Solid-valued GML geometries, to decide what a `lod4Geometry` becomes.
+/// GML geometry types that count as solids when naming a folded `lod4Geometry`.
 const SOLIDS: &[&str] = &["Solid", "CompositeSolid", "MultiSolid"];
 
-/// Quality descriptors that are recorded per LOD and so have an LOD4 form.
-///
-/// The `Lod0`–`Lod3` counterparts of the first three accept repeats, so
-/// folding adds a value. `srcScaleLodN` admits one value, so a folded
-/// `srcScaleLod4` yields to an existing one.
+/// Data quality descriptors recorded per LOD, in their LOD4 form.
 const QUALITY_LOD4: &[&str] = &[
     "geometrySrcDescLod4",
     "appearanceSrcDescLod4",
@@ -54,12 +43,11 @@ const QUALITY_LOD4: &[&str] = &[
 /// Where one feature's LOD4 content goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Target {
-    /// Interior content folds to this LOD; the exterior shell to LOD3.
+    /// Interior content folds to this LOD. The exterior shell folds to LOD3.
     Lod(char),
     /// Remove LOD4 geometry and descriptors alike.
     Drop,
-    /// The feature has LOD4 descriptors but no LOD4 geometry, so there is
-    /// nothing to place and the descriptors describe nothing.
+    /// The feature carries LOD4 descriptors but no LOD4 geometry.
     Absent,
 }
 
@@ -68,7 +56,8 @@ pub struct Lod4Rewrite {
     core: String,
     bldg: String,
     con: String,
-    /// Where the folded quality descriptors are declared in i-UR 4.0.
+    /// Namespace the folded quality descriptors are written into, when the
+    /// profile declares one.
     urc: Option<String>,
     /// The i-UR namespaces a quality descriptor may still sit in after rename.
     iur: Vec<String>,
@@ -77,7 +66,7 @@ pub struct Lod4Rewrite {
 }
 
 impl Lod4Rewrite {
-    /// `fallback` overrides the profile's when given (the CLI's `--lod4-fallback`).
+    /// `fallback` overrides the profile's `[lod4]` fallback when given.
     pub fn new(rules: &Rules, fallback: Option<Lod4Fallback>) -> Result<Self> {
         let mut lod4 = rules.lod4().clone();
         if let Some(fallback) = fallback {
@@ -102,9 +91,8 @@ impl Lod4Rewrite {
 
     /// Rewrites one top-level member and its descendants in place.
     ///
-    /// The decision is made once per member from the code it carries and then
-    /// applied to every LOD4 element under it: the quality attribute describes
-    /// the feature as a whole.
+    /// One decision is taken from the code `member` carries and applied to
+    /// every LOD4 element under it.
     pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) {
         self.suffix_lod_types(member, false, warnings);
         let target = if has_lod4_geometry(member, &self.bldg) {
@@ -120,11 +108,11 @@ impl Lod4Rewrite {
         self.rewrite(member, false, target, warnings);
     }
 
-    /// Rewrites the plain 2.0-era `lodType` codes: the i-UR 4.0
-    /// `Building_lodType` list tells the exterior and interior models apart
-    /// with an `_exterior`/`_interior` suffix instead. A `4.x` value is left
-    /// for the LOD4 fold, which knows which interior LOD it became;
-    /// everything else classifies the exterior.
+    /// Rewrites plain 2.0-era `lodType` codes under `el` to their i-UR 4.0
+    /// `_exterior` form.
+    ///
+    /// `in_building` says whether `el` already sits inside a building feature.
+    /// A `4.x` value is left for [`Self::fold_lod_type`].
     fn suffix_lod_types(&self, el: &mut Element, in_building: bool, warnings: &mut Warnings) {
         let in_building = in_building || el.name.in_ns(&self.bldg);
         let children = std::mem::take(&mut el.children);
@@ -163,19 +151,16 @@ impl Lod4Rewrite {
         el.children = out;
     }
 
-    /// A `lodType` holding a pre-3.0 plain code — anything but the `4.x`
-    /// values the LOD4 fold owns.
+    /// A `lodType` holding a pre-3.0 plain code, meaning anything but the
+    /// `4.x` values the LOD4 fold owns.
     fn is_plain_lod_type(&self, el: &Element) -> bool {
         el.name.local == "lodType"
             && self.iur.iter().any(|ns| el.name.in_ns(ns))
             && !el.text().trim().starts_with('4')
     }
 
-    /// CityGML 3.0 requires `bldg:Storey` in every interior LOD, and CityGML
-    /// 2.0 records nothing to build one from — PLATEAU's per-floor
-    /// CityObjectGroups name the floors but not which rooms are on them — so
-    /// a converted interior model is missing a required feature. That cannot
-    /// be fixed here, only said.
+    /// Reports an interior model that carries no `bldg:Storey`, which
+    /// CityGML 3.0 requires in every interior LOD.
     fn warn_missing_storeys(&self, member: &Element, warnings: &mut Warnings) {
         if !has_descendant(member, &self.bldg, "BuildingRoom")
             || has_descendant(member, &self.bldg, "Storey")
@@ -190,9 +175,8 @@ impl Lod4Rewrite {
         ));
     }
 
-    /// Names the feature for diagnostics. A member is usually
-    /// `core:cityObjectMember` wrapping the feature; name the feature, which
-    /// is what a reader will look for.
+    /// The name to show for `member` in diagnostics. A lowercase-named member
+    /// is a property wrapping the feature, and the feature is named instead.
     fn feature_name(&self, member: &Element) -> String {
         let feature = member
             .elements()
@@ -203,8 +187,8 @@ impl Lod4Rewrite {
         self.display.display_name(feature)
     }
 
-    /// The interior LOD this member's LOD4 content becomes, from the
-    /// measurement code.
+    /// The interior LOD this member's LOD4 content becomes, read from the
+    /// measurement code it carries.
     fn decide(&self, member: &Element, warnings: &mut Warnings) -> Target {
         let feature = self.feature_name(member);
         let fallback = self.rules.fallback;
@@ -252,12 +236,10 @@ impl Lod4Rewrite {
         }
     }
 
-    /// `interior` says whether `el` belongs to the interior model, so its own
-    /// LOD4 children fold to the decided LOD rather than into the exterior's
-    /// LOD3 slot.
+    /// Folds the LOD4 children of `el` and of its descendants. `interior`
+    /// says whether `el` belongs to the interior model, in which case its own
+    /// LOD4 children fold to `target` rather than into the exterior LOD3 slot.
     fn rewrite(&self, el: &mut Element, interior: bool, target: Target, warnings: &mut Warnings) {
-        // Names already filled by something that is not LOD4 content: a fold
-        // landing on one of these yields to it.
         let occupied: Vec<Name> = el
             .elements()
             .filter(|c| !self.is_lod4_geometry(c) && !self.is_lod4_quality(c))
@@ -286,7 +268,7 @@ impl Lod4Rewrite {
         }
     }
 
-    /// One child of an element: returns it, possibly retagged, or `None` to
+    /// Rewrites one child, returning it possibly retagged, or `None` to
     /// remove it.
     fn rewrite_child(
         &self,
@@ -325,8 +307,6 @@ impl Lod4Rewrite {
                 ));
                 return None;
             }
-            // The exterior model tops out at LOD3 whatever the interior
-            // decision; only interior content follows the measurement code.
             Target::Lod(lod) if interior => lod,
             Target::Lod(_) => '3',
         };
@@ -387,7 +367,6 @@ impl Lod4Rewrite {
         let to = Name::qualified(urc, child.name.local.replace("Lod4", &format!("Lod{lod}")));
         let to_display = self.display.display_name(&to);
 
-        // srcScaleLodN admits one value; the descriptor lists accept repeats.
         if child.name.local == "srcScaleLod4" && taken(&to, occupied, accepted) {
             warnings.add(format!(
                 "{from} was dropped: it would become {to_display}, which the feature \
@@ -405,8 +384,8 @@ impl Lod4Rewrite {
         Some(child)
     }
 
-    /// `lodType` records the LOD sub-level (`4.1`); a folded interior model's
-    /// entry follows it (`2.1` or `3.1`).
+    /// Rewrites a `4.x` `lodType` value to the interior form of the decided
+    /// LOD, turning `4.1` into `2.1_interior` or `3.1_interior`.
     fn fold_lod_type(
         &self,
         child: Element,
@@ -421,7 +400,6 @@ impl Lod4Rewrite {
                     "lodType {old} became {new}: CityGML 3.0 has no LOD4, and the \
                      content it classified is the interior model at LOD{lod}"
                 ));
-                // Keep the element (and its codeSpace); only the value moves.
                 let mut child = child;
                 child.children = vec![Node::Text(new)];
                 Some(child)
@@ -443,7 +421,6 @@ impl Lod4Rewrite {
             "lod4MultiCurve" => format!("lod{lod}MultiCurve"),
             "lod4TerrainIntersection" => format!("lod{lod}TerrainIntersectionCurve"),
             "lod4ImplicitRepresentation" => format!("lod{lod}ImplicitRepresentation"),
-            // lod4Geometry held any geometry; 3.0 has a slot per kind.
             _ => {
                 let inner = child.elements().next().map(|g| g.name.local.clone());
                 let solid = inner.as_deref().is_some_and(|g| SOLIDS.contains(&g));
@@ -465,8 +442,8 @@ impl Lod4Rewrite {
     }
 
     /// True for an element that puts everything under it in the interior
-    /// model: a room, furniture, an interior surface, or the property that
-    /// carried an interior installation in 2.0.
+    /// model, namely: a room, furniture, an interior surface, or the property
+    /// that carried an interior installation in 2.0.
     fn marks_interior(&self, name: &Name) -> bool {
         if name.in_ns(&self.bldg) {
             return matches!(
@@ -504,9 +481,9 @@ impl Lod4Rewrite {
     }
 }
 
-/// Building lodType codes the published i-UR 4.0 list defines for the
-/// exterior model. The 2.0-era plain codes map onto these by suffix; a code
-/// outside this set (3.2, 3.3) has no 4.0 home.
+/// Building `lodType` codes the i-UR 4.0 list defines for the exterior model.
+/// A plain 2.0-era code in this set gains the `_exterior` suffix. A code
+/// outside it, such as 3.2 or 3.3, has no 4.0 form.
 const EXTERIOR_LOD_TYPES: &[&str] = &[
     "0.0", "0.1", "1.0", "1.1", "2.0", "2.1", "2.2", "2.3", "3.0", "3.1",
 ];
@@ -658,12 +635,10 @@ mod tests {
             .unwrap()
     }
 
-    /// The exterior model tops out at LOD3, so the building's own LOD4 shell
-    /// goes there whatever the interior decision — but never displaces an
-    /// exterior LOD3 the building already has.
+    /// The building's own LOD4 shell folds to LOD3 whatever the interior
+    /// decision, and never displaces an exterior LOD3 already present.
     #[test]
     fn the_exterior_shell_folds_to_lod3_only_where_empty() {
-        // Empty slot: the shell fills it, even when the interior goes to LOD2.
         let mut b = building(vec![
             geometry("lod4Solid", "Solid"),
             room(vec![geometry("lod4Solid", "Solid")]),
@@ -674,8 +649,6 @@ mod tests {
         assert!(b.child(ns::CITYGML_3, "lod3Solid").is_some());
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
-        // Occupied slot: the existing LOD3 wins, whichever side of the LOD4
-        // element it sits, and the drop is reported.
         for lod3_first in [true, false] {
             let mut existing = Element::new(Name::qualified(ns::CITYGML_3, "lod3Solid"));
             let mut solid = Element::new(Name::qualified(ns::GML_32, "Solid"));
@@ -827,7 +800,7 @@ mod tests {
     }
 
     /// Plain lodType codes gain the exterior suffix even when the feature has
-    /// no LOD4 content at all; codes the 4.0 list dropped are kept or removed.
+    /// no LOD4 content. Codes the 4.0 list dropped are kept or removed.
     #[test]
     fn plain_lod_types_are_suffixed_without_any_lod4() {
         let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
@@ -857,7 +830,7 @@ mod tests {
         assert!(w.iter().any(|(m, _)| m.contains("lodType 8 (不明)")));
     }
 
-    /// srcScaleLodN admits one value; an existing one wins.
+    /// srcScaleLodN admits one value, and an existing one wins.
     #[test]
     fn a_folded_src_scale_yields_to_an_existing_one() {
         let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
@@ -918,9 +891,8 @@ mod tests {
         assert!(w.iter().any(|(m, _)| m.contains("dropped")));
     }
 
-    /// PLATEAU writes geometrySrcDescLod4 = 999 on every building. Without
-    /// LOD4 geometry there is nothing for it to describe: it goes, and no
-    /// decision (and no fallback warning) is made.
+    /// A LOD4 descriptor on a feature with no LOD4 geometry is dropped, with
+    /// no decision and no fallback warning.
     #[test]
     fn lod4_descriptors_without_lod4_geometry_are_dropped_not_folded() {
         let mut b = building(vec![geometry("lod3Solid", "Solid"), quality(Some("999"))]);

@@ -1,15 +1,14 @@
-//! Resolving whatever the user handed us into a single PLATEAU directory tree.
+//! Resolves whatever the user handed in into a single PLATEAU directory tree.
 //!
 //! PLATEAU data arrives in two shapes:
 //!
-//! 1. one package holding `udx/`, `codelists/`, `schemas/` and friends — as a
-//!    directory or as a zip of one;
+//! 1. one package holding `udx/`, `codelists/`, `schemas/` and friends, either
+//!    as a directory or as a zip of one;
 //! 2. a loose set of zips, one per part, as the portal serves them.
 //!
-//! The second shape has to be reassembled before anything can resolve a
-//! `codeSpace` or an `xsi:schemaLocation`, so those inputs are extracted into a
-//! staging directory laid out like case 1. A directory that is already a package
-//! is used where it lies — nothing is copied.
+//! The second shape is extracted into a staging directory laid out like the
+//! first. A directory that is already a package is used where it lies, with
+//! nothing copied.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -62,8 +61,7 @@ impl Dataset {
             .map(|p| Source::classify(p))
             .collect::<Result<_>>()?;
 
-        // The common case: a single directory that is already a package. Use it
-        // in place rather than copying a few gigabytes for nothing.
+        // A single directory that is already a package is used in place.
         if let [
             Source::Directory {
                 path,
@@ -95,7 +93,8 @@ impl Dataset {
         Ok(Dataset { root, temp })
     }
 
-    /// The package root: the directory holding `udx/`, `codelists/` and so on.
+    /// The package root, meaning the directory holding `udx/`, `codelists/`
+    /// and so on.
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -130,8 +129,8 @@ impl Dataset {
         self.feature_files(feature_type, true)
     }
 
-    /// The files of one feature type that are *not* CityGML — texture images
-    /// above all, which the documents reference by relative path — sorted.
+    /// The files of one feature type that are *not* CityGML, texture images
+    /// above all, sorted.
     pub fn companion_files(&self, feature_type: &str) -> Result<Vec<PathBuf>> {
         self.feature_files(feature_type, false)
     }
@@ -154,8 +153,6 @@ impl Dataset {
     }
 
     /// Stops the staging directory from being removed, returning its path.
-    ///
-    /// Useful for inspecting what the reassembly produced.
     pub fn keep(mut self) -> PathBuf {
         if let Some(temp) = self.temp.take() {
             let _ = temp.keep();
@@ -169,8 +166,8 @@ fn check_root(root: &Path) -> Result<()> {
         return Ok(());
     }
     Err(Error::Layout(format!(
-        "{}: no `{REQUIRED_PART}` directory — inputs must add up to a PLATEAU package \
-         (udx, codelists, schemas)",
+        "{}: no `{REQUIRED_PART}` directory, so the inputs do not add up to a \
+         PLATEAU package (udx, codelists, schemas)",
         root.display()
     )))
 }
@@ -243,7 +240,8 @@ fn dir_layout(path: &Path) -> Result<Layout> {
         });
     }
 
-    // A package one level down — what unzipping a portal download leaves behind.
+    // A package one level down, which is what unzipping a portal download
+    // leaves behind.
     for entry in read_dir(path)?.filter(|e| e.is_dir()) {
         let parts = present_parts(&entry);
         if !parts.is_empty() {
@@ -273,8 +271,8 @@ fn zip_layout(path: &Path) -> Result<Layout> {
 
     let found = find_parts(entries.iter().map(String::as_str));
     if !found.is_empty() {
-        // Several prefixes can match when a zip nests packages; the outermost
-        // one is the package root.
+        // Several prefixes can match when a zip nests packages, and the
+        // outermost one is the package root.
         let prefix = found
             .values()
             .min_by_key(|p| (depth(p), p.len()))
@@ -327,8 +325,8 @@ fn find_parts<'a>(entries: impl Iterator<Item = &'a str>) -> BTreeMap<&'static s
     found
 }
 
-/// A part name taken from the input's own file or directory name, so that
-/// `.../udx` and `..._udx.zip` are recognised without looking inside.
+/// A part name taken from the input's own file or directory name, recognising
+/// `.../udx` and `..._udx.zip` without looking inside.
 fn part_by_name(path: &Path) -> Option<&'static str> {
     let name = path.file_stem()?.to_str()?.to_ascii_lowercase();
     PARTS
@@ -348,8 +346,8 @@ fn infer_part<'a>(entries: impl Iterator<Item = &'a str>) -> Option<&'static str
         xsd |= lower.ends_with(".xsd");
         xml |= lower.ends_with(".xml");
     }
-    // Order matters: schemas ship .xsd alongside other files, and codelists are
-    // the only part that is nothing but .xml.
+    // Order matters. Schemas ship .xsd alongside other files, and codelists
+    // are the only part that is nothing but .xml.
     match (gml, xsd, xml) {
         (true, _, _) => Some("udx"),
         (_, true, _) => Some("schemas"),
@@ -375,8 +373,7 @@ fn read_dir(path: &Path) -> Result<impl Iterator<Item = PathBuf>> {
     Ok(paths.into_iter())
 }
 
-/// Relative paths under `dir`, shallow enough to identify it but not to walk a
-/// whole city.
+/// Relative paths under `dir`, deep enough to identify the part it holds.
 fn dir_entries(dir: &Path) -> Vec<String> {
     WalkDir::new(dir)
         .max_depth(3)
@@ -396,9 +393,9 @@ fn dir_entries(dir: &Path) -> Vec<String> {
 fn zip_entries(path: &Path) -> Result<Vec<String>> {
     let file = File::open(path).map_err(|e| Error::io(path, e))?;
     let archive = zip::ZipArchive::new(file).map_err(|e| Error::zip(path, e))?;
-    // Windows-made archives separate with backslashes; real PLATEAU part zips
-    // do. Normalise here so layout detection sees the same paths `extract`
-    // (which normalises on its own) will write.
+    // Windows-made archives separate with backslashes, as real PLATEAU part
+    // zips do. Normalising here makes layout detection see the same paths
+    // `extract` will write.
     Ok(archive
         .file_names()
         .map(|name| name.replace('\\', "/"))
@@ -413,8 +410,8 @@ fn extract(archive_path: &Path, strip: &str, dest: &Path) -> Result<()> {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| Error::zip(archive_path, e))?;
-        // `enclosed_name` rejects absolute paths and `..`, so a malicious archive
-        // cannot write outside `dest`.
+        // `enclosed_name` rejects absolute paths and `..`, so a malicious
+        // archive cannot write outside `dest`.
         let Some(name) = entry.enclosed_name() else {
             tracing::warn!(entry = entry.name(), "skipping unsafe zip entry");
             continue;
@@ -475,8 +472,8 @@ fn strip_prefix(path: &str, prefix: &str) -> Option<String> {
         return Some(path.to_owned());
     }
     path.strip_prefix(prefix)
-        // The remainder must start at a component boundary, so `rootx/udx` does
-        // not match the prefix `root`.
+        // The remainder must start at a component boundary, so `rootx/udx`
+        // does not match the prefix `root`.
         .and_then(|rest| {
             rest.strip_prefix('/')
                 .or_else(|| rest.is_empty().then_some(""))
