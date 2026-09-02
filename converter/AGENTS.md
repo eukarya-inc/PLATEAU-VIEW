@@ -37,9 +37,9 @@ cargo run -p plateau-converter-cli -- inspect <input>...
 The single most common mistake here is putting a mapping in the wrong layer.
 
 * **A namespace bump, an element rename, an element to drop, a child order, or a
-  value the converter has to invent** → a file under `profiles/`. No Rust. This
-  is a table, so keep it a table. *Which* file follows from what the rule varies
-  with, and getting that wrong is how profiles drift apart:
+  value the converter has to invent** → a file under `profiles/` instead of Rust.
+  This is a table, so keep it a table. *Which* file follows from what the rule
+  varies with, and getting that wrong is how profiles drift apart:
   * true of CityGML 2.0 → 3.0 whatever i-UR the input carries →
     `citygml-2.0-to-3.0.toml`
   * true of producing i-UR 4.0 whatever version it came from →
@@ -115,38 +115,3 @@ free.
 
 Mapping rules are experimental, and this experimental phase continues at least
 until the official PLATEAU spec for CityGML 3.0 is released.
-
-## Vendored schemas
-
-`fixtures/schemas/iur/*/4.0/` are the i-UR 4.0 XSDs the converter writes into a
-converted package, and `fixtures/schemas/sources/` are the 3.x revisions the
-generator reads. Both are committed on purpose, because i-UR publishes patch
-revisions **in place** under the same minor-version URL and they are not
-compatible with one another, so fetching at build or run time would make the
-output depend on when it ran. Replacing a set means replacing all of it, since
-the modules import one another by exact namespace.
-
-`/fixtures/codelists` is vendored for the same reason. It holds the published
-i-UR 4.0 code lists, embedded by `core/build.rs` and written into every
-converted package in place of the input's copies of the same files. Which input
-lists survive instead (the municipality-authored ones), which file names the
-published set moved, and which codes it dropped is the profile's `[codelists]`
-table, so a change there is a profile edit rather than Rust. Never replace a
-municipality-authored list with a published file of the same name, because some
-published files under those names are literal placeholder templates.
-
-## Testing
-
-`core/tests/fixtures/plateau` is a real PLATEAU 2023 Shizuoka package. Convert
-it in tests rather than hand-writing CityGML, so a regression in the mapping
-surfaces as a failing assertion rather than as a bad output file someone notices
-later. Add a fixture only when the existing one cannot exercise the path (LOD2
-surfaces, `BuildingPart`, appearances).
-
-That makes `core/tests/convert_*.rs` the place a mapping is tested, and a
-`#[cfg(test)]` unit test over hand-built `Element`s the exception. Write one
-only for a branch a document cannot reach, such as a fallback, an error path, or
-an edge the fixture has no data for. Do not write one that restates a mapping an
-integration test already asserts, that pins a value the profile owns (the
-mapping rules are experimental, so those move), or that reads back a table or a
-three-line helper, since the code says it more clearly than an assertion does.
