@@ -357,11 +357,11 @@ children = [
   "core:externalReference", "core:generalizesTo",
   "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
   "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
   # core::AbstractThematicSurface
   "core:area",
   "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
   "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
-  "core:adeOfAbstractCityObject",
   "con:fillingSurface", "con:adeOfAbstractConstructionSurface",
 ]
 

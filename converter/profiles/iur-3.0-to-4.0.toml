@@ -106,7 +106,9 @@ drop = true
 # This is inferred, not stated: no schema records that
 # BuildingTsunamiRiskAttribute *became* TsunamiRiskAttribute. What supports it is
 # that 3.1 performed exactly this merge, and that every stripped name is declared
-# by urc 4.0. The quality classes follow the Exterior decision made above.
+# by urc 4.0. The quality classes follow the Exterior decision made above, with
+# one exception. RoomDataQualityAttribute describes a room, which is interior
+# content, so it takes the Interior variant.
 #
 # 3.0 only. From 3.1 onwards the data already uses the generic classes.
 [[element]]
@@ -144,7 +146,7 @@ from = "uro:LandUseDataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
 [[element]]
 from = "uro:RoomDataQualityAttribute"
-to = "urc:ExteriorDataQualityAttribute"
+to = "urc:InteriorDataQualityAttribute"
 [[element]]
 from = "uro:TransportationDataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
