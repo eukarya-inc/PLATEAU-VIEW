@@ -82,11 +82,15 @@ impl RasterEncoding {
         }
     }
 
-    fn name(self) -> &'static str {
-        match self {
-            Self::Terrarium => "terrarium-ellipsoid",
-            Self::Mapbox => "mapbox-terrain-rgb-ellipsoid",
-        }
+    /// Display name for `tilejson.json`. Carries the height mode because the
+    /// same endpoint now serves three different vertical surfaces — a fixed
+    /// `-ellipsoid` suffix would misdescribe two of them.
+    fn name(self, mode: HeightMode) -> String {
+        let base = match self {
+            Self::Terrarium => "terrarium",
+            Self::Mapbox => "mapbox-terrain-rgb",
+        };
+        format!("{base}-{}", mode.slug())
     }
 
     fn heightmap_format(self) -> HeightmapFormat {
@@ -1033,7 +1037,7 @@ async fn raster_tilejson(
     struct TileJson<'a> {
         tilejson: &'a str,
         tiles: Vec<String>,
-        name: &'a str,
+        name: String,
         attribution: &'a str,
         scheme: &'a str,
         minzoom: u8,
@@ -1045,7 +1049,7 @@ async fn raster_tilejson(
     Json(TileJson {
         tilejson: "3.0.0",
         tiles: vec![tile_url],
-        name: encoding.name(),
+        name: encoding.name(height_mode),
         attribution:
             r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#,
         scheme: "xyz",

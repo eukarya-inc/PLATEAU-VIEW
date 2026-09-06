@@ -14,7 +14,7 @@ Project PLATEAU では、日本全国の地形データを Cesium などの 3D �
 :::note[現在の提供状況]
 現在配信しているのは、Cesium 向けの **quantized-mesh 形式**の地形タイル（`/terrain/`）です。これは従来 Cesium ion 上でホストしていた PLATEAU-Terrain（[5 章](#5-plateau-terrain-cesium-ion)）をオブジェクトストレージにミラーし、そのまま配信しているものです。配信される標高は楕円体高に変換済みですが、**ジオイドモデルはデータ生成時に固定**されており、リクエスト時に切り替えることはできません。
 
-リクエスト時のジオイドモデル切り替え（`?geoid=`）や、MapLibre / Mapbox GL 向けの raster-dem エンドポイント（`/terrarium/`・`/mapbox/`）は、新しい DEM ベースの配信パイプラインで開発を進めていますが、**現在調整中で、まだリリースされていません**（[1.3](#13-今後提供予定の機能調整中)）。
+リクエスト時の高さ基準の切り替え（`?heights=`）や、MapLibre / Mapbox GL 向けの raster-dem エンドポイント（`/terrarium/`・`/mapbox/`）は、新しい DEM ベースの配信パイプラインで開発を進めていますが、**現在調整中で、まだリリースされていません**（[1.3](#13-今後提供予定の機能調整中)）。
 :::
 
 ### 1.1. 高さの基準（楕円体高）
@@ -35,14 +35,15 @@ PLATEAU-Terrain では、ジオイド高 N を加算した楕円体高を配信�
 
 以下の機能は新しい DEM ベースの配信パイプラインで開発を進めていますが、調整中のためまだリリースされていません。正式公開までは [2 章](#2-配信-url)の quantized-mesh 配信をご利用ください。
 
-- **ジオイドモデルの切り替え**：`?geoid=` クエリパラメータで、用途に応じてジオイドモデルを切り替え。提供予定のモデルは次のとおりです。
+- **高さの基準の切り替え**：`?heights=` クエリパラメータで、配信する鉛直方向の面を切り替え。
 
-  | `geoid=` | 内容 | 適用範囲 |
-  | --- | --- | --- |
-  | `gsigeo2011`（既定） | 国土地理院「日本のジオイド 2011」(Ver.2.2) | 日本陸域 |
-  | `jpgeo2024` | 国土地理院「日本のジオイド 2024」 | 日本陸域 + 周辺海域 |
-  | `jpgeo2024-hrefconv` | JPGEO2024 + Hrefconv 補正 | 日本陸域のみ |
-  | `none` | ジオイド補正なし（正標高のまま） | グローバル |
+  | `heights=` | 配信される高さ |
+  | --- | --- |
+  | `ellipsoidal`（既定） | 楕円体高（正標高 + ジオイド高） |
+  | `orthometric` | 正標高（ジオイド高を加算しない、DEM そのまま） |
+  | `geoid` | ジオイド高そのもの |
+
+  ジオイドモデル（[GSIGEO2011](https://www.gsi.go.jp/buturisokuchi/grageo_geoidseika.html) や日本のジオイド 2024 など）は、**データセットごとに固定**でリクエストからは選べません。ジオイドモデルはそれぞれ特定の測地成果と対になっており、DEM の測地系に合わないモデルを重ねても意味のある高さにならないためです。適用されているモデルはデータセットの仕様として公開します。
 
 - **MapLibre / Mapbox GL 向け raster-dem エンドポイント**：同じ標高データを MapLibre / Mapbox GL からも利用できるよう、`/terrarium/`（[Mapzen Terrarium](https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)）と `/mapbox/`（[Mapbox Terrain-RGB v1](https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/)）の各エンドポイントを PNG / WebP / AVIF 形式で配信。
 - **高ズームのアップサンプリング**：DEM 元データの最大ズームを超えるズームが要求された場合に、親タイルを bilinear でアップサンプリングして返却。
@@ -69,7 +70,7 @@ https://tile.plateauview.mlit.go.jp/terrain/{z}/{x}/{y}.terrain
 [Cesium quantized-mesh-1.0](https://github.com/CesiumGS/quantized-mesh) 形式（TMS Geodetic、`octvertexnormals` 拡張付き）の地形タイルです。CesiumJS の `CesiumTerrainProvider.fromUrl` に `layer.json` の URL（または `/terrain`）を渡すだけで利用できます。`requestVertexNormals: true` を指定すると法線付きで読み込めます。
 
 :::note
-現在の `/terrain/` は、固定のジオイドモデルを適用済みの quantized-mesh ミラーです。`?geoid=` を付与してもジオイドモデルは切り替わりません（[1.3](#13-今後提供予定の機能調整中)）。
+現在の `/terrain/` は、固定のジオイドモデルを適用済みの quantized-mesh ミラーです。`?heights=` を付与しても高さの基準は切り替わりません（[1.3](#13-今後提供予定の機能調整中)）。
 :::
 
 ### 2.2. 配信中のタイル一覧（カタログ API）
