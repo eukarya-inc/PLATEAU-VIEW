@@ -28,10 +28,14 @@ image = { version = "0.25", default-features = false, features = ["png", "webp",
 flate2 = "1"
 japan-geoid = { version = "0.6", features = ["gsigeo2011", "jpgeo2024", "jpgeo2024_hrefconv2024"] }
 terrain-codec = "0.3.0"
-pmtiles = { version = "0.23", default-features = false, features = ["http-async", "object-store", "reqwest-rustls"] }
+pmtiles = { version = "=0.23.0", default-features = false, features = ["http-async", "object-store", "reqwest-rustls"] }
 rstar = "0.12"
 # pmtiles needs object_store v0.13; the existing /tile/src/cog/* still uses
 # v0.12. We expose v0.13 under a rename so both coexist in the build.
+# pmtiles is pinned exactly because 0.23.1 moved to object_store ^0.14, which
+# no longer matches the rename below — a caret range silently picks it up and
+# breaks the build. To take a newer pmtiles, bump the rename in lockstep and
+# port src/terrain/pmtiles.rs + src/tile/pmtiles.rs to the new API.
 object_store_pmtiles = { package = "object_store", version = "0.13", default-features = false, features = ["http", "gcp", "aws", "fs"] }
 
 # HTTP client
