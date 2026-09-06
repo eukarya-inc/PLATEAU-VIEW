@@ -16,6 +16,7 @@
 pub mod cache;
 pub mod cog;
 pub mod config;
+pub mod object_url;
 pub mod server;
 pub mod terrain;
 pub mod tile;

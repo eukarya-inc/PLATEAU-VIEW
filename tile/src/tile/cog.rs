@@ -106,6 +106,7 @@ impl CogTileSource {
     async fn create_object_store(&self) -> Result<(Arc<dyn ObjectStore>, ObjectPath), TileError> {
         let parsed_url =
             Url::parse(&self.url).map_err(|e| TileError::Internal(format!("Invalid URL: {e}")))?;
+        let path = object_path_from_url(&parsed_url)?;
 
         match parsed_url.scheme() {
             "http" | "https" => {
@@ -128,8 +129,6 @@ impl CogTileSource {
                         TileError::Internal(format!("Failed to create HTTP store: {e}"))
                     })?;
 
-                let path = ObjectPath::from(parsed_url.path());
-
                 Ok((Arc::new(store), path))
             }
             "gs" => {
@@ -142,8 +141,6 @@ impl CogTileSource {
                     .with_bucket_name(bucket)
                     .build()
                     .map_err(|e| TileError::Internal(format!("Failed to create GCS store: {e}")))?;
-
-                let path = ObjectPath::from(parsed_url.path());
 
                 Ok((Arc::new(store), path))
             }
@@ -158,8 +155,6 @@ impl CogTileSource {
                     .build()
                     .map_err(|e| TileError::Internal(format!("Failed to create S3 store: {e}")))?;
 
-                let path = ObjectPath::from(parsed_url.path());
-
                 Ok((Arc::new(store), path))
             }
             scheme => Err(TileError::Internal(format!(
@@ -167,6 +162,13 @@ impl CogTileSource {
             ))),
         }
     }
+}
+
+/// Build the object-store key for a COG URL. See
+/// [`crate::object_url::object_path_from_url`] for the encoding rule.
+fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, TileError> {
+    crate::object_url::object_path_from_url(parsed)
+        .map_err(|e| TileError::Internal(format!("Invalid URL path: {e}")))
 }
 
 #[async_trait]
@@ -298,5 +300,39 @@ impl TileSource for CogTileSource {
 
     async fn bounds(&self) -> Option<crate::terrain::GeoBounds> {
         self.cached_geo_bounds().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Non-ASCII COG filenames must map to a **single**-encoded object key;
+    /// `ObjectPath::from` on an already-encoded URL path would re-encode the
+    /// `%` signs and 404 on every request.
+    #[test]
+    fn non_ascii_url_path_is_single_encoded() {
+        let url = Url::parse("https://example.com/patch/shizuoka/静岡市（葵区）・DEM.tif").unwrap();
+        assert!(url.path().contains('%'));
+
+        let path = object_path_from_url(&url).unwrap();
+        // The key holds the *decoded* name; `object_store` percent-encodes it
+        // exactly once when it builds the request URL.
+        assert_eq!(path.to_string(), "patch/shizuoka/静岡市（葵区）・DEM.tif");
+        assert!(
+            !path.to_string().contains('%'),
+            "an already-encoded key would be encoded a second time and 404"
+        );
+        // The old `ObjectPath::from(url.path())` form keeps the escapes, which
+        // is what produced the double-encoded 404s.
+        assert_ne!(path, ObjectPath::from(url.path()));
+        assert!(ObjectPath::from(url.path()).to_string().contains('%'));
+    }
+
+    #[test]
+    fn ascii_url_path_unchanged() {
+        let url = Url::parse("https://example.com/base/dem5/5238.tif").unwrap();
+        let path = object_path_from_url(&url).unwrap();
+        assert_eq!(path.to_string(), "base/dem5/5238.tif");
     }
 }

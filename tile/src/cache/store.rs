@@ -9,6 +9,8 @@ use object_store::{
 use thiserror::Error;
 use url::Url;
 
+use crate::object_url::object_path_from_url;
+
 /// Errors related to cache storage operations.
 #[derive(Error, Debug)]
 pub enum CacheStoreError {
@@ -77,14 +79,18 @@ impl CacheStoreFactory {
     fn create_local_store(
         url: &Url,
     ) -> Result<(Arc<dyn ObjectStore>, ObjectPath), CacheStoreError> {
-        let path = url.path();
+        // `Url::path()` is percent-encoded; the filesystem needs the decoded
+        // form, otherwise a non-ASCII cache dir is created under its escapes.
+        let path = url
+            .to_file_path()
+            .unwrap_or_else(|_| std::path::PathBuf::from(url.path()));
 
         // Create the directory if it doesn't exist
-        std::fs::create_dir_all(path).map_err(|e| {
+        std::fs::create_dir_all(&path).map_err(|e| {
             CacheStoreError::StorageError(format!("Failed to create cache directory: {e}"))
         })?;
 
-        let store = LocalFileSystem::new_with_prefix(path).map_err(|e| {
+        let store = LocalFileSystem::new_with_prefix(&path).map_err(|e| {
             CacheStoreError::StorageError(format!("Failed to create local store: {e}"))
         })?;
 
@@ -104,7 +110,7 @@ impl CacheStoreFactory {
                 CacheStoreError::StorageError(format!("Failed to create GCS store: {e}"))
             })?;
 
-        let prefix = ObjectPath::from(url.path().trim_start_matches('/'));
+        let prefix = cache_prefix(url)?;
 
         Ok((Arc::new(store), prefix))
     }
@@ -122,7 +128,7 @@ impl CacheStoreFactory {
                 CacheStoreError::StorageError(format!("Failed to create S3 store: {e}"))
             })?;
 
-        let prefix = ObjectPath::from(url.path().trim_start_matches('/'));
+        let prefix = cache_prefix(url)?;
 
         Ok((Arc::new(store), prefix))
     }
@@ -157,10 +163,19 @@ impl CacheStoreFactory {
                 CacheStoreError::StorageError(format!("Failed to create R2 store: {e}"))
             })?;
 
-        let prefix = ObjectPath::from(url.path().trim_start_matches('/'));
+        let prefix = cache_prefix(url)?;
 
         Ok((Arc::new(store), prefix))
     }
+}
+
+/// Bucket-relative prefix for a cache URL.
+///
+/// Uses the shared decoder so a prefix containing non-ASCII characters is
+/// single-encoded when `object_store` builds the request URL.
+fn cache_prefix(url: &Url) -> Result<ObjectPath, CacheStoreError> {
+    object_path_from_url(url)
+        .map_err(|e| CacheStoreError::InvalidUrl(format!("invalid cache path: {e}")))
 }
 
 #[cfg(test)]
@@ -177,5 +192,29 @@ mod tests {
     fn test_invalid_url() {
         let result = CacheStoreFactory::create("not a url");
         assert!(matches!(result, Err(CacheStoreError::InvalidUrl(_))));
+    }
+
+    /// A cache prefix with non-ASCII characters must be stored **decoded**;
+    /// `object_store` percent-encodes it exactly once per request.
+    #[test]
+    fn cache_prefix_non_ascii_is_single_encoded() {
+        let url = Url::parse("r2://bucket/cache/静岡（葵）").unwrap();
+        assert!(url.path().contains('%'));
+
+        let prefix = cache_prefix(&url).unwrap();
+        assert_eq!(prefix.to_string(), "cache/静岡（葵）");
+        assert!(!prefix.to_string().contains('%'));
+        // The old `ObjectPath::from(url.path().trim_start_matches('/'))` form
+        // kept the escapes and re-encoded the `%`, producing 404s.
+        assert_ne!(prefix, ObjectPath::from(url.path().trim_start_matches('/')));
+    }
+
+    #[test]
+    fn cache_prefix_ascii_unchanged() {
+        let url = Url::parse("gs://bucket/tiles/v1").unwrap();
+        assert_eq!(cache_prefix(&url).unwrap().to_string(), "tiles/v1");
+
+        let root = Url::parse("s3://bucket").unwrap();
+        assert_eq!(cache_prefix(&root).unwrap().to_string(), "");
     }
 }

@@ -329,11 +329,19 @@ fn lat_from_y(y: f64, n: f64) -> f64 {
     (PI * (1.0 - 2.0 * y / n)).sinh().atan().to_degrees()
 }
 
+/// Build the object-store key for a COG URL. See
+/// [`crate::object_url::object_path_from_url`] for the encoding rule.
+fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, DemError> {
+    crate::object_url::object_path_from_url(parsed)
+        .map_err(|e| DemError::Decode(format!("invalid cog URL path: {e}")))
+}
+
 /// Build an object_store v0.12 backend from a URL. Mirrors the logic in
 /// `tile::cog::CogTileSource::create_object_store` but is local to keep the
 /// terrain module self-contained.
 fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), DemError> {
     let parsed = Url::parse(url).map_err(|e| DemError::Decode(format!("invalid cog URL: {e}")))?;
+    let object_path = object_path_from_url(&parsed)?;
 
     match parsed.scheme() {
         "http" | "https" => {
@@ -348,7 +356,7 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
                 .with_config(ClientConfigKey::AllowHttp, "true")
                 .build()
                 .map_err(|e| DemError::Http(format!("HTTP store init: {e}")))?;
-            Ok((Arc::new(store), ObjectPath::from(parsed.path())))
+            Ok((Arc::new(store), object_path))
         }
         "gs" => {
             let bucket = parsed
@@ -358,7 +366,7 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
                 .with_bucket_name(bucket)
                 .build()
                 .map_err(|e| DemError::Http(format!("GCS store init: {e}")))?;
-            Ok((Arc::new(store), ObjectPath::from(parsed.path())))
+            Ok((Arc::new(store), object_path))
         }
         "s3" => {
             let bucket = parsed
@@ -368,11 +376,12 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
                 .with_bucket_name(bucket)
                 .build()
                 .map_err(|e| DemError::Http(format!("S3 store init: {e}")))?;
-            Ok((Arc::new(store), ObjectPath::from(parsed.path())))
+            Ok((Arc::new(store), object_path))
         }
         "r2" => {
             // Cloudflare R2 (S3-compatible). Credentials + endpoint from R2_*
-            // env vars via the shared factory.
+            // env vars via the shared factory, which derives its path with the
+            // same decoder as `object_path_from_url`.
             let (store, path, _) = crate::cache::CacheStoreFactory::create(url)
                 .map_err(|e| DemError::Http(format!("R2 store init: {e}")))?;
             Ok((store, path))
@@ -386,6 +395,36 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A COG whose filename contains non-ASCII characters must map to a
+    /// **single**-encoded object key. `ObjectPath::from` on an already-encoded
+    /// URL path would re-encode the `%` signs and 404 on every request.
+    #[test]
+    fn non_ascii_url_path_is_single_encoded() {
+        let url = Url::parse("https://example.com/patch/shizuoka/静岡市（葵区）・DEM.tif").unwrap();
+        // Sanity: `Url` stores the path percent-encoded.
+        assert!(url.path().contains('%'));
+
+        let path = object_path_from_url(&url).unwrap();
+        // The key holds the *decoded* name; `object_store` percent-encodes it
+        // exactly once when it builds the request URL.
+        assert_eq!(path.to_string(), "patch/shizuoka/静岡市（葵区）・DEM.tif");
+        assert!(
+            !path.to_string().contains('%'),
+            "an already-encoded key would be encoded a second time and 404"
+        );
+        // The old `ObjectPath::from(url.path())` form keeps the escapes, which
+        // is what produced the double-encoded 404s.
+        assert_ne!(path, ObjectPath::from(url.path()));
+        assert!(ObjectPath::from(url.path()).to_string().contains('%'));
+    }
+
+    #[test]
+    fn ascii_url_path_unchanged() {
+        let url = Url::parse("https://example.com/base/dem5/5238.tif").unwrap();
+        let path = object_path_from_url(&url).unwrap();
+        assert_eq!(path.to_string(), "base/dem5/5238.tif");
+    }
 
     #[test]
     fn xyz_to_bounds_z0() {

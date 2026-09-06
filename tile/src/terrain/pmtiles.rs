@@ -220,6 +220,17 @@ pub fn build_object_store_for(
     build_object_store(url).map_err(|e| crate::tile::TileError::Internal(e.to_string()))
 }
 
+/// Build the object-store key for a PMTiles URL.
+///
+/// Same rule as [`crate::object_url::object_path_from_url`], but this module is
+/// built on `object_store` v0.13 (`object_store_pmtiles`), whose `Path` is a
+/// distinct type from the v0.12 `Path` the shared helper returns, so the one
+/// call cannot be shared across the version boundary.
+fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, DemError> {
+    ObjectPath::from_url_path(parsed.path())
+        .map_err(|e| DemError::Decode(format!("invalid pmtiles URL path: {e}")))
+}
+
 /// Build an `(ObjectStore, ObjectPath)` pair for the URL scheme.
 fn build_object_store(url: &str) -> Result<(Box<dyn ObjectStore>, ObjectPath), DemError> {
     let parsed =
@@ -238,7 +249,7 @@ fn build_object_store(url: &str) -> Result<(Box<dyn ObjectStore>, ObjectPath), D
                 .with_config(ClientConfigKey::AllowHttp, "true")
                 .build()
                 .map_err(|e| DemError::Http(format!("HTTP store init: {e}")))?;
-            Ok((Box::new(store), ObjectPath::from(parsed.path())))
+            Ok((Box::new(store), object_path_from_url(&parsed)?))
         }
         "gs" => {
             let bucket = parsed
@@ -248,7 +259,7 @@ fn build_object_store(url: &str) -> Result<(Box<dyn ObjectStore>, ObjectPath), D
                 .with_bucket_name(bucket)
                 .build()
                 .map_err(|e| DemError::Http(format!("GCS store init: {e}")))?;
-            Ok((Box::new(store), ObjectPath::from(parsed.path())))
+            Ok((Box::new(store), object_path_from_url(&parsed)?))
         }
         "s3" => {
             let bucket = parsed
@@ -258,7 +269,7 @@ fn build_object_store(url: &str) -> Result<(Box<dyn ObjectStore>, ObjectPath), D
                 .with_bucket_name(bucket)
                 .build()
                 .map_err(|e| DemError::Http(format!("S3 store init: {e}")))?;
-            Ok((Box::new(store), ObjectPath::from(parsed.path())))
+            Ok((Box::new(store), object_path_from_url(&parsed)?))
         }
         "r2" => {
             // R2 is S3-compatible. R2_ACCOUNT_ID is required to derive the
@@ -284,7 +295,7 @@ fn build_object_store(url: &str) -> Result<(Box<dyn ObjectStore>, ObjectPath), D
             let store = builder
                 .build()
                 .map_err(|e| DemError::Http(format!("R2 store init: {e}")))?;
-            Ok((Box::new(store), ObjectPath::from(parsed.path())))
+            Ok((Box::new(store), object_path_from_url(&parsed)?))
         }
         "file" => {
             let path = parsed
@@ -325,5 +336,28 @@ mod tests {
     fn rejects_unknown_scheme() {
         let res = build_object_store("ftp://example.com/x.pmtiles");
         assert!(res.is_err());
+    }
+
+    /// An archive key with non-ASCII characters must be stored **decoded**;
+    /// `ObjectPath::from(url.path())` would re-encode the `%` and 404.
+    #[test]
+    fn non_ascii_url_path_is_single_encoded() {
+        let url = Url::parse("r2://bucket/dem/静岡（葵）.pmtiles").unwrap();
+        assert!(url.path().contains('%'));
+
+        let path = object_path_from_url(&url).unwrap();
+        assert_eq!(path.to_string(), "dem/静岡（葵）.pmtiles");
+        assert!(!path.to_string().contains('%'));
+        assert_ne!(path, ObjectPath::from(url.path()));
+        assert!(ObjectPath::from(url.path()).to_string().contains('%'));
+    }
+
+    #[test]
+    fn ascii_url_path_unchanged() {
+        let url = Url::parse("https://example.com/dem/japan.pmtiles").unwrap();
+        assert_eq!(
+            object_path_from_url(&url).unwrap().to_string(),
+            "dem/japan.pmtiles"
+        );
     }
 }

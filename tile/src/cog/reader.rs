@@ -358,36 +358,35 @@ impl CogReader {
                                 );
                             }
 
-                            // Copy to buffer
+                            // Copy to buffer. Edge chunks may decode to their
+                            // real (cropped) extent rather than the padded
+                            // block — see `decoded_chunk_stride`.
+                            let (chunk_w, chunk_h) =
+                                chunk_extent(tx, ty, cog_tile_w, cog_tile_h, img_width, img_height);
+                            let bytes_per_pixel = (bits_per_sample as usize).div_ceil(8)
+                                * samples_per_pixel.max(1) as usize;
+                            let src_stride = decoded_chunk_stride(
+                                decoded_bytes.len(),
+                                bytes_per_pixel,
+                                cog_tile_w as usize,
+                                cog_tile_h as usize,
+                                chunk_w,
+                            );
+
                             let buf_x_offset = (tx - tile_range.x_start) * cog_tile_w as usize;
                             let buf_y_offset = (ty - tile_range.y_start) * cog_tile_h as usize;
-                            let tile_px_x_start = tx * cog_tile_w as usize;
-                            let tile_px_y_start = ty * cog_tile_h as usize;
 
-                            for y in 0..cog_tile_h as usize {
-                                let img_y = tile_px_y_start + y;
-                                if img_y >= img_height as usize {
-                                    continue;
-                                }
-
-                                for x in 0..cog_tile_w as usize {
-                                    let img_x = tile_px_x_start + x;
-                                    if img_x >= img_width as usize {
-                                        continue;
-                                    }
-
-                                    let src_idx = (y * cog_tile_w as usize + x) * 4;
-                                    let dst_idx = ((buf_y_offset + y) * buffer_width
-                                        + (buf_x_offset + x))
-                                        * 4;
-
-                                    if src_idx + 3 < rgba.len() && dst_idx + 3 < pixel_buffer.len()
-                                    {
-                                        pixel_buffer[dst_idx..dst_idx + 4]
-                                            .copy_from_slice(&rgba[src_idx..src_idx + 4]);
-                                    }
-                                }
-                            }
+                            blit_chunk(
+                                &rgba,
+                                src_stride,
+                                4,
+                                chunk_w,
+                                chunk_h,
+                                &mut pixel_buffer,
+                                buffer_width,
+                                buf_x_offset,
+                                buf_y_offset,
+                            );
                         }
                         Err(e) => {
                             tracing::warn!("Failed to decode tile ({}, {}): {:?}", tx, ty, e);
@@ -444,6 +443,7 @@ impl CogReader {
         let img_height = ifd.image_height();
         let cog_tile_w = ifd.tile_width().unwrap_or(256);
         let cog_tile_h = ifd.tile_height().unwrap_or(256);
+        let samples_per_pixel = ifd.samples_per_pixel();
         let sample_format = ifd
             .sample_format()
             .first()
@@ -520,33 +520,35 @@ impl CogReader {
                                 }
                             }
 
-                            // Copy to buffer
+                            // Copy to buffer. Edge chunks may decode to their
+                            // real (cropped) extent rather than the padded
+                            // block — see `decoded_chunk_stride`.
+                            let (chunk_w, chunk_h) =
+                                chunk_extent(tx, ty, cog_tile_w, cog_tile_h, img_width, img_height);
+                            let bytes_per_pixel = (bits_per_sample as usize).div_ceil(8)
+                                * samples_per_pixel.max(1) as usize;
+                            let src_stride = decoded_chunk_stride(
+                                decoded_bytes.len(),
+                                bytes_per_pixel,
+                                cog_tile_w as usize,
+                                cog_tile_h as usize,
+                                chunk_w,
+                            );
+
                             let buf_x_offset = (tx - tile_range.x_start) * cog_tile_w as usize;
                             let buf_y_offset = (ty - tile_range.y_start) * cog_tile_h as usize;
-                            let tile_px_x_start = tx * cog_tile_w as usize;
-                            let tile_px_y_start = ty * cog_tile_h as usize;
 
-                            for y in 0..cog_tile_h as usize {
-                                let img_y = tile_px_y_start + y;
-                                if img_y >= img_height as usize {
-                                    continue;
-                                }
-
-                                for x in 0..cog_tile_w as usize {
-                                    let img_x = tile_px_x_start + x;
-                                    if img_x >= img_width as usize {
-                                        continue;
-                                    }
-
-                                    let src_idx = y * cog_tile_w as usize + x;
-                                    let dst_idx =
-                                        (buf_y_offset + y) * buffer_width + (buf_x_offset + x);
-
-                                    if src_idx < elevations.len() && dst_idx < pixel_buffer.len() {
-                                        pixel_buffer[dst_idx] = elevations[src_idx];
-                                    }
-                                }
-                            }
+                            blit_chunk(
+                                &elevations,
+                                src_stride,
+                                1,
+                                chunk_w,
+                                chunk_h,
+                                &mut pixel_buffer,
+                                buffer_width,
+                                buf_x_offset,
+                                buf_y_offset,
+                            );
                         }
                         Err(e) => {
                             tracing::warn!("Failed to decode tile ({}, {}): {:?}", tx, ty, e);
@@ -579,6 +581,81 @@ impl CogReader {
     }
 }
 
+/// Real pixel extent of chunk `(tx, ty)`.
+///
+/// TIFF chunks (tiles) are written padded out to `tile_w × tile_h`, but the
+/// chunks along the right/bottom edge only cover `image_size - offset` real
+/// pixels. Returns `(0, _)` / `(_, 0)` for chunks entirely outside the image.
+fn chunk_extent(
+    tx: usize,
+    ty: usize,
+    tile_w: u32,
+    tile_h: u32,
+    img_width: u32,
+    img_height: u32,
+) -> (usize, usize) {
+    let w = (img_width as usize).saturating_sub(tx * tile_w as usize);
+    let h = (img_height as usize).saturating_sub(ty * tile_h as usize);
+    (w.min(tile_w as usize), h.min(tile_h as usize))
+}
+
+/// Row stride, in pixels, of a decoded chunk buffer.
+///
+/// `Tile::decode` applies the TIFF predictor, and for a **partial-width** edge
+/// chunk the horizontal-differencing unpredictors return only the chunk's real
+/// extent (`chunk_w × chunk_h`) — the padding columns are stripped. With
+/// `Predictor::None` the full padded `tile_w × tile_h` block comes back
+/// instead. Rather than assuming either behaviour (it differs per predictor,
+/// and could change with the library), decide from the decoded byte length: if
+/// there are enough bytes for the padded block, the padded stride applies,
+/// otherwise the buffer is cropped and the stride is `chunk_w`.
+fn decoded_chunk_stride(
+    decoded_len: usize,
+    bytes_per_pixel: usize,
+    tile_w: usize,
+    tile_h: usize,
+    chunk_w: usize,
+) -> usize {
+    if bytes_per_pixel == 0 {
+        return tile_w;
+    }
+    let decoded_pixels = decoded_len / bytes_per_pixel;
+    if decoded_pixels >= tile_w * tile_h {
+        tile_w
+    } else {
+        chunk_w
+    }
+}
+
+/// Copy the `chunk_w × chunk_h` valid region of a decoded chunk into the
+/// mosaic buffer at `(dst_x, dst_y)`. Source rows are `src_stride` pixels
+/// apart, destination rows `dst_stride` pixels apart; each pixel is
+/// `components` elements wide.
+#[allow(clippy::too_many_arguments)]
+fn blit_chunk<T: Copy>(
+    src: &[T],
+    src_stride: usize,
+    components: usize,
+    chunk_w: usize,
+    chunk_h: usize,
+    dst: &mut [T],
+    dst_stride: usize,
+    dst_x: usize,
+    dst_y: usize,
+) {
+    for y in 0..chunk_h {
+        for x in 0..chunk_w {
+            let src_idx = (y * src_stride + x) * components;
+            let dst_idx = ((dst_y + y) * dst_stride + (dst_x + x)) * components;
+
+            if src_idx + components <= src.len() && dst_idx + components <= dst.len() {
+                dst[dst_idx..dst_idx + components]
+                    .copy_from_slice(&src[src_idx..src_idx + components]);
+            }
+        }
+    }
+}
+
 /// Apply nodata configuration to RGBA buffer, making matching pixels transparent.
 fn apply_nodata_rgba(
     rgba: &mut [u8],
@@ -595,6 +672,183 @@ fn apply_nodata_rgba(
                 if idx + 3 < rgba.len() {
                     rgba[idx + 3] = 0; // Set alpha to 0 (transparent)
                 }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod chunk_tests {
+    use super::*;
+
+    // Synthetic layout: 300 x 200 image in 128 x 128 chunks, so the last
+    // chunk column is 300 - 2*128 = 44 px wide and the last chunk row is
+    // 200 - 128 = 72 px tall.
+    const IMG_W: u32 = 300;
+    const IMG_H: u32 = 200;
+    const TILE: u32 = 128;
+
+    #[test]
+    fn chunk_extent_clips_edges() {
+        assert_eq!(chunk_extent(0, 0, TILE, TILE, IMG_W, IMG_H), (128, 128));
+        assert_eq!(chunk_extent(2, 0, TILE, TILE, IMG_W, IMG_H), (44, 128));
+        assert_eq!(chunk_extent(0, 1, TILE, TILE, IMG_W, IMG_H), (128, 72));
+        assert_eq!(chunk_extent(2, 1, TILE, TILE, IMG_W, IMG_H), (44, 72));
+        // Entirely outside the image.
+        assert_eq!(chunk_extent(9, 9, TILE, TILE, IMG_W, IMG_H), (0, 0));
+    }
+
+    #[test]
+    fn stride_follows_decoded_length() {
+        let bpp = 4; // f32 elevation
+        // Cropped buffer (predictor applied): 44 x 128 samples.
+        assert_eq!(
+            decoded_chunk_stride(44 * 128 * bpp, bpp, 128, 128, 44),
+            44,
+            "cropped edge chunk must use the real chunk width as stride"
+        );
+        // Padded buffer (no predictor): 128 x 128 samples.
+        assert_eq!(
+            decoded_chunk_stride(128 * 128 * bpp, bpp, 128, 128, 44),
+            128,
+            "padded edge chunk must use the padded tile width as stride"
+        );
+        // Interior chunk: both interpretations agree.
+        assert_eq!(
+            decoded_chunk_stride(128 * 128 * bpp, bpp, 128, 128, 128),
+            128
+        );
+    }
+
+    /// Regression test for the edge-chunk stride bug: a partial-width chunk
+    /// whose decoded buffer is cropped used to be read with the padded stride,
+    /// scrambling rows and leaving the bottom of the block untouched.
+    #[test]
+    fn edge_chunk_cropped_buffer_lands_row_aligned() {
+        let (chunk_w, chunk_h) = chunk_extent(2, 0, TILE, TILE, IMG_W, IMG_H);
+        assert_eq!((chunk_w, chunk_h), (44, 128));
+
+        // Decoded (cropped) elevation samples: value encodes (x, y).
+        let src: Vec<f64> = (0..chunk_h)
+            .flat_map(|y| (0..chunk_w).map(move |x| (y * 1000 + x) as f64))
+            .collect();
+        let stride = decoded_chunk_stride(src.len() * 4, 4, TILE as usize, TILE as usize, chunk_w);
+
+        // One-chunk-wide mosaic buffer in padded-block space.
+        let buffer_width = TILE as usize;
+        let mut dst = vec![f64::NAN; buffer_width * TILE as usize];
+        blit_chunk(
+            &src,
+            stride,
+            1,
+            chunk_w,
+            chunk_h,
+            &mut dst,
+            buffer_width,
+            0,
+            0,
+        );
+
+        for y in 0..chunk_h {
+            for x in 0..chunk_w {
+                assert_eq!(
+                    dst[y * buffer_width + x],
+                    (y * 1000 + x) as f64,
+                    "pixel ({x}, {y}) misplaced"
+                );
+            }
+            // Padding columns stay untouched.
+            assert!(dst[y * buffer_width + chunk_w].is_nan());
+        }
+    }
+
+    /// The same edge chunk decoded *without* a predictor comes back padded;
+    /// it must still land row-aligned.
+    #[test]
+    fn edge_chunk_padded_buffer_lands_row_aligned() {
+        let (chunk_w, chunk_h) = chunk_extent(2, 0, TILE, TILE, IMG_W, IMG_H);
+        let padded = TILE as usize;
+        let src: Vec<f64> = (0..padded)
+            .flat_map(|y| (0..padded).map(move |x| (y * 1000 + x) as f64))
+            .collect();
+        let stride = decoded_chunk_stride(src.len() * 4, 4, padded, padded, chunk_w);
+        assert_eq!(stride, padded);
+
+        let mut dst = vec![f64::NAN; padded * padded];
+        blit_chunk(&src, stride, 1, chunk_w, chunk_h, &mut dst, padded, 0, 0);
+
+        for y in 0..chunk_h {
+            for x in 0..chunk_w {
+                assert_eq!(dst[y * padded + x], (y * 1000 + x) as f64);
+            }
+            assert!(dst[y * padded + chunk_w].is_nan());
+        }
+    }
+
+    /// RGBA path: 4 components per pixel, cropped edge chunk.
+    #[test]
+    fn edge_chunk_rgba_cropped_buffer() {
+        let (chunk_w, chunk_h) = chunk_extent(2, 0, TILE, TILE, IMG_W, IMG_H);
+        let src: Vec<u8> = (0..chunk_h)
+            .flat_map(|y| (0..chunk_w).flat_map(move |x| [x as u8, y as u8, 0, 255].into_iter()))
+            .collect();
+        // 8-bit RGBA => 4 bytes per pixel.
+        let stride = decoded_chunk_stride(src.len(), 4, TILE as usize, TILE as usize, chunk_w);
+        assert_eq!(stride, chunk_w);
+
+        let buffer_width = TILE as usize;
+        let mut dst = vec![0u8; buffer_width * TILE as usize * 4];
+        blit_chunk(
+            &src,
+            stride,
+            4,
+            chunk_w,
+            chunk_h,
+            &mut dst,
+            buffer_width,
+            0,
+            0,
+        );
+
+        for y in 0..chunk_h {
+            for x in 0..chunk_w {
+                let i = (y * buffer_width + x) * 4;
+                assert_eq!(&dst[i..i + 4], &[x as u8, y as u8, 0, 255]);
+            }
+        }
+    }
+
+    /// Interior (full) chunks must keep working, and land at their offset.
+    #[test]
+    fn interior_chunk_offset_copy() {
+        let (chunk_w, chunk_h) = chunk_extent(0, 0, TILE, TILE, IMG_W, IMG_H);
+        assert_eq!((chunk_w, chunk_h), (128, 128));
+        let src: Vec<f64> = (0..chunk_h)
+            .flat_map(|y| (0..chunk_w).map(move |x| (y * 1000 + x) as f64))
+            .collect();
+        let stride = decoded_chunk_stride(src.len() * 4, 4, TILE as usize, TILE as usize, chunk_w);
+
+        let buffer_width = 2 * TILE as usize;
+        let mut dst = vec![f64::NAN; buffer_width * TILE as usize];
+        blit_chunk(
+            &src,
+            stride,
+            1,
+            chunk_w,
+            chunk_h,
+            &mut dst,
+            buffer_width,
+            TILE as usize,
+            0,
+        );
+
+        for y in 0..chunk_h {
+            for x in 0..chunk_w {
+                assert_eq!(
+                    dst[y * buffer_width + TILE as usize + x],
+                    (y * 1000 + x) as f64
+                );
+                assert!(dst[y * buffer_width + x].is_nan());
             }
         }
     }
