@@ -10,8 +10,8 @@ use crate::{
     cache::{CacheMode, TileCache},
     config::{ConfigManager, LayerConfig, SourceConfig},
     terrain::{
-        CogDemSource, DemProvider, GeoBounds, MirrorSource, PmtilesEncoding, PmtilesSource,
-        TerrainSettings, XyzDemEncoding, XyzDemSource, build_composite_dem,
+        CogDemSource, DemProvider, GeoBounds, GeoidModel, MirrorSource, PmtilesEncoding,
+        PmtilesSource, TerrainSettings, XyzDemEncoding, XyzDemSource, build_composite_dem,
     },
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
@@ -323,12 +323,14 @@ impl AppState {
                 );
                 Arc::new(build_composite_dem(base.clone(), overlays).await)
             };
+            let geoid =
+                resolve_source_geoid(name, dem_cfg.geoid.as_deref(), settings.default_geoid);
             terrains.insert(
                 (*name).to_string(),
                 Arc::new(super::terrain::TerrainState {
                     dem,
                     tile_size: settings.tile_size,
-                    default_geoid: settings.default_geoid,
+                    geoid,
                     max_zoom: settings.max_zoom,
                     max_error: settings.max_error,
                 }),
@@ -345,7 +347,8 @@ impl AppState {
                 Arc::new(super::terrain::TerrainState {
                     dem: base.clone(),
                     tile_size: settings.tile_size,
-                    default_geoid: settings.default_geoid,
+                    // No config source to declare a model — env fallback only.
+                    geoid: settings.default_geoid,
                     max_zoom: settings.max_zoom,
                     max_error: settings.max_error,
                 })
@@ -628,6 +631,21 @@ impl AppState {
     }
 }
 
+/// Resolve the geoid model a DEM source is bound to.
+///
+/// Precedence: the source's own `geoid` in the config JSON, else the
+/// `TERRAIN_DEFAULT_GEOID` env fallback (which itself defaults to
+/// `gsigeo2011`), so deployments that predate the config field keep the exact
+/// model they have today.
+///
+/// An unparseable config value is logged at ERROR and falls back to the env
+/// default. It deliberately does *not* silently pick a neighbouring model — the
+/// log names both the rejected value and the model actually used, because a
+/// geoid/datum mismatch produces plausible-looking numbers that mean nothing.
+fn resolve_source_geoid(name: &str, configured: Option<&str>, fallback: GeoidModel) -> GeoidModel {
+    GeoidModel::resolve_or(configured, fallback, &format!("sources.{name}.geoid"))
+}
+
 /// Build a single DEM overlay from a `LayerConfig` entry inside the
 /// `sources.dem.layers` list. Returns `None` for unsupported variants
 /// (e.g. `maplibre`).
@@ -728,5 +746,85 @@ fn parse_xyz_dem_encoding(s: Option<&str>) -> XyzDemEncoding {
     match s.unwrap_or("terrarium").to_lowercase().as_str() {
         "mapbox" => XyzDemEncoding::Mapbox,
         _ => XyzDemEncoding::Terrarium,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[test]
+    fn config_declared_geoid_is_used() {
+        assert_eq!(
+            resolve_source_geoid("dem", Some("jpgeo2024"), GeoidModel::Gsigeo2011),
+            GeoidModel::Jpgeo2024
+        );
+        assert_eq!(
+            resolve_source_geoid("dem", Some(" jpgeo2024-hrefconv "), GeoidModel::Gsigeo2011),
+            GeoidModel::Jpgeo2024Hrefconv
+        );
+    }
+
+    #[test]
+    fn env_fallback_applies_when_source_declares_nothing() {
+        assert_eq!(
+            resolve_source_geoid("dem", None, GeoidModel::Jpgeo2024),
+            GeoidModel::Jpgeo2024
+        );
+        assert_eq!(
+            resolve_source_geoid("dem", Some(""), GeoidModel::Jpgeo2024),
+            GeoidModel::Jpgeo2024
+        );
+    }
+
+    #[test]
+    fn invalid_config_geoid_falls_back_to_env_default() {
+        assert_eq!(
+            resolve_source_geoid("dem", Some("gsigeo2099"), GeoidModel::Gsigeo2011),
+            GeoidModel::Gsigeo2011
+        );
+        // `none` used to be a model; it is now a mode, so it is not a valid
+        // source geoid and must not silently disable the geoid.
+        assert_eq!(
+            resolve_source_geoid("dem", Some("none"), GeoidModel::Jpgeo2024),
+            GeoidModel::Jpgeo2024
+        );
+    }
+
+    #[test]
+    fn dem_source_geoid_parses_from_config_json() {
+        let json = r#"{
+            "sources": {
+                "dem": {
+                    "type": "dem",
+                    "geoid": "jpgeo2024",
+                    "layers": []
+                },
+                "dem-2011": {
+                    "type": "dem",
+                    "layers": []
+                }
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.sources["dem"].geoid.as_deref(), Some("jpgeo2024"));
+        assert_eq!(config.sources["dem-2011"].geoid, None);
+        assert_eq!(
+            resolve_source_geoid(
+                "dem",
+                config.sources["dem"].geoid.as_deref(),
+                GeoidModel::Gsigeo2011
+            ),
+            GeoidModel::Jpgeo2024
+        );
+        assert_eq!(
+            resolve_source_geoid(
+                "dem-2011",
+                config.sources["dem-2011"].geoid.as_deref(),
+                GeoidModel::Gsigeo2011
+            ),
+            GeoidModel::Gsigeo2011
+        );
     }
 }

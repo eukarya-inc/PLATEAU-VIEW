@@ -194,11 +194,10 @@
         <button id="copyUrl" title="Copy tile URL template">URL</button>
         <button id="gsiToggle" class="active">地理院</button>
         <select id="demSource" style="display:none;" title="DEM source served by /mapbox/{name}/"></select>
-        <select id="geoid" title="Geoid model used by /mapbox/ DEM">
-            <option value="gsigeo2011">GSIGEO2011</option>
-            <option value="jpgeo2024">JPGEO2024</option>
-            <option value="jpgeo2024-hrefconv">JPGEO2024+Hrefconv</option>
-            <option value="none">No geoid</option>
+        <select id="heights" title="Vertical surface served by /mapbox/. The geoid model is fixed per DEM source (config `geoid` / TERRAIN_DEFAULT_GEOID).">
+            <option value="ellipsoidal">Ellipsoidal</option>
+            <option value="orthometric">Orthometric</option>
+            <option value="geoid">Geoid only</option>
         </select>
         <button id="terrain3dToggle" title="3D terrain (Mapbox Terrain-RGB)">3D</button>
         <button id="hillshadeToggle" title="Hillshade overlay">Hillshade</button>
@@ -239,7 +238,7 @@
     <script>
         // ── URL state ──────────────────────────────────────────────────
         // Persist non-camera UI state to the query string so reloads and
-        // shared links preserve the picked tile source, DEM, geoid, format,
+        // shared links preserve the picked tile source, DEM, height mode, format,
         // and active toggles. Camera position is handled separately by
         // MapLibre's built-in `hash: true` (URL fragment) — kept distinct so
         // these utilities never touch the fragment.
@@ -286,8 +285,8 @@
         // Source dropdown is restored once `/tiles/sources.json` populates it.
         const initialFormat = urlParams.get('format');
         if (initialFormat) formatSelect.value = initialFormat;
-        const initialGeoid = urlParams.get('geoid');
-        // geoidSelect is declared later; defer applying until after that block.
+        const initialHeights = urlParams.get('heights');
+        // heightsSelect is declared later; defer applying until after that block.
 
         // Cache of /tiles/sources.json (populated lazily; shared by the
         // dropdown and the inspector overlay).
@@ -441,8 +440,8 @@
         });
 
         // ── Mapbox Terrain-RGB DEM (3D terrain + hillshade) ────────────
-        const geoidSelect = document.getElementById('geoid');
-        if (initialGeoid) geoidSelect.value = initialGeoid;
+        const heightsSelect = document.getElementById('heights');
+        if (initialHeights) heightsSelect.value = initialHeights;
         const demSourceSelect = document.getElementById('demSource');
         const terrain3dToggle = document.getElementById('terrain3dToggle');
         const hillshadeToggle = document.getElementById('hillshadeToggle');
@@ -457,9 +456,9 @@
         let demSourceName = urlParams.get('dem') || '';
 
         function demTilejsonUrl() {
-            const g = encodeURIComponent(geoidSelect.value);
+            const h = encodeURIComponent(heightsSelect.value);
             const prefix = demSourceName ? `/mapbox/${demSourceName}` : '/mapbox';
-            return `${window.location.origin}${prefix}/tilejson.json?geoid=${g}&format=png`;
+            return `${window.location.origin}${prefix}/tilejson.json?heights=${h}&format=png`;
         }
 
         // MapLibre warns (and degrades rendering) when the same raster-dem
@@ -484,7 +483,7 @@
         }
 
         function rebuildSource(id, onTearDown, onRestore) {
-            // Used when the source URL changes (e.g. geoid switch). Tear
+            // Used when the source URL changes (e.g. height-mode switch). Tear
             // dependents down, swap the source, then re-apply.
             if (onTearDown) onTearDown();
             if (map.getSource(id)) map.removeSource(id);
@@ -565,8 +564,8 @@
                     () => applyHillshade());
             }
         }
-        geoidSelect.addEventListener('change', () => {
-            setUrlParam('geoid', geoidSelect.value === 'gsigeo2011' ? '' : geoidSelect.value);
+        heightsSelect.addEventListener('change', () => {
+            setUrlParam('heights', heightsSelect.value === 'ellipsoidal' ? '' : heightsSelect.value);
             rebuildDemSources();
         });
         demSourceSelect.addEventListener('change', (e) => {

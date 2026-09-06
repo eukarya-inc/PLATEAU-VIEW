@@ -62,6 +62,21 @@ pub struct SourceConfig {
     /// `/tiles/catalog.json` endpoint for end-user UIs.
     #[serde(default)]
     pub description: Option<String>,
+    /// DEM-only: the geoid model this source's elevations are referenced to.
+    /// One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`.
+    ///
+    /// A geoid model is bound to a vertical datum (GSIGEO2011 ↔ JGD2011,
+    /// JPGEO2024 ↔ JGD2024), so it belongs to the data, not to the request —
+    /// see [`crate::terrain::geoid`]. Absent, the source falls back to
+    /// `TERRAIN_DEFAULT_GEOID` (itself defaulting to `gsigeo2011`), which is
+    /// what every existing deployment gets.
+    ///
+    /// Kept as a `String` rather than a `GeoidModel` on purpose: an unknown
+    /// value here must not fail the whole config parse and take every other
+    /// source down with it. It is resolved (and loudly logged if bogus) when
+    /// terrain state is built.
+    #[serde(default)]
+    pub geoid: Option<String>,
     pub layers: Vec<LayerConfig>,
 }
 

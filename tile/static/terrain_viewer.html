@@ -31,12 +31,11 @@
     <select id="imagery"></select>
     <label id="demSourceLabel" style="display:none;">DEM:</label>
     <select id="demSource" style="display:none;"></select>
-    <label>Geoid:</label>
-    <select id="geoid">
-      <option value="gsigeo2011">GSIGEO2011（日本域）</option>
-      <option value="jpgeo2024">JPGEO2024（日本域+海域）</option>
-      <option value="jpgeo2024-hrefconv">JPGEO2024 + Hrefconv（日本域のみ）</option>
-      <option value="none">なし（オルソ高のまま）</option>
+    <label>Heights:</label>
+    <select id="heights" title="Vertical surface to request. The geoid model itself is fixed per DEM source (config `geoid` / TERRAIN_DEFAULT_GEOID).">
+      <option value="ellipsoidal">楕円体高（オルソ高＋ジオイド、既定）</option>
+      <option value="orthometric">オルソ高（DEMそのまま）</option>
+      <option value="geoid">ジオイド高のみ</option>
     </select>
     <button id="flyChiyoda">千代田区へ</button>
     <span class="sep">|</span>
@@ -50,7 +49,7 @@
     Cesium.Ion.defaultAccessToken = null;
 
     // ── URL state ──────────────────────────────────────────────────────
-    // Persist UI state (camera, imagery, DEM, geoid, toggles) to the query
+    // Persist UI state (camera, imagery, DEM, heights, toggles) to the query
     // string so reloads and shared links preserve the view. Cesium has no
     // built-in URL-hash sync analogous to MapLibre's `hash: true`, so we wire
     // camera persistence by hand on `moveEnd`.
@@ -224,21 +223,21 @@
     const LEGACY_ASSET_ID = 3258112;
     Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 
-    const geoidSelect = document.getElementById('geoid');
+    const heightsSelect = document.getElementById('heights');
     const demSourceSelect = document.getElementById('demSource');
     const demSourceLabel = document.getElementById('demSourceLabel');
     const terrainCompareBtn = document.getElementById('terrainCompare');
     let usingLegacyTerrain = readBoolParam('legacy', false);
-    const initialGeoid = urlParams.get('geoid');
-    if (initialGeoid) geoidSelect.value = initialGeoid;
+    const initialHeights = urlParams.get('heights');
+    if (initialHeights) heightsSelect.value = initialHeights;
     // Selected DEM source name. Empty string = the default `/terrain` route
     // (which the tile server aliases to source name "dem"). Anything else
     // becomes `/terrain/{name}`.
     let demSourceName = urlParams.get('dem') || '';
 
-    // Mirror sources (type === 'qmesh-mirror') don't honor ?geoid= — the
-    // bytes were pre-rendered against a fixed geoid by the upstream crawler —
-    // so we suppress the query parameter and grey out the geoid picker when
+    // Mirror sources (type === 'qmesh-mirror') don't honor ?heights= — the
+    // bytes were pre-rendered as ellipsoidal heights by the upstream crawler —
+    // so we suppress the query parameter and grey out the picker when
     // a mirror is selected.
     const mirrorSources = new Set();
 
@@ -256,19 +255,19 @@
       } else {
         const url = demSourceName ? `/terrain/${demSourceName}` : '/terrain';
         const isMirror = mirrorSources.has(demSourceName);
-        const queryParameters = isMirror ? {} : { geoid: geoidSelect.value };
+        const queryParameters = isMirror ? {} : { heights: heightsSelect.value };
         const resource = new Cesium.Resource({ url, queryParameters });
         providerPromise = Cesium.CesiumTerrainProvider.fromUrl(resource, {
           requestVertexNormals: true,
           requestWaterMask: false,
         });
-        geoidSelect.disabled = isMirror;
+        heightsSelect.disabled = isMirror;
       }
       viewer.scene.setTerrain(new Cesium.Terrain(providerPromise));
     }
     applyTerrain();
-    geoidSelect.addEventListener('change', () => {
-      setUrlParam('geoid', geoidSelect.value === 'gsigeo2011' ? '' : geoidSelect.value);
+    heightsSelect.addEventListener('change', () => {
+      setUrlParam('heights', heightsSelect.value === 'ellipsoidal' ? '' : heightsSelect.value);
       applyTerrain();
     });
     demSourceSelect.addEventListener('change', (e) => {
@@ -321,9 +320,9 @@
       terrainCompareBtn.textContent = usingLegacyTerrain
         ? 'PLATEAUに戻す'
         : '旧テラインと比較';
-      // Geoid is irrelevant for the legacy tileset — it bakes its own
-      // height model. Disable the dropdown to avoid confusion.
-      geoidSelect.disabled = usingLegacyTerrain;
+      // The height mode is irrelevant for the legacy tileset — it bakes its
+      // own height model. Disable the dropdown to avoid confusion.
+      heightsSelect.disabled = usingLegacyTerrain;
     }
     if (usingLegacyTerrain) applyLegacyState();
     terrainCompareBtn.addEventListener('click', () => {

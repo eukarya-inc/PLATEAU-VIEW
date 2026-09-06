@@ -37,7 +37,9 @@ pub struct TerrainSettings {
     pub dem_native_tile_size: u32,
     /// Output Terrarium raster size.
     pub tile_size: u32,
-    /// Default geoid model.
+    /// Fallback geoid model for DEM sources that don't declare their own
+    /// `geoid` in the config JSON. Requests can no longer override this — the
+    /// model belongs to the data's vertical datum, not to the caller.
     pub default_geoid: GeoidModel,
     /// Max zoom advertised in `layer.json`.
     pub max_zoom: u8,
@@ -62,10 +64,11 @@ impl TerrainSettings {
                 MAPTERHORN_NATIVE_TILE_SIZE,
             ),
             tile_size: parse_env_u32("TERRAIN_TILE_SIZE", DEFAULT_TERRAIN_TILE_SIZE),
-            default_geoid: env::var("TERRAIN_DEFAULT_GEOID")
-                .ok()
-                .and_then(|s| s.parse::<GeoidModel>().ok())
-                .unwrap_or(GeoidModel::Gsigeo2011),
+            default_geoid: GeoidModel::resolve_or(
+                env::var("TERRAIN_DEFAULT_GEOID").ok().as_deref(),
+                GeoidModel::Gsigeo2011,
+                "TERRAIN_DEFAULT_GEOID",
+            ),
             max_zoom: parse_env_u8("TERRAIN_MAX_ZOOM", DEFAULT_TERRAIN_MAX_ZOOM),
             max_error: parse_env_f64("TERRAIN_MAX_ERROR", DEFAULT_TERRAIN_MAX_ERROR),
             mirror_url: env::var("TERRAIN_MIRROR_URL")
@@ -136,6 +139,33 @@ fn parse_env_f64(name: &str, default: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_geoid_env_resolution() {
+        // Unset / blank → the historical default.
+        assert_eq!(
+            GeoidModel::resolve_or(None, GeoidModel::Gsigeo2011, "TERRAIN_DEFAULT_GEOID"),
+            GeoidModel::Gsigeo2011
+        );
+        // A valid value is honoured.
+        assert_eq!(
+            GeoidModel::resolve_or(
+                Some("jpgeo2024"),
+                GeoidModel::Gsigeo2011,
+                "TERRAIN_DEFAULT_GEOID"
+            ),
+            GeoidModel::Jpgeo2024
+        );
+        // A stale `none` (removed model) does not disable the geoid.
+        assert_eq!(
+            GeoidModel::resolve_or(
+                Some("none"),
+                GeoidModel::Gsigeo2011,
+                "TERRAIN_DEFAULT_GEOID"
+            ),
+            GeoidModel::Gsigeo2011
+        );
+    }
 
     #[test]
     fn detects_pmtiles_urls() {

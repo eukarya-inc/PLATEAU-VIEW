@@ -119,7 +119,7 @@ pub async fn get_sources(State(state): State<Arc<AppState>>) -> impl IntoRespons
     // Surface the pre-rendered quantized-mesh mirror (if configured) as a
     // synthetic source so debug viewers can populate their terrain picker
     // without needing to probe env vars. Distinct `type` lets the viewer
-    // skip mirror-incompatible UI (e.g. the `?geoid=` selector).
+    // skip mirror-incompatible UI (e.g. the `?heights=` selector).
     //
     // When a mirror is present, also surface the default DEM source as an
     // explicit entry — even when it has no overlays in config — so the

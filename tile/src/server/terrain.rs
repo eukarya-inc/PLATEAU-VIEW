@@ -1,16 +1,23 @@
 //! Terrain (quantized-mesh-1.0) and raster DEM HTTP handlers.
 //!
-//! - `GET /terrain/layer.json[?geoid=...]`
-//! - `GET /terrain/{z}/{x}/{y}.terrain[?geoid=...]` — gzipped quantized-mesh-1.0
+//! - `GET /terrain/layer.json[?heights=...]`
+//! - `GET /terrain/{z}/{x}/{y}.terrain[?heights=...]` — gzipped quantized-mesh-1.0
 //!   (Cesium **TMS Geodetic** addressing).
-//! - `GET /terrarium/{z}/{x}/{y}.{png|webp|avif}[?geoid=...]` — ellipsoid-height
-//!   Mapzen Terrarium tiles in **Web Mercator XYZ**.
-//! - `GET /terrarium/tilejson.json[?geoid=...&format=...]`
-//! - `GET /mapbox/{z}/{x}/{y}.{png|webp|avif}[?geoid=...]` — ellipsoid-height
-//!   Mapbox Terrain-RGB tiles in **Web Mercator XYZ**.
-//! - `GET /mapbox/tilejson.json[?geoid=...&format=...]`
+//! - `GET /terrarium/{z}/{x}/{y}.{png|webp|avif}[?heights=...]` — Mapzen
+//!   Terrarium tiles in **Web Mercator XYZ**.
+//! - `GET /terrarium/tilejson.json[?heights=...&format=...]`
+//! - `GET /mapbox/{z}/{x}/{y}.{png|webp|avif}[?heights=...]` — Mapbox
+//!   Terrain-RGB tiles in **Web Mercator XYZ**.
+//! - `GET /mapbox/tilejson.json[?heights=...&format=...]`
 //!
-//! Heights are served as ellipsoidal (orthometric Mapterhorn + japan-geoid offset).
+//! Heights default to ellipsoidal (orthometric DEM + the source's geoid).
+//! `?heights=orthometric` serves the DEM as-is and `?heights=geoid` the geoid
+//! surface alone; see [`HeightMode`]. The geoid *model* is **not** selectable
+//! per request — it is a property of the DEM source (config `geoid`, falling
+//! back to `TERRAIN_DEFAULT_GEOID`), because a model is bound to a vertical
+//! datum and mixing the two produces meaningless numbers. The old `?geoid=`
+//! parameter is therefore rejected with 400 rather than ignored.
+//!
 //! Tiles entirely outside the geoid's coverage area respond 404.
 
 use std::sync::Arc;
@@ -35,8 +42,10 @@ use super::response::{compute_etag, etag_matches, not_modified_response, tile_re
 use super::state::{AppState, TerrainBackend};
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
-    DemProvider, Geoid, GeoidModel, MirrorSource,
-    ellipsoid::{apply_geoid_to_grid, apply_geoid_to_grid_sized, apply_geoid_to_xyz_grid},
+    DemProvider, Geoid, GeoidModel, HeightMode, MirrorSource,
+    ellipsoid::{
+        apply_height_mode_to_grid, apply_height_mode_to_grid_sized, apply_height_mode_to_xyz_grid,
+    },
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
     mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile},
@@ -131,38 +140,76 @@ fn japan_availability(max_zoom: u8) -> Vec<Vec<TileAvailability>> {
 pub struct TerrainState {
     pub dem: Arc<dyn DemProvider>,
     pub tile_size: u32,
-    pub default_geoid: GeoidModel,
+    /// Geoid model this DEM source's elevations are referenced to. Comes from
+    /// the source's `geoid` in the config JSON, else `TERRAIN_DEFAULT_GEOID`.
+    /// Fixed per source — requests cannot change it.
+    pub geoid: GeoidModel,
     pub max_zoom: u8,
     pub max_error: f64,
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct GeoidQuery {
+pub struct TerrainQuery {
+    /// Vertical surface to serve: `orthometric` | `geoid` | `ellipsoidal`
+    /// (default). See [`HeightMode`].
+    #[serde(default)]
+    pub heights: Option<String>,
+    /// Retired model selector, still parsed so we can 400 on it explicitly
+    /// instead of silently serving a different model than the caller asked for.
     #[serde(default)]
     pub geoid: Option<String>,
     #[serde(default)]
     pub format: Option<String>,
 }
 
+/// Resolve the requested [`HeightMode`], rejecting the retired `?geoid=`
+/// model selector.
+///
+/// This is a deliberate breaking change: a caller that still passes
+/// `?geoid=gsigeo2011` gets a 400 naming the replacement and its valid values.
+/// Ignoring the parameter would silently serve a *different* geoid than asked
+/// for, which is exactly the class of vertical-datum mistake this change
+/// exists to prevent.
 #[allow(clippy::result_large_err)]
-fn resolve_geoid(state: &TerrainState, q: &GeoidQuery) -> Result<GeoidModel, Response> {
-    match q.geoid.as_deref() {
-        None => Ok(state.default_geoid),
+fn resolve_height_mode(q: &TerrainQuery) -> Result<HeightMode, Response> {
+    if let Some(v) = q.geoid.as_deref() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "the `geoid` query parameter has been removed (got `geoid={v}`): the geoid \
+                 model is a property of the DEM source (config `geoid`, or the \
+                 TERRAIN_DEFAULT_GEOID env var), not of the request. Use \
+                 `heights={valid}` instead (default: {default})",
+                valid = HeightMode::valid_values().replace(", ", "|"),
+                default = HeightMode::default(),
+            ),
+        )
+            .into_response());
+    }
+    match q.heights.as_deref().map(str::trim) {
+        None | Some("") => Ok(HeightMode::default()),
         Some(s) => s
-            .parse::<GeoidModel>()
+            .parse::<HeightMode>()
             .map_err(|e| (StatusCode::BAD_REQUEST, format!("{e}")).into_response()),
     }
 }
 
-/// Cache-key builder. Keeps DEM version, DEM upstream etag (if any), geoid,
-/// and pixel size in separate path segments so that CDN partial-purge is not
-/// required: different versions/geoids live at different keys.
+/// Cache-key builder. Keeps DEM version, DEM upstream etag (if any), geoid
+/// model, height mode, and pixel size in separate path segments so that CDN
+/// partial-purge is not required: different versions/models/modes live at
+/// different keys.
+///
+/// Both the model and the mode belong here. The model because a source's
+/// configured `geoid` can change on a config reload without the DEM slug or
+/// version changing; the mode because one source now serves three different
+/// surfaces from identical DEM input.
 struct TerrainCacheKey<'a> {
     prefix: &'a str,
     dem_slug: &'a str,
     dem_version: &'a str,
     dem_etag_digest: &'a str,
     geoid: GeoidModel,
+    heights: HeightMode,
     z: u32,
     x: u32,
     y: u32,
@@ -174,12 +221,13 @@ impl TerrainCacheKey<'_> {
     fn to_key(&self) -> String {
         let size_str = self.size.map_or_else(String::new, |s| format!("{s}/"));
         format!(
-            "{prefix}/{dem_slug}/{dem_version}/{dem_etag_digest}/{g}/{size}{z}/{x}/{y}.{ext}",
+            "{prefix}/{dem_slug}/{dem_version}/{dem_etag_digest}/{g}/{h}/{size}{z}/{x}/{y}.{ext}",
             prefix = self.prefix,
             dem_slug = self.dem_slug,
             dem_version = self.dem_version,
             dem_etag_digest = self.dem_etag_digest,
             g = self.geoid.slug(),
+            h = self.heights.slug(),
             size = size_str,
             z = self.z,
             x = self.x,
@@ -187,6 +235,16 @@ impl TerrainCacheKey<'_> {
             ext = self.ext,
         )
     }
+}
+
+/// ETag components shared by every terrain endpoint: the source's geoid model
+/// and the requested height mode. Both must be present or the three modes (and
+/// two models) could serve each other's bytes from memory / R2 / the CDN.
+fn vertical_etag_keys(geoid: GeoidModel, heights: HeightMode) -> [String; 2] {
+    [
+        format!("geoid:{}", geoid.slug()),
+        format!("heights:{}", heights.slug()),
+    ]
 }
 
 fn digest(s: &str) -> String {
@@ -207,7 +265,7 @@ pub async fn terrain_viewer() -> axum::response::Response {
 pub async fn terrain_layer_json(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     terrain_layer_json_impl(state, headers, query, None).await
 }
@@ -217,7 +275,7 @@ pub async fn terrain_layer_json_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path(name): Path<String>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     terrain_layer_json_impl(state, headers, query, Some(name)).await
 }
@@ -225,7 +283,7 @@ pub async fn terrain_layer_json_named(
 async fn terrain_layer_json_impl(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Query(q): Query<GeoidQuery>,
+    Query(q): Query<TerrainQuery>,
     name: Option<String>,
 ) -> Response {
     match state.resolve_terrain(name.as_deref()).await {
@@ -239,10 +297,14 @@ fn dem_layer_json_response(
     terrain: Arc<super::terrain::TerrainState>,
     state: &AppState,
     headers: HeaderMap,
-    q: GeoidQuery,
+    q: TerrainQuery,
 ) -> Response {
-    let geoid_model = match resolve_geoid(&terrain, &q) {
-        Ok(g) => g,
+    // Validate the query even though layer.json's body doesn't depend on it:
+    // a stale `?geoid=` must fail here too, otherwise Cesium would propagate it
+    // onto every tile request and the caller would only see the 400 at tile
+    // level (or, worse, take the 400s for missing tiles).
+    let height_mode = match resolve_height_mode(&q) {
+        Ok(m) => m,
         Err(r) => return r,
     };
 
@@ -250,11 +312,11 @@ fn dem_layer_json_response(
     // location. Avoids any reliance on `Host` / `X-Forwarded-Host`, which
     // fronting load balancers (Cloud Run / Cloudflare) sometimes rewrite to
     // `localhost` and trigger Chrome's Private Network Access prompt.
-    // The viewer passes `geoid` via `Resource.queryParameters`, which Cesium
+    // The viewer passes `heights` via `Resource.queryParameters`, which Cesium
     // automatically propagates onto every derived tile request — so we
-    // don't put it in the template here (avoids duplicate `?geoid=`).
+    // don't put it in the template here (avoids duplicate `?heights=`).
     let _ = &headers;
-    let _ = geoid_model;
+    let _ = height_mode;
     let tiles_template = "{z}/{x}/{y}.terrain".to_string();
 
     let config = LayerJsonConfig {
@@ -459,7 +521,7 @@ pub async fn terrain_tile(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     path: Path<(u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     terrain_tile_impl(state, headers, path, query, None).await
 }
@@ -469,7 +531,7 @@ pub async fn terrain_tile_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     terrain_tile_impl(state, headers, Path((z, x, y_ext)), query, Some(name)).await
 }
@@ -478,7 +540,7 @@ async fn terrain_tile_impl(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
-    Query(q): Query<GeoidQuery>,
+    Query(q): Query<TerrainQuery>,
     name: Option<String>,
 ) -> Response {
     state.maybe_revalidate().await;
@@ -500,10 +562,11 @@ async fn terrain_tile_impl(
         None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
     };
 
-    let geoid_model = match resolve_geoid(&terrain, &q) {
-        Ok(g) => g,
+    let height_mode = match resolve_height_mode(&q) {
+        Ok(m) => m,
         Err(r) => return r,
     };
+    let geoid_model = terrain.geoid;
     let geoid = Geoid::load(geoid_model);
 
     // 404 if tile is entirely outside geoid coverage.
@@ -556,10 +619,12 @@ async fn terrain_tile_impl(
     // The six patch/shizuoka overlays also began resolving at the same time.
     const TERRAIN_MESH_ALGO_VERSION: &str = "v4-edge-chunk-stride";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
+    let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
         format!("dem-etag:{}", upstream_etag_digest),
-        format!("geoid:{}", geoid_model.slug()),
+        geoid_key,
+        heights_key,
         format!("mesh-algo:{TERRAIN_MESH_ALGO_VERSION}"),
     ];
     let etag = compute_etag(&etag_keys, "terrain", TileFormat::Png, z as u32, x, y);
@@ -580,6 +645,7 @@ async fn terrain_tile_impl(
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
         geoid: geoid_model,
+        heights: height_mode,
         z: z as u32,
         x,
         y,
@@ -621,14 +687,17 @@ async fn terrain_tile_impl(
             Some(&etag_hash),
             Some(meta),
             move || async move {
-                // Apply geoid (ortho → ellipsoid) to both grids.
+                // Rewrite both grids onto the requested vertical surface. The
+                // halo gets the same treatment as the interior so the
+                // gradient-based normals stay in one datum.
                 let g = Geoid::load(geoid_for_gen);
-                apply_geoid_to_grid(&bounds_copy, &mut elevations, &g);
-                apply_geoid_to_grid_sized(
+                apply_height_mode_to_grid(&bounds_copy, &mut elevations, &g, height_mode);
+                apply_height_mode_to_grid_sized(
                     &halo_bounds,
                     &mut elevations_with_halo,
                     &g,
                     halo_grid_size,
+                    height_mode,
                 );
 
                 let qm_bounds = QmBounds::new(
@@ -682,7 +751,7 @@ pub async fn terrarium_tile(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     path: Path<(u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tile(state, headers, path, query, RasterEncoding::Terrarium, None).await
 }
@@ -692,7 +761,7 @@ pub async fn terrarium_tile_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tile(
         state,
@@ -710,7 +779,7 @@ pub async fn mapbox_tile(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     path: Path<(u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tile(state, headers, path, query, RasterEncoding::Mapbox, None).await
 }
@@ -720,7 +789,7 @@ pub async fn mapbox_tile_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path((name, z, x, y_ext)): Path<(String, u8, u32, String)>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tile(
         state,
@@ -737,7 +806,7 @@ async fn raster_tile(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path((z, x, y_ext)): Path<(u8, u32, String)>,
-    Query(q): Query<GeoidQuery>,
+    Query(q): Query<TerrainQuery>,
     encoding: RasterEncoding,
     name: Option<String>,
 ) -> Response {
@@ -758,10 +827,11 @@ async fn raster_tile(
         }
     };
 
-    let geoid_model = match resolve_geoid(&terrain, &q) {
-        Ok(g) => g,
+    let height_mode = match resolve_height_mode(&q) {
+        Ok(m) => m,
         Err(r) => return r,
     };
+    let geoid_model = terrain.geoid;
     let geoid = Geoid::load(geoid_model);
 
     // Web Mercator XYZ tile bounds for coverage check.
@@ -810,10 +880,12 @@ async fn raster_tile(
     let upsample_marker = upsample_info
         .map(|(d, _, _)| format!("upsample:{d}"))
         .unwrap_or_else(|| "upsample:0".to_string());
+    let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
         format!("dem-etag:{}", upstream_etag_digest),
-        format!("geoid:{}", geoid_model.slug()),
+        geoid_key,
+        heights_key,
         format!("size:{}", tile_size),
         format!("proj:webmercator"),
         upsample_marker,
@@ -831,6 +903,7 @@ async fn raster_tile(
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
         geoid: geoid_model,
+        heights: height_mode,
         z: z as u32,
         x,
         y,
@@ -860,7 +933,7 @@ async fn raster_tile(
             Some(meta),
             move || async move {
                 let g = Geoid::load(geoid_for_gen);
-                apply_geoid_to_xyz_grid(z, x, y, tile_size, &mut elevations, &g);
+                apply_height_mode_to_xyz_grid(z, x, y, tile_size, &mut elevations, &g, height_mode);
 
                 let img_rgba = encoding.encode_to_rgba(&elevations, tile_size, tile_size);
                 encode_image(&img_rgba, format)
@@ -886,7 +959,7 @@ async fn raster_tile(
 pub async fn terrarium_tilejson(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tilejson(state, headers, query, RasterEncoding::Terrarium, None).await
 }
@@ -896,7 +969,7 @@ pub async fn terrarium_tilejson_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path(name): Path<String>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tilejson(state, headers, query, RasterEncoding::Terrarium, Some(name)).await
 }
@@ -905,7 +978,7 @@ pub async fn terrarium_tilejson_named(
 pub async fn mapbox_tilejson(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tilejson(state, headers, query, RasterEncoding::Mapbox, None).await
 }
@@ -915,7 +988,7 @@ pub async fn mapbox_tilejson_named(
     state: State<Arc<AppState>>,
     headers: HeaderMap,
     Path(name): Path<String>,
-    query: Query<GeoidQuery>,
+    query: Query<TerrainQuery>,
 ) -> Response {
     raster_tilejson(state, headers, query, RasterEncoding::Mapbox, Some(name)).await
 }
@@ -923,7 +996,7 @@ pub async fn mapbox_tilejson_named(
 async fn raster_tilejson(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Query(q): Query<GeoidQuery>,
+    Query(q): Query<TerrainQuery>,
     encoding: RasterEncoding,
     name: Option<String>,
 ) -> Response {
@@ -931,8 +1004,8 @@ async fn raster_tilejson(
         Some(t) => t,
         None => return (StatusCode::NOT_FOUND, "Unknown terrain source").into_response(),
     };
-    let geoid_model = match resolve_geoid(&terrain, &q) {
-        Ok(g) => g,
+    let height_mode = match resolve_height_mode(&q) {
+        Ok(m) => m,
         Err(r) => return r,
     };
     let fmt = q.format.as_deref().unwrap_or("webp");
@@ -947,10 +1020,13 @@ async fn raster_tilejson(
     // Embed the source name segment when this tilejson refers to a non-default
     // DEM source, so MapLibre's resolved tile URLs hit `/{slug}/{name}/...`.
     let name_segment = name.as_deref().map(|n| format!("/{n}")).unwrap_or_default();
+    // Pin the resolved height mode into the tile template so MapLibre keeps
+    // requesting the same surface it asked this tilejson for — and so the two
+    // never drift apart if the default ever changes.
     let tile_url = format!(
-        "/{slug}{name_segment}/{{z}}/{{x}}/{{y}}.{fmt}?geoid={geoid}",
+        "/{slug}{name_segment}/{{z}}/{{x}}/{{y}}.{fmt}?heights={heights}",
         slug = encoding.slug(),
-        geoid = geoid_model.slug(),
+        heights = height_mode.slug(),
     );
 
     #[derive(Serialize)]
@@ -1012,3 +1088,157 @@ fn tile_response_raw(
 // Suppress unused: `GeodeticBounds` re-export keeps clippy quiet in alt paths.
 #[allow(dead_code)]
 fn _assert_bounds(_b: &GeodeticBounds) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn query(heights: Option<&str>, geoid: Option<&str>) -> TerrainQuery {
+        TerrainQuery {
+            heights: heights.map(str::to_string),
+            geoid: geoid.map(str::to_string),
+            format: None,
+        }
+    }
+
+    #[test]
+    fn unparameterised_request_is_ellipsoidal() {
+        assert_eq!(
+            resolve_height_mode(&TerrainQuery::default()).unwrap(),
+            HeightMode::Ellipsoidal
+        );
+        assert_eq!(
+            resolve_height_mode(&query(Some(""), None)).unwrap(),
+            HeightMode::Ellipsoidal
+        );
+    }
+
+    #[test]
+    fn each_mode_is_selectable() {
+        for m in HeightMode::all() {
+            assert_eq!(
+                resolve_height_mode(&query(Some(m.slug()), None)).unwrap(),
+                *m
+            );
+        }
+    }
+
+    #[test]
+    fn model_name_in_request_is_rejected_with_400() {
+        for stale in ["gsigeo2011", "jpgeo2024", "jpgeo2024-hrefconv", "none"] {
+            let resp = resolve_height_mode(&query(None, Some(stale)))
+                .expect_err("a geoid model in the request must be rejected");
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "geoid={stale}");
+        }
+    }
+
+    #[test]
+    fn geoid_parameter_is_rejected_even_alongside_a_valid_mode() {
+        let resp = resolve_height_mode(&query(Some("ellipsoidal"), Some("jpgeo2024")))
+            .expect_err("`geoid` must never be silently ignored");
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn rejection_message_names_the_replacement_and_valid_values() {
+        let resp = resolve_height_mode(&query(None, Some("gsigeo2011"))).unwrap_err();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("heights="), "{text}");
+        for m in HeightMode::all() {
+            assert!(text.contains(m.slug()), "{text}");
+        }
+        assert!(text.contains("TERRAIN_DEFAULT_GEOID"), "{text}");
+    }
+
+    #[test]
+    fn unknown_mode_is_rejected_with_400() {
+        let resp = resolve_height_mode(&query(Some("wgs84"), None)).unwrap_err();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    fn key_for(geoid: GeoidModel, heights: HeightMode) -> String {
+        TerrainCacheKey {
+            prefix: "terrain/v3",
+            dem_slug: "dem",
+            dem_version: "v1",
+            dem_etag_digest: "abc",
+            geoid,
+            heights,
+            z: 10,
+            x: 909,
+            y: 403,
+            ext: "terrain",
+            size: None,
+        }
+        .to_key()
+    }
+
+    /// The three modes must never be able to serve each other's tiles, in the
+    /// persistent cache or through a downstream CDN.
+    #[test]
+    fn each_mode_gets_a_distinct_cache_key_and_etag() {
+        let mut keys: Vec<String> = HeightMode::all()
+            .iter()
+            .map(|m| key_for(GeoidModel::Gsigeo2011, *m))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), HeightMode::all().len());
+
+        let mut etags: Vec<String> = HeightMode::all()
+            .iter()
+            .map(|m| {
+                compute_etag(
+                    &vertical_etag_keys(GeoidModel::Gsigeo2011, *m),
+                    "terrain",
+                    TileFormat::Png,
+                    10,
+                    909,
+                    403,
+                )
+            })
+            .collect();
+        etags.sort();
+        etags.dedup();
+        assert_eq!(etags.len(), HeightMode::all().len());
+    }
+
+    /// The model still has to key too: a source's configured `geoid` can change
+    /// on a config reload without the DEM slug/version moving.
+    #[test]
+    fn each_model_gets_a_distinct_cache_key_and_etag() {
+        let mut keys: Vec<String> = GeoidModel::all()
+            .iter()
+            .map(|g| key_for(*g, HeightMode::Ellipsoidal))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), GeoidModel::all().len());
+
+        let mut etags: Vec<String> = GeoidModel::all()
+            .iter()
+            .map(|g| {
+                compute_etag(
+                    &vertical_etag_keys(*g, HeightMode::Ellipsoidal),
+                    "terrarium-xyz",
+                    TileFormat::Png,
+                    10,
+                    909,
+                    403,
+                )
+            })
+            .collect();
+        etags.sort();
+        etags.dedup();
+        assert_eq!(etags.len(), GeoidModel::all().len());
+    }
+
+    #[test]
+    fn cache_key_carries_model_and_mode_segments() {
+        let key = key_for(GeoidModel::Jpgeo2024, HeightMode::GeoidOnly);
+        assert!(key.contains("/jpgeo2024/geoid/"), "{key}");
+    }
+}

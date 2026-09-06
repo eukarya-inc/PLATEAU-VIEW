@@ -16,7 +16,7 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Smart ETag**: Per-tile ETag calculation based on covering layers with If-None-Match support for 304 responses
 - **Configurable Cache-Control**: Set custom Cache-Control headers via environment variable
 - **Multi-Format Output**: Support for PNG, WebP, and AVIF image formats
-- **Terrain**: Cesium quantized-mesh-1.0 (TMS Geodetic) plus Mapzen Terrarium and Mapbox Terrain-RGB raster tiles (Web Mercator XYZ), generated from a Mapterhorn DEM and a selectable `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). Heights are **ellipsoidal** (orthometric + geoid). Tiles fully outside the geoid coverage respond 404.
+- **Terrain**: Cesium quantized-mesh-1.0 (TMS Geodetic) plus Mapzen Terrarium and Mapbox Terrain-RGB raster tiles (Web Mercator XYZ), generated from a Mapterhorn DEM and a per-source `japan-geoid` model (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). Heights are **ellipsoidal** (orthometric + geoid) by default; `?heights=` also serves the orthometric DEM or the geoid surface alone. Tiles fully outside the geoid coverage respond 404.
 
 ## Terrain
 
@@ -35,9 +35,25 @@ In production the recommended setup is to mirror Mapterhorn's Japan slice into y
 
 ### Why a separate geoid model
 
-Mapterhorn (and most public DEM tile services) encode **orthometric** heights — height above the geoid, i.e. roughly mean sea level. Cesium's globe is the WGS84 ellipsoid, so feeding orthometric heights directly causes a 30–40 m vertical offset over Japan, which makes 3D Tiles buildings float or sink. We resolve this by adding a **geoid height** at every grid point, using the [`japan-geoid`](https://crates.io/crates/japan-geoid) crate (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv). The model is selectable per-request via `?geoid=...`, with each model living in a separate cache key so switching is instant and partial-purge-free.
+Mapterhorn (and most public DEM tile services) encode **orthometric** heights — height above the geoid, i.e. roughly mean sea level. Cesium's globe is the WGS84 ellipsoid, so feeding orthometric heights directly causes a 30–40 m vertical offset over Japan, which makes 3D Tiles buildings float or sink. We resolve this by adding a **geoid height** at every grid point, using the [`japan-geoid`](https://crates.io/crates/japan-geoid) crate (GSIGEO2011 / JPGEO2024 / JPGEO2024+Hrefconv).
 
-Tiles whose bounds lie **entirely outside** the selected geoid's coverage respond `404`. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
+#### The model belongs to the data, the mode to the request
+
+A geoid model is bound to a **vertical datum**: GSIGEO2011 goes with JGD2011 orthometric heights, JPGEO2024 with JGD2024. Combining a DEM with a geoid from the other datum produces plausible-looking numbers that mean nothing. So the model is **declared per DEM source** in the config JSON (`"geoid": "..."`), falling back to `TERRAIN_DEFAULT_GEOID`, and **cannot be chosen by a request**. Models are never mixed and never fall back to one another.
+
+What a request *can* choose is the vertical surface, via `?heights=`:
+
+| `heights=` | Surface | Notes |
+|------------|---------|-------|
+| `ellipsoidal` | orthometric DEM + geoid | **Default** — what an unparameterised request returns |
+| `orthometric` | the DEM as-is | No geoid applied |
+| `geoid` | the geoid surface alone | DEM elevation ignored; useful for inspecting the model a source is bound to |
+
+Aliases: `ortho`, `ellipsoid`, `geoid-only`. Each mode lives in its own cache key and ETag, so the three can be served side by side without a partial purge.
+
+> **Breaking change.** The old `?geoid=<model>` selector is **gone**. Any request that still carries a `geoid` query parameter gets a **400** naming `heights=` and its valid values — it is never silently ignored and never silently falls back to another model. `?geoid=none` in particular becomes `?heights=orthometric`.
+
+Tiles whose bounds lie **entirely outside** the source's geoid coverage respond `404` — in every height mode, since coverage is a property of the source's model. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
 
 ### Layering DEM overlays on top of the base
 
@@ -49,6 +65,10 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
     "ortho": { "layers": [/* regular raster layers */] },
 
     "dem": {
+      // Geoid model this source's elevations are referenced to:
+      // "gsigeo2011" (default) | "jpgeo2024" | "jpgeo2024-hrefconv".
+      // Omit to inherit TERRAIN_DEFAULT_GEOID.
+      "geoid": "gsigeo2011",
       "layers": [
         // Order matters: index 0 = bottom-most overlay, last = frontmost.
         { "type": "pmtiles", "url": "gs://my-bucket/japan-2m.pmtiles",
@@ -67,6 +87,7 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 ```
 
 - The source named `"dem"` is **not** exposed under `/tiles/dem/...`; its layers feed the terrain endpoint instead.
+- `"geoid"` fixes the vertical datum for that source. Two DEM sources can therefore carry different models — e.g. a JGD2011 `dem` alongside a future JGD2024 `dem-2024` — each addressable at `/terrain/{name}/...`. An unrecognised value is logged at ERROR and the source falls back to `TERRAIN_DEFAULT_GEOID`; it never silently picks a neighbouring model.
 - Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
@@ -204,7 +225,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_MAX_ZOOM` | No | `15` | Upstream DEM max zoom (clamps `/terrain/` requests above this) |
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
 | `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/` |
-| `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Default geoid model when `?geoid=` is not specified. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`, `none` |
+| `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Geoid model for DEM sources that don't declare their own `geoid` in the config JSON. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`. **Not** overridable per request |
 | `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
 | `TERRAIN_MIRROR_URL` | No | — | Pre-rendered quantized-mesh mirror bucket (`r2://`, `s3://`, `gs://`, `file://`). When set, `/terrain/`, `/terrain/mirror/`, and `/terrain-mirror/` serve directly from this bucket instead of generating from DEM. The DEM pipeline remains reachable at `/terrain/dem/` for side-by-side validation. See [Quantized-mesh mirror](#quantized-mesh-mirror-pre-rendered-passthrough) below. |
@@ -303,17 +324,17 @@ All modes always use the in-memory cache (moka). Persistent failures don't block
 |--------|------|-------------|
 | GET | `/tiles/:name/tilejson.json` | Get TileJSON metadata for a source |
 | GET | `/tiles/:name/:z/:x/:y.{format}` | Get a tile (format: `png`, `webp`, `avif`) |
-| GET | `/terrain/layer.json` | Cesium quantized-mesh-1.0 layer.json. Query: `?geoid=gsigeo2011\|jpgeo2024\|jpgeo2024-hrefconv\|none` |
-| GET | `/terrain/:z/:x/:y.terrain` | Quantized-mesh-1.0 tile (gzipped, octvertexnormals). Same `?geoid=` query |
-| GET | `/terrarium/tilejson.json` | TileJSON for the Terrarium raster output. Query: `?geoid=...&format=png\|webp\|avif` |
-| GET | `/terrarium/:z/:x/:y.{format}` | Terrarium raster of **ellipsoidal** heights (orthometric DEM + geoid offset) |
+| GET | `/terrain/layer.json` | Cesium quantized-mesh-1.0 layer.json. Query: `?heights=ellipsoidal\|orthometric\|geoid` (default `ellipsoidal`) |
+| GET | `/terrain/:z/:x/:y.terrain` | Quantized-mesh-1.0 tile (gzipped, octvertexnormals). Same `?heights=` query |
+| GET | `/terrarium/tilejson.json` | TileJSON for the Terrarium raster output. Query: `?heights=...&format=png\|webp\|avif` |
+| GET | `/terrarium/:z/:x/:y.{format}` | Terrarium raster of **ellipsoidal** heights by default (orthometric DEM + geoid offset); `?heights=` selects the surface |
 | GET | `/mapbox/tilejson.json` | TileJSON for the Mapbox Terrain-RGB v1 raster output |
 | GET | `/mapbox/:z/:x/:y.{format}` | Mapbox Terrain-RGB v1 raster of ellipsoidal heights |
 | GET | `/terrain-viewer` | Embedded Cesium preview of the terrain output |
 | GET | `/health` | Health check |
 | POST | `/reload` | Force-reload configuration (requires `Authorization: Bearer <RELOAD_SECRET>` if secret is set). Always rebuilds sources, even when the config body hash is unchanged. Most operators don't need to call this — see `CONFIG_TTL_SECS` for the lazy-revalidation path that picks up CMS changes automatically |
 
-> See [Terrain](#terrain) above for what these endpoints output and how the geoid query parameter works. To self-host the DEM, see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
+> See [Terrain](#terrain) above for what these endpoints output and how the `heights` query parameter works. To self-host the DEM, see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
 
 ### Supported Image Formats
 
@@ -414,6 +435,10 @@ CONFIG_URL="https://cms.example/config.json,https://tiles.example/r2-cogs.json" 
       ]
     },
     "dem": {
+      // Geoid model this source's elevations are referenced to:
+      // "gsigeo2011" (default) | "jpgeo2024" | "jpgeo2024-hrefconv".
+      // Omit to inherit TERRAIN_DEFAULT_GEOID.
+      "geoid": "gsigeo2011",
       "layers": [
         {
           "type": "cog",

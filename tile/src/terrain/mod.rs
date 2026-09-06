@@ -1,7 +1,9 @@
 //! Terrain generation and serving.
 //!
 //! Provides DEM-backed Cesium quantized-mesh-1.0 tiles and Terrarium raster tiles.
-//! Heights are served as ellipsoidal (orthometric DEM + geoid via `japan-geoid`).
+//! Heights default to ellipsoidal (orthometric DEM + geoid via `japan-geoid`);
+//! `?heights=` selects the orthometric DEM or the geoid surface alone instead.
+//! The geoid *model* is a property of the DEM source, not of the request.
 
 #![allow(dead_code)]
 
@@ -25,7 +27,7 @@ pub use cached_dem::CachedDemProvider;
 pub use cog_dem::CogDemSource;
 pub use composite::{CompositeDemProvider, build as build_composite_dem};
 pub use dem::{DemError, DemProvider, DemTile, GeoBounds};
-pub use geoid::{Geoid, GeoidModel, UnknownGeoidModel};
+pub use geoid::{Geoid, GeoidModel, HeightMode, UnknownGeoidModel, UnknownHeightMode};
 pub use mapterhorn::MapterhornSource;
 pub use mirror::MirrorSource;
 pub use pmtiles::{PmtilesEncoding, PmtilesSource};
