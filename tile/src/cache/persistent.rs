@@ -4,7 +4,10 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use object_store::{Attribute, Attributes, ObjectStore, PutOptions, path::Path as ObjectPath};
+use object_store::{
+    Attribute, Attributes, ObjectStore, PutOptions,
+    path::{Path as ObjectPath, PathPart},
+};
 use thiserror::Error;
 
 use super::store::{CacheBackend, CacheStoreError, CacheStoreFactory};
@@ -75,14 +78,22 @@ impl PersistentCache {
     }
 
     /// Convert a cache key to an object path.
+    ///
+    /// `self.prefix` already holds the **decoded** segments (see
+    /// `crate::object_url`), and `object_store` percent-encodes a key once when
+    /// it builds the request URL. Re-running the prefix through
+    /// `ObjectPath::from` would encode it a second time, so it is composed from
+    /// its already-parsed parts; only `key` — a plain string that was never
+    /// encoded — goes through `PathPart`. For an ASCII prefix this is
+    /// byte-identical to the previous `ObjectPath::from(format!(..))` form.
     fn key_to_path(&self, key: &str) -> ObjectPath {
         // Key format: {source}/{format}/{z}/{x}/{y}.{ext}
         // Path format: {prefix}/{source}/{format}/{z}/{x}/{y}.{ext}
-        if self.prefix.as_ref().is_empty() {
-            ObjectPath::from(key)
-        } else {
-            ObjectPath::from(format!("{}/{key}", self.prefix.as_ref()))
-        }
+        ObjectPath::from_iter(
+            self.prefix
+                .parts()
+                .chain(key.split('/').map(PathPart::from)),
+        )
     }
 
     /// Get a cached tile with its metadata.
@@ -275,5 +286,66 @@ mod tests {
         // Key now includes format and extension
         let path = cache.key_to_path("source/webp/10/100/200.webp");
         assert_eq!(path.as_ref(), "source/webp/10/100/200.webp");
+    }
+
+    /// Build a cache with an arbitrary prefix, bypassing `new()` so the test
+    /// doesn't need R2/GCS credentials.
+    fn cache_with_prefix(prefix: ObjectPath) -> PersistentCache {
+        PersistentCache {
+            store: Arc::new(object_store::memory::InMemory::new()),
+            prefix,
+            cache_control: None,
+            backend: CacheBackend::File,
+        }
+    }
+
+    const TEST_KEY: &str = "source/webp/10/100/200.webp";
+
+    /// A non-ASCII prefix must stay decoded in the key; `object_store` encodes
+    /// it exactly once per request.
+    #[test]
+    fn key_to_path_non_ascii_prefix_is_single_encoded() {
+        let prefix = ObjectPath::from_url_path("/cache/静岡（葵）").unwrap();
+        let cache = cache_with_prefix(prefix.clone());
+
+        let path = cache.key_to_path(TEST_KEY);
+        assert_eq!(
+            path.as_ref(),
+            "cache/静岡（葵）/source/webp/10/100/200.webp"
+        );
+        assert!(!path.as_ref().contains('%'));
+        // The old form re-encoded the already-decoded prefix.
+        assert_ne!(
+            path,
+            ObjectPath::from(format!("{}/{TEST_KEY}", prefix.as_ref()))
+        );
+    }
+
+    /// ASCII prefixes (everything used in production) must be byte-identical to
+    /// the previous `ObjectPath::from(format!(..))` behaviour.
+    #[test]
+    fn key_to_path_ascii_prefix_matches_old_behaviour() {
+        let prefix = ObjectPath::from("tiles/v1");
+        let cache = cache_with_prefix(prefix.clone());
+        assert_eq!(
+            cache.key_to_path(TEST_KEY).as_ref(),
+            ObjectPath::from(format!("{}/{TEST_KEY}", prefix.as_ref())).as_ref()
+        );
+
+        // ...including the empty-prefix branch.
+        let root = cache_with_prefix(ObjectPath::from(""));
+        assert_eq!(
+            root.key_to_path(TEST_KEY).as_ref(),
+            ObjectPath::from(TEST_KEY).as_ref()
+        );
+    }
+
+    /// The `{source}` segment comes from the config as a plain, never-encoded
+    /// string, so sanitising it through `PathPart` is correct and unchanged.
+    #[test]
+    fn key_to_path_still_sanitizes_key_segments() {
+        let cache = cache_with_prefix(ObjectPath::from("tiles"));
+        let path = cache.key_to_path("so#urce/webp/0/0/0.webp");
+        assert_eq!(path.as_ref(), "tiles/so%23urce/webp/0/0/0.webp");
     }
 }

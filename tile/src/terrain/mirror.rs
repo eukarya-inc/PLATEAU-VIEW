@@ -17,7 +17,10 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use object_store::{ObjectStore, path::Path as ObjectPath};
+use object_store::{
+    ObjectStore,
+    path::{Path as ObjectPath, PathPart},
+};
 
 use crate::cache::{CacheStoreError, CacheStoreFactory};
 
@@ -41,13 +44,21 @@ impl MirrorSource {
         })
     }
 
+    /// `{prefix}/{sub}` as an object key.
+    ///
+    /// `self.prefix` already holds the **decoded** segments (see
+    /// `crate::object_url`), and `object_store` percent-encodes a key once when
+    /// it builds the request URL. Re-running the prefix through
+    /// `ObjectPath::from` would encode it a second time, so it is composed from
+    /// its already-parsed parts; only `sub` — a plain string that was never
+    /// encoded — goes through `PathPart`. For an ASCII prefix this is
+    /// byte-identical to the previous `ObjectPath::from(format!(..))` form.
     fn key_for(&self, sub: &str) -> ObjectPath {
-        let prefix = self.prefix.as_ref();
-        if prefix.is_empty() {
-            ObjectPath::from(sub)
-        } else {
-            ObjectPath::from(format!("{prefix}/{sub}"))
-        }
+        ObjectPath::from_iter(
+            self.prefix
+                .parts()
+                .chain(sub.split('/').map(PathPart::from)),
+        )
     }
 
     /// Fetch a single tile. `Ok(None)` for a 404 (tile not in mirror).
@@ -75,5 +86,60 @@ impl MirrorSource {
             Err(object_store::Error::NotFound { .. }) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a mirror with an arbitrary prefix, bypassing `from_url` so the
+    /// test doesn't need R2 credentials.
+    fn mirror_with_prefix(prefix: ObjectPath) -> MirrorSource {
+        MirrorSource {
+            store: Arc::new(object_store::memory::InMemory::new()),
+            prefix,
+            source_url: "memory://test".to_string(),
+        }
+    }
+
+    /// A non-ASCII prefix must stay decoded in the key; `object_store` encodes
+    /// it exactly once per request.
+    #[test]
+    fn key_for_non_ascii_prefix_is_single_encoded() {
+        let prefix = ObjectPath::from_url_path("/terrain/静岡（葵）").unwrap();
+        let mirror = mirror_with_prefix(prefix.clone());
+
+        let path = mirror.key_for("9/455/203.terrain");
+        assert_eq!(path.as_ref(), "terrain/静岡（葵）/9/455/203.terrain");
+        assert!(!path.as_ref().contains('%'));
+        // The old form re-encoded the already-decoded prefix.
+        assert_ne!(
+            path,
+            ObjectPath::from(format!("{}/9/455/203.terrain", prefix.as_ref()))
+        );
+    }
+
+    /// ASCII prefixes (everything used in production, e.g.
+    /// `plateau-terrain-2024`) must be byte-identical to the previous
+    /// `ObjectPath::from(format!(..))` behaviour.
+    #[test]
+    fn key_for_ascii_prefix_matches_old_behaviour() {
+        let prefix = ObjectPath::from("plateau-terrain-2024");
+        let mirror = mirror_with_prefix(prefix.clone());
+
+        for sub in ["layer.json", "9/455/203.terrain"] {
+            assert_eq!(
+                mirror.key_for(sub).as_ref(),
+                ObjectPath::from(format!("{}/{sub}", prefix.as_ref())).as_ref()
+            );
+        }
+
+        // ...including the empty-prefix branch.
+        let root = mirror_with_prefix(ObjectPath::from(""));
+        assert_eq!(
+            root.key_for("layer.json").as_ref(),
+            ObjectPath::from("layer.json").as_ref()
+        );
     }
 }
