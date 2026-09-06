@@ -549,7 +549,12 @@ async fn terrain_tile_impl(
     //
     // v3: terrain-codec 0.3.0 — pixel-centre DEM sampling via MercatorDem and
     // mesh-vertex (not full-grid) height range, both of which change bytes.
-    const TERRAIN_MESH_ALGO_VERSION: &str = "v3-terrain-codec";
+    // v4: COG edge-chunk stride fix. Chunks on a COG's right edge were read
+    // with the padded block stride, scrambling rows and leaving the remainder
+    // NaN, so tiles near every integer meridian encoded wrong heights from
+    // DEM input that never changed — exactly the case this tag exists for.
+    // The six patch/shizuoka overlays also began resolving at the same time.
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v4-edge-chunk-stride";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let etag_keys: Vec<String> = vec![
         format!("dem-ver:{}", terrain.dem.version()),
