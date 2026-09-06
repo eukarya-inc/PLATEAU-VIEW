@@ -38,6 +38,20 @@ function demDatasets(env: Env): string[] {
     : [];
 }
 
+/**
+ * Geoid model a DEM dataset's elevations are referenced to, from the
+ * `DEM_GEOIDS` var (dataset -> model). Emitted into `config.json` so the
+ * vertical datum is stated in the data rather than left to the tile server's
+ * `TERRAIN_DEFAULT_GEOID`. Unset means "say nothing", which keeps the server's
+ * default -- so adding a dataset without an entry cannot silently mislabel it.
+ */
+function geoidForDataset(env: Env, segment: string): string | undefined {
+  const raw = (env as unknown as Record<string, unknown>).DEM_GEOIDS;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const v = (raw as Record<string, unknown>)[segment];
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
 /** Resolve the R2 bucket for a dataset segment (e.g. "terrain"), or null. */
 function bucketForDataset(env: Env, segment: string): { bucket: R2Bucket; name: string } | null {
   const bindingName = pathBuckets(env)[segment];
@@ -107,6 +121,7 @@ export default {
         cors,
         request.method,
         demDatasets(env).includes(segment),
+        geoidForDataset(env, segment),
       );
     }
 

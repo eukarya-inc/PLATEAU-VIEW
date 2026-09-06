@@ -149,6 +149,14 @@ interface TileCogLayer {
 interface TileSource {
   /** `"dem"` marks a CompositeDemProvider stack; omitted for raster overlays. */
   type?: string;
+  /**
+   * Geoid model this DEM's elevations are referenced to. Declared explicitly so
+   * a reader can tell which vertical datum a dataset carries instead of having
+   * to know the tile server's TERRAIN_DEFAULT_GEOID -- which matters once a
+   * JGD2024 dataset (jpgeo2024-hrefconv) sits alongside the JGD2011 one
+   * (gsigeo2011). Omitted when unconfigured, leaving the server's default.
+   */
+  geoid?: string;
   description: string;
   layers: TileCogLayer[];
 }
@@ -309,6 +317,7 @@ function demSource(
   dataset: string,
   origin: string,
   name: string,
+  geoid?: string,
 ): Record<string, TileSource> {
   const ordered = [...cogs].sort(
     (a, b) => demPriority(a.key) - demPriority(b.key) || (a.key < b.key ? -1 : 1),
@@ -316,6 +325,7 @@ function demSource(
   return {
     [name]: {
       type: "dem",
+      ...(geoid ? { geoid } : {}),
       description: `${dataset} DEM overlay stack (${cogs.length} COGs, bottom->top)`,
       layers: ordered.map((o) => ({
         type: "cog",
@@ -360,6 +370,7 @@ export async function tileConfig(
   cors: Headers,
   method: string,
   isDem: boolean,
+  geoid?: string,
 ): Promise<Response> {
   const headers = new Headers(cors);
   headers.set("content-type", "application/json; charset=utf-8");
@@ -389,7 +400,7 @@ export async function tileConfig(
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
   const sources = isDem
-    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || "dem")
+    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || "dem", geoid)
     : rasterSources(cogs, dataset, origin);
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.

@@ -27,6 +27,12 @@ PATH_BUCKETS = { terrain = "TERRAIN", ortho = "ORTHO" }
 # Datasets whose `config.json` emits a DEM overlay stack (type: "dem") rather
 # than raster sources. Comma-separated; no query param needed.
 DEM_DATASETS = "terrain"
+# DEM dataset -> geoid model, emitted as `geoid` in that dataset's config.json.
+# States the vertical datum in the data instead of relying on the tile server's
+# TERRAIN_DEFAULT_GEOID, which matters once a JGD2024 dataset (jpgeo2024-hrefconv)
+# sits next to the JGD2011 one. An unlisted dataset emits nothing and keeps the
+# server default.
+DEM_GEOIDS = { terrain = "gsigeo2011" }
 
 [observability]
 enabled = true
