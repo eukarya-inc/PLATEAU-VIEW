@@ -91,6 +91,22 @@ export async function serveObject(
     }
   }
 
+  // HEAD carries no body, and the runtime derives Content-Length from the body
+  // it is given -- so a HEAD loses the header, and writeHttpMetadata never sets
+  // one. Callers that size an object with HEAD then break: object_store's HTTP
+  // store fails outright ("Content-Length Header missing from response"), which
+  // kills the tile server's upstream-ETag probe for every COG overlay, and GDAL
+  // /vsicurl falls back to whole-file GETs. Set it here only -- the GET path
+  // already emits a correct value, and hand-setting one there could disagree
+  // with a body the runtime re-encodes under `encodeBody: "automatic"`.
+  // The 206 branch above already set the range length; keep that.
+  if (request.method === "HEAD") {
+    if (!headers.has("content-length")) {
+      headers.set("content-length", String(object.size));
+    }
+    return new Response(null, { status, headers });
+  }
+
   return new Response(object.body, {
     status,
     headers,
