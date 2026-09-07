@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:urg="https://www.geospatial.jp/iur/urg/3.1" xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:gml="http://www.opengis.net/gml" targetNamespace="https://www.geospatial.jp/iur/urg/3.1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="3.1.0">
+	<xs:annotation>
+		<xs:documentation>XML Schema for Statistical Grid module</xs:documentation>
+		<xs:documentation>Updated on 2023/03/23</xs:documentation>
+		<xs:documentation>v3.1 バージョン情報のみ更新</xs:documentation>
+	</xs:annotation>
+	<xs:import namespace="http://www.opengis.net/gml" schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/gml.xsd"/>
+	<xs:import namespace="http://www.opengis.net/citygml/2.0" schemaLocation="http://schemas.opengis.net/citygml/2.0/cityGMLBase.xsd"/>
+	<xs:import namespace="http://www.opengis.net/citygml/cityobjectgroup/2.0" schemaLocation="http://schemas.opengis.net/citygml/cityobjectgroup/2.0/cityObjectGroup.xsd"/>
+	<!-- ===================================================================== -->
+	<!-- =====================　CityGML StatisticalGrid module =============== -->
+	<!-- ===================================================================== -->
+	<xs:complexType name="StatisticalGridType" abstract="true">
+		<xs:complexContent>
+			<xs:extension base="core:AbstractCityObjectType">
+				<xs:sequence>
+					<xs:element name="class" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="value" type="xs:anyType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="urbanPlanType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="areaClassificationType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="prefecture" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="city" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="surveyYear" type="xs:gYear" minOccurs="0"/>
+					<xs:element name="referenceDate" type="xs:date" minOccurs="0"/>
+					<xs:element name="lod-1MultiSurface" type="gml:MultiSurfacePropertyType" minOccurs="0"/>
+					<xs:element name="lod-2MultiSurface" type="gml:MultiSurfacePropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="_StatisticalGrid" type="urg:StatisticalGridType" abstract="true" substitutionGroup="core:_CityObject"/>
+	<xs:complexType name="StatisticalGridPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:_StatisticalGrid"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="PopulationType">
+		<xs:annotation>
+			<xs:documentation>grid cell with population values</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="total" type="xs:integer" minOccurs="0"/>
+					<xs:element name="daytimePopulation" type="xs:integer" minOccurs="0"/>
+					<xs:element name="daytimePopulationDensity" type="xs:double" minOccurs="0"/>
+					<xs:element name="daytimeOfficeCommuter" type="xs:integer" minOccurs="0"/>
+					<xs:element name="daytimeSchoolCommuter" type="xs:integer" minOccurs="0"/>
+					<xs:element name="daytimeUnder15" type="xs:integer" minOccurs="0"/>
+					<xs:element name="daytimeOver15" type="xs:integer" minOccurs="0"/>
+					<xs:element name="agriculturalWorker" type="xs:integer" minOccurs="0"/>
+					<xs:element name="nonCommuter" type="xs:integer" minOccurs="0"/>
+					<xs:element name="naturalIncrease" type="xs:integer" minOccurs="0"/>
+					<xs:element name="births" type="xs:integer" minOccurs="0"/>
+					<xs:element name="deaths" type="xs:integer" minOccurs="0"/>
+					<xs:element name="socialIncrease" type="xs:integer" minOccurs="0"/>
+					<xs:element name="moveFrom" type="xs:integer" minOccurs="0"/>
+					<xs:element name="moveTo" type="xs:integer" minOccurs="0"/>
+					<xs:element name="increasement" type="xs:integer" minOccurs="0"/>
+					<xs:element name="malePopulation" type="xs:integer" minOccurs="0"/>
+					<xs:element name="femalePopulation" type="xs:integer" minOccurs="0"/>
+					<xs:element name="populationByAgeAndSex" type="urg:PopulationByAgeAndSexPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Population" type="urg:PopulationType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="PopulationPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:Population"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="PopulationByAgeAndSex" type="urg:PopulationByAgeAndSexType"/>
+	<xs:complexType name="PopulationByAgeAndSexType">
+		<xs:sequence>
+			<xs:element name="ageAndSex" type="gml:CodeType"/>
+			<xs:element name="number" type="xs:integer" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="PopulationByAgeAndSexPropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:PopulationByAgeAndSex"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="PublicTransitAccessibilityType">
+		<xs:annotation>
+			<xs:documentation>grid cell to describe areas where the public transportation service is available</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="availability" type="xs:boolean" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="PublicTransitAccessibility" type="urg:PublicTransitAccessibilityType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="PublicTransitAccessibilityPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:PublicTransitAccessibility"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="LandPriceType">
+		<xs:annotation>
+			<xs:documentation>grid cell with land prices</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="landPrice" type="urg:LandPricePerLandUsePropertyType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="currencyUnit" type="gml:CodeType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="LandPrice" type="urg:LandPriceType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="LandPricePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:LandPrice"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="LandPricePerLandUse" type="urg:LandPricePerLandUseType"/>
+	<xs:complexType name="LandPricePerLandUseType">
+		<xs:sequence>
+			<xs:element name="landUse" type="gml:CodeType"/>
+			<xs:element name="landPrice" type="xs:integer" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="LandPricePerLandUsePropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:LandPricePerLandUse"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="LandUseDiversionType">
+		<xs:annotation>
+			<xs:documentation>grid cell with the number and area of land use diversion</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="numberOfAnnualDiversion" type="urg:NumberOfAnnualDiversionsPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="areaOfAnnualDiversion" type="urg:AreaOfAnnualDiversionsPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="LandUseDiversion" type="urg:LandUseDiversionType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="LandUseDiversionPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:LandUseDiversion"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="NumberOfAnnualDiversions" type="urg:NumberOfAnnualDiversionsType"/>
+	<xs:complexType name="NumberOfAnnualDiversionsType">
+		<xs:sequence>
+			<xs:element name="year" type="xs:gYear"/>
+			<xs:element name="count" type="xs:nonNegativeInteger" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="NumberOfAnnualDiversionsPropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:NumberOfAnnualDiversions"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="AreaOfAnnualDiversions" type="urg:AreaOfAnnualDiversionsType"/>
+	<xs:complexType name="AreaOfAnnualDiversionsType">
+		<xs:sequence>
+			<xs:element name="year" type="xs:gYear"/>
+			<xs:element name="area" type="gml:MeasureType" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="AreaOfAnnualDiversionsPropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:AreaOfAnnualDiversions"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="HouseholdsType">
+		<xs:annotation>
+			<xs:documentation>grid cell with the number of households</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="numberOfOrdinaryHousehold" type="xs:integer"/>
+					<xs:element name="numberOfHouseholdsByOwnership" type="urg:NumberOfHouseholdsPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="numberOfHouseholdsByStructure" type="urg:NumberOfHouseholdsPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="numberOfMainHousehold" type="xs:integer"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Households" type="urg:HouseholdsType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="HouseholdsPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:Households"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="NumberOfHouseholds" type="urg:NumberOfHouseholdsType"/>
+	<xs:complexType name="NumberOfHouseholdsType">
+		<xs:sequence>
+			<xs:element name="class" type="gml:CodeType"/>
+			<xs:element name="number" type="xs:integer"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="NumberOfHouseholdsPropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:NumberOfHouseholds"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="OfficesAndEmployeesType">
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="numberOfOffices" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numberOfEmployees" type="xs:integer" minOccurs="0"/>
+					<xs:element name="salesAmount" type="xs:integer" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="OfficesAndEmployees" type="urg:OfficesAndEmployeesType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="OfficesAndEmployeesPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:OfficesAndEmployees"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="GenericGridCellType">
+		<xs:annotation>
+			<xs:documentation>grid cell for various use</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="genericValue" type="urg:KeyValuePairPropertyType" maxOccurs="unbounded"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="GenericGridCell" type="urg:GenericGridCellType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="GenericGridCellPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:GenericGridCell"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="KeyValuePairType">
+		<xs:sequence>
+			<xs:element name="key" type="gml:CodeType"/>
+			<xs:choice>
+				<xs:element name="stringValue" type="xs:string"/>
+				<xs:element name="intValue" type="xs:integer"/>
+				<xs:element name="doubleValue" type="xs:double"/>
+				<xs:element name="codeValue" type="gml:CodeType"/>
+				<xs:element name="measuredValue" type="gml:MeasureType"/>
+				<xs:element name="dateValue" type="xs:date"/>
+				<xs:element name="uriValue" type="xs:anyURI"/>
+			</xs:choice>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="KeyValuePair" type="urg:KeyValuePairType"/>
+	<!-- ===================================================================== -->
+	<xs:complexType name="KeyValuePairPropertyType">
+		<xs:sequence>
+			<xs:element ref="urg:KeyValuePair"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- =================== Extended attribute for CityObjectGroup ================= -->
+	<xs:element name="fiscalYearOfPublication" type="xs:gYear" substitutionGroup="grp:_GenericApplicationPropertyOfCityObjectGroup"/>
+	<xs:element name="language" type="gml:CodeType" substitutionGroup="grp:_GenericApplicationPropertyOfCityObjectGroup"/>
+	<!-- ===================================================================== -->
+	<xs:complexType name="StatusOfSiteSeeingType">
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="numOfHotels" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfRyokan" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfPublicInn" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfInn" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfCotage" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfTempleHotel" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfRentaVilla" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfYouthHostel" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfCapsuleHotel" type="xs:integer" minOccurs="0"/>
+					<xs:element name="numOfTrainingCenter" type="xs:integer" minOccurs="0"/>
+					<xs:element name="totalAccomodations" type="xs:integer" minOccurs="0"/>
+					<xs:element name="totalCapacity" type="xs:integer" minOccurs="0"/>
+					<xs:element name="totalRooms" type="xs:integer" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="StatusOfSiteSeeing" type="urg:StatusOfSiteSeeingType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="StatusOfSiteSeeingPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:StatusOfSiteSeeing"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="LandslideDisasterType">
+		<xs:complexContent>
+			<xs:extension base="urg:StatisticalGridType">
+				<xs:sequence>
+					<xs:element name="dateOfOccurence" type="xs:date" minOccurs="0"/>
+					<xs:element name="landSlideType" type="urg:LandSlideTypeValue" minOccurs="0"/>
+					<xs:element name="maximumRainfallPerDay" type="gml:LengthType" minOccurs="0"/>
+					<xs:element name="maximumRainfallPerHour" type="gml:LengthType" minOccurs="0"/>
+					<xs:element name="slope" type="xs:integer" minOccurs="0"/>
+					<xs:element name="sedimentDischarge" type="xs:integer" minOccurs="0"/>
+					<xs:element name="length" type="gml:LengthType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="LandslideDisaster" type="urg:LandslideDisasterType" substitutionGroup="urg:_StatisticalGrid"/>
+	<xs:complexType name="LandslideDisasterPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urg:LandslideDisaster"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<xs:simpleType name="LandSlideTypeValue">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="土石流"/>
+			<xs:enumeration value="土石流（土砂流）"/>
+			<xs:enumeration value="土石流（山腹崩壊・土砂流）"/>
+			<xs:enumeration value="土石流（山腹崩壊）"/>
+			<xs:enumeration value="土石流（山林火災）"/>
+			<xs:enumeration value="土石流（流木堆積、えん堤基礎部損傷）"/>
+			<xs:enumeration value="土石流（噴火）"/>
+			<xs:enumeration value="土石流（施設災害）"/>
+			<xs:enumeration value="土石流（その他（民地盛土河川流出）"/>
+			<xs:enumeration value="土石流（その他（洪水））"/>
+			<xs:enumeration value="土石流（その他（河道内堆積物の泥流化）"/>
+			<xs:enumeration value="土石流（その他）"/>
+			<xs:enumeration value="がけ崩れ"/>
+			<xs:enumeration value="地すべり）"/>
+			<xs:enumeration value="雪崩（表層）"/>
+			<xs:enumeration value="雪崩（全層傷）"/>
+			<xs:enumeration value="雪崩"/>
+			<xs:enumeration value="山林火災（計上なし）"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<!-- ===================================================================== -->
+</xs:schema>

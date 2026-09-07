@@ -1,0 +1,669 @@
+# i-UR 3.1 -> i-UR 4.0, over CityGML 2.0 -> 3.0 (PLATEAU).
+#
+# One profile per source i-UR version. The versions do not declare the same
+# elements -- 3.0 and 3.1 differ by 143 element declarations, and five of the
+# names they share changed the type they hold -- so a single profile covering all
+# of them would have to pretend they are interchangeable. They are not.
+#
+# The converter picks this file by reading the i-UR namespaces the input declares.
+# Running it against a different version is refused rather than half-applied.
+#
+# What is left here is only the part that is specific to i-UR 3.1. The two
+# halves that are not -- the CityGML 2.0 -> 3.0 mapping, and everything about
+# producing i-UR 4.0 -- are the fragments named in `base`, folded in ahead of
+# this file's own rules. A rule that is not version-specific belongs in one of
+# them rather than here. Put it here and the sibling profiles silently do
+# without it.
+#
+# The two sides must stay disjoint. A key this file and a fragment both declare
+# is refused at load rather than resolved by precedence, because there is no
+# reading of "the CityGML fragment and the i-UR profile disagree" that is not a
+# mistake in one of them.
+#
+# Names are written `prefix:local`. Prefixes on the `from` side resolve through
+# [input.namespaces], prefixes on the `to` side through [output.namespaces].
+# Both are merged across the fragments before any name is resolved.
+#
+# Anything marked UNVERIFIED below could not be confirmed against a source. The
+# sources are not in this repo, so ask for them before changing a rule.
+
+name = "iur-3.1-to-4.0"
+description = "PLATEAU CityGML 2.0 + i-UR 3.1 -> CityGML 3.0 + i-UR 4.0, building module"
+base = ["citygml-2.0-to-3.0", "iur-4.0-target"]
+
+# What this profile accepts and what it produces. `iur` lists the exact
+# source namespaces that identify a document as belonging to this profile.
+# The converter matches an input against them to choose a profile, and
+# refuses a mismatch instead of converting half of it.
+[source]
+label = "CityGML 2.0 + i-UR 3.1"
+citygml = "http://www.opengis.net/citygml/2.0"
+iur_version = "3.1"
+iur = [
+  "https://www.geospatial.jp/iur/uro/3.1",
+  "https://www.geospatial.jp/iur/urf/3.1",
+  "https://www.geospatial.jp/iur/urg/3.1",
+  "https://www.geospatial.jp/iur/urt/3.1",
+]
+
+# The i-UR 3.1 input prefixes. The CityGML ones are in `citygml-2.0-to-3.0`.
+[input.namespaces]
+# This profile converts i-UR 3.1 only. A sibling profile covers each other
+# minor version, and the converter picks between them from the input itself.
+uro = "https://www.geospatial.jp/iur/uro/3.1"
+urf = "https://www.geospatial.jp/iur/urf/3.1"
+urg = "https://www.geospatial.jp/iur/urg/3.1"
+urt = "https://www.geospatial.jp/iur/urt/3.1"
+
+# The i-UR half of the bulk namespace bump. The CityGML rows are in
+# `citygml-2.0-to-3.0`, and fold in ahead of these.
+[namespace_map]
+# i-UR 3.1 -> 4.0. Only this one version is listed, and a namespace absent from
+# this table passes through unmapped, which is exactly the outcome wanted if
+# a document from another version somehow reaches this profile.
+"https://www.geospatial.jp/iur/uro/3.1" = "https://www.geospatial.jp/iur/uro/4.0"
+"https://www.geospatial.jp/iur/urf/3.1" = "https://www.geospatial.jp/iur/urf/4.0"
+"https://www.geospatial.jp/iur/urg/3.1" = "https://www.geospatial.jp/iur/urg/4.0"
+"https://www.geospatial.jp/iur/urt/3.1" = "https://www.geospatial.jp/iur/urt/4.0"
+
+# ---------------------------------------------------------------------------
+# i-UR decisions the schemas cannot make.
+#
+# Everything below is a choice, and everything in the generated block further
+# down is read off the schemas. Rules here win, and the generator skips any name
+# already ruled on above it.
+# ---------------------------------------------------------------------------
+
+# The quality attribute. urc:DataQualityAttribute is concrete, so it would
+# validate, but 3.0 data published for PLATEAU uses the Exterior variant --
+# these are outdoor city models. An indoor dataset wants
+# urc:InteriorDataQualityAttribute instead, which is a change to this one rule.
+[[element]]
+from = "uro:DataQualityAttribute"
+to = "urc:ExteriorDataQualityAttribute"
+
+
+# Nested properties of the risk and key-value classes, which move to urc with
+# the class that holds them. The generator cannot derive these: it keys a
+# declaration by its bare local name, so a name uro 4.0 still declares under a
+# different class, or one two target modules spell the same way, is left alone.
+[[element]]
+from = "uro:depth"
+to = "urc:depth"
+[[element]]
+from = "uro:scale"
+to = "urc:scale"
+[[element]]
+from = "uro:description"
+to = "urc:description"
+[[element]]
+from = "uro:adminType"
+to = "urc:adminType"
+[[element]]
+from = "uro:areaType"
+to = "urc:areaType"
+[[element]]
+from = "uro:codeValue"
+to = "urc:codeValue"
+
+# BEGIN GENERATED -- i-UR rules
+#
+# Derived from the schemas, not written by hand. Regenerate with:
+#   cargo run -p plateau-converter-gen -- --source 3.1 \
+#       --write profiles/iur-3.1-to-4.0.toml
+#
+# source urf 3.1: union of revisions 3.1.0, 3.1.1
+# source urg 3.1: union of revisions 3.1.0, 3.1.1
+# source uro 3.1: union of revisions 3.1.1, 3.1.2
+# source urt 3.1: union of revisions 3.1.0
+# target urc 4.0.0: 94 declarations
+# target urf 4.0.0: 487 declarations
+# target urg 4.0.0: 92 declarations
+# target uro 4.0.0: 688 declarations
+# target urt 4.0.0: 148 declarations
+
+# Elements that changed module. Same local name, so the only question is
+# which module now declares it, and exactly one does.
+[[element]]
+from = "uro:DisasterRiskAttribute"
+to = "urc:DisasterRiskAttribute"
+[[element]]
+from = "uro:DmAnnotation"
+to = "urc:DmAnnotation"
+[[element]]
+from = "uro:DmAttribute"
+to = "urc:DmAttribute"
+[[element]]
+from = "uro:DmElement"
+to = "urc:DmElement"
+[[element]]
+from = "uro:DmGeometricAttribute"
+to = "urc:DmGeometricAttribute"
+[[element]]
+from = "uro:FloodingRiskAttribute"
+to = "urc:FloodingRiskAttribute"
+[[element]]
+from = "uro:HighTideRiskAttribute"
+to = "urc:HighTideRiskAttribute"
+[[element]]
+from = "uro:InlandFloodingRiskAttribute"
+to = "urc:InlandFloodingRiskAttribute"
+[[element]]
+from = "uro:KeyValuePairAttribute"
+to = "urc:KeyValuePairAttribute"
+[[element]]
+from = "uro:LandSlideRiskAttribute"
+to = "urc:LandSlideRiskAttribute"
+[[element]]
+from = "uro:PublicSurveyDataQualityAttribute"
+to = "urc:PublicSurveyDataQualityAttribute"
+[[element]]
+from = "uro:ReservoirFloodingRiskAttribute"
+to = "urc:ReservoirFloodingRiskAttribute"
+[[element]]
+from = "uro:RiverFloodingRiskAttribute"
+to = "urc:RiverFloodingRiskAttribute"
+[[element]]
+from = "uro:TsunamiRiskAttribute"
+to = "urc:TsunamiRiskAttribute"
+[[element]]
+from = "uro:Waterway"
+to = "urf:Waterway"
+[[element]]
+from = "uro:annotationType"
+to = "urc:annotationType"
+[[element]]
+from = "uro:appearanceSrcDescLod0"
+to = "urc:appearanceSrcDescLod0"
+[[element]]
+from = "uro:appearanceSrcDescLod1"
+to = "urc:appearanceSrcDescLod1"
+[[element]]
+from = "uro:appearanceSrcDescLod2"
+to = "urc:appearanceSrcDescLod2"
+[[element]]
+from = "uro:appearanceSrcDescLod3"
+to = "urc:appearanceSrcDescLod3"
+[[element]]
+from = "uro:attributeType"
+to = "urc:attributeType"
+[[element]]
+from = "uro:attributeValue"
+to = "urc:attributeValue"
+[[element]]
+from = "uro:attributeValueType"
+to = "urc:attributeValueType"
+[[element]]
+from = "uro:breakType"
+to = "urc:breakType"
+[[element]]
+from = "uro:dataType"
+to = "urc:dataType"
+[[element]]
+from = "uro:dislocationType"
+to = "urc:dislocationType"
+[[element]]
+from = "uro:dmCode"
+to = "urc:dmCode"
+[[element]]
+from = "uro:dmElement"
+to = "urc:dmElement"
+[[element]]
+from = "uro:duration"
+to = "urc:duration"
+[[element]]
+from = "uro:elementKey"
+to = "urc:elementKey"
+[[element]]
+from = "uro:freeSpace"
+to = "urc:freeSpace"
+[[element]]
+from = "uro:geometrySrcDescLod0"
+to = "urc:geometrySrcDescLod0"
+[[element]]
+from = "uro:geometrySrcDescLod1"
+to = "urc:geometrySrcDescLod1"
+[[element]]
+from = "uro:geometrySrcDescLod2"
+to = "urc:geometrySrcDescLod2"
+[[element]]
+from = "uro:geometrySrcDescLod3"
+to = "urc:geometrySrcDescLod3"
+[[element]]
+from = "uro:geometryType"
+to = "urc:geometryType"
+[[element]]
+from = "uro:hierarchyLevel"
+to = "urc:hierarchyLevel"
+[[element]]
+from = "uro:infoType"
+to = "urc:infoType"
+[[element]]
+from = "uro:is3d"
+to = "urc:is3d"
+[[element]]
+from = "uro:isEdited"
+to = "urc:isEdited"
+[[element]]
+from = "uro:isInstallation"
+to = "urc:isInstallation"
+[[element]]
+from = "uro:isSupplementarySymbol"
+to = "urc:isSupplementarySymbol"
+[[element]]
+from = "uro:isVertical"
+to = "urc:isVertical"
+[[element]]
+from = "uro:key"
+to = "urc:key"
+[[element]]
+from = "uro:label"
+to = "urc:label"
+[[element]]
+from = "uro:linewidth"
+to = "urc:linewidth"
+[[element]]
+from = "uro:locationType"
+to = "urc:locationType"
+[[element]]
+from = "uro:lod0anchorPoint"
+to = "urc:lod0anchorPoint"
+[[element]]
+from = "uro:lod1HeightType"
+to = "urc:lod1HeightType"
+[[element]]
+from = "uro:lodType"
+to = "urc:lodType"
+[[element]]
+from = "uro:mapLevel"
+to = "urc:mapLevel"
+[[element]]
+from = "uro:meshCode"
+to = "urc:meshCode"
+[[element]]
+from = "uro:orientation"
+to = "urc:orientation"
+[[element]]
+from = "uro:precisionType"
+to = "urc:precisionType"
+[[element]]
+from = "uro:publicSurveyDataQualityAttribute"
+to = "urc:publicSurveyDataQualityAttribute"
+[[element]]
+from = "uro:publicSurveySrcDescLod0"
+to = "urc:publicSurveySrcDescLod0"
+[[element]]
+from = "uro:publicSurveySrcDescLod1"
+to = "urc:publicSurveySrcDescLod1"
+[[element]]
+from = "uro:publicSurveySrcDescLod2"
+to = "urc:publicSurveySrcDescLod2"
+[[element]]
+from = "uro:publicSurveySrcDescLod3"
+to = "urc:publicSurveySrcDescLod3"
+[[element]]
+from = "uro:rank"
+to = "urc:rank"
+[[element]]
+from = "uro:rankOrg"
+to = "urc:rankOrg"
+[[element]]
+from = "uro:spacing"
+to = "urc:spacing"
+[[element]]
+from = "uro:srcScaleLod0"
+to = "urc:srcScaleLod0"
+[[element]]
+from = "uro:srcScaleLod1"
+to = "urc:srcScaleLod1"
+[[element]]
+from = "uro:srcScaleLod2"
+to = "urc:srcScaleLod2"
+[[element]]
+from = "uro:srcScaleLod3"
+to = "urc:srcScaleLod3"
+[[element]]
+from = "uro:terminationDate"
+to = "urc:terminationDate"
+[[element]]
+from = "uro:thematicSrcDesc"
+to = "urc:thematicSrcDesc"
+[[element]]
+from = "uro:tranDataAcquisition"
+to = "urc:tranDataAcquisition"
+[[element]]
+from = "uro:updateDate"
+to = "urc:updateDate"
+[[element]]
+from = "uro:visibility"
+to = "urc:visibility"
+
+# Where an i-UR class attaches in CityGML 3.0. 2.0 used a property named by
+# the extension (uro:buildingIDAttribute). 3.0 uses one general hook per host
+# class, so the wrapper is chosen by the class inside it rather than by its own
+# name.
+[ade_hooks]
+"urc:DataQualityAttribute" = "core:adeOfAbstractCityObject"
+"urc:DisasterRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:DmAnnotation" = "core:adeOfAbstractCityObject"
+"urc:DmAttribute" = "core:adeOfAbstractCityObject"
+"urc:DmGeometricAttribute" = "core:adeOfAbstractCityObject"
+"urc:ExteriorDataQualityAttribute" = "core:adeOfAbstractCityObject"
+"urc:FloodingRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:HighTideRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:InlandFloodingRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:InteriorDataQualityAttribute" = "core:adeOfAbstractCityObject"
+"urc:KeyValuePairAttribute" = "core:adeOfAbstractCityObject"
+"urc:LandSlideRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:ReservoirFloodingRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:RiverFloodingRiskAttribute" = "core:adeOfAbstractCityObject"
+"urc:TsunamiRiskAttribute" = "core:adeOfAbstractCityObject"
+"uro:BridgeFunctionalAttribute" = "brid:adeOfAbstractBridge"
+"uro:BridgeStructureAttribute" = "brid:adeOfAbstractBridge"
+"uro:BuildingDetailAttribute" = "bldg:adeOfAbstractBuilding"
+"uro:BuildingIDAttribute" = "bldg:adeOfAbstractBuilding"
+"uro:BuildingUsecaseAttribute" = "bldg:adeOfAbstractBuilding"
+"uro:CargoHandlingFacility" = "core:adeOfAbstractCityObject"
+"uro:CityFurnitureDetailAttribute" = "frn:adeOfCityFurniture"
+"uro:CityFurnitureExtendedGeometry" = "frn:adeOfCityFurniture"
+"uro:ConstructionBaseAttribute" = "con:adeOfAbstractConstruction"
+"uro:ConstructionRiskAssessmentAttribute" = "con:adeOfAbstractConstruction"
+"uro:ConstructionStructureAttribute" = "con:adeOfOtherConstruction"
+"uro:CyberportMarinaAndPBS" = "core:adeOfAbstractCityObject"
+"uro:DamAttribute" = "con:adeOfOtherConstruction"
+"uro:EmbankmentAttribute" = "con:adeOfOtherConstruction"
+"uro:FacilityAttribute" = "core:adeOfAbstractCityObject"
+"uro:FacilityIdAttribute" = "core:adeOfAbstractCityObject"
+"uro:FacilityTypeAttribute" = "core:adeOfAbstractCityObject"
+"uro:FishingPortAttribute" = "core:adeOfAbstractCityObject"
+"uro:FishingPortCapacity" = "core:adeOfAbstractCityObject"
+"uro:FishingPortFacility" = "core:adeOfAbstractCityObject"
+"uro:HarborFacility" = "core:adeOfAbstractCityObject"
+"uro:IfcAttribute" = "core:adeOfAbstractCityObject"
+"uro:IfcBuilding" = "core:adeOfAbstractCityObject"
+"uro:IfcBuildingElement" = "core:adeOfAbstractCityObject"
+"uro:IfcBuildingStorey" = "core:adeOfAbstractCityObject"
+"uro:IfcClassificationReference" = "core:adeOfAbstractCityObject"
+"uro:IfcCoordinateReferenceSystem" = "core:adeOfAbstractCityObject"
+"uro:IfcCurtainWall" = "core:adeOfAbstractCityObject"
+"uro:IfcDoor" = "core:adeOfAbstractCityObject"
+"uro:IfcElement" = "core:adeOfAbstractCityObject"
+"uro:IfcFurnishingElement" = "core:adeOfAbstractCityObject"
+"uro:IfcGroup" = "core:adeOfAbstractCityObject"
+"uro:IfcMapConversion" = "core:adeOfAbstractCityObject"
+"uro:IfcObject" = "core:adeOfAbstractCityObject"
+"uro:IfcObjectDefinition" = "core:adeOfAbstractCityObject"
+"uro:IfcOpeningElement" = "core:adeOfAbstractCityObject"
+"uro:IfcProduct" = "core:adeOfAbstractCityObject"
+"uro:IfcProject" = "core:adeOfAbstractCityObject"
+"uro:IfcProjectedCRS" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetBuildingCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetDoorCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetOpeningElementCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetSiteCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetSpaceCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcPsetWindowCommon" = "core:adeOfAbstractCityObject"
+"uro:IfcRoof" = "core:adeOfAbstractCityObject"
+"uro:IfcRoot" = "core:adeOfAbstractCityObject"
+"uro:IfcSite" = "core:adeOfAbstractCityObject"
+"uro:IfcSpace" = "core:adeOfAbstractCityObject"
+"uro:IfcSpaceBaseQuantity" = "core:adeOfAbstractCityObject"
+"uro:IfcSpatialStructureElement" = "core:adeOfAbstractCityObject"
+"uro:IfcWall" = "core:adeOfAbstractCityObject"
+"uro:IfcWindow" = "core:adeOfAbstractCityObject"
+"uro:IfcZone" = "core:adeOfAbstractCityObject"
+"uro:IndoorFacilityAttribute" = "bldg:adeOfBuilding"
+"uro:IndoorFurnishingAttribute" = "bldg:adeOfBuildingFurniture"
+"uro:IndoorPublicTagAttribute" = "bldg:adeOfBuildingConstructiveElement"
+"uro:IndoorSpaceAttribute" = "bldg:adeOfBuildingRoom"
+"uro:IndoorStoreyAttribute" = "bldg:adeOfStorey"
+"uro:IndoorTactileTileAttribute" = "bldg:adeOfBuildingInstallation"
+"uro:IndoorZoneAttribute" = "bldg:adeOfBuildingUnit"
+"uro:LandUseDetailAttribute" = "luse:adeOfLandUse"
+"uro:LargeCustomerFacilityAttribute" = "bldg:adeOfAbstractBuilding"
+"uro:MaintenanceHistoryAttribute" = "core:adeOfAbstractCityObject"
+"uro:MooringFacility" = "core:adeOfAbstractCityObject"
+"uro:NavigationAssistanceFacility" = "core:adeOfAbstractCityObject"
+"uro:ParkFacilityLongevityPlanAttribute" = "core:adeOfAbstractCityObject"
+"uro:PointCloudSpecAttribute" = "pcl:adeOfPointCloud"
+"uro:PortAttribute" = "core:adeOfAbstractCityObject"
+"uro:PortEnvironmentalImprovementFacility" = "core:adeOfAbstractCityObject"
+"uro:PortManagementFacility" = "core:adeOfAbstractCityObject"
+"uro:PortPassengerFacility" = "core:adeOfAbstractCityObject"
+"uro:PortPollutionControlFacility" = "core:adeOfAbstractCityObject"
+"uro:PortProtectiveFacility" = "core:adeOfAbstractCityObject"
+"uro:PortStorageFacility" = "core:adeOfAbstractCityObject"
+"uro:PortTransportationFacility" = "core:adeOfAbstractCityObject"
+"uro:PortWasteTreatmentFacility" = "core:adeOfAbstractCityObject"
+"uro:PortWelfareFacility" = "core:adeOfAbstractCityObject"
+"uro:RailwayRouteAttribute" = "tran:adeOfRailway"
+"uro:RailwayTrackAttribute" = "tran:adeOfTrafficArea"
+"uro:RealEstateIDAttribute" = "bldg:adeOfAbstractBuilding"
+"uro:RiverFacilityIdAttribute" = "core:adeOfAbstractCityObject"
+"uro:RoadStructureAttribute" = "tran:adeOfRoad"
+"uro:RoadType" = "tran:adeOfRoad"
+"uro:ShipServiceFacility" = "core:adeOfAbstractCityObject"
+"uro:SquareUrbanPlanAttribute" = "tran:adeOfSquare"
+"uro:StationSquareAttribute" = "tran:adeOfSquare"
+"uro:TerminalAttribute" = "tran:adeOfSquare"
+"uro:TrackAttribute" = "tran:adeOfTrack"
+"uro:TrafficAreaStructureAttribute" = "tran:adeOfTrafficArea"
+"uro:TrafficVolumeAttribute" = "tran:adeOfRoad"
+"uro:TunnelFunctionalAttribute" = "tun:adeOfAbstractTunnel"
+"uro:TunnelStructureAttribute" = "tun:adeOfAbstractTunnel"
+"uro:WaterBodyDetailAttribute" = "wtr:adeOfWaterBody"
+"uro:WaterwayDetailAttribute" = "tran:adeOfWaterway"
+
+# Names with no rule, listed so they are not mistaken for oversights.
+#   urf: 25 name(s) declared in 3.1 and in no 4.0 module
+#     Administration
+#     FireProtectionFacility
+#     FloodPreventionFacility
+#     RoadsideDistrictFacility
+#     RuralDistrictFacility
+#     SandControlFacility
+#     SnowProtectionFacility
+#     TelecommunicationFacility
+#     TideFacility
+#     WindProtectionFacility
+#     _AbstractDistrictPlan
+#     _UrbanFunction
+#     costUptToLastYear
+#     keyValuePairAttribute
+#     lod-1MultiCurve
+#     lod-1MultiPoint
+#     lod-2MultiCurve
+#     lod-2MultiPoint
+#     lod0MultiPoint
+#     lod0MultiSurface
+#     lod1MultiCurve
+#     secionName
+#     target
+#     validFrom
+#     validTo
+#   urg: 4 name(s) declared in 3.1 and in no 4.0 module
+#     StatusOfSightseeing
+#     _StatisticalGrid
+#     fiscalYearOfPublication
+#     language
+#   uro: 159 name(s) declared in 3.1 and in no 4.0 module
+#     AbstractConstruction
+#     BuildingAttribute
+#     CityFurnitureAttribute
+#     ClosureSurface
+#     ConstructionEvent
+#     ConstructionInstallation
+#     Elevation
+#     GroundSurface
+#     Height
+#     IndoorAttribute
+#     IndoorUserDefinedAttribute
+#     LandUseAttribute
+#     Occupancy
+#     OtherConstruction
+#     OuterCeilingSurface
+#     OuterFloorSurface
+#     RoadAttribute
+#     RoofSurface
+#     TrafficAreaAttribute
+#     UserDefinedValue
+#     WallSurface
+#     _BoundarySurface
+#     administorator
+#     appearanceSrcDescLod4
+#     bldgDataQualityAttribute
+#     bldgDisasterRiskAttribute
+#     bldgDmAttribute
+#     bldgFacilityAttribute
+#     bldgFacilityIdAttribute
+#     bldgFacilityTypeAttribute
+#     bldgKeyValuePairAttribute
+#     bldgRealEstateIDAttribute
+#     bldgUsecaseAttribute
+#     boundedBy
+#     bridBaseAttribute
+#     bridDataQualityAttribute
+#     bridDisasterRiskAttribute
+#     bridDmAttribute
+#     bridFacilityAttribute
+#     bridFacilityIdAttribute
+#     bridFacilityTypeAttribute
+#     bridFunctionalAttribute
+#     bridKeyValuePairAttribute
+#     bridRiskAssessmentAttribute
+#     bridStructureAttribute
+#     buildingDetailAttribute
+#     buildingIDAttribute
+#     cityFurnitureDetailAttribute
+#     conditionOfConstruction
+#     consBaseAttribute
+#     consDataQualityAttribute
+#     consDisasterRiskAttribute
+#     consDmAttribute
+#     consFacilityAttribute
+#     consFacilityIdAttribute
+#     consFacilityTypeAttribute
+#     consKeyValuePairAttribute
+#     consStructureAttribute
+#     constructionEvent
+#     constructionInstallation
+#     dateOfConstruction
+#     dateOfDemolition
+#     dateOfEvent
+#     demDataQualityAttribute
+#     demDmAttribute
+#     demKeyValuePairAttribute
+#     elevationReference
+#     elevationValue
+#     event
+#     fiscalYearOfPublication
+#     floodingRiskAttribute
+#     frnDataQualityAttribute
+#     frnDmAttribute
+#     frnFacilityAttribute
+#     frnFacilityIdAttribute
+#     frnFacilityTypeAttribute
+#     frnKeyValuePairAttribute
+#     geometrySrcDescLod4
+#     highReference
+#     ifcBoundarySurfaceAttribute
+#     ifcBuildingAttribute
+#     ifcBuildingFurnitureAttribute
+#     ifcBuildingInstallationAttribute
+#     ifcBuildingStoreyAttribute
+#     ifcIntBuildingInstallationAttribute
+#     ifcLandUseAttribute
+#     ifcOpeningAttribute
+#     ifcRoomAttribute
+#     indoorBoundarySurfaceAttribute
+#     indoorBuildingAttribute
+#     indoorFurnitureAttribute
+#     indoorIntInstallationAttribute
+#     indoorOpeningAttribute
+#     indoorRoomAttribute
+#     indoorStoreyAttribute
+#     interval
+#     landUseDetailAttribute
+#     language
+#     largeCustomerFacilityAttribute
+#     lod1Geometry
+#     lod2Geometry
+#     lod2MultiSurface
+#     lod3Geometry
+#     lod3MultiSurface
+#     lod4Geometry
+#     lowReference
+#     luseDataQualityAttribute
+#     luseDmAttribute
+#     luseFacilityAttribute
+#     luseFacilityIdAttribute
+#     luseFacilityTypeAttribute
+#     luseKeyValuePairAttribute
+#     nominalValue
+#     numberOfOccupants
+#     occupancy
+#     occupantType
+#     publicSurveySrcDescLod4
+#     railwayRouteAttribute
+#     railwayTrackAttribute
+#     roadStatus
+#     roadStructureAttribute
+#     squareUrbanPlanAttribute
+#     srcScaleLod4
+#     totalFoorArea
+#     trackAttribute
+#     trafficAreaStructureAttribute
+#     trafficVolumeAttribute
+#     tranDataQualityAttribute
+#     tranDmAttribute
+#     tranFacilityAttribute
+#     tranFacilityIdAttribute
+#     tranFacilityTypeAttribute
+#     tranKeyValuePairAttribute
+#     tranUsecaseAttribute
+#     tunBaseAttribute
+#     tunDataQualityAttribute
+#     tunDisasterRiskAttribute
+#     tunDmAttribute
+#     tunFacilityAttribute
+#     tunFacilityIdAttribute
+#     tunFacilityTypeAttribute
+#     tunFunctionalAttribute
+#     tunKeyValuePairAttribute
+#     tunRiskAssessmentAttribute
+#     tunStructureAttribute
+#     vegDataQualityAttribute
+#     vegDmAttribute
+#     vegFacilityAttribute
+#     vegFacilityIdAttribute
+#     vegFacilityTypeAttribute
+#     vegKeyValuePairAttribute
+#     waterBodyDetailAttribute
+#     waterwayDetailAttribute
+#     wtrDataQualityAttribute
+#     wtrDmAttribute
+#     wtrFacilityAttribute
+#     wtrFacilityIdAttribute
+#     wtrFacilityTypeAttribute
+#     wtrKeyValuePairAttribute
+#   urt: 4 name(s) declared in 3.1 and in no 4.0 module
+#     _PublicTransit
+#     _PublicTransitDataType
+#     dataType
+#     target
+#   urf:lod0MultiCurve: no single 4.0 module is both a match and consistent with the class holding it
+#   urf:lod1MultiSurface: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:codeValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:dateValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:doubleValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:intValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:lod0Geometry: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:measuredValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:stringValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:unit: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:uriValue: no single 4.0 module is both a match and consistent with the class holding it
+#   uro:value: no single 4.0 module is both a match and consistent with the class holding it
+
+# Left to the rule written by hand elsewhere in this file:
+#   uro:DataQualityAttribute
+# END GENERATED -- i-UR rules

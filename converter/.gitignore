@@ -1,0 +1,11 @@
+/target
+**/target
+/Cargo.lock.orig
+# Tauri / frontend
+/ui/node_modules
+/ui/dist
+/ui/src-tauri/target
+/ui/src-tauri/gen
+# local scratch
+/out
+/.staging

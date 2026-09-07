@@ -1,0 +1,603 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:urt="https://www.geospatial.jp/iur/urt/3.2" xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:gml="http://www.opengis.net/gml" targetNamespace="https://www.geospatial.jp/iur/urt/3.2" elementFormDefault="qualified" attributeFormDefault="unqualified" version="3.2.0">
+	<xs:annotation>
+		<xs:documentation>XML Schema for Public Transit module</xs:documentation>
+		<xs:documentation>v3.2 バージョン情報のみ更新</xs:documentation>
+	</xs:annotation>
+	<xs:import namespace="http://www.opengis.net/gml" schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/gml.xsd"/>
+	<xs:import namespace="http://www.opengis.net/citygml/2.0" schemaLocation="http://schemas.opengis.net/citygml/2.0/cityGMLBase.xsd"/>
+	<xs:import namespace="http://www.opengis.net/citygml/cityobjectgroup/2.0" schemaLocation="http://schemas.opengis.net/citygml/cityobjectgroup/2.0/cityObjectGroup.xsd"/>
+	<!-- ===================================================================== -->
+	<!-- =====================　CityGML PublicTransit module ================= -->
+	<!-- ===================================================================== -->
+	<xs:complexType name="PublicTransitType" abstract="true">
+		<xs:complexContent>
+			<xs:extension base="core:AbstractCityObjectType">
+				<xs:sequence>
+					<xs:element name="orgId" type="xs:string">
+						<xs:annotation>
+							<xs:documentation>id field of GTFS files</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="target" type="urt:TargetPropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="_PublicTransit" type="urt:PublicTransitType" abstract="true" substitutionGroup="core:_CityObject"/>
+	<xs:complexType name="PublicTransitPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:_PublicTransit"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="TargetPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="core:_CityObject"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="RouteType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="shortName" type="xs:string" minOccurs="0"/>
+					<xs:element name="longName" type="xs:string" minOccurs="0"/>
+					<xs:element name="description" type="urt:DescriptionPropertyType" minOccurs="0"/>
+					<xs:element name="type" type="gml:CodeType"/>
+					<xs:element name="url" type="xs:string" minOccurs="0"/>
+					<xs:element name="color" type="xs:string" minOccurs="0"/>
+					<xs:element name="textColor" type="xs:string" minOccurs="0"/>
+					<xs:element name="updateDate" type="xs:date" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="originStop" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="viaStop" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="destinationStop" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="routeSortOrder" type="xs:integer" minOccurs="0"/>
+					<xs:element name="continuousPickup" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="continuousDropOff" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="agency" type="urt:AgencyPropertyType"/>
+					<xs:element name="parentRoute" type="urt:RoutePropertyType" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="lod0MultiCurve" type="gml:MultiCurvePropertyType" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>geometric property added in this module</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Route" type="urt:RouteType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="RoutePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Route"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="DescriptionType">
+		<xs:sequence>
+			<xs:element name="description" type="xs:string" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>route_desc</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="frequencyOfService" type="xs:integer" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>extended information defined in this modeule</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="numberOfCustomers" type="xs:integer" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>extended information defined in this modeule</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:element name="Description" type="urt:DescriptionType"/>
+	<xs:complexType name="DescriptionPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:Description"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="AgencyType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="name" type="xs:string"/>
+					<xs:element name="url" type="xs:anyURI"/>
+					<xs:element name="timeZone" type="gml:CodeType"/>
+					<xs:element name="language" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="phone" type="xs:string" minOccurs="0"/>
+					<xs:element name="fareUrl" type="xs:anyURI" minOccurs="0"/>
+					<xs:element name="email" type="xs:string" minOccurs="0"/>
+					<xs:element name="officialName" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="zipNumber" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="address" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="presidentPosition" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="presidentName" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Agency" type="urt:AgencyType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="AgencyPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Agency"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="StopType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="code" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="ttsName" type="xs:string" minOccurs="0"/>
+					<xs:element name="latitude" type="xs:double" minOccurs="0"/>
+					<xs:element name="longitude" type="xs:double" minOccurs="0"/>
+					<xs:element name="zoneId" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="url" type="xs:anyURI" minOccurs="0"/>
+					<xs:element name="locationType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="timeZone" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="wheelchairBoarding" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="platformCode" type="xs:string" minOccurs="0"/>
+					<xs:element name="point" type="gml:PointPropertyType"/>
+					<xs:element name="parentStation" type="urt:StopPropertyType" minOccurs="0"/>
+					<xs:element name="level" type="urt:LevelPropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Stop" type="urt:StopType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="StopPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Stop"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="LevelType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="index" type="xs:double"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Level" type="urt:LevelType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="LevelPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Level"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="TripType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="headsign" type="xs:string" minOccurs="0"/>
+					<xs:element name="shortName" type="xs:string" minOccurs="0"/>
+					<xs:element name="directionId" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="blockId" type="xs:string" minOccurs="0"/>
+					<xs:element name="wheelchairAccessible" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="bikeAllowed" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="symbol" type="xs:string" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="route" type="urt:RoutePropertyType"/>
+					<xs:element name="calendar" type="urt:CalendarPropertyType" minOccurs="0"/>
+					<xs:element name="calendarDate" type="urt:CalendarDatePropertyType" minOccurs="0"/>
+					<xs:element name="office" type="urt:OfficePropertyType" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended field in GTFS-JP</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+					<xs:element name="shape" type="urt:ShapePropertyType" minOccurs="0"/>
+					<xs:element name="lod0MultiCurve" type="gml:MultiCurvePropertyType" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended property defined in this module. The curve is composed of a sequence of points in a shape.</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Trip" type="urt:TripType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="TripPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Trip"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:element name="Shape" type="urt:ShapeType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="ShapeType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="point" type="urt:PointPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="ShapePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Shape"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="PointType">
+		<xs:sequence>
+			<xs:element name="latitude" type="xs:double"/>
+			<xs:element name="longitude" type="xs:double"/>
+			<xs:element name="point" type="gml:PointPropertyType"/>
+			<xs:element name="pointSequence" type="xs:nonNegativeInteger"/>
+			<xs:element name="pointDistanceTraveled" type="xs:double" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:element name="Point" type="urt:PointType"/>
+	<xs:complexType name="PointPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:Point"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="OfficeType">
+		<xs:annotation>
+			<xs:documentation>extended file in GTFS-JP</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="name" type="xs:string"/>
+					<xs:element name="url" type="xs:anyURI" minOccurs="0"/>
+					<xs:element name="phone" type="xs:string" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Office" type="urt:OfficeType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="OfficePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Office"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="CalendarType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="monday" type="xs:boolean"/>
+					<xs:element name="tuesday" type="xs:boolean"/>
+					<xs:element name="wednesday" type="xs:boolean"/>
+					<xs:element name="thursday" type="xs:boolean"/>
+					<xs:element name="friday" type="xs:boolean"/>
+					<xs:element name="saturday" type="xs:boolean"/>
+					<xs:element name="sunday" type="xs:boolean"/>
+					<xs:element name="startDate" type="xs:date"/>
+					<xs:element name="endDate" type="xs:date"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Calendar" type="urt:CalendarType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="CalendarPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Calendar"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="CalendarDateType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="date" type="xs:date"/>
+					<xs:element name="exceptionType" type="gml:CodeType"/>
+					<xs:element name="calendar" type="urt:CalendarPropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="CalendarDate" type="urt:CalendarDateType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="CalendarDatePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:CalendarDate"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="FareAttributeType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="price" type="xs:double"/>
+					<xs:element name="currencyType" type="gml:CodeType"/>
+					<xs:element name="paymentMethod" type="gml:CodeType"/>
+					<xs:element name="transfers" type="gml:CodeType"/>
+					<xs:element name="transferDuration" type="xs:integer" minOccurs="0"/>
+					<xs:element name="agency" type="urt:AgencyPropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="FareAttribute" type="urt:FareAttributeType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="FareAttributePropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:FareAttribute"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="PathwayType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="mode" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="isBidirectional" type="gml:CodeType"/>
+					<xs:element name="length" type="gml:LengthType" minOccurs="0"/>
+					<xs:element name="traversalTime" type="xs:integer" minOccurs="0"/>
+					<xs:element name="stairCount" type="xs:integer" minOccurs="0"/>
+					<xs:element name="maxSlope" type="xs:double" minOccurs="0"/>
+					<xs:element name="minWidth" type="xs:double" minOccurs="0"/>
+					<xs:element name="signpostedAs" type="xs:string" minOccurs="0"/>
+					<xs:element name="reversedSignpostedAs" type="xs:string" minOccurs="0"/>
+					<xs:element name="from" type="urt:StopPropertyType"/>
+					<xs:element name="to" type="urt:StopPropertyType"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Pathway" type="urt:PathwayType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="PathwayPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Pathway"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="TranslationJPType">
+		<xs:annotation>
+			<xs:documentation>extended file in GTFS-JP</xs:documentation>
+		</xs:annotation>
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="language" type="gml:CodeType"/>
+					<xs:element name="translation" type="xs:string"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="TranslationJP" type="urt:TranslationJPType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="TranslationJPPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:TranslationJP"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="AttributionType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitType">
+				<xs:sequence>
+					<xs:element name="organizationName" type="xs:string"/>
+					<xs:element name="isProducer" type="xs:boolean" minOccurs="0"/>
+					<xs:element name="isOperator" type="xs:boolean" minOccurs="0"/>
+					<xs:element name="isAuthority" type="xs:boolean" minOccurs="0"/>
+					<xs:element name="url" type="xs:anyURI" minOccurs="0"/>
+					<xs:element name="email" type="xs:string" minOccurs="0"/>
+					<xs:element name="phoneNumber" type="xs:string" minOccurs="0"/>
+					<xs:element name="agency" type="urt:AgencyPropertyType" minOccurs="0"/>
+					<xs:element name="route" type="urt:RoutePropertyType" minOccurs="0"/>
+					<xs:element name="trip" type="urt:TripPropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Attribution" type="urt:AttributionType" substitutionGroup="urt:_PublicTransit"/>
+	<xs:complexType name="AttributionPropertyType">
+		<xs:sequence minOccurs="0">
+			<xs:element ref="urt:Attribution"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<!-- =================     DataType Declaration    ======================= -->
+	<!-- ===================================================================== -->
+	<xs:complexType name="PublicTransitDataTypeType" abstract="true"/>
+	<xs:element name="_PublicTransitDataType" type="urt:PublicTransitDataTypeType" abstract="true"/>
+	<xs:complexType name="PublicTransitDataTypePropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:_PublicTransitDataType"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="FeedInfoType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="publisherName" type="xs:string"/>
+					<xs:element name="publisherUrl" type="xs:anyURI"/>
+					<xs:element name="language" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="defaultLanguage" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="startDate" type="xs:date" minOccurs="0"/>
+					<xs:element name="endDate" type="xs:date" minOccurs="0"/>
+					<xs:element name="version" type="xs:string" minOccurs="0"/>
+					<xs:element name="contactEmail" type="xs:string" minOccurs="0"/>
+					<xs:element name="contactURL" type="xs:anyURI" minOccurs="0"/>
+					<xs:element name="detailedInfo" type="xs:anyURI" minOccurs="0">
+						<xs:annotation>
+							<xs:documentation>extended information defined in this module</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="FeedInfo" type="urt:FeedInfoType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="FeedInfoPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:FeedInfo"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="TranslationType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="tableName" type="gml:CodeType"/>
+					<xs:element name="fieldName" type="xs:string"/>
+					<xs:element name="language" type="gml:CodeType"/>
+					<xs:element name="translation" type="xs:string"/>
+					<xs:element name="fieldValue" type="xs:string" minOccurs="0"/>
+					<xs:element name="recordId" type="urt:PublicTransitPropertyType" minOccurs="0"/>
+					<xs:element name="recordSubId" type="xs:string" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Translation" type="urt:TranslationType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="TranslationPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:Translation"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="TransferType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="transferType" type="gml:CodeType"/>
+					<xs:element name="minTransferTime" type="xs:integer" minOccurs="0"/>
+					<xs:element name="from" type="urt:StopPropertyType"/>
+					<xs:element name="to" type="urt:StopPropertyType"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Transfer" type="urt:TransferType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="TransferPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:Transfer"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="FrequencyType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="startTime" type="xs:time"/>
+					<xs:element name="endTime" type="xs:time"/>
+					<xs:element name="headwaySecs" type="xs:integer"/>
+					<xs:element name="exactTimes" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="trip" type="urt:TripPropertyType"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="Frequency" type="urt:FrequencyType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="FrequencyPropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:Frequency"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="StopTimeType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="arrivalTime" type="xs:time"/>
+					<xs:element name="departureTime" type="xs:time"/>
+					<xs:element name="stopSequence" type="xs:integer"/>
+					<xs:element name="headsign" type="xs:string" minOccurs="0"/>
+					<xs:element name="pickupType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="dropoffType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="continuousPickupType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="continuousDropoffType" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="shapeDistanceTraveled" type="xs:double" minOccurs="0"/>
+					<xs:element name="timePoint" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="trip" type="urt:TripPropertyType"/>
+					<xs:element name="stop" type="urt:StopPropertyType"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="StopTime" type="urt:StopTimeType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="StopTimePropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:StopTime"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- ===================================================================== -->
+	<xs:complexType name="FareRuleType">
+		<xs:complexContent>
+			<xs:extension base="urt:PublicTransitDataTypeType">
+				<xs:sequence>
+					<xs:element name="originId" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="destinationId" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="containsId" type="gml:CodeType" minOccurs="0"/>
+					<xs:element name="fare" type="urt:FareAttributePropertyType"/>
+					<xs:element name="route" type="urt:RoutePropertyType" minOccurs="0"/>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element name="FareRule" type="urt:FareRuleType" substitutionGroup="urt:_PublicTransitDataType"/>
+	<xs:complexType name="FareRulePropertyType">
+		<xs:sequence>
+			<xs:element ref="urt:FareRule"/>
+		</xs:sequence>
+	</xs:complexType>
+	<!-- =================== Extended attribute for CityObjectGroup ================= -->
+	<xs:element name="dataType" type="urt:PublicTransitDataTypePropertyType" substitutionGroup="grp:_GenericApplicationPropertyOfCityObjectGroup"/>
+</xs:schema>

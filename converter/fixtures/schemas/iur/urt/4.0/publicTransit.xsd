@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema" xmlns:core="http://www.opengis.net/citygml/3.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:urt="https://www.geospatial.jp/iur/urt/4.0" targetNamespace="https://www.geospatial.jp/iur/urt/4.0" elementFormDefault="qualified" version="4.0.0" xmlns:urc="https://www.geospatial.jp/iur/urc/4.0">
+	<import namespace="http://www.opengis.net/citygml/3.0" schemaLocation="http://schemas.opengis.net/citygml/3.0/core.xsd"/>
+	<import namespace="http://www.opengis.net/gml/3.2" schemaLocation="http://schemas.opengis.net/gml/3.2.1/gml.xsd"/>
+	<import namespace="https://www.geospatial.jp/iur/urc/4.0" schemaLocation="../../urc/4.0/urbanCore.xsd"/>
+	<annotation>
+		<documentation>XML Schema for Public Transit module</documentation>
+		<documentation>Updated on 2026/03/18</documentation>
+		<documentation>i-UR v3.2 をCityGML 3.0対応に更新</documentation>
+	</annotation>
+	<!-- ===================================================================== -->
+	<!-- =====================　CityGML PublicTransit module ================= -->
+	<!-- ===================================================================== -->
+	<complexType name="PublicTransitType">
+		<complexContent>
+			<extension base="core:AbstractThematicSurfaceType">
+				<sequence>
+					<element name="info" type="urt:PublicTransitTypePropertyType" minOccurs="0" maxOccurs="unbounded"/>
+					<element name="data" type="urt:PublicTransitDataTypePropertyType" minOccurs="0" maxOccurs="unbounded"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="PublicTransit" type="urt:PublicTransitType" substitutionGroup="core:AbstractThematicSurface"/>
+	<complexType name="PublicTransitPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:PublicTransit"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<!-- =================     Type Declaration    ======================= -->
+	<!-- ===================================================================== -->
+	<complexType name="PublicTransitTypeType" abstract="true">
+		<complexContent>
+			<extension base="gml:AbstractGMLType">
+				<sequence>
+					<element name="orgId" type="string">
+						<annotation>
+							<documentation>id field of GTFS files</documentation>
+						</annotation>
+					</element>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="PublicTransitType" type="urt:PublicTransitTypeType" abstract="true" substitutionGroup="gml:AbstractGML"/>
+	<complexType name="PublicTransitTypePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:PublicTransitType"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="TargetPropertyType">
+		<sequence minOccurs="0">
+			<element ref="core:AbstractCityObject"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="RouteType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="shortName" type="string" minOccurs="0"/>
+					<element name="longName" type="string" minOccurs="0"/>
+					<element name="description" type="urt:DescriptionPropertyType" minOccurs="0"/>
+					<element name="type" type="gml:CodeType"/>
+					<element name="url" type="string" minOccurs="0"/>
+					<element name="color" type="string" minOccurs="0"/>
+					<element name="textColor" type="string" minOccurs="0"/>
+					<element name="updateDate" type="date" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="originStop" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="viaStop" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="destinationStop" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="routeSortOrder" type="integer" minOccurs="0"/>
+					<element name="continuousPickup" type="gml:CodeType" minOccurs="0"/>
+					<element name="continuousDropOff" type="gml:CodeType" minOccurs="0"/>
+					<element name="agency" type="urt:AgencyPropertyType"/>
+					<element name="parentRoute" type="urt:RoutePropertyType" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="lod0MultiCurve" type="gml:MultiCurvePropertyType" minOccurs="0">
+						<annotation>
+							<documentation>geometric property added in this module</documentation>
+						</annotation>
+					</element>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Route" type="urt:RouteType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="RoutePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Route"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="DescriptionType">
+		<sequence>
+			<element name="description" type="string" minOccurs="0">
+				<annotation>
+					<documentation>route_desc</documentation>
+				</annotation>
+			</element>
+			<element name="frequencyOfService" type="integer" minOccurs="0">
+				<annotation>
+					<documentation>extended information defined in this modeule</documentation>
+				</annotation>
+			</element>
+			<element name="numberOfCustomers" type="integer" minOccurs="0">
+				<annotation>
+					<documentation>extended information defined in this modeule</documentation>
+				</annotation>
+			</element>
+		</sequence>
+	</complexType>
+	<element name="Description" type="urt:DescriptionType"/>
+	<complexType name="DescriptionPropertyType">
+		<sequence>
+			<element ref="urt:Description"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="AgencyType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="name" type="string"/>
+					<element name="url" type="anyURI"/>
+					<element name="timeZone" type="gml:CodeType"/>
+					<element name="language" type="gml:CodeType" minOccurs="0"/>
+					<element name="phone" type="string" minOccurs="0"/>
+					<element name="fareUrl" type="anyURI" minOccurs="0"/>
+					<element name="email" type="string" minOccurs="0"/>
+					<element name="officialName" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="zipNumber" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="address" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="presidentPosition" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="presidentName" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Agency" type="urt:AgencyType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="AgencyPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Agency"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="StopType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="code" type="gml:CodeType" minOccurs="0"/>
+					<element name="ttsName" type="string" minOccurs="0"/>
+					<element name="latitude" type="double" minOccurs="0"/>
+					<element name="longitude" type="double" minOccurs="0"/>
+					<element name="zoneId" type="gml:CodeType" minOccurs="0"/>
+					<element name="url" type="anyURI" minOccurs="0"/>
+					<element name="locationType" type="gml:CodeType" minOccurs="0"/>
+					<element name="timeZone" type="gml:CodeType" minOccurs="0"/>
+					<element name="wheelchairBoarding" type="gml:CodeType" minOccurs="0"/>
+					<element name="platformCode" type="string" minOccurs="0"/>
+					<element name="point" type="gml:PointPropertyType"/>
+					<element name="parentStation" type="urt:StopPropertyType" minOccurs="0"/>
+					<element name="level" type="urt:LevelPropertyType" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Stop" type="urt:StopType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="StopPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Stop"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="LevelType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="index" type="double"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Level" type="urt:LevelType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="LevelPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Level"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="TripType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="headsign" type="string" minOccurs="0"/>
+					<element name="shortName" type="string" minOccurs="0"/>
+					<element name="directionId" type="gml:CodeType" minOccurs="0"/>
+					<element name="blockId" type="string" minOccurs="0"/>
+					<element name="wheelchairAccessible" type="gml:CodeType" minOccurs="0"/>
+					<element name="bikeAllowed" type="gml:CodeType" minOccurs="0"/>
+					<element name="symbol" type="string" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="route" type="urt:RoutePropertyType"/>
+					<element name="calendar" type="urt:CalendarPropertyType" minOccurs="0"/>
+					<element name="calendarDate" type="urt:CalendarDatePropertyType" minOccurs="0"/>
+					<element name="office" type="urt:OfficePropertyType" minOccurs="0">
+						<annotation>
+							<documentation>extended field in GTFS-JP</documentation>
+						</annotation>
+					</element>
+					<element name="shape" type="urt:ShapePropertyType" minOccurs="0"/>
+					<element name="lod0MultiCurve" type="gml:MultiCurvePropertyType" minOccurs="0">
+						<annotation>
+							<documentation>extended property defined in this module. The curve is composed of a sequence of points in a shape.</documentation>
+						</annotation>
+					</element>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Trip" type="urt:TripType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="TripPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Trip"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<element name="Shape" type="urt:ShapeType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="ShapeType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="point" type="urt:PointPropertyType" minOccurs="0" maxOccurs="unbounded"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<complexType name="ShapePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Shape"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="PointType">
+		<sequence>
+			<element name="latitude" type="double"/>
+			<element name="longitude" type="double"/>
+			<element name="point" type="gml:PointPropertyType"/>
+			<element name="pointSequence" type="nonNegativeInteger"/>
+			<element name="pointDistanceTraveled" type="double" minOccurs="0"/>
+		</sequence>
+	</complexType>
+	<element name="Point" type="urt:PointType"/>
+	<complexType name="PointPropertyType">
+		<sequence>
+			<element ref="urt:Point"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="OfficeType">
+		<annotation>
+			<documentation>extended file in GTFS-JP</documentation>
+		</annotation>
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="name" type="string"/>
+					<element name="url" type="anyURI" minOccurs="0"/>
+					<element name="phone" type="string" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Office" type="urt:OfficeType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="OfficePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Office"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="CalendarType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="monday" type="boolean"/>
+					<element name="tuesday" type="boolean"/>
+					<element name="wednesday" type="boolean"/>
+					<element name="thursday" type="boolean"/>
+					<element name="friday" type="boolean"/>
+					<element name="saturday" type="boolean"/>
+					<element name="sunday" type="boolean"/>
+					<element name="startDate" type="date"/>
+					<element name="endDate" type="date"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Calendar" type="urt:CalendarType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="CalendarPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Calendar"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="CalendarDateType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="date" type="date"/>
+					<element name="exceptionType" type="gml:CodeType"/>
+					<element name="calendar" type="urt:CalendarPropertyType" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="CalendarDate" type="urt:CalendarDateType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="CalendarDatePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:CalendarDate"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="FareAttributeType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="price" type="double"/>
+					<element name="currencyType" type="gml:CodeType"/>
+					<element name="paymentMethod" type="gml:CodeType"/>
+					<element name="transfers" type="gml:CodeType"/>
+					<element name="transferDuration" type="integer" minOccurs="0"/>
+					<element name="agency" type="urt:AgencyPropertyType" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="FareAttribute" type="urt:FareAttributeType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="FareAttributePropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:FareAttribute"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="PathwayType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="mode" type="gml:CodeType" minOccurs="0"/>
+					<element name="isBidirectional" type="gml:CodeType"/>
+					<element name="length" type="gml:LengthType" minOccurs="0"/>
+					<element name="traversalTime" type="integer" minOccurs="0"/>
+					<element name="stairCount" type="integer" minOccurs="0"/>
+					<element name="maxSlope" type="double" minOccurs="0"/>
+					<element name="minWidth" type="double" minOccurs="0"/>
+					<element name="signpostedAs" type="string" minOccurs="0"/>
+					<element name="reversedSignpostedAs" type="string" minOccurs="0"/>
+					<element name="from" type="urt:StopPropertyType"/>
+					<element name="to" type="urt:StopPropertyType"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Pathway" type="urt:PathwayType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="PathwayPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Pathway"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="TranslationJPType">
+		<annotation>
+			<documentation>extended file in GTFS-JP</documentation>
+		</annotation>
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="language" type="gml:CodeType"/>
+					<element name="translation" type="string"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="TranslationJP" type="urt:TranslationJPType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="TranslationJPPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:TranslationJP"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="AttributionType">
+		<complexContent>
+			<extension base="urt:PublicTransitTypeType">
+				<sequence>
+					<element name="organizationName" type="string"/>
+					<element name="isProducer" type="boolean" minOccurs="0"/>
+					<element name="isOperator" type="boolean" minOccurs="0"/>
+					<element name="isAuthority" type="boolean" minOccurs="0"/>
+					<element name="url" type="anyURI" minOccurs="0"/>
+					<element name="email" type="string" minOccurs="0"/>
+					<element name="phoneNumber" type="string" minOccurs="0"/>
+					<element name="agency" type="urt:AgencyPropertyType" minOccurs="0"/>
+					<element name="route" type="urt:RoutePropertyType" minOccurs="0"/>
+					<element name="trip" type="urt:TripPropertyType" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Attribution" type="urt:AttributionType" substitutionGroup="urt:PublicTransitType"/>
+	<complexType name="AttributionPropertyType">
+		<sequence minOccurs="0">
+			<element ref="urt:Attribution"/>
+		</sequence>
+		<attributeGroup ref="gml:AssociationAttributeGroup"/>
+	</complexType>
+	<!-- ===================================================================== -->
+	<!-- =================     DataType Declaration    ======================= -->
+	<!-- ===================================================================== -->
+	<complexType name="PublicTransitDataTypeType" abstract="true"/>
+	<element name="PublicTransitDataType" type="urt:PublicTransitDataTypeType" abstract="true"/>
+	<complexType name="PublicTransitDataTypePropertyType">
+		<sequence>
+			<element ref="urt:PublicTransitDataType"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="FeedInfoType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="publisherName" type="string"/>
+					<element name="publisherUrl" type="anyURI"/>
+					<element name="language" type="gml:CodeType" minOccurs="0"/>
+					<element name="defaultLanguage" type="gml:CodeType" minOccurs="0"/>
+					<element name="startDate" type="date" minOccurs="0"/>
+					<element name="endDate" type="date" minOccurs="0"/>
+					<element name="version" type="string" minOccurs="0"/>
+					<element name="contactEmail" type="string" minOccurs="0"/>
+					<element name="contactURL" type="anyURI" minOccurs="0"/>
+					<element name="detailedInfo" type="anyURI" minOccurs="0">
+						<annotation>
+							<documentation>extended information defined in this module</documentation>
+						</annotation>
+					</element>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="FeedInfo" type="urt:FeedInfoType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="FeedInfoPropertyType">
+		<sequence>
+			<element ref="urt:FeedInfo"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="TranslationType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="tableName" type="gml:CodeType"/>
+					<element name="fieldName" type="string"/>
+					<element name="language" type="gml:CodeType"/>
+					<element name="translation" type="string"/>
+					<element name="fieldValue" type="string" minOccurs="0"/>
+					<element name="recordId" type="urt:PublicTransitPropertyType" minOccurs="0"/>
+					<element name="recordSubId" type="string" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Translation" type="urt:TranslationType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="TranslationPropertyType">
+		<sequence>
+			<element ref="urt:Translation"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="TransferType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="transferType" type="gml:CodeType"/>
+					<element name="minTransferTime" type="integer" minOccurs="0"/>
+					<element name="from" type="urt:StopPropertyType"/>
+					<element name="to" type="urt:StopPropertyType"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Transfer" type="urt:TransferType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="TransferPropertyType">
+		<sequence>
+			<element ref="urt:Transfer"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="FrequencyType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="startTime" type="time"/>
+					<element name="endTime" type="time"/>
+					<element name="headwaySecs" type="integer"/>
+					<element name="exactTimes" type="gml:CodeType" minOccurs="0"/>
+					<element name="trip" type="urt:TripPropertyType"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="Frequency" type="urt:FrequencyType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="FrequencyPropertyType">
+		<sequence>
+			<element ref="urt:Frequency"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="StopTimeType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="arrivalTime" type="time"/>
+					<element name="departureTime" type="time"/>
+					<element name="stopSequence" type="integer"/>
+					<element name="headsign" type="string" minOccurs="0"/>
+					<element name="pickupType" type="gml:CodeType" minOccurs="0"/>
+					<element name="dropoffType" type="gml:CodeType" minOccurs="0"/>
+					<element name="continuousPickupType" type="gml:CodeType" minOccurs="0"/>
+					<element name="continuousDropoffType" type="gml:CodeType" minOccurs="0"/>
+					<element name="shapeDistanceTraveled" type="double" minOccurs="0"/>
+					<element name="timePoint" type="gml:CodeType" minOccurs="0"/>
+					<element name="trip" type="urt:TripPropertyType"/>
+					<element name="stop" type="urt:StopPropertyType"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="StopTime" type="urt:StopTimeType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="StopTimePropertyType">
+		<sequence>
+			<element ref="urt:StopTime"/>
+		</sequence>
+	</complexType>
+	<!-- ===================================================================== -->
+	<complexType name="FareRuleType">
+		<complexContent>
+			<extension base="urt:PublicTransitDataTypeType">
+				<sequence>
+					<element name="originId" type="gml:CodeType" minOccurs="0"/>
+					<element name="destinationId" type="gml:CodeType" minOccurs="0"/>
+					<element name="containsId" type="gml:CodeType" minOccurs="0"/>
+					<element name="fare" type="urt:FareAttributePropertyType"/>
+					<element name="route" type="urt:RoutePropertyType" minOccurs="0"/>
+				</sequence>
+			</extension>
+		</complexContent>
+	</complexType>
+	<element name="FareRule" type="urt:FareRuleType" substitutionGroup="urt:PublicTransitDataType"/>
+	<complexType name="FareRulePropertyType">
+		<sequence>
+			<element ref="urt:FareRule"/>
+		</sequence>
+	</complexType>
+</schema>
