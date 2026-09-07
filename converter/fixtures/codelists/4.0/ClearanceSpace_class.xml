@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_d974c79f-1b79-45e0-afed-3a3455d03532">
+<gml:name>ClearanceSpace_class</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="ClearanceSpace_class_1">
+<gml:description>無人航空機が飛行可能な領域</gml:description>
+<gml:name>1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

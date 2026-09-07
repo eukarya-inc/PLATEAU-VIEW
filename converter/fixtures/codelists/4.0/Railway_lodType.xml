@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_e10b886c-014b-4fa0-b524-d7528f99d240">
+<gml:name>Railway_lodType</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Railway_lodType_1">
+<gml:description>建築限界の最高高さを用いて鉄道空間を一律高さで押し出した立体</gml:description>
+<gml:name>1.0</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Railway_lodType_2">
+<gml:description>建築限界の最高高さを用いて補助交通空間も含めて押し出した立体</gml:description>
+<gml:name>1.1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Railway_lodType_3">
+<gml:description>軌道中心線に標高を与え、道床にその高さを与えて表現</gml:description>
+<gml:name>2.0</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Railway_lodType_4">
+<gml:description>LOD2.0に加え、横断方向の15cm以上の高低差を表現</gml:description>
+<gml:name>2.1</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Railway_lodType_5">
+<gml:description>LOD2.1に加え、横断方向の15cm未満の高低差も表現</gml:description>
+<gml:name>2.2</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

@@ -1,0 +1,465 @@
+# CityGML 2.0 -> CityGML 3.0. The half of the mapping that every profile shares.
+#
+# This is a *fragment*, not a profile: it is folded into a profile that names it
+# in `base`, and cannot convert anything on its own. It holds the rules that do
+# not depend on which i-UR minor the input carries -- which is all of the
+# CityGML mapping, because i-UR rides alongside CityGML rather than inside it.
+# Keeping it here means a rule that is not version-specific is written once
+# rather than copied into every profile, where the copies would drift.
+#
+# What belongs here: anything true of CityGML 2.0 -> 3.0. What does not: the
+# i-UR target (`iur-4.0-target.toml`) and the i-UR source half, which is what
+# each `iur-3.x-to-4.0.toml` is left holding.
+#
+# Names are written `prefix:local`, resolved through [input.namespaces] on the
+# `from` side and [output.namespaces] on the `to` side. Both tables are merged
+# across fragments before any name is resolved, so a rule here may use a prefix
+# another fragment declares.
+
+name = "citygml-2.0-to-3.0"
+description = "CityGML 2.0 -> CityGML 3.0, shared by every i-UR profile"
+
+# The CityGML 2.0 side. The i-UR prefixes are added by the profile, which is
+# the only part that knows which minor version it reads.
+[input.namespaces]
+core = "http://www.opengis.net/citygml/2.0"
+bldg = "http://www.opengis.net/citygml/building/2.0"
+gen = "http://www.opengis.net/citygml/generics/2.0"
+app = "http://www.opengis.net/citygml/appearance/2.0"
+gml = "http://www.opengis.net/gml"
+xlink = "http://www.w3.org/1999/xlink"
+xsi = "http://www.w3.org/2001/XMLSchema-instance"
+xAL = "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0"
+
+# The CityGML 3.0 side, with the recommended prefixes. The i-UR 4.0 prefixes
+# are added by the target fragment.
+[output.namespaces]
+core = "http://www.opengis.net/citygml/3.0"
+bldg = "http://www.opengis.net/citygml/building/3.0"
+con = "http://www.opengis.net/citygml/construction/3.0"
+gen = "http://www.opengis.net/citygml/generics/3.0"
+app = "http://www.opengis.net/citygml/appearance/3.0"
+gml = "http://www.opengis.net/gml/3.2"
+xlink = "http://www.w3.org/1999/xlink"
+xsi = "http://www.w3.org/2001/XMLSchema-instance"
+# xAL 3.0, which CityGML 3.0 binds core:xalAddress to. The address rewrite
+# rebuilds 2.0 content in this namespace.
+xAL = "urn:oasis:names:tc:ciq:xal:3"
+# The other CityGML 3.0 modules. i-UR classes attach to hosts across the whole
+# standard -- a bridge attribute hangs off brid:adeOfAbstractBridge -- so a
+# prefix has to exist for each, or [ade_hooks] cannot name them and any element
+# in them would be written unqualified.
+brid = "http://www.opengis.net/citygml/bridge/3.0"
+dem = "http://www.opengis.net/citygml/relief/3.0"
+frn = "http://www.opengis.net/citygml/cityfurniture/3.0"
+grp = "http://www.opengis.net/citygml/cityobjectgroup/3.0"
+luse = "http://www.opengis.net/citygml/landuse/3.0"
+pcl = "http://www.opengis.net/citygml/pointcloud/3.0"
+tran = "http://www.opengis.net/citygml/transportation/3.0"
+tun = "http://www.opengis.net/citygml/tunnel/3.0"
+veg = "http://www.opengis.net/citygml/vegetation/3.0"
+wtr = "http://www.opengis.net/citygml/waterbody/3.0"
+
+# Written unchanged into xsi:schemaLocation on the output root, in this order.
+#
+# i-UR resolves through a relative path into the package's own schemas/, which
+# the converter writes. CityGML is referenced remotely. That is the split a
+# PLATEAU package uses, and the only place a package records which revision of
+# i-UR its data was written against.
+#
+# Every CityGML location below was fetched and returns the schema it claims to. Note
+# that CityGML 3.0 puts each thematic module under its own namespace path
+# (citygml/building/3.0/building.xsd), not flat under citygml/3.0/ the way 2.0
+# did, and that the base module's file is core.xsd, not cityGMLBase.xsd.
+[output.schema_locations]
+"http://www.opengis.net/citygml/3.0" = "http://schemas.opengis.net/citygml/3.0/core.xsd"
+"http://www.opengis.net/citygml/building/3.0" = "http://schemas.opengis.net/citygml/building/3.0/building.xsd"
+"http://www.opengis.net/citygml/construction/3.0" = "http://schemas.opengis.net/citygml/construction/3.0/construction.xsd"
+"http://www.opengis.net/citygml/generics/3.0" = "http://schemas.opengis.net/citygml/generics/3.0/generics.xsd"
+"http://www.opengis.net/citygml/appearance/3.0" = "http://schemas.opengis.net/citygml/appearance/3.0/appearance.xsd"
+"http://www.opengis.net/gml/3.2" = "http://schemas.opengis.net/gml/3.2.1/gml.xsd"
+"http://www.opengis.net/citygml/bridge/3.0" = "http://schemas.opengis.net/citygml/bridge/3.0/bridge.xsd"
+"http://www.opengis.net/citygml/relief/3.0" = "http://schemas.opengis.net/citygml/relief/3.0/relief.xsd"
+"http://www.opengis.net/citygml/cityfurniture/3.0" = "http://schemas.opengis.net/citygml/cityfurniture/3.0/cityFurniture.xsd"
+"http://www.opengis.net/citygml/cityobjectgroup/3.0" = "http://schemas.opengis.net/citygml/cityobjectgroup/3.0/cityObjectGroup.xsd"
+"http://www.opengis.net/citygml/landuse/3.0" = "http://schemas.opengis.net/citygml/landuse/3.0/landUse.xsd"
+"http://www.opengis.net/citygml/pointcloud/3.0" = "http://schemas.opengis.net/citygml/pointcloud/3.0/pointCloud.xsd"
+"http://www.opengis.net/citygml/transportation/3.0" = "http://schemas.opengis.net/citygml/transportation/3.0/transportation.xsd"
+"http://www.opengis.net/citygml/tunnel/3.0" = "http://schemas.opengis.net/citygml/tunnel/3.0/tunnel.xsd"
+"http://www.opengis.net/citygml/vegetation/3.0" = "http://schemas.opengis.net/citygml/vegetation/3.0/vegetation.xsd"
+"http://www.opengis.net/citygml/waterbody/3.0" = "http://schemas.opengis.net/citygml/waterbody/3.0/waterBody.xsd"
+
+# Bulk namespace bump: any element or attribute in a listed namespace moves to
+# the mapped one, keeping its local name. Namespaces absent from this table
+# (xlink, xsi) pass through unchanged. xAL is also absent on purpose: a
+# namespace bump cannot express the 2.0 -> 3.0 address restructuring, so the
+# address rewrite rebuilds that content instead. Per-element rules take
+# precedence.
+[namespace_map]
+"http://www.opengis.net/citygml/2.0" = "http://www.opengis.net/citygml/3.0"
+"http://www.opengis.net/citygml/building/2.0" = "http://www.opengis.net/citygml/building/3.0"
+"http://www.opengis.net/citygml/generics/2.0" = "http://www.opengis.net/citygml/generics/3.0"
+"http://www.opengis.net/citygml/appearance/2.0" = "http://www.opengis.net/citygml/appearance/3.0"
+"http://www.opengis.net/citygml/relief/2.0" = "http://www.opengis.net/citygml/relief/3.0"
+"http://www.opengis.net/citygml/transportation/2.0" = "http://www.opengis.net/citygml/transportation/3.0"
+"http://www.opengis.net/citygml/landuse/2.0" = "http://www.opengis.net/citygml/landuse/3.0"
+"http://www.opengis.net/citygml/vegetation/2.0" = "http://www.opengis.net/citygml/vegetation/3.0"
+"http://www.opengis.net/citygml/cityfurniture/2.0" = "http://www.opengis.net/citygml/cityfurniture/3.0"
+"http://www.opengis.net/citygml/waterbody/2.0" = "http://www.opengis.net/citygml/waterbody/3.0"
+"http://www.opengis.net/citygml/bridge/2.0" = "http://www.opengis.net/citygml/bridge/3.0"
+"http://www.opengis.net/citygml/tunnel/2.0" = "http://www.opengis.net/citygml/tunnel/3.0"
+"http://www.opengis.net/citygml/cityobjectgroup/2.0" = "http://www.opengis.net/citygml/cityobjectgroup/3.0"
+"http://www.opengis.net/gml" = "http://www.opengis.net/gml/3.2"
+
+# ---------------------------------------------------------------------------
+# Appearance module.
+#
+# CityGML 3.0 moves the attachment points into the core module -- appearance
+# on the city object, appearanceMember on the CityModel -- and renames the
+# surface-data role. How a ParameterizedTexture binds to geometry changed
+# shape as well, and that rewrite is core/src/app.rs rather than a table row.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "app:appearance"
+to = "core:appearance"
+[[element]]
+from = "app:appearanceMember"
+to = "core:appearanceMember"
+[[element]]
+from = "app:surfaceDataMember"
+to = "app:surfaceData"
+
+# ---------------------------------------------------------------------------
+# LOD geometry properties.
+#
+# lod0MultiCurve, lod0MultiSurface, lod0Point, lod1Solid,
+# lod2Solid, lod3Solid, lod2MultiSurface, lod3MultiSurface and the
+# lodNTerrainIntersectionCurve / lodNImplicitRepresentation families are all
+# inherited from core::AbstractSpace / AbstractPhysicalSpace /
+# AbstractOccupiedSpace, so they take the core prefix.
+#
+# CityGML 3.0 has no LOD4. No lod4* rule appears here on purpose: which LOD an
+# LOD4 element becomes depends on the feature's measurement code, so it is
+# decided per feature by the lod4 pass (core/src/lod4.rs) from the [lod4] table
+# below, and every fold is reported.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "bldg:lod1Solid"
+to = "core:lod1Solid"
+[[element]]
+from = "bldg:lod2Solid"
+to = "core:lod2Solid"
+[[element]]
+from = "bldg:lod3Solid"
+to = "core:lod3Solid"
+[[element]]
+from = "bldg:lod2MultiSurface"
+to = "core:lod2MultiSurface"
+[[element]]
+from = "bldg:lod3MultiSurface"
+to = "core:lod3MultiSurface"
+[[element]]
+from = "bldg:lod2MultiCurve"
+to = "core:lod2MultiCurve"
+[[element]]
+from = "bldg:lod3MultiCurve"
+to = "core:lod3MultiCurve"
+[[element]]
+from = "bldg:lod1TerrainIntersection"
+to = "core:lod1TerrainIntersectionCurve"
+[[element]]
+from = "bldg:lod2TerrainIntersection"
+to = "core:lod2TerrainIntersectionCurve"
+[[element]]
+from = "bldg:lod3TerrainIntersection"
+to = "core:lod3TerrainIntersectionCurve"
+[[element]]
+from = "bldg:lod1ImplicitRepresentation"
+to = "core:lod1ImplicitRepresentation"
+[[element]]
+from = "bldg:lod2ImplicitRepresentation"
+to = "core:lod2ImplicitRepresentation"
+[[element]]
+from = "bldg:lod3ImplicitRepresentation"
+to = "core:lod3ImplicitRepresentation"
+
+# ---------------------------------------------------------------------------
+# Space boundaries.
+#
+# Thematic surfaces are con::AbstractConstructionSurface subtypes. They are
+# defined in the Construction module, so they take the con prefix.
+#
+# `boundary` is declared once, on core::AbstractSpace (core.xsd), and the
+# Construction module adds no boundary role of its own, so the property is
+# core:boundary on every space -- Building, BuildingRoom, BuildingInstallation.
+# MLIT's CityGML 3.0 Takeshiba sample writes core:boundary throughout.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "bldg:boundedBy"
+to = "core:boundary"
+[[element]]
+from = "bldg:RoofSurface"
+to = "con:RoofSurface"
+[[element]]
+from = "bldg:WallSurface"
+to = "con:WallSurface"
+[[element]]
+from = "bldg:GroundSurface"
+to = "con:GroundSurface"
+[[element]]
+from = "bldg:ClosureSurface"
+to = "core:ClosureSurface"
+[[element]]
+from = "bldg:OuterCeilingSurface"
+to = "con:OuterCeilingSurface"
+[[element]]
+from = "bldg:OuterFloorSurface"
+to = "con:OuterFloorSurface"
+[[element]]
+from = "bldg:CeilingSurface"
+to = "con:CeilingSurface"
+[[element]]
+from = "bldg:FloorSurface"
+to = "con:FloorSurface"
+[[element]]
+from = "bldg:InteriorWallSurface"
+to = "con:InteriorWallSurface"
+
+# Openings. con::AbstractFillingSurface is the *boundary* of an opening and is
+# reached through the `fillingSurface` role of a construction surface.
+# 2.0's bldg:Window and bldg:Door carry MultiSurface geometry as part of the
+# wall, so they are surfaces, namely con:WindowSurface and con:DoorSurface,
+# rather than the solid con:Window and con:Door
+# (con::AbstractFillingElement, which models the door or window itself and has
+# thickness).
+[[element]]
+from = "bldg:opening"
+to = "con:fillingSurface"
+[[element]]
+from = "bldg:Window"
+to = "con:WindowSurface"
+[[element]]
+from = "bldg:Door"
+to = "con:DoorSurface"
+
+# ---------------------------------------------------------------------------
+# Sub-features: the relation roles.
+# ---------------------------------------------------------------------------
+# Building defines `buildingPart: BuildingPart [0..*]` on itself. The more
+# general `buildingSubdivision: AbstractBuildingSubdivision` is for BuildingUnit
+# and Storey, so 2.0's consistsOfBuildingPart maps to buildingPart.
+[[element]]
+from = "bldg:consistsOfBuildingPart"
+to = "bldg:buildingPart"
+# The three 2.0 installation properties are not table rows: the placement the
+# property name expressed (outer / interior / in a room) moves onto the
+# installation as con:relationToConstruction, which is a rewrite (bldg.rs).
+# Only the class rename stays declarative.
+[[element]]
+from = "bldg:IntBuildingInstallation"
+to = "bldg:BuildingInstallation"
+[[element]]
+from = "bldg:interiorRoom"
+to = "bldg:buildingRoom"
+[[element]]
+from = "bldg:Room"
+to = "bldg:BuildingRoom"
+[[element]]
+from = "bldg:interiorFurniture"
+to = "bldg:buildingFurniture"
+
+# Address. The property stays bldg:address, but the object it
+# holds moved to the core module: <bldg:address><core:Address><core:xalAddress>.
+[[element]]
+from = "bldg:Address"
+to = "core:Address"
+[[element]]
+from = "bldg:xalAddress"
+to = "core:xalAddress"
+
+# ---------------------------------------------------------------------------
+# Child order.
+#
+# 3.0 content models are xs:sequence, so a property that is merely renamed can
+# still land in the wrong slot. Children not listed keep their relative order
+# and are emitted after the listed ones.
+#
+# The lists below are the flattened xs:sequence of each 3.0 type, read off the
+# OGC CityGML 3.0 XSDs rather than inferred: derivation by extension emits the
+# base type's content before the extension's, so walking the chain
+# (AbstractFeature -> AbstractFeatureWithLifespan -> AbstractCityObject ->
+# AbstractSpace -> AbstractPhysicalSpace -> AbstractOccupiedSpace ->
+# AbstractConstruction -> AbstractBuilding -> Building) and concatenating gives
+# the exact order a validator expects. The comments name the class each run of
+# properties comes from.
+#
+# TODO: where i-UR properties belong. uro/urc properties substitute into
+# adeOfAbstractCityObject, adeOfAbstractConstruction or adeOfBuilding depending
+# on the class. Since this profile does not encode which hook each one uses,
+# they stay unlisted and are emitted last, as they are in PLATEAU 2.0 data.
+# ---------------------------------------------------------------------------
+
+[[order_group]]
+types = ["bldg:Building", "bldg:BuildingPart"]
+children = [
+  # gml::AbstractGML, then gml::AbstractFeature
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  # core::AbstractFeatureWithLifespan
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  # core::AbstractCityObject
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
+  # core::AbstractSpace
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
+  # core::AbstractPhysicalSpace
+  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
+  # core::AbstractOccupiedSpace
+  "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
+  "core:lod3ImplicitRepresentation",
+  # con::AbstractConstruction
+  "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
+  "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
+  "con:adeOfAbstractConstruction",
+  # bldg::AbstractBuilding
+  "bldg:class", "bldg:function", "bldg:usage", "bldg:roofType",
+  "bldg:storeysAboveGround", "bldg:storeysBelowGround",
+  "bldg:storeyHeightsAboveGround", "bldg:storeyHeightsBelowGround",
+  "bldg:buildingConstructiveElement", "bldg:buildingInstallation",
+  "bldg:buildingRoom", "bldg:buildingFurniture", "bldg:buildingSubdivision",
+  "bldg:address", "bldg:adeOfAbstractBuilding",
+  # bldg::Building
+  "bldg:buildingPart",
+]
+
+# con::AbstractConstructionSurface and con::AbstractFillingSurface subtypes.
+# core::AbstractThematicSurface carries the LOD0-3 multi-surfaces, and
+# con:fillingSurface is on AbstractConstructionSurface only, so a WindowSurface
+# or DoorSurface simply never has one.
+[[order_group]]
+types = [
+  "con:RoofSurface", "con:WallSurface", "con:GroundSurface",
+  "con:ClosureSurface", "con:OuterCeilingSurface", "con:OuterFloorSurface",
+  "con:CeilingSurface", "con:FloorSurface", "con:InteriorWallSurface",
+  "con:DoorSurface", "con:WindowSurface",
+]
+children = [
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
+  # core::AbstractThematicSurface
+  "core:area",
+  "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
+  "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
+  "con:fillingSurface", "con:adeOfAbstractConstructionSurface",
+]
+
+# BuildingInstallation and BuildingConstructiveElement are occupied spaces and
+# BuildingRoom and BuildingFurniture are not, so they have no terrain
+# intersection curve or implicit representation. Listing the union is harmless,
+# because reorder only moves children that are actually present.
+[[order_group]]
+types = ["bldg:BuildingInstallation", "bldg:BuildingRoom", "bldg:BuildingFurniture", "bldg:BuildingConstructiveElement"]
+children = [
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
+  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
+  "core:lod1ImplicitRepresentation", "core:lod2ImplicitRepresentation",
+  "core:lod3ImplicitRepresentation",
+  "con:relationToConstruction",
+  "con:conditionOfConstruction", "con:dateOfConstruction", "con:dateOfDemolition",
+  "con:constructionEvent", "con:elevation", "con:height", "con:occupancy",
+  "con:adeOfAbstractConstruction",
+  "bldg:class", "bldg:function", "bldg:usage", "bldg:roomHeight",
+]
+
+# con:Height. Every property is [1..1]. Confirmed against con:HeightType in the
+# OGC construction.xsd, which sequences them this way.
+[[order_group]]
+types = ["con:Height"]
+children = ["con:highReference", "con:lowReference", "con:status", "con:value"]
+
+# StringAttribute and siblings: name then value.
+[[order_group]]
+types = [
+  "gen:StringAttribute", "gen:IntAttribute", "gen:DoubleAttribute",
+  "gen:DateAttribute", "gen:UriAttribute", "gen:MeasureAttribute",
+  "gen:GenericAttributeSet",
+]
+children = ["gen:name", "gen:value", "gen:genericAttribute"]
+
+# ---------------------------------------------------------------------------
+# Values the converter has to supply because CityGML 2.0 does not record them.
+#
+# con::Height has value, status, lowReference and highReference, all [1..1].
+# lowReference and highReference are codes from Elevation_elevationReference.xml.
+# status is an enumeration and takes no codeSpace. The referenced code list is
+# not part of a PLATEAU 2.0 package, so the converter writes it into the
+# output's codelists/ (see ELEVATION_CODELIST) and the codeSpace below resolves.
+#
+# CityGML 2.0's measuredHeight is a measured height running from the lowest
+# ground point to the construction's highest point. Hence
+# status=measured, lowReference=6 (lowest ground point) and highReference=2
+# (highest point of the construction).
+# ---------------------------------------------------------------------------
+[height]
+status = "measured"
+low_reference = "6"
+high_reference = "2"
+reference_code_space = "../../codelists/Elevation_elevationReference.xml"
+
+# ---------------------------------------------------------------------------
+# LOD4.
+#
+# CityGML 3.0 has no LOD4, and splits a building into an exterior and an
+# interior model, each with LOD0-3. CityGML 2.0's LOD4 is the interior model,
+# and which interior LOD it becomes depends on how it was measured. A surveyed
+# interior is interior LOD2, one derived from BIM interior LOD3. The
+# measurement method is the feature's `attribute` code, and the tables below
+# say which codes mean which. They are the survey-method codes (000, 101-121)
+# and the BIM/CAD/drawing code (500) of DataQualityAttribute_geometrySrcDesc.
+# Codes that say nothing about the method (GIS data, ledgers, estimates,
+# 999 = not created) are deliberately unlisted and take `fallback`.
+#
+# The exterior shell at LOD4 (lod4Solid / lod4MultiSurface on the building
+# itself and its exterior surfaces) folds into the exterior LOD3 slot instead,
+# and only where that slot is empty, so a building that already carries LOD3
+# keeps it and the LOD4 shell is dropped and reported.
+#
+# `attribute` is written as it stands after the rename pass. geometrySrcDescLod4
+# has no i-UR 4.0 home, so the bulk bump leaves it in uro 4.0 -- hence the uro
+# prefix although its siblings become urc.
+#
+# A feature with no code, or a code in neither list, takes `fallback` (lod3,
+# lod2 or drop) for its interior content and is reported. `--lod4-fallback`
+# overrides it per run.
+# ---------------------------------------------------------------------------
+[lod4]
+attribute = "uro:geometrySrcDescLod4"
+lod2 = [
+  "000", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
+  "111", "112", "113", "114", "115", "116", "117", "118", "119", "120", "121",
+]
+lod3 = ["500"]
+fallback = "lod3"

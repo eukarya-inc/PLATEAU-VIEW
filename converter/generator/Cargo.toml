@@ -1,0 +1,11 @@
+[package]
+name = "plateau-converter-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+quick-xml.workspace = true

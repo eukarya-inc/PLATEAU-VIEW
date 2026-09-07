@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<gml:Dictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" xsi:schemaLocation="http://www.opengis.net/gml http://schemas.opengis.net/gml/3.1.1/profiles/SimpleDictionary/1.0.0/gmlSimpleDictionaryProfile.xsd" gml:id="cl_61bbc749-4f5b-4674-9f16-b903cc80d309">
+<gml:name>Timeseries_mimeType</gml:name>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Timeseries_mimeType_1">
+<gml:description>*.gml GMLData</gml:description>
+<gml:name>application/gml+xml</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Timeseries_mimeType_2">
+<gml:description>*.json JSONData</gml:description>
+<gml:name>application/json</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+<gml:dictionaryEntry>
+<gml:Definition gml:id="Timeseries_mimeType_3">
+<gml:description>*.xml XMLData</gml:description>
+<gml:name>application/xml</gml:name>
+</gml:Definition>
+</gml:dictionaryEntry>
+</gml:Dictionary>

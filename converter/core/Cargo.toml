@@ -1,0 +1,26 @@
+[package]
+name = "plateau-converter-core"
+description = "CityGML 2.0 -> 3.0 conversion for PLATEAU city models"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+quick-xml.workspace = true
+zip.workspace = true
+tempfile.workspace = true
+walkdir.workspace = true
+serde.workspace = true
+toml.workspace = true
+tracing.workspace = true
+indexmap.workspace = true
+encoding_rs.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+zip.workspace = true

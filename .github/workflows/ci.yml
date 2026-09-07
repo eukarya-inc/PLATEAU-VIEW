@@ -15,6 +15,7 @@ on:
           - geo
           - server
           - tile
+          - converter
           - tools
           - worker
           - docs
@@ -37,6 +38,7 @@ jobs:
       tools: ${{ steps.tools.outputs.any_changed }}
       worker: ${{ steps.worker.outputs.any_changed }}
       tile: ${{ steps.tile.outputs.any_changed }}
+      converter: ${{ steps.converter.outputs.any_changed }}
       cms-server: ${{ steps.cms-server.outputs.any_changed }}
       cms-worker: ${{ steps.cms-worker.outputs.any_changed }}
       cms-web: ${{ steps.cms-web.outputs.any_changed }}
@@ -105,6 +107,14 @@ jobs:
             .github/workflows/ci-tile.yml
             .github/workflows/build-tile.yml
             .github/workflows/deploy-tile-*.yml
+      - name: changed files for converter
+        id: converter
+        uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
+        with:
+          since_last_remote_commit: true
+          files: |
+            converter/**
+            .github/workflows/ci-converter.yml
       - name: changed files for docs
         id: docs
         uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47.0.5
@@ -250,6 +260,11 @@ jobs:
     if: ${{ needs.prepare.outputs.tile == 'true' || inputs.action_type == 'tile' }}
     uses: ./.github/workflows/ci-tile.yml
 
+  ci-converter:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.converter == 'true' || inputs.action_type == 'converter' }}
+    uses: ./.github/workflows/ci-converter.yml
+
   ci-docs:
     needs: prepare
     if: ${{ needs.prepare.outputs.docs == 'true' || inputs.action_type == 'docs' }}
@@ -290,6 +305,7 @@ jobs:
       - ci-tools
       - ci-worker
       - ci-tile
+      - ci-converter
       - ci-docs
       - ci-cms-server
       - ci-cms-worker

@@ -1,0 +1,28 @@
+name: ci-converter
+on:
+  workflow_call:
+jobs:
+  ci-converter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: converter
+      - name: Check formatting
+        working-directory: converter
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        working-directory: converter
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        working-directory: converter
+        run: cargo test --all-targets
