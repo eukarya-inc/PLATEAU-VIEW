@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use object_store::{
-    ObjectStore,
+    ObjectStore, ObjectStoreExt,
     path::{Path as ObjectPath, PathPart},
 };
 

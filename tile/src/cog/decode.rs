@@ -117,13 +117,13 @@ pub fn decode_elevation(
     let mut elevations = Vec::with_capacity(pixel_count);
 
     match (sample_format, bits_per_sample) {
-        (SampleFormat::IEEEFP, 32) => {
+        (SampleFormat::Float, 32) => {
             for chunk in bytes.chunks_exact(4) {
                 let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
                 elevations.push(value as f64);
             }
         }
-        (SampleFormat::IEEEFP, 64) => {
+        (SampleFormat::Float, 64) => {
             for chunk in bytes.chunks_exact(8) {
                 let value = f64::from_le_bytes([
                     chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
@@ -260,7 +260,7 @@ mod tests {
             200.0,
         ];
         let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let result = decode_elevation(&bytes, 4, 1, SampleFormat::IEEEFP, 32);
+        let result = decode_elevation(&bytes, 4, 1, SampleFormat::Float, 32);
         assert_eq!(result.len(), 4);
         assert_eq!(result[0], 100.0);
         assert!(result[1].is_nan());
@@ -272,7 +272,7 @@ mod tests {
     fn test_decode_elevation_rejects_infinity() {
         let values: [f32; 3] = [42.0, f32::INFINITY, f32::NEG_INFINITY];
         let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let result = decode_elevation(&bytes, 3, 1, SampleFormat::IEEEFP, 32);
+        let result = decode_elevation(&bytes, 3, 1, SampleFormat::Float, 32);
         assert_eq!(result[0], 42.0);
         assert!(result[1].is_nan());
         assert!(result[2].is_nan());

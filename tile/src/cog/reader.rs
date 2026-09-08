@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use async_tiff::{
     ImageFileDirectory, TIFF,
+    decoder::DecoderRegistry,
     metadata::{TiffMetadataReader, cache::ReadaheadMetadataCache},
     reader::ObjectReader,
     tags::SampleFormat,
@@ -17,7 +18,6 @@ use super::{
     error::CogError,
     interpolate::{bilinear_f64, bilinear_rgba},
     resample::{TileRange, resample_to_tile},
-    webp::decoder_registry,
 };
 use crate::config::NoDataConfig;
 
@@ -332,15 +332,22 @@ impl CogReader {
 
         // Fetch and decode tiles
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let decoder_registry = decoder_registry();
+        // Upstream's default registry covers uncompressed, Deflate, LZW, JPEG,
+        // ZSTD and — with the `webp` feature enabled in Cargo.toml — GDAL's
+        // private WebP compression tag (50001) used by the ortho COGs.
+        let decoder_registry = DecoderRegistry::default();
 
         for ty in tile_range.y_start..tile_range.y_end {
             for tx in tile_range.x_start..tile_range.x_end {
                 match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
-                        Ok(decoded_bytes) => {
+                        Ok(decoded) => {
+                            // `Array` is a typed view; `as_ref` hands back the
+                            // same native-endian bytes the pre-0.3 `decode`
+                            // returned directly.
+                            let decoded_bytes: &[u8] = decoded.data().as_ref();
                             let mut rgba = decode_rgba(
-                                &decoded_bytes,
+                                decoded_bytes,
                                 cog_tile_w,
                                 cog_tile_h,
                                 samples_per_pixel,
@@ -471,15 +478,22 @@ impl CogReader {
         let mut pixel_buffer: Vec<f64> = vec![f64::NAN; buffer_width * buffer_height];
 
         let reader = ObjectReader::new(self.store.clone(), self.path.clone());
-        let decoder_registry = decoder_registry();
+        // Upstream's default registry covers uncompressed, Deflate, LZW, JPEG,
+        // ZSTD and — with the `webp` feature enabled in Cargo.toml — GDAL's
+        // private WebP compression tag (50001) used by the ortho COGs.
+        let decoder_registry = DecoderRegistry::default();
 
         for ty in tile_range.y_start..tile_range.y_end {
             for tx in tile_range.x_start..tile_range.x_end {
                 match ifd.fetch_tile(tx, ty, &reader).await {
                     Ok(tile) => match tile.decode(&decoder_registry) {
-                        Ok(decoded_bytes) => {
+                        Ok(decoded) => {
+                            // `Array` is a typed view; `as_ref` hands back the
+                            // same native-endian bytes the pre-0.3 `decode`
+                            // returned directly.
+                            let decoded_bytes: &[u8] = decoded.data().as_ref();
                             let mut elevations = decode_elevation(
-                                &decoded_bytes,
+                                decoded_bytes,
                                 cog_tile_w,
                                 cog_tile_h,
                                 sample_format,
@@ -601,14 +615,28 @@ fn chunk_extent(
 
 /// Row stride, in pixels, of a decoded chunk buffer.
 ///
-/// `Tile::decode` applies the TIFF predictor, and for a **partial-width** edge
-/// chunk the horizontal-differencing unpredictors return only the chunk's real
-/// extent (`chunk_w × chunk_h`) — the padding columns are stripped. With
-/// `Predictor::None` the full padded `tile_w × tile_h` block comes back
-/// instead. Rather than assuming either behaviour (it differs per predictor,
-/// and could change with the library), decide from the decoded byte length: if
-/// there are enough bytes for the padded block, the padded stride applies,
-/// otherwise the buffer is cropped and the stride is `chunk_w`.
+/// `Tile::decode` applies the TIFF predictor. **As of async-tiff 0.3.0 every
+/// predictor path returns the full padded `tile_w × tile_h` block**, and
+/// cropping to the chunk's real extent is explicitly the caller's job (that is
+/// what [`chunk_extent`] + [`blit_chunk`] do here). So on 0.3.0 this function
+/// always answers `tile_w`.
+///
+/// It is kept deliberately, not as dead weight:
+///
+/// - Before 0.3.0 the floating-point unpredictor cropped partial-width edge
+///   chunks to `chunk_w × chunk_h` while `Predictor::None` returned the padded
+///   block, so the two strides genuinely differed per predictor.
+/// - Upstream has already flipped this behaviour once (0.2.0 redefined
+///   `Tile::width/height` from the cropped extent to the nominal tile size,
+///   0.3.0 rewrote `predictor.rs` around the padded block). Assuming the
+///   padded stride unconditionally would mean a future flip silently
+///   scrambles rows in edge chunks — which, on a DEM, is corrupt elevation
+///   that renders as plausible terrain rather than an error.
+/// - The cost is two branches per chunk.
+///
+/// So: decide from the decoded byte length. If there are enough bytes for the
+/// padded block, the padded stride applies; otherwise the buffer is cropped and
+/// the stride is `chunk_w`.
 fn decoded_chunk_stride(
     decoded_len: usize,
     bytes_per_pixel: usize,
@@ -674,6 +702,27 @@ fn apply_nodata_rgba(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod decoder_tests {
+    use super::*;
+    use async_tiff::tags::Compression;
+
+    /// The ortho COGs are `-co COMPRESS=WEBP`, i.e. GDAL's private TIFF
+    /// compression tag 50001. Upstream only registers a decoder for it when the
+    /// `webp` cargo feature is on, and a missing decoder is not a compile error
+    /// — every ortho tile would just start failing to decode at runtime. Guard
+    /// the feature flag here so dropping it fails the build instead.
+    #[test]
+    fn default_registry_decodes_webp() {
+        assert!(
+            DecoderRegistry::default()
+                .as_ref()
+                .contains_key(&Compression::WebP),
+            "async-tiff `webp` feature must stay enabled in Cargo.toml"
+        );
     }
 }
 

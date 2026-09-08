@@ -16,9 +16,14 @@ http = "1"
 hyper-util = { version = "0.1", features = ["server", "server-auto", "tokio"] }
 
 # COG reading (async-cog style)
-# Using git commit for read_next_ifd support (faster metadata loading)
-async-tiff = { git = "https://github.com/developmentseed/async-tiff", rev = "dd8f2d0f" }
-object_store = { version = "0.12", default-features = false, features = ["http", "gcp", "aws", "fs"] }
+# `webp` pulls upstream's libwebp-backed decoder for GDAL's private WebP
+# compression tag (50001) — see src/cog/reader.rs. `default-features = false`
+# drops async-tiff's optional `reqwest` backend: every reader here is opened
+# over an `object_store`, so that backend would only add an HTTP client we
+# never call. It costs no extra reqwest major either way — async-tiff's is
+# 0.13, which pmtiles already pulls in.
+async-tiff = { version = "0.3", default-features = false, features = ["object_store", "webp"] }
+object_store = { version = "0.13", default-features = false, features = ["http", "gcp", "aws", "fs"] }
 bytes = "1"
 
 # Image processing
@@ -28,15 +33,13 @@ image = { version = "0.25", default-features = false, features = ["png", "webp",
 flate2 = "1"
 japan-geoid = { version = "0.6", features = ["gsigeo2011", "jpgeo2024", "jpgeo2024_hrefconv2024"] }
 terrain-codec = "0.3.0"
+# pmtiles is pinned exactly because 0.23.1 moved to object_store ^0.14, while
+# async-tiff 0.3 and the COG/cache code here are on 0.13 — a caret range would
+# silently pull 0.23.1 and split the tree into two incompatible object_store
+# majors again. To take a newer pmtiles, move `object_store` above in lockstep
+# and port src/cog/reader.rs, src/terrain/pmtiles.rs and src/tile/pmtiles.rs.
 pmtiles = { version = "=0.23.0", default-features = false, features = ["http-async", "object-store", "reqwest-rustls"] }
 rstar = "0.12"
-# pmtiles needs object_store v0.13; the existing /tile/src/cog/* still uses
-# v0.12. We expose v0.13 under a rename so both coexist in the build.
-# pmtiles is pinned exactly because 0.23.1 moved to object_store ^0.14, which
-# no longer matches the rename below — a caret range silently picks it up and
-# breaks the build. To take a newer pmtiles, bump the rename in lockstep and
-# port src/terrain/pmtiles.rs + src/tile/pmtiles.rs to the new API.
-object_store_pmtiles = { package = "object_store", version = "0.13", default-features = false, features = ["http", "gcp", "aws", "fs"] }
 
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }

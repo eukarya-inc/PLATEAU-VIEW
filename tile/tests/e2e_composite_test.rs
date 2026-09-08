@@ -2,7 +2,7 @@
 //!
 //! These tests require COG fixture files. Run `fixtures/create_test_cog.sh` to generate them.
 //!
-//! Note: COG tests via HTTP are currently disabled because object_store 0.12 has stricter
+//! Note: COG tests via HTTP are currently disabled because object_store has stricter
 //! Range request support detection that our mock server doesn't fully satisfy.
 
 mod common;
