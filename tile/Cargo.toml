@@ -18,9 +18,10 @@ hyper-util = { version = "0.1", features = ["server", "server-auto", "tokio"] }
 # COG reading (async-cog style)
 # `webp` pulls upstream's libwebp-backed decoder for GDAL's private WebP
 # compression tag (50001) — see src/cog/reader.rs. `default-features = false`
-# drops async-tiff's optional `reqwest` backend: we only ever hand it an
-# `object_store`, and the default would drag a second reqwest major into the
-# tree next to the 0.12 this crate uses directly.
+# drops async-tiff's optional `reqwest` backend: every reader here is opened
+# over an `object_store`, so that backend would only add an HTTP client we
+# never call. It costs no extra reqwest major either way — async-tiff's is
+# 0.13, which pmtiles already pulls in.
 async-tiff = { version = "0.3", default-features = false, features = ["object_store", "webp"] }
 object_store = { version = "0.13", default-features = false, features = ["http", "gcp", "aws", "fs"] }
 bytes = "1"
