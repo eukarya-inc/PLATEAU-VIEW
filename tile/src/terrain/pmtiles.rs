@@ -1,8 +1,7 @@
 //! PMTiles DEM source.
 //!
 //! Reads a PMTiles v3 archive and exposes its tiles as a [`DemProvider`].
-//! Backed by the `object_store` crate (v0.13, see Cargo.toml note about
-//! coexistence with the v0.12 used by `crate::cog`), so the URL can point at:
+//! Backed by the `object_store` crate, so the URL can point at:
 //!
 //! - `https://...` — any HTTPS host (R2 public, GCS public, custom CDN, …)
 //! - `gs://bucket/key` — Google Cloud Storage (uses ADC /
@@ -20,13 +19,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use image::GenericImageView;
-use object_store_pmtiles::aws::AmazonS3Builder;
-use object_store_pmtiles::client::ClientConfigKey;
-use object_store_pmtiles::gcp::GoogleCloudStorageBuilder;
-use object_store_pmtiles::http::HttpBuilder;
-use object_store_pmtiles::local::LocalFileSystem;
-use object_store_pmtiles::path::Path as ObjectPath;
-use object_store_pmtiles::{GetOptions, ObjectStore};
+use object_store::aws::AmazonS3Builder;
+use object_store::client::ClientConfigKey;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::http::HttpBuilder;
+use object_store::local::LocalFileSystem;
+use object_store::path::Path as ObjectPath;
+use object_store::{GetOptions, ObjectStore};
 use pmtiles::{AsyncPmTilesReader, ObjectStoreBackend, TileCoord};
 use serde::Deserialize;
 use tokio::sync::OnceCell;
@@ -222,12 +221,10 @@ pub fn build_object_store_for(
 
 /// Build the object-store key for a PMTiles URL.
 ///
-/// Same rule as [`crate::object_url::object_path_from_url`], but this module is
-/// built on `object_store` v0.13 (`object_store_pmtiles`), whose `Path` is a
-/// distinct type from the v0.12 `Path` the shared helper returns, so the one
-/// call cannot be shared across the version boundary.
+/// Same rule as [`crate::object_url::object_path_from_url`]; kept as a thin
+/// wrapper only to map the error into [`DemError`].
 fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, DemError> {
-    ObjectPath::from_url_path(parsed.path())
+    crate::object_url::object_path_from_url(parsed)
         .map_err(|e| DemError::Decode(format!("invalid pmtiles URL path: {e}")))
 }
 

@@ -95,7 +95,7 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 
 ### Supported COG tile compressions
 
-COG tiles are decoded via `async_tiff`, whose default decoders cover **uncompressed, Deflate, LZW, JPEG, and ZSTD**. On top of those the server also registers a **WebP** decoder (`src/cog/webp.rs`), so ortho-imagery COGs built with `-co COMPRESS=WEBP` (GDAL's private TIFF compression tag `50001`) decode correctly. Recommended choices:
+COG tiles are decoded via `async_tiff`, whose default decoders cover **uncompressed, Deflate, LZW, JPEG, and ZSTD**, plus **WebP** — GDAL's private TIFF compression tag `50001` — via the crate's `webp` feature, which this crate enables in `Cargo.toml`. So ortho-imagery COGs built with `-co COMPRESS=WEBP` decode correctly. (Up to async-tiff 0.2 the WebP decoder was a local one in `src/cog/webp.rs`; 0.3.0 ships an equivalent upstream, so the local copy is gone.) Recommended choices:
 
 - **DEM (float32 elevation):** `ZSTD` (or `DEFLATE`) with `PREDICTOR=3` — lossless, see below.
 - **Ortho (RGB imagery):** `WEBP` or `JPEG` — both are decodable and give a good size/quality trade-off for aerial photography.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use object_store::{
-    Attribute, Attributes, ObjectStore, PutOptions,
+    Attribute, Attributes, ObjectStore, ObjectStoreExt, PutOptions,
     path::{Path as ObjectPath, PathPart},
 };
 use thiserror::Error;

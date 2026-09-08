@@ -336,7 +336,7 @@ fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, DemError> {
         .map_err(|e| DemError::Decode(format!("invalid cog URL path: {e}")))
 }
 
-/// Build an object_store v0.12 backend from a URL. Mirrors the logic in
+/// Build an object_store backend from a URL. Mirrors the logic in
 /// `tile::cog::CogTileSource::create_object_store` but is local to keep the
 /// terrain module self-contained.
 fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), DemError> {

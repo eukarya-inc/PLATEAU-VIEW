@@ -133,20 +133,22 @@ dependencies = [
 
 [[package]]
 name = "async-tiff"
-version = "0.1.0"
-source = "git+https://github.com/developmentseed/async-tiff?rev=dd8f2d0f#dd8f2d0f9068846c941cc331132db3ddd74df372"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05522e42858395d38271023b42c1cc80307340cca9aa1348fda35d154a423874"
 dependencies = [
  "async-trait",
+ "bytemuck",
  "byteorder",
  "bytes",
  "flate2",
  "futures",
  "jpeg-decoder",
  "num_enum",
- "object_store 0.12.5",
- "reqwest 0.12.28",
- "thiserror 1.0.69",
+ "object_store",
+ "thiserror 2.0.20",
  "tokio",
+ "webp",
  "weezl",
  "zstd",
 ]
@@ -1549,6 +1551,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libwebp-sys"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54cd30df7c7165ce74a456e4ca9732c603e8dc5e60784558c1c6dc047f876733"
+dependencies = [
+ "cc",
+ "glob",
+]
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1897,43 +1909,6 @@ dependencies = [
 
 [[package]]
 name = "object_store"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbfbfff40aeccab00ec8a910b57ca8ecf4319b335c542f2edcd19dd25a1e2a00"
-dependencies = [
- "async-trait",
- "base64",
- "bytes",
- "chrono",
- "form_urlencoded",
- "futures",
- "http",
- "http-body-util",
- "humantime",
- "hyper",
- "itertools",
- "md-5",
- "parking_lot",
- "percent-encoding",
- "quick-xml 0.38.4",
- "rand 0.9.5",
- "reqwest 0.12.28",
- "ring",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "url",
- "walkdir",
- "wasm-bindgen-futures",
- "web-time",
-]
-
-[[package]]
-name = "object_store"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "622acbc9100d3c10e2ee15804b0caa40e55c933d5aa53814cd520805b7958a49"
@@ -1954,7 +1929,7 @@ dependencies = [
  "md-5",
  "parking_lot",
  "percent-encoding",
- "quick-xml 0.39.4",
+ "quick-xml",
  "rand 0.10.2",
  "reqwest 0.12.28",
  "ring",
@@ -2134,7 +2109,7 @@ dependencies = [
  "async-compression",
  "bytes",
  "fast_hilbert",
- "object_store 0.13.2",
+ "object_store",
  "reqwest 0.13.4",
  "thiserror 2.0.20",
  "tokio",
@@ -2284,16 +2259,6 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
-
-[[package]]
-name = "quick-xml"
-version = "0.38.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
-dependencies = [
- "memchr",
- "serde",
-]
 
 [[package]]
 name = "quick-xml"
@@ -2756,15 +2721,6 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
-dependencies = [
- "rustls-pki-types",
 ]
 
 [[package]]
@@ -3243,8 +3199,7 @@ dependencies = [
  "japan-geoid",
  "maplibre_native",
  "moka",
- "object_store 0.12.5",
- "object_store 0.13.2",
+ "object_store",
  "opentelemetry",
  "opentelemetry_sdk",
  "pmtiles",
@@ -3857,6 +3812,16 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webp"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c071456adef4aca59bf6a583c46b90ff5eb0b4f758fc347cea81290288f37ce1"
+dependencies = [
+ "image",
+ "libwebp-sys",
 ]
 
 [[package]]
