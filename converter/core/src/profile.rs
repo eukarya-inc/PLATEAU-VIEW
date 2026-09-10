@@ -59,6 +59,9 @@ pub struct Profile {
     /// The child a data quality attribute must carry. See [`QualityPolicy`].
     #[serde(default)]
     pub quality: QualityPolicy,
+    /// The values the transportation rewrite supplies. See [`TranPolicy`].
+    #[serde(default)]
+    pub tran: TranPolicy,
 }
 
 impl Profile {
@@ -405,6 +408,10 @@ pub struct CodelistsPolicy {
     /// Codes the published lists no longer define, per file. The values are
     /// kept and reported rather than mapped.
     pub kept_codes: IndexMap<String, Vec<String>>,
+    /// [`retarget`](Self::retarget) rows that apply only under one feature
+    /// type, keyed by the type's `prefix:local` name. Checked before the
+    /// global rows.
+    pub retarget_by_type: IndexMap<String, IndexMap<String, String>>,
 }
 
 impl CodelistsPolicy {
@@ -455,6 +462,36 @@ pub struct QualityRules {
     pub after: Vec<Name>,
 }
 
+/// The values the transportation rewrite has to supply, since CityGML 2.0
+/// records none of them.
+///
+/// `full_width_function` is the `tran:function` code written on the surface
+/// minted for a feature's own full-width geometry, per feature type, from the
+/// list `function_code_space` names. A traffic space is `lane` when its area's
+/// function is `lane_function`, or when the feature's `lodType` is one of the
+/// codes `lane_lod_types` lists for the code list the value cites.
+/// `lod_type_map` rewrites `lodType` values per code list, and a value with
+/// no entry is dropped.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct TranPolicy {
+    pub function_code_space: Option<String>,
+    pub full_width_function: IndexMap<String, String>,
+    pub lane_function: Option<String>,
+    pub lane_lod_types: IndexMap<String, Vec<String>>,
+    pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+}
+
+/// [`TranPolicy`] with its feature types resolved.
+#[derive(Debug, Clone, Default)]
+pub struct TranRules {
+    pub function_code_space: Option<String>,
+    pub full_width_function: HashMap<Name, String>,
+    pub lane_function: Option<String>,
+    pub lane_lod_types: IndexMap<String, Vec<String>>,
+    pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+}
+
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
 /// apply.
 #[derive(Debug, Clone)]
@@ -474,6 +511,8 @@ pub struct Rules {
     codelists: CodelistsPolicy,
     ade_hooks: HashMap<Name, Name>,
     quality: QualityRules,
+    retarget_by_type: HashMap<Name, IndexMap<String, String>>,
+    tran: TranRules,
 }
 
 impl Rules {
@@ -562,6 +601,23 @@ impl Rules {
             ade_hooks.insert(parse_name(class, output)?, parse_name(hook, output)?);
         }
 
+        let mut retarget_by_type = HashMap::new();
+        for (ty, rows) in &codelists.retarget_by_type {
+            retarget_by_type.insert(parse_name(ty, output)?, rows.clone());
+        }
+
+        let mut full_width_function = HashMap::new();
+        for (ty, code) in &profile.tran.full_width_function {
+            full_width_function.insert(parse_name(ty, output)?, code.clone());
+        }
+        let tran = TranRules {
+            function_code_space: profile.tran.function_code_space.clone(),
+            full_width_function,
+            lane_function: profile.tran.lane_function.clone(),
+            lane_lod_types: profile.tran.lane_lod_types.clone(),
+            lod_type_map: profile.tran.lod_type_map.clone(),
+        };
+
         let lod4 = Lod4Rules {
             attribute: policy
                 .attribute
@@ -627,6 +683,8 @@ impl Rules {
             codelists,
             ade_hooks,
             quality,
+            retarget_by_type,
+            tran,
         })
     }
 
@@ -700,6 +758,21 @@ impl Rules {
     /// The child a data quality attribute must carry. See [`QualityPolicy`].
     pub fn quality(&self) -> &QualityRules {
         &self.quality
+    }
+
+    /// The published name for code list `file` when cited under `host`, the
+    /// nearest enclosing feature type. A row for the type wins over a global
+    /// row.
+    pub fn retarget(&self, host: Option<&Name>, file: &str) -> Option<&str> {
+        host.and_then(|h| self.retarget_by_type.get(h))
+            .and_then(|rows| rows.get(file))
+            .or_else(|| self.codelists.retarget.get(file))
+            .map(String::as_str)
+    }
+
+    /// The values the transportation rewrite supplies. See [`TranPolicy`].
+    pub fn tran(&self) -> &TranRules {
+        &self.tran
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.

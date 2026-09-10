@@ -78,20 +78,22 @@ The single most common mistake here is putting a mapping in the wrong layer.
   (generic attributes, lifespan dates). `measuredHeight` → `con:height` belongs
   in `bldg.rs` because it invents a `con:Height` object, while
   `bldg:lod1Solid` → `core:lod1Solid` is a table row.
-* **A new thematic module** (`tran`, `frn`, …) → a sibling of `bldg.rs` plus its
-  own profile rules. Do not grow `bldg.rs` sideways.
+* **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
+  own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
+  the transportation module. Do not grow `bldg.rs` sideways.
 
-`common.rs`, `lod4.rs`, `bldg.rs` and `iur.rs` run **after** the rename pass, so
-they speak CityGML **3.0** and i-UR **4.0** names only. Writing a 2.0 namespace
-constant in there is a bug. The order is
-`common` -> `xal` -> `app` -> `lod4` -> `bldg` -> `iur`, and each step is placed
-so that a wrapper it introduces is never mistaken for something the next step
-handles. `common`'s `core:genericAttribute` is not a building property, `lod4`
-has retagged every `lod4*` before `bldg` looks at geometry so `bldg` can never
-emit an LOD4 slot, and `iur`'s `bldg:adeOfAbstractBuilding` would be a building
-property if it ran before `bldg`. `xal` and `app` touch only address and
-appearance content respectively, which no later pass reads, so their slots are
-free.
+`common.rs`, `lod4.rs`, `bldg.rs`, `tran.rs` and `iur.rs` run **after** the
+rename pass, so they speak CityGML **3.0** and i-UR **4.0** names only. Writing
+a 2.0 namespace constant in there is a bug. The order is
+`common` -> `xal` -> `app` -> `lod4` -> `bldg` -> `tran` -> `iur`, and each step
+is placed so that a wrapper it introduces is never mistaken for something the
+next step handles. `common`'s `core:genericAttribute` is not a building
+property, `lod4` has retagged every `lod4*` before `bldg` looks at geometry so
+`bldg` can never emit an LOD4 slot, `tran` has renumbered the LOD-indexed
+quality descriptors before `iur` supplies the one i-UR requires, and `iur`'s
+`bldg:adeOfAbstractBuilding` would be a building property if it ran before
+`bldg`. `xal` and `app` touch only address and appearance content
+respectively, which no later pass reads, so their slots are free.
 
 ## Invariants worth not breaking
 

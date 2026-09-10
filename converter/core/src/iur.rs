@@ -92,15 +92,26 @@ impl IurRewrite {
     }
 
     /// Rewrites `el` and its descendants in place.
+    ///
+    /// An ADE wrapper sits directly under a CityGML host, so the hook rewrite
+    /// is attempted on the children of a non-i-UR element only. A property
+    /// inside an i-UR class is that class's own and holds a class of its own
+    /// by design.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
         self.required_quality_child(el, warnings);
+        let host = !self.is_iur(&el.name);
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
                 Node::Element(child) => {
                     let child = self.year_to_date(child, warnings);
-                    out.push(Node::Element(self.rewrite(child, warnings)));
+                    let child = if host {
+                        self.rewrite(child, warnings)
+                    } else {
+                        child
+                    };
+                    out.push(Node::Element(child));
                 }
                 other => out.push(other),
             }
@@ -339,6 +350,40 @@ mod tests {
         assert!(building.child(URO, "buildingIDAttribute").is_some());
         assert!(
             warnings.iter().any(|(w, _)| w.contains("holds 2 elements")),
+            "{warnings:?}"
+        );
+    }
+
+    /// A property inside an i-UR class holds that class's own nested class
+    /// and is not an ADE wrapper, so it is neither rehomed nor reported.
+    #[test]
+    fn a_nested_i_ur_property_is_not_a_hook() {
+        const URC: &str = "https://www.geospatial.jp/iur/urc/4.0";
+        let mut nested = Element::new(Name::qualified(URC, "publicSurveyDataQualityAttribute"));
+        nested.push(Element::new(Name::qualified(
+            URC,
+            "PublicSurveyDataQualityAttribute",
+        )));
+        let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
+        class.push(nested);
+        let mut wrapper = Element::new(Name::qualified(URO, "bldgDataQualityAttribute"));
+        wrapper.push(class);
+        let (building, warnings) = in_building(wrapper);
+
+        let hook = building
+            .child(ns::CITYGML_3, "adeOfAbstractCityObject")
+            .expect("the outer property is the hook");
+        let class = hook.child(URC, "ExteriorDataQualityAttribute").unwrap();
+        assert!(
+            class
+                .child(URC, "publicSurveyDataQualityAttribute")
+                .is_some(),
+            "the nested property stays where it is"
+        );
+        assert!(
+            !warnings
+                .iter()
+                .any(|(w, _)| w.contains("could not be determined")),
             "{warnings:?}"
         );
     }

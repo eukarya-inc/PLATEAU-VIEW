@@ -61,9 +61,11 @@ local = [
 ]
 
 # Lists whose values the conversion itself rewrites into the published codes
-# (the building lodType pass adds the exterior/interior suffixes). The
-# published file always wins, or the rewritten values would not resolve.
-superseded = ["Building_lodType.xml"]
+# (the building lodType pass adds the exterior/interior suffixes, and the
+# transportation pass maps the road and railway codes through [tran]
+# lod_type_map). The published file always wins, or the rewritten values would
+# not resolve.
+superseded = ["Building_lodType.xml", "Road_lodType.xml", "Railway_lodType.xml"]
 
 # Files the published 4.0 set carries under a new name, with unchanged codes.
 # Every codeSpace naming the old file is rewritten.
@@ -79,6 +81,17 @@ superseded = ["Building_lodType.xml"]
 "Building_fireproofStructureType.xml" = "BuildingDetailAttribute_fireproofStructureType.xml"
 "Common_sex.xml" = "Common_Sex.xml"
 "LengthAttribute_mesureType.xml" = "LengthAttribute_measureType.xml"
+
+# Retargets that hold under one feature type only. CityGML 2.0 declared
+# `class` once, on TransportationComplex, and 3.0 declares it on each
+# transportation type, so the 4.0 set publishes one class list per type. The
+# shared list is still published and stays on the types whose observed codes
+# the per-type lists do not carry (Track, Square), and on Waterway, which has
+# no per-type list.
+[codelists.retarget_by_type."tran:Road"]
+"TransportationComplex_class.xml" = "Road_class.xml"
+[codelists.retarget_by_type."tran:Railway"]
+"TransportationComplex_class.xml" = "Railway_class.xml"
 
 # Codes the published lists no longer define. The values are kept and
 # reported. 898 means "unknown source", which no surviving code expresses.
@@ -129,3 +142,47 @@ child = "urc:geometrySrcDescLod1"
 value = "999"
 code_space = "../../codelists/DataQualityAttribute_geometrySrcDesc.xml"
 after = ["urc:geometrySrcDescLod0"]
+
+# ---------------------------------------------------------------------------
+# What the transportation rewrite (core/src/tran.rs) supplies.
+#
+# CityGML 3.0 gives a transportation object no geometry of its own, so the
+# object's full-width surface goes on a minted TrafficArea, whose function is
+# the whole-object code the 4.0 TrafficArea_function list defines per type.
+#
+# A TrafficSpace must say whether it is a whole way or one lane. It is a lane
+# when the area it bounds is a lane (function 1010), or when the object's
+# lodType, from Road_lodType, is a lane-level code. Auxiliary spaces and the
+# minted full-width space are always a way.
+#
+# lodType is rewritten per code list. The 2.0-era road codes 3.0 to 3.4 became
+# 2.0 to 2.2 by the height rule each stands for, the lane and planting
+# subdivisions having moved to granularity and function. The railway codes
+# 3.0 to 3.2 became 2.0 to 2.2 the same way. A code with no entry (8 = 不明)
+# is dropped.
+# ---------------------------------------------------------------------------
+[tran]
+function_code_space = "../../codelists/TrafficArea_function.xml"
+lane_function = "1010"
+
+[tran.full_width_function]
+"tran:Road" = "1140"
+"tran:Square" = "1140"
+"tran:Track" = "2040"
+"tran:Railway" = "8200"
+"tran:Waterway" = "9000"
+
+[tran.lane_lod_types]
+"Road_lodType.xml" = ["3.2", "3.3", "3.4"]
+
+[tran.lod_type_map."Road_lodType.xml"]
+"3.0" = "2.0"
+"3.1" = "2.0"
+"3.2" = "2.1"
+"3.3" = "2.2"
+"3.4" = "2.2"
+
+[tran.lod_type_map."Railway_lodType.xml"]
+"3.0" = "2.0"
+"3.1" = "2.1"
+"3.2" = "2.2"
