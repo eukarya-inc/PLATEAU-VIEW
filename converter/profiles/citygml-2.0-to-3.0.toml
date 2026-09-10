@@ -410,6 +410,132 @@ types = [
 children = ["gen:name", "gen:value", "gen:genericAttribute"]
 
 # ---------------------------------------------------------------------------
+# Transportation module child order.
+#
+# Three shapes cover the whole module, because every transportation type
+# derives from one of three bases: tran::AbstractTransportationSpace for the
+# top-level objects and their groupings, core::AbstractUnoccupiedSpace for the
+# spaces held inside them, and core::AbstractThematicSurface for the surfaces
+# that bound those spaces.
+#
+# Each list is the flattened xs:sequence of the 3.0 type, read off the OGC
+# CityGML 3.0 XSDs by walking the xs:extension chain and concatenating, the
+# same way the building lists above were derived. Where a group covers several
+# types, the tail is their union: the properties that differ are each declared
+# by one type only, so no document can carry two of them and their relative
+# order never arises.
+# ---------------------------------------------------------------------------
+
+# tran::AbstractTransportationSpace subtypes. The five top-level objects, plus
+# Section and Intersection, which group spaces and carry no geometry of their
+# own.
+[[order_group]]
+types = [
+  "tran:Road", "tran:Track", "tran:Square", "tran:Railway", "tran:Waterway",
+  "tran:Section", "tran:Intersection",
+]
+children = [
+  # gml::AbstractGML, then gml::AbstractFeature
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  "core:adeOfAbstractFeature",
+  # core::AbstractFeatureWithLifespan
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  "core:adeOfAbstractFeatureWithLifespan",
+  # core::AbstractCityObject
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
+  # core::AbstractSpace
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
+  "core:adeOfAbstractSpace",
+  # core::AbstractPhysicalSpace, then core::AbstractUnoccupiedSpace
+  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
+  "core:adeOfAbstractPhysicalSpace", "core:adeOfAbstractUnoccupiedSpace",
+  # tran::AbstractTransportationSpace
+  "tran:trafficDirection", "tran:occupancy",
+  "tran:trafficSpace", "tran:auxiliaryTrafficSpace",
+  "tran:hole", "tran:marking",
+  "tran:adeOfAbstractTransportationSpace",
+  # the subtypes' own properties
+  "tran:class", "tran:function", "tran:usage",
+  "tran:section", "tran:intersection",
+  "tran:adeOfRoad", "tran:adeOfTrack", "tran:adeOfSquare",
+  "tran:adeOfRailway", "tran:adeOfWaterway",
+  "tran:adeOfSection", "tran:adeOfIntersection",
+]
+
+# The spaces held inside a transportation object. All four are
+# core::AbstractUnoccupiedSpace subtypes, so they share everything down to
+# adeOfAbstractUnoccupiedSpace and differ only in the tail.
+[[order_group]]
+types = [
+  "tran:TrafficSpace", "tran:AuxiliaryTrafficSpace",
+  "tran:ClearanceSpace", "tran:Hole",
+]
+children = [
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  "core:adeOfAbstractFeature",
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  "core:adeOfAbstractFeatureWithLifespan",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
+  "core:spaceType", "core:volume", "core:area", "core:boundary",
+  "core:lod0Point", "core:lod0MultiSurface", "core:lod0MultiCurve",
+  "core:lod1Solid",
+  "core:lod2Solid", "core:lod2MultiSurface", "core:lod2MultiCurve",
+  "core:lod3Solid", "core:lod3MultiSurface", "core:lod3MultiCurve",
+  "core:adeOfAbstractSpace",
+  "core:lod1TerrainIntersectionCurve", "core:lod2TerrainIntersectionCurve",
+  "core:lod3TerrainIntersectionCurve", "core:pointCloud",
+  "core:adeOfAbstractPhysicalSpace", "core:adeOfAbstractUnoccupiedSpace",
+  # tran::TrafficSpace, and the shorter tails of its siblings
+  "tran:class", "tran:function", "tran:usage", "tran:granularity",
+  "tran:trafficDirection", "tran:occupancy",
+  "tran:predecessor", "tran:successor", "tran:clearanceSpace",
+  "tran:adeOfTrafficSpace", "tran:adeOfAuxiliaryTrafficSpace",
+  "tran:adeOfClearanceSpace", "tran:adeOfHole",
+]
+
+# The surfaces that bound those spaces. core::AbstractThematicSurface subtypes,
+# so the LOD0-3 multi-surfaces come from the same place a building's boundary
+# surfaces get theirs.
+[[order_group]]
+types = [
+  "tran:TrafficArea", "tran:AuxiliaryTrafficArea",
+  "tran:HoleSurface", "tran:Marking",
+]
+children = [
+  "gml:description", "gml:descriptionReference", "gml:identifier", "gml:name",
+  "gml:boundedBy", "gml:location",
+  "core:adeOfAbstractFeature",
+  "core:creationDate", "core:terminationDate", "core:validFrom", "core:validTo",
+  "core:adeOfAbstractFeatureWithLifespan",
+  "core:externalReference", "core:generalizesTo",
+  "core:relativeToTerrain", "core:relativeToWater", "core:relatedTo",
+  "core:appearance", "core:genericAttribute", "core:dynamizer",
+  "core:adeOfAbstractCityObject",
+  # core::AbstractSpaceBoundary, then core::AbstractThematicSurface
+  "core:adeOfAbstractSpaceBoundary",
+  "core:area",
+  "core:lod0MultiCurve", "core:lod0MultiSurface", "core:lod1MultiSurface",
+  "core:lod2MultiSurface", "core:lod3MultiSurface", "core:pointCloud",
+  "core:adeOfAbstractThematicSurface",
+  "tran:class", "tran:function", "tran:usage", "tran:surfaceMaterial",
+  "tran:adeOfTrafficArea", "tran:adeOfAuxiliaryTrafficArea",
+  "tran:adeOfHoleSurface", "tran:adeOfMarking",
+]
+
+# ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.
 #
 # con::Height has value, status, lowReference and highReference, all [1..1].

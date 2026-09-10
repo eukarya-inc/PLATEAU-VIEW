@@ -106,6 +106,14 @@ to = "urc:areaType"
 from = "uro:codeValue"
 to = "urc:codeValue"
 
+# The 航路 feature. i-UR 3.x declares uro:Waterway in tran:TransportationComplex's
+# substitution group, so it is a transportation complex, and CityGML 3.0 has a
+# transportation type of that name -- the class left i-UR for the standard.
+# urf:Waterway is a different class, an urf:UrbanFacility, and is not it.
+[[element]]
+from = "uro:Waterway"
+to = "tran:Waterway"
+
 # BEGIN GENERATED -- i-UR rules
 #
 # Derived from the schemas, not written by hand. Regenerate with:
@@ -166,9 +174,6 @@ to = "urc:RiverFloodingRiskAttribute"
 [[element]]
 from = "uro:TsunamiRiskAttribute"
 to = "urc:TsunamiRiskAttribute"
-[[element]]
-from = "uro:Waterway"
-to = "urf:Waterway"
 [[element]]
 from = "uro:annotationType"
 to = "urc:annotationType"
@@ -340,8 +345,8 @@ to = "urc:visibility"
 
 # Where an i-UR class attaches in CityGML 3.0. 2.0 used a property named by
 # the extension (uro:buildingIDAttribute). 3.0 uses one general hook per host
-# class, so the wrapper is chosen by the class inside it rather than by its own
-# name.
+# class, so the wrapper is chosen by the class inside it rather than by its
+# own name.
 [ade_hooks]
 "urc:DataQualityAttribute" = "core:adeOfAbstractCityObject"
 "urc:DisasterRiskAttribute" = "core:adeOfAbstractCityObject"
@@ -653,7 +658,6 @@ to = "urc:visibility"
 #     target
 #   urf:lod0MultiCurve: no single 4.0 module is both a match and consistent with the class holding it
 #   urf:lod1MultiSurface: no single 4.0 module is both a match and consistent with the class holding it
-#   uro:codeValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:dateValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:doubleValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:intValue: no single 4.0 module is both a match and consistent with the class holding it
@@ -666,4 +670,6 @@ to = "urc:visibility"
 
 # Left to the rule written by hand elsewhere in this file:
 #   uro:DataQualityAttribute
+#   uro:Waterway
+#   uro:codeValue
 # END GENERATED -- i-UR rules

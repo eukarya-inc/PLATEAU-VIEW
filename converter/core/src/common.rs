@@ -47,7 +47,19 @@ impl CommonRewrite {
 
     /// Rewrites `el` and its descendants in place.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
-        self.code_space(el, warnings);
+        self.apply_in(el, None, warnings);
+    }
+
+    /// `host` is the nearest enclosing feature type, meaning the closest
+    /// ancestor-or-self whose local name is upper-case.
+    fn apply_in(&self, el: &mut Element, host: Option<&Name>, warnings: &mut Warnings) {
+        let own = el.name.clone();
+        let host = if own.local.starts_with(char::is_uppercase) {
+            Some(&own)
+        } else {
+            host
+        };
+        self.code_space(el, host, warnings);
 
         let wrapper_ns = if el.is(&self.generics, "GenericAttributeSet") {
             &self.generics
@@ -67,14 +79,14 @@ impl CommonRewrite {
         el.children = out;
 
         for child in el.elements_mut() {
-            self.apply(child, warnings);
+            self.apply_in(child, host, warnings);
         }
     }
 
     /// Rewrites a `codeSpace` path pointing into `codelists/` to the name the
     /// published i-UR 4.0 set gives that list, and reports a value the list no
-    /// longer defines.
-    fn code_space(&self, el: &mut Element, warnings: &mut Warnings) {
+    /// longer defines. `host` selects the per-type rows.
+    fn code_space(&self, el: &mut Element, host: Option<&Name>, warnings: &mut Warnings) {
         let policy = self.rules.codelists();
         let Some(value) = el.attr(None, "codeSpace").map(str::to_owned) else {
             return;
@@ -83,17 +95,17 @@ impl CommonRewrite {
             Some((dir, file)) => (Some(dir), file),
             None => (None, value.as_str()),
         };
-        if let Some(new) = policy.retarget.get(file) {
+        if let Some(new) = self.rules.retarget(host, file) {
             warnings.add(format!(
                 "codeSpace {file} became {new}: the published i-UR 4.0 code \
                  lists carry these codes under the new name"
             ));
             let path = match dir {
                 Some(dir) => format!("{dir}/{new}"),
-                None => new.clone(),
+                None => new.to_owned(),
             };
             el.set_attr(Name::unqualified("codeSpace"), path);
-            file = new.as_str();
+            file = new;
         }
         if let Some(codes) = policy.kept_codes.get(file) {
             let text = el.text();
@@ -294,6 +306,28 @@ mod tests {
                 .iter()
                 .any(|(m, _)| m.contains("became BuildingInstallation_function.xml"))
         );
+    }
+
+    /// A per-type row applies under its feature type and nowhere else.
+    #[test]
+    fn a_per_type_retarget_follows_the_enclosing_feature() {
+        const TRAN3: &str = "http://www.opengis.net/citygml/transportation/3.0";
+        let shared = "../../codelists/TransportationComplex_class.xml";
+        for (feature, expected) in [
+            ("Road", "../../codelists/Road_class.xml"),
+            ("Track", shared),
+        ] {
+            let mut class = Element::with_text(Name::qualified(TRAN3, "class"), "1040");
+            class.set_attr(Name::unqualified("codeSpace"), shared);
+            let mut host = Element::new(Name::qualified(TRAN3, feature));
+            host.push(class);
+            rewrite().apply(&mut host, &mut Warnings::new());
+            assert_eq!(
+                host.child(TRAN3, "class").unwrap().attr(None, "codeSpace"),
+                Some(expected),
+                "{feature}"
+            );
+        }
     }
 
     #[test]

@@ -15,6 +15,7 @@ use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules};
 use crate::report::{FileReport, Report, Warnings};
+use crate::tran::TranRewrite;
 use crate::transform::{self, IdGen};
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
@@ -64,6 +65,7 @@ pub struct Converter {
     app: AppearanceRewrite,
     lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
+    tran: TranRewrite,
     iur: IurRewrite,
     gml_ns: String,
     options: Options,
@@ -76,6 +78,7 @@ impl Converter {
         let app = AppearanceRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
+        let tran = TranRewrite::new(&rules)?;
         let iur = IurRewrite::new(&rules)?;
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
@@ -85,6 +88,7 @@ impl Converter {
             app,
             lod4,
             bldg,
+            tran,
             iur,
             gml_ns,
             options,
@@ -273,7 +277,7 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
-    /// `app`, `lod4`, `bldg`, `iur`. Generated `gml:id` values are seeded from
+    /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are seeded from
     /// the member's own `gml:id`, so they are unique across a dataset and
     /// stable across runs.
     fn convert_member(&self, element: Element, report: &mut FileReport) -> Option<Element> {
@@ -288,6 +292,8 @@ impl Converter {
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
         self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
+            .apply(&mut element, &mut ids, &mut report.warnings);
+        self.tran
             .apply(&mut element, &mut ids, &mut report.warnings);
         self.iur.apply(&mut element, &mut report.warnings);
         if self.options.generate_gml_ids {

@@ -9,9 +9,9 @@
 //!   feature can be restructured without holding the whole file in memory.
 //! * [`profile`] holds the declarative part of the mapping (namespace bumps,
 //!   element renames, child ordering) loaded from a TOML profile.
-//! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`] and [`iur`]
-//!   apply the profile and the structural rewrites a rename table cannot
-//!   express.
+//! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`], [`tran`]
+//!   and [`iur`] apply the profile and the structural rewrites a rename table
+//!   cannot express.
 //!
 //! [`convert`] ties them together and [`report`] carries the diagnostics back out.
 
@@ -26,6 +26,7 @@ pub mod iur;
 pub mod lod4;
 pub mod profile;
 pub mod report;
+pub mod tran;
 pub mod transform;
 pub mod xal;
 pub mod xml;
