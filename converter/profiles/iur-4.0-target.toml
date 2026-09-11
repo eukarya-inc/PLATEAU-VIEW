@@ -160,6 +160,15 @@ after = ["urc:geometrySrcDescLod0"]
 # subdivisions having moved to granularity and function. The railway codes
 # 3.0 to 3.2 became 2.0 to 2.2 the same way. A code with no entry (8 = 不明)
 # is dropped.
+#
+# A run may ask for LOD1 solids, each space's LOD1 area extruded upward by
+# the clearance gauge (建築限界) of its type. The heights below are the ones
+# 道路構造令 fixes for a carriageway (4.5 m) and a sidewalk (2.5 m), and apply
+# when the run names no height of its own. A railway's gauge is set by each
+# operator and a waterway has none, so those types have no default and are
+# extruded only when the run names a height. Railway_lodType has codes for the
+# extruded form, 1.0 for the rail space alone and 1.1 with the auxiliary
+# spaces, which an extruded Railway gains beside its mapped code.
 # ---------------------------------------------------------------------------
 [tran]
 function_code_space = "../../codelists/TrafficArea_function.xml"
@@ -186,3 +195,12 @@ lane_function = "1010"
 "3.0" = "2.0"
 "3.1" = "2.1"
 "3.2" = "2.2"
+
+[tran.clearance]
+"tran:Road" = 4.5
+"tran:Square" = 4.5
+"tran:Track" = 2.5
+
+[tran.clearance_lod_type."tran:Railway"]
+traffic = "1.0"
+auxiliary = "1.1"

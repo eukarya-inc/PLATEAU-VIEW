@@ -30,6 +30,9 @@ Useful flags:
 | `--no-gml-ids` | do not mint the `gml:id`s GML 3.2 requires |
 | `--no-reorder` | leave children in input order instead of the 3.0 sequence |
 | `--lod4-fallback lod3\|lod2\|drop` | where LOD4 goes when no measurement code decides it (profile default `lod3`) |
+| `--clearance` | extrude every transportation LOD1 space into a solid by the clearance gauge height of its type (profile defaults, roads 4.5 m) |
+| `--clearance-height M` | the height in metres for every type, ahead of the profile's defaults, and implies `--clearance` |
+| `--clearance-csv FILE` | `gml_id,height` rows giving one area's height, or every space's of one feature, ahead of the rest, and implies `--clearance` |
 | `--indent tab\|two\|four\|none` | output indentation |
 | `-j N` | worker threads |
 
