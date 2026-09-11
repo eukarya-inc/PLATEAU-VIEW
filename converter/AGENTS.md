@@ -81,6 +81,10 @@ The single most common mistake here is putting a mapping in the wrong layer.
 * **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
   own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
   the transportation module. Do not grow `bldg.rs` sideways.
+* **A geometry construction** → its own module with no module knowledge, the
+  way `core/src/extrude.rs` turns a multi-surface into a solid and `tran.rs`
+  decides when to call it. Coordinates are copied as strings, never
+  reformatted, except the one value the construction changes.
 
 `common.rs`, `lod4.rs`, `bldg.rs`, `tran.rs` and `iur.rs` run **after** the
 rename pass, so they speak CityGML **3.0** and i-UR **4.0** names only. Writing

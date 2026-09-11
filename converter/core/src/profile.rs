@@ -471,7 +471,11 @@ pub struct QualityRules {
 /// function is `lane_function`, or when the feature's `lodType` is one of the
 /// codes `lane_lod_types` lists for the code list the value cites.
 /// `lod_type_map` rewrites `lodType` values per code list, and a value with
-/// no entry is dropped.
+/// no entry is dropped. `clearance` is the height in metres a feature type's
+/// LOD1 spaces are extruded by when the run enables extrusion and names no
+/// height itself. `clearance_lod_type` is the `lodType` code an extruded
+/// feature of that type gains, `traffic` when only traffic spaces were
+/// extruded and `auxiliary` when auxiliary spaces were too.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct TranPolicy {
@@ -480,6 +484,16 @@ pub struct TranPolicy {
     pub lane_function: Option<String>,
     pub lane_lod_types: IndexMap<String, Vec<String>>,
     pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+    pub clearance: IndexMap<String, f64>,
+    pub clearance_lod_type: IndexMap<String, ClearanceLodType>,
+}
+
+/// The `lodType` codes an extruded feature gains.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClearanceLodType {
+    pub traffic: String,
+    pub auxiliary: String,
 }
 
 /// [`TranPolicy`] with its feature types resolved.
@@ -490,6 +504,8 @@ pub struct TranRules {
     pub lane_function: Option<String>,
     pub lane_lod_types: IndexMap<String, Vec<String>>,
     pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+    pub clearance: HashMap<Name, f64>,
+    pub clearance_lod_type: HashMap<Name, ClearanceLodType>,
 }
 
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
@@ -610,12 +626,27 @@ impl Rules {
         for (ty, code) in &profile.tran.full_width_function {
             full_width_function.insert(parse_name(ty, output)?, code.clone());
         }
+        let mut clearance = HashMap::new();
+        for (ty, height) in &profile.tran.clearance {
+            if *height <= 0.0 {
+                return Err(Error::Profile(format!(
+                    "[tran.clearance] gives `{ty}` a height of {height}, which is not positive"
+                )));
+            }
+            clearance.insert(parse_name(ty, output)?, *height);
+        }
+        let mut clearance_lod_type = HashMap::new();
+        for (ty, codes) in &profile.tran.clearance_lod_type {
+            clearance_lod_type.insert(parse_name(ty, output)?, codes.clone());
+        }
         let tran = TranRules {
             function_code_space: profile.tran.function_code_space.clone(),
             full_width_function,
             lane_function: profile.tran.lane_function.clone(),
             lane_lod_types: profile.tran.lane_lod_types.clone(),
             lod_type_map: profile.tran.lod_type_map.clone(),
+            clearance,
+            clearance_lod_type,
         };
 
         let lod4 = Lod4Rules {

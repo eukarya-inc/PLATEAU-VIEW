@@ -15,7 +15,7 @@ use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules};
 use crate::report::{FileReport, Report, Warnings};
-use crate::tran::TranRewrite;
+use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
@@ -42,6 +42,8 @@ pub struct Options {
     /// Where LOD4 goes when the data does not say. `None` takes the profile's
     /// `[lod4] fallback`.
     pub lod4_fallback: Option<Lod4Fallback>,
+    /// Extrude transportation LOD1 spaces into solids. `None` writes no solid.
+    pub clearance: Option<Clearance>,
 }
 
 impl Default for Options {
@@ -54,6 +56,7 @@ impl Default for Options {
             copy_support_files: true,
             parallel: true,
             lod4_fallback: None,
+            clearance: None,
         }
     }
 }
@@ -78,7 +81,7 @@ impl Converter {
         let app = AppearanceRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
-        let tran = TranRewrite::new(&rules)?;
+        let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules)?;
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
@@ -136,6 +139,7 @@ impl Converter {
         for result in results {
             report.absorb(&result?);
         }
+        self.tran.report_unused_clearance(&mut report.warnings);
 
         for feature_type in &requested {
             for input in dataset.companion_files(feature_type)? {
@@ -287,6 +291,7 @@ impl Converter {
             .unwrap_or_else(|| format!("{}_{}", element.name.local, report.features + 1));
         let mut ids = IdGen::new(&seed);
 
+        self.tran.raise_envelope(&mut element, &mut report.warnings);
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);

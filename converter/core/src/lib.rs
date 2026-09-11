@@ -11,7 +11,7 @@
 //!   element renames, child ordering) loaded from a TOML profile.
 //! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`], [`tran`]
 //!   and [`iur`] apply the profile and the structural rewrites a rename table
-//!   cannot express.
+//!   cannot express. [`extrude`] builds the solids [`tran`] can add.
 //!
 //! [`convert`] ties them together and [`report`] carries the diagnostics back out.
 
@@ -22,6 +22,7 @@ pub mod convert;
 pub mod dataset;
 pub mod detect;
 pub mod error;
+pub mod extrude;
 pub mod iur;
 pub mod lod4;
 pub mod profile;
