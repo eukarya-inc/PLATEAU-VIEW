@@ -52,6 +52,13 @@ type Config struct {
 	SignupDisabled   bool              `pp:",omitempty"`
 	HTTPSREDIRECT    bool              `pp:",omitempty"`
 
+	// AccessAudit toggles per-request audit logging for authenticated Editor
+	// API requests. Emits one structured JSON line (prefixed with
+	// "editor_access_audit ") per request via the standard logger so it can
+	// be picked up by Cloud Logging and routed to BigQuery.
+	// Defaults to true; set REEARTH_ACCESSAUDIT=false to disable.
+	AccessAudit bool `default:"true" pp:",omitempty"`
+
 	// storage
 	GCS GCSConfig `pp:",omitempty"`
 	S3  S3Config  `pp:",omitempty"`
