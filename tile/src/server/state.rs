@@ -274,6 +274,12 @@ impl AppState {
         }
     }
 
+    /// LRU size, in tiles, for each composite DEM source's merged grids.
+    ///
+    /// Entries are `tile_size²` f64 grids (~2 MiB at 512), and one cache exists
+    /// per configured DEM source, so this is a per-source ceiling of ~128 MiB.
+    const COMPOSITE_DEM_CACHE_ENTRIES: u64 = 64;
+
     /// Construct the set of terrain states, one per DEM source in the config.
     ///
     /// The base DEM (env-configured) is shared across every entry; only the
@@ -401,6 +407,7 @@ impl AppState {
                         overlays.len()
                     );
                     Arc::new(build_composite_dem(base.clone(), overlays).await)
+                        as Arc<dyn DemProvider>
                 }
                 Some(c) => {
                     tracing::info!(
@@ -412,6 +419,21 @@ impl AppState {
                     );
                     Arc::new(build_corrected_composite_dem(base.clone(), overlays, Some(c)).await)
                 }
+            };
+            // Wrap every composite in its own LRU. The terrain tile cache sits
+            // *downstream* of the DEM read (its key embeds the aggregated
+            // upstream ETag, so the DEM has to be fetched before the key even
+            // exists), which means a 100% tile-cache hit rate still re-read and
+            // re-decoded every intersecting COG on each request. Caching the
+            // merged grid makes repeat requests cost nothing upstream, and
+            // moka's single-flight collapses concurrent misses for one tile.
+            let dem: Arc<dyn DemProvider> = if dem_cfg.layers.is_empty() {
+                dem
+            } else {
+                Arc::new(crate::terrain::CachedDemProvider::new(
+                    dem,
+                    Self::COMPOSITE_DEM_CACHE_ENTRIES,
+                ))
             };
             terrains.insert(
                 (*name).to_string(),

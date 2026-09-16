@@ -40,12 +40,6 @@ resource "google_storage_bucket_iam_member" "plateau_flow_worker_batch_object_ad
   member = "serviceAccount:${google_service_account.plateau_flow_worker_batch.email}"
 }
 
-resource "google_storage_bucket_iam_member" "plateau_flow_websocket_public_read" {
-  bucket = google_storage_bucket.plateau_flow_websocket_bucket.name
-  role   = "roles/storage.objectViewer"
-  member = "allUsers"
-}
-
 resource "google_storage_bucket_iam_member" "plateau_flow_websocket_object_admin" {
   bucket = google_storage_bucket.plateau_flow_websocket_bucket.name
   role   = "roles/storage.objectAdmin"
