@@ -192,45 +192,88 @@ interface Cog {
 const MAX_CONFIG_COGS = 30_000;
 
 /**
- * Append every `.tif`/`.tiff` under `prefix` to `cogs` (paginated). Empty prefix
- * = whole bucket. Returns false — leaving `cogs` at the cap — as soon as the
- * total would exceed `MAX_CONFIG_COGS`, so listing work stays bounded at roughly
- * the cap plus one 1,000-key page per prefix. Callers must treat false as an
- * error, never as a usable (truncated) result.
+ * Ceiling on `bucket.list` pages for one request, shared across every prefix.
+ *
+ * `MAX_CONFIG_COGS` only counts keys that *match*, so it bounds nothing over a
+ * prefix dominated by non-COG keys: `plateau-terrain` mirrors quantized-mesh
+ * tiles alongside its COGs, so `?prefix=<mesh-prefix>` pages through millions of
+ * `.terrain` keys, 1,000 at a time, without ever reaching the COG cap. Each page
+ * is a subrequest (1,000 per request on paid Workers) and the endpoint is public
+ * and unauthenticated, so the scan itself needs its own limit.
+ *
+ * 300 pages = up to 300,000 keys scanned, comfortably more than any real COG
+ * prefix and well inside the subrequest ceiling.
  */
-async function listCogs(bucket: R2Bucket, prefix: string, cogs: Cog[]): Promise<boolean> {
+const MAX_LIST_PAGES = 300;
+
+/**
+ * Ceiling on comma-separated `?prefix=` entries. Each entry costs a full listing,
+ * so an uncapped list multiplies the work of a single request by its length.
+ */
+const MAX_PREFIXES = 32;
+
+type ListLimit = "too_many_cogs" | "too_much_listing";
+
+/**
+ * Append every `.tif`/`.tiff` under `prefix` to `cogs` (paginated). Empty prefix
+ * = whole bucket. `budget.pages` is decremented per listed page and is shared
+ * across the whole request.
+ *
+ * Returns the limit that was hit, or null on success. Callers must treat a
+ * non-null result as an error, never as a usable (truncated) result.
+ */
+async function listCogs(
+  bucket: R2Bucket,
+  prefix: string,
+  cogs: Cog[],
+  budget: { pages: number },
+): Promise<ListLimit | null> {
   let cursor: string | undefined;
   do {
+    if (budget.pages <= 0) return "too_much_listing";
+    budget.pages--;
+
     const res = await bucket.list({ prefix: prefix || undefined, cursor, limit: 1000 });
     for (const o of res.objects) {
       if (o.key.endsWith(".tif") || o.key.endsWith(".tiff")) {
-        if (cogs.length >= MAX_CONFIG_COGS) return false;
+        if (cogs.length >= MAX_CONFIG_COGS) return "too_many_cogs";
         cogs.push({ key: o.key, etag: o.etag });
       }
     }
     cursor = res.truncated ? (res.cursor ?? undefined) : undefined;
   } while (cursor);
-  return true;
+  return null;
 }
 
 /**
- * 500 for a bucket that outgrew `MAX_CONFIG_COGS`. Deliberately an error and not
- * a truncated config: a short mosaic still parses, so the tile server would
- * silently render with data missing. `no-store` keeps the failure from being
- * cached — the fix (splitting by `?prefix=`) should take effect immediately.
+ * 500 for a request that outgrew one of the enumeration limits. Deliberately an
+ * error and not a truncated config: a short mosaic still parses, so the tile
+ * server would silently render with data missing. `no-store` keeps the failure
+ * from being cached — the fix (splitting by `?prefix=`) should take effect
+ * immediately.
  */
-function tooManyCogs(cors: Headers, dataset: string): Response {
+function listingTooLarge(cors: Headers, dataset: string, limit: ListLimit): Response {
   const headers = new Headers(cors);
   headers.set("content-type", "application/json; charset=utf-8");
   headers.set("cache-control", "no-store");
-  const body = {
-    error: "too_many_cogs",
-    message:
-      `too many COGs for config generation in dataset "${dataset}": more than ` +
-      `${MAX_CONFIG_COGS} match the requested prefixes. Scope the request with ` +
-      `?prefix= and list the resulting config URLs separately.`,
-    limit: MAX_CONFIG_COGS,
-  };
+  const body =
+    limit === "too_many_cogs"
+      ? {
+          error: limit,
+          message:
+            `too many COGs for config generation in dataset "${dataset}": more than ` +
+            `${MAX_CONFIG_COGS} match the requested prefixes. Scope the request with ` +
+            `?prefix= and list the resulting config URLs separately.`,
+          limit: MAX_CONFIG_COGS,
+        }
+      : {
+          error: limit,
+          message:
+            `enumerating dataset "${dataset}" exceeded ${MAX_LIST_PAGES} listing pages. ` +
+            `The requested prefixes hold too many non-COG keys; point ?prefix= at the ` +
+            `COG prefixes only.`,
+          limit: MAX_LIST_PAGES,
+        };
   return new Response(JSON.stringify(body), { status: 500, headers });
 }
 
@@ -356,9 +399,11 @@ function demSource(
  * and the whole bucket otherwise. `version` is an FNV-1a hash of every key+etag,
  * so the tile server's config revalidation picks up any COG add/change/remove.
  *
- * Enumeration is bounded by `MAX_CONFIG_COGS` — the default raster prefix is the
- * whole bucket, and an unbounded listing would eventually OOM the isolate. Past
- * the cap this returns 500 rather than a short mosaic; the body is emitted
+ * Enumeration is bounded by `MAX_CONFIG_COGS`, `MAX_LIST_PAGES` and
+ * `MAX_PREFIXES` — the default raster prefix is the whole bucket, and an
+ * unbounded listing would eventually OOM the isolate or burn the request's
+ * subrequest budget. Past any cap this returns 500 rather than a short mosaic
+ * (see `listingTooLarge`); the body is emitted
  * compactly (no pretty-printing) to keep the peak footprint down, since only the
  * tile server reads it.
  */
@@ -391,10 +436,16 @@ export async function tileConfig(
         ? ["base/", "patch/", "sea/"]
         : [""];
 
+  if (prefixes.length > MAX_PREFIXES) {
+    return listingTooLarge(cors, dataset, "too_much_listing");
+  }
+
   const cogs: Cog[] = [];
+  const budget = { pages: MAX_LIST_PAGES };
   for (const prefix of prefixes) {
-    if (!(await listCogs(bucket, prefix, cogs))) {
-      return tooManyCogs(cors, dataset);
+    const limit = await listCogs(bucket, prefix, cogs, budget);
+    if (limit) {
+      return listingTooLarge(cors, dataset, limit);
     }
   }
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
