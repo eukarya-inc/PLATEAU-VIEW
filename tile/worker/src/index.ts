@@ -81,8 +81,18 @@ export default {
     const cacheKey = pathToCacheKey(url.pathname);
 
     if (cacheKey) {
-      // Try to get from R2 cache
-      const cached = await env.CACHE.get(cacheKey);
+      // Try to get from R2 cache. An R2 *error* (throttling, regional
+      // degradation, an internal 500) has to be treated like a miss: letting it
+      // escape returns Cloudflare's worker-exception page for every tile while
+      // the origin, which this worker exists to sit in front of, is healthy and
+      // would have generated it. That response is also uncacheable, so clients
+      // retry-storm the failing path.
+      let cached: R2ObjectBody | null = null;
+      try {
+        cached = await env.CACHE.get(cacheKey);
+      } catch (e) {
+        console.error(`R2 ERROR (falling back to origin): ${cacheKey}: ${e}`);
+      }
 
       if (cached) {
         // Cache hit - return from R2

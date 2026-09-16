@@ -34,6 +34,11 @@ var failureCacheDuration = 1 * time.Minute
 // recent attempt failed.
 var errUpdateRecentlyFailed = errors.New("update recently failed")
 
+// updateTimeout bounds the shared catalog query once it is detached from the
+// leader's request. A cold instance loads the whole catalog from the CMS and
+// needs tens of seconds, so this is generous on purpose.
+const updateTimeout = 3 * time.Minute
+
 type Handler struct {
 	// e.g. "http://[::]:8080"
 	gqlEndpoint       string
@@ -97,7 +102,14 @@ func (h *Handler) Update(c echo.Context) error {
 	// Only one update runs at a time; concurrent requests share its result
 	// instead of each issuing the same expensive catalog query.
 	_, err, _ := h.group.Do("update", func() (any, error) {
-		return nil, h.update(ctx)
+		// Detach cancellation for the shared update: which request becomes the
+		// singleflight leader is a coincidence, so the leader disconnecting must
+		// not cancel the query every other waiter is blocked on. A bounded
+		// timeout keeps a stuck upstream from hanging the group forever.
+		updateCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), updateTimeout)
+		defer cancel()
+
+		return nil, h.update(updateCtx)
 	})
 
 	return err
@@ -122,9 +134,13 @@ func (h *Handler) update(ctx context.Context) error {
 	// write lock: it is taken only to swap the results in.
 	geojsonj, qt, err := h.compute(ctx)
 	if err != nil {
-		h.lock.Lock()
-		h.failedAt = util.Now()
-		h.lock.Unlock()
+		// A cancellation says nothing about the upstream's health, so it must not
+		// suppress retries for everyone else.
+		if !errors.Is(err, context.Canceled) {
+			h.lock.Lock()
+			h.failedAt = util.Now()
+			h.lock.Unlock()
+		}
 		return err
 	}
 

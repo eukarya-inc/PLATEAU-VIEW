@@ -45,8 +45,11 @@ impl DemProvider for SeaLevelDem {
         256
     }
 
-    /// High enough not to cap the composite's max zoom; overlays define the
-    /// real detail ceiling.
+    /// A constant surface has no native resolution, so this only needs to be
+    /// high enough not to cap the composite's max zoom. Overlays above their own
+    /// max zoom are fetched from their parent tile and upsampled
+    /// ([`super::composite`]), so advertising more zoom than any overlay has does
+    /// not drop them.
     fn max_zoom(&self) -> u8 {
         20
     }
