@@ -3,18 +3,15 @@
 //! The input is a multi-surface of inline `gml:Polygon`s whose rings are
 //! `gml:posList` values of three-dimensional tuples. Each polygon becomes one
 //! solid with a `gml:Shell` of the polygon reversed as its bottom, the polygon
-//! raised by the height as its top, and one wall per edge of every ring. A
-//! multi-surface with several polygons yields a `gml:CompositeSolid` holding
-//! one solid per polygon.
+//! raised by the height as its top, and one wall per edge of every ring.
+//! Several polygons yield a `gml:CompositeSolid`.
 //!
-//! The horizontal tokens of every tuple are copied as written. Only the third
-//! token is parsed, raised, and written back. The `srsName` and `srsDimension`
-//! of the input multi-surface, where it carries them, are copied onto the
-//! result.
+//! Horizontal tokens are copied as written, and only the third token of each
+//! tuple is parsed, raised and written back. `srsName` and `srsDimension` are
+//! copied from the input multi-surface onto the result.
 
 use crate::xml::{Element, Name};
 
-/// The CRS attributes a generated solid takes from the surface it stands on.
 const SRS_ATTRIBUTES: &[&str] = &["srsName", "srsDimension"];
 
 /// Extrudes `multi_surface` upward by `height`.
@@ -198,7 +195,6 @@ fn face(rings: &[String], gml: &str, id: &str) -> Element {
     polygon
 }
 
-/// The closed ring over `vertices`, at their own height or raised by `raise`.
 fn ring_text<'a>(vertices: impl Iterator<Item = &'a Vertex>, raise: Option<f64>) -> String {
     let vertices: Vec<&Vertex> = vertices.collect();
     let mut tuples: Vec<String> = vertices.iter().map(|v| tuple(v, raise)).collect();
@@ -206,7 +202,6 @@ fn ring_text<'a>(vertices: impl Iterator<Item = &'a Vertex>, raise: Option<f64>)
     tuples.join(" ")
 }
 
-/// The closed quadrilateral standing on the edge from `a` to `b`.
 fn wall_text(a: &Vertex, b: &Vertex, height: f64) -> String {
     [
         tuple(a, None),
@@ -285,9 +280,6 @@ mod tests {
             .text()
     }
 
-    /// A square with a square hole has a bottom, a top and eight walls, the
-    /// bottom wound the other way and the top raised, with the horizontal
-    /// digits untouched.
     #[test]
     fn a_polygon_with_a_hole_becomes_a_closed_shell_of_ten_faces() {
         let outer = "0 0 0 0 10.5 0 10.5 10.5 0 10.5 0 0 0 0 0";
@@ -331,8 +323,6 @@ mod tests {
         assert!(faces[2].child(ns::GML_32, "interior").is_none());
     }
 
-    /// Several polygons give one solid each inside a composite, and a member
-    /// held by reference cannot be extruded at all.
     #[test]
     fn several_polygons_compose_and_a_reference_refuses() {
         let square = "0 0 0 1 0 0 1 1 0 0 1 0 0 0 0";

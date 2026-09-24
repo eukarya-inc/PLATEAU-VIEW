@@ -93,10 +93,8 @@ impl IurRewrite {
 
     /// Rewrites `el` and its descendants in place.
     ///
-    /// An ADE wrapper sits directly under a CityGML host, so the hook rewrite
-    /// is attempted on the children of a non-i-UR element only. A property
-    /// inside an i-UR class is that class's own and holds a class of its own
-    /// by design.
+    /// The hook rewrite is attempted on the children of a non-i-UR element
+    /// only.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
         self.required_quality_child(el, warnings);
         let host = !self.is_iur(&el.name);
@@ -354,8 +352,6 @@ mod tests {
         );
     }
 
-    /// A property inside an i-UR class holds that class's own nested class
-    /// and is not an ADE wrapper, so it is neither rehomed nor reported.
     #[test]
     fn a_nested_i_ur_property_is_not_a_hook() {
         const URC: &str = "https://www.geospatial.jp/iur/urc/4.0";

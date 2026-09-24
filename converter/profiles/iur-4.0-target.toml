@@ -60,11 +60,8 @@ local = [
   "LandUseDetailAttribute_orgLandUse.xml",
 ]
 
-# Lists whose values the conversion itself rewrites into the published codes
-# (the building lodType pass adds the exterior/interior suffixes, and the
-# transportation pass maps the road and railway codes through [tran]
-# lod_type_map). The published file always wins, or the rewritten values would
-# not resolve.
+# Lists whose values the conversion itself rewrites into the published codes.
+# The published file always wins, or the rewritten values would not resolve.
 superseded = ["Building_lodType.xml", "Road_lodType.xml", "Railway_lodType.xml"]
 
 # Files the published 4.0 set carries under a new name, with unchanged codes.
@@ -82,12 +79,10 @@ superseded = ["Building_lodType.xml", "Road_lodType.xml", "Railway_lodType.xml"]
 "Common_sex.xml" = "Common_Sex.xml"
 "LengthAttribute_mesureType.xml" = "LengthAttribute_measureType.xml"
 
-# Retargets that hold under one feature type only. CityGML 2.0 declared
-# `class` once, on TransportationComplex, and 3.0 declares it on each
-# transportation type, so the 4.0 set publishes one class list per type. The
-# shared list is still published and stays on the types whose observed codes
-# the per-type lists do not carry (Track, Square), and on Waterway, which has
-# no per-type list.
+# Retargets that hold under one feature type only. CityGML 3.0 declares
+# `class` on each transportation type, and the 4.0 set publishes one class
+# list per type. The shared list stays on Track, Square and Waterway, whose
+# codes the per-type lists do not carry.
 [codelists.retarget_by_type."tran:Road"]
 "TransportationComplex_class.xml" = "Road_class.xml"
 [codelists.retarget_by_type."tran:Railway"]
@@ -146,29 +141,19 @@ after = ["urc:geometrySrcDescLod0"]
 # ---------------------------------------------------------------------------
 # What the transportation rewrite (core/src/tran.rs) supplies.
 #
-# CityGML 3.0 gives a transportation object no geometry of its own, so the
-# object's full-width surface goes on a minted TrafficArea, whose function is
-# the whole-object code the 4.0 TrafficArea_function list defines per type.
+# full_width_function is the function code of the TrafficArea minted for an
+# object's own full-width surface, per feature type. A TrafficSpace is a lane
+# when the area it bounds has function lane_function, or when the object's
+# lodType is one of lane_lod_types for the list it cites, and a way otherwise.
+# Auxiliary spaces and the minted full-width space are always a way.
+# lod_type_map rewrites lodType per code list, and a code with no entry is
+# dropped.
 #
-# A TrafficSpace must say whether it is a whole way or one lane. It is a lane
-# when the area it bounds is a lane (function 1010), or when the object's
-# lodType, from Road_lodType, is a lane-level code. Auxiliary spaces and the
-# minted full-width space are always a way.
-#
-# lodType is rewritten per code list. The 2.0-era road codes 3.0 to 3.4 became
-# 2.0 to 2.2 by the height rule each stands for, the lane and planting
-# subdivisions having moved to granularity and function. The railway codes
-# 3.0 to 3.2 became 2.0 to 2.2 the same way. A code with no entry (8 = 不明)
-# is dropped.
-#
-# A run may ask for LOD1 solids, each space's LOD1 area extruded upward by
-# the clearance gauge (建築限界) of its type. The heights below are the ones
-# 道路構造令 fixes for a carriageway (4.5 m) and a sidewalk (2.5 m), and apply
-# when the run names no height of its own. A railway's gauge is set by each
-# operator and a waterway has none, so those types have no default and are
-# extruded only when the run names a height. Railway_lodType has codes for the
-# extruded form, 1.0 for the rail space alone and 1.1 with the auxiliary
-# spaces, which an extruded Railway gains beside its mapped code.
+# clearance is the height in metres a type's LOD1 spaces are extruded by when
+# a run asks for the extrusion and names no height of its own. Railway and
+# Waterway have no default and are extruded only on a named height.
+# clearance_lod_type is the code an extruded feature of that type gains beside
+# its mapped lodType.
 # ---------------------------------------------------------------------------
 [tran]
 function_code_space = "../../codelists/TrafficArea_function.xml"

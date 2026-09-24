@@ -103,10 +103,8 @@ to = "urc:adminType"
 from = "uro:areaType"
 to = "urc:areaType"
 
-# The 航路 feature. i-UR 3.x declares uro:Waterway in tran:TransportationComplex's
-# substitution group, so it is a transportation complex, and CityGML 3.0 has a
-# transportation type of that name -- the class left i-UR for the standard.
-# urf:Waterway is a different class, an urf:UrbanFacility, and is not it.
+# The 航路 feature. CityGML 3.0 declares it in the transportation module, so
+# it becomes tran:Waterway and not the urf:UrbanFacility of the same name.
 [[element]]
 from = "uro:Waterway"
 to = "tran:Waterway"

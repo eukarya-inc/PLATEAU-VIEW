@@ -281,9 +281,9 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
-    /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are seeded from
-    /// the member's own `gml:id`, so they are unique across a dataset and
-    /// stable across runs.
+    /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are
+    /// seeded from the member's own `gml:id`, so they are unique across a
+    /// dataset and stable across runs.
     fn convert_member(&self, element: Element, report: &mut FileReport) -> Option<Element> {
         let mut element = transform::rename(&self.rules, element)?;
 
