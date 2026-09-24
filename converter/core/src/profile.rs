@@ -463,33 +463,30 @@ pub struct QualityRules {
     pub after: Vec<Name>,
 }
 
-/// The values the transportation rewrite has to supply, since CityGML 2.0
-/// records none of them.
-///
-/// `full_width_function` is the `tran:function` code written on the surface
-/// minted for a feature's own full-width geometry, per feature type, from the
-/// list `function_code_space` names. A traffic space is `lane` when its area's
-/// function is `lane_function`, or when the feature's `lodType` is one of the
-/// codes `lane_lod_types` lists for the code list the value cites.
-/// `lod_type_map` rewrites `lodType` values per code list, and a value with
-/// no entry is dropped. `clearance` is the height in metres a feature type's
-/// LOD1 spaces are extruded by when the run enables extrusion and names no
-/// height itself. `clearance_lod_type` is the `lodType` code an extruded
-/// feature of that type gains, `traffic` when only traffic spaces were
-/// extruded and `auxiliary` when auxiliary spaces were too.
+/// The values the transportation rewrite has to supply, per feature type.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct TranPolicy {
+    /// The code list the minted full-width function cites.
     pub function_code_space: Option<String>,
+    /// The `tran:function` code of the minted full-width area.
     pub full_width_function: IndexMap<String, String>,
+    /// The area function that makes its traffic space a `lane`.
     pub lane_function: Option<String>,
+    /// The `lodType` codes that make every traffic space a `lane`, per code
+    /// list.
     pub lane_lod_types: IndexMap<String, Vec<String>>,
+    /// The `lodType` values to rewrite, per code list. A value with no entry
+    /// is dropped.
     pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+    /// The height in metres LOD1 spaces are extruded by when the run names
+    /// none itself.
     pub clearance: IndexMap<String, f64>,
     pub clearance_lod_type: IndexMap<String, ClearanceLodType>,
 }
 
-/// The `lodType` codes an extruded feature gains.
+/// The `lodType` codes an extruded feature gains, `traffic` when only traffic
+/// spaces were extruded and `auxiliary` when auxiliary spaces were too.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClearanceLodType {

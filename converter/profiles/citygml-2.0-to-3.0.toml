@@ -412,23 +412,13 @@ children = ["gen:name", "gen:value", "gen:genericAttribute"]
 # ---------------------------------------------------------------------------
 # Transportation module child order.
 #
-# Three shapes cover the whole module, because every transportation type
-# derives from one of three bases: tran::AbstractTransportationSpace for the
-# top-level objects and their groupings, core::AbstractUnoccupiedSpace for the
-# spaces held inside them, and core::AbstractThematicSurface for the surfaces
-# that bound those spaces.
-#
-# Each list is the flattened xs:sequence of the 3.0 type, read off the OGC
-# CityGML 3.0 XSDs by walking the xs:extension chain and concatenating, the
-# same way the building lists above were derived. Where a group covers several
-# types, the tail is their union: the properties that differ are each declared
-# by one type only, so no document can carry two of them and their relative
-# order never arises.
+# Three groups cover the whole module, one per base type. Where a group covers
+# several types, the tail is their union, since the properties that differ are
+# each declared by one type only.
 # ---------------------------------------------------------------------------
 
-# tran::AbstractTransportationSpace subtypes. The five top-level objects, plus
-# Section and Intersection, which group spaces and carry no geometry of their
-# own.
+# tran::AbstractTransportationSpace subtypes, the top-level objects and the
+# groupings that hold no geometry of their own.
 [[order_group]]
 types = [
   "tran:Road", "tran:Track", "tran:Square", "tran:Railway", "tran:Waterway",
@@ -471,9 +461,8 @@ children = [
   "tran:adeOfSection", "tran:adeOfIntersection",
 ]
 
-# The spaces held inside a transportation object. All four are
-# core::AbstractUnoccupiedSpace subtypes, so they share everything down to
-# adeOfAbstractUnoccupiedSpace and differ only in the tail.
+# core::AbstractUnoccupiedSpace subtypes, the spaces held inside a
+# transportation object.
 [[order_group]]
 types = [
   "tran:TrafficSpace", "tran:AuxiliaryTrafficSpace",
@@ -506,9 +495,8 @@ children = [
   "tran:adeOfClearanceSpace", "tran:adeOfHole",
 ]
 
-# The surfaces that bound those spaces. core::AbstractThematicSurface subtypes,
-# so the LOD0-3 multi-surfaces come from the same place a building's boundary
-# surfaces get theirs.
+# core::AbstractThematicSurface subtypes, the surfaces that bound those
+# spaces.
 [[order_group]]
 types = [
   "tran:TrafficArea", "tran:AuxiliaryTrafficArea",

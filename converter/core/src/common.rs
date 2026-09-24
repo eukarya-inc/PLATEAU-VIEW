@@ -308,7 +308,6 @@ mod tests {
         );
     }
 
-    /// A per-type row applies under its feature type and nowhere else.
     #[test]
     fn a_per_type_retarget_follows_the_enclosing_feature() {
         const TRAN3: &str = "http://www.opengis.net/citygml/transportation/3.0";

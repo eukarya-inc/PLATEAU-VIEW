@@ -1,14 +1,8 @@
 //! Structural rewrites for the Transportation module that a rename table
 //! cannot express.
 //!
-//! Like [`crate::bldg`] this runs *after* [`crate::transform::rename`], so
-//! every name here is CityGML 3.0. It runs before [`crate::iur`], so the data
-//! quality descriptors it renumbers are in place when that pass supplies the
-//! one i-UR 4.0 requires.
-//!
-//! CityGML 2.0 gave a transportation object its own geometry and hung
-//! surfaces off it directly. CityGML 3.0 gives the object no geometry and
-//! reaches every surface through a space:
+//! Runs after [`crate::transform::rename`] and before [`crate::iur`], so
+//! every name here is CityGML 3.0 and i-UR 4.0.
 //!
 //! ```text
 //! 2.0   <tran:Road>
@@ -26,25 +20,21 @@
 //!         </…></…>
 //! ```
 //!
-//! One pass covers Road, Track, Square, Railway and Waterway, since the module
-//! gives them one shape. Per feature it does the following:
+//! One pass covers Road, Track, Square, Railway and Waterway. Per feature it
+//! does the following:
 //!
-//! * wraps every inline traffic and auxiliary traffic area in a space, whose
-//!   `gml:id` is the area's own id with `_space` appended, so a document in
-//!   another file can name the space from the area it already references;
-//! * rewrites an area held by reference into a reference to that space;
-//! * moves each area's geometry down one LOD, since 3.0's LOD1 has no height
-//!   and its LOD2 does, which is where 2.0 drew the line between LOD2 and
-//!   LOD3;
+//! * wraps every inline area in a space whose `gml:id` is the area's own id
+//!   with `_space` appended, and turns an area held by reference into a
+//!   reference to that space;
+//! * moves each area's geometry down one LOD;
 //! * keeps the feature's own full-width surface as a minted space and area at
 //!   LOD1 when no area carries an LOD2 surface, and drops it otherwise;
-//! * drops the feature's own LOD2 and LOD3 surfaces, which 2.0 defined as the
-//!   aggregate of the areas' surfaces, and keeps them on the minted area when
-//!   the feature holds no area for them to aggregate;
-//! * renumbers the LOD-indexed data quality descriptors the same way the
-//!   geometry moved, and rewrites `lodType` through the profile's map;
-//! * when the run asks for it, extrudes each space's LOD1 area into a
-//!   `core:lod1Solid` by the clearance height that [`Clearance`] resolves.
+//! * drops the feature's own LOD2 and LOD3 surfaces, keeping them on the
+//!   minted area when the feature holds no area;
+//! * renumbers the LOD-indexed data quality descriptors and rewrites
+//!   `lodType` through the profile's map;
+//! * extrudes each space's LOD1 area into a `core:lod1Solid` when the run
+//!   supplies a [`Clearance`].
 //!
 //! Granularity, the full-width function code, the `lodType` map and the
 //! per-type clearance heights come from the profile's `[tran]` table.
@@ -59,11 +49,9 @@ use crate::report::Warnings;
 use crate::transform::{IdGen, id_seed};
 use crate::xml::{Element, Name, Node, ns};
 
-/// The transportation feature types this pass rewrites.
 const FEATURES: &[&str] = &["Road", "Track", "Square", "Railway", "Waterway"];
 
-/// The 2.0 properties that held an area, and the 3.0 property and space each
-/// becomes.
+/// Each 2.0 area property, with the 3.0 property and space it becomes.
 const AREA_PROPERTIES: &[(&str, &str, &str)] = &[
     ("trafficArea", "trafficSpace", "TrafficSpace"),
     (
@@ -73,7 +61,7 @@ const AREA_PROPERTIES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// Data quality descriptors recorded per LOD, by their stem.
+/// The per-LOD data quality descriptors, by stem.
 const QUALITY_STEMS: &[&str] = &[
     "geometrySrcDesc",
     "appearanceSrcDesc",
@@ -83,10 +71,10 @@ const QUALITY_STEMS: &[&str] = &[
 
 /// The clearance heights one run extrudes LOD1 spaces by, in metres.
 ///
-/// A space takes the first of these that applies, `overrides` by the
-/// `gml:id` of its area, `overrides` by the `gml:id` of its feature, `height`,
-/// then the profile's default for the feature type. A space none applies to
-/// gets no solid.
+/// A space takes the first of these that applies, `overrides` by the `gml:id`
+/// of its area, `overrides` by the `gml:id` of its feature, `height`, then the
+/// profile's default for the feature type. A space none applies to gets no
+/// solid.
 #[derive(Debug, Clone, Default)]
 pub struct Clearance {
     pub height: Option<f64>,
@@ -94,8 +82,7 @@ pub struct Clearance {
 }
 
 impl Clearance {
-    /// True when `height` is usable as a clearance, finite and greater than
-    /// zero.
+    /// True when `height` is finite and greater than zero.
     pub fn valid_height(height: f64) -> bool {
         height.is_finite() && height > 0.0
     }
@@ -140,7 +127,6 @@ impl Clearance {
     }
 }
 
-/// Where a resolved clearance height came from.
 #[derive(Debug, Clone, Copy)]
 enum ClearanceSource {
     Area,
@@ -152,7 +138,6 @@ enum ClearanceSource {
 /// A clearance height and its source.
 type Height = (f64, ClearanceSource);
 
-/// Which kinds of space a feature had extruded.
 #[derive(Debug, Default)]
 struct Extruded {
     traffic: bool,
@@ -175,15 +160,11 @@ pub struct TranRewrite {
 
 /// What the pass learned about one feature before rewriting it.
 struct Shape {
-    /// An old LOD2 surface supplies the output's LOD1. Either some inline area
-    /// carries one, or the feature's own LOD2 aggregate stands for the areas it
-    /// holds by reference, or the feature has no area and no LOD1 of its own.
+    /// An old LOD2 surface supplies the output's LOD1.
     divided: bool,
-    /// Some inline area carries an LOD3 surface, or the feature holds only
-    /// references and carries an LOD3 aggregate of its own.
+    /// An old LOD3 surface supplies the output's LOD2.
     has_lod3: bool,
-    /// The feature carries no traffic or auxiliary traffic area, inline or by
-    /// reference.
+    /// The feature carries no area property, inline or by reference.
     arealess: bool,
     /// The feature carries a `tran:lod1MultiSurface` of its own.
     own_lod1: bool,
@@ -213,8 +194,7 @@ impl TranRewrite {
     }
 
     /// Raises the upper corner of a document's `gml:boundedBy` by the largest
-    /// height this run can extrude by, so the envelope still bounds the
-    /// solids. Any other member is left alone.
+    /// height this run can extrude by. Any other member is left alone.
     pub fn raise_envelope(&self, member: &mut Element, warnings: &mut Warnings) {
         let Some(raise) = self.max_height() else {
             return;
@@ -250,7 +230,6 @@ impl TranRewrite {
         ));
     }
 
-    /// The largest height any space in this run can be extruded by.
     fn max_height(&self) -> Option<f64> {
         let clearance = self.clearance.as_ref()?;
         clearance
@@ -312,7 +291,6 @@ impl TranRewrite {
             .map(|h| (*h, ClearanceSource::Default))
     }
 
-    /// The height one area's space takes.
     fn area_clearance(&self, area: &Element, feature: Option<Height>) -> Option<Height> {
         let clearance = self.clearance.as_ref()?;
         area.attr(Some(&self.gml), "id")
@@ -379,7 +357,7 @@ impl TranRewrite {
     }
 
     /// Adds the `lodType` the profile names for an extruded feature, beside
-    /// the last `lodType` the feature already carries.
+    /// the last one the feature already carries.
     fn stamp_lod_type(
         &self,
         feature: &mut Element,
@@ -805,8 +783,7 @@ impl TranRewrite {
     }
 
     /// Renumbers the LOD-indexed quality descriptors under `el` to follow the
-    /// geometry. Spaces are not entered, since they hold no descriptors of the
-    /// feature's.
+    /// geometry. Spaces are not entered.
     fn renumber_quality(
         &self,
         el: &mut Element,
@@ -951,7 +928,6 @@ impl TranRewrite {
         }
     }
 
-    /// Calls `f` on every quality descriptor under `el`, spaces excluded.
     fn for_each_descriptor(&self, el: &Element, f: &mut dyn FnMut(&Element)) {
         for child in el.elements() {
             if self.is_space_property(child) {
@@ -965,7 +941,6 @@ impl TranRewrite {
         }
     }
 
-    /// Calls `f` on every `lodType` under `el`, spaces excluded.
     fn for_each_lod_type(&self, el: &Element, f: &mut dyn FnMut(&Element)) {
         for child in el.elements() {
             if self.is_space_property(child) {
@@ -1014,19 +989,16 @@ pub fn space_id(area: &str) -> String {
     format!("{}_space", id_seed(area))
 }
 
-/// The file name a `codeSpace` cites.
 fn code_list_file(el: &Element) -> Option<&str> {
     let value = el.attr(None, "codeSpace")?;
     Some(value.rsplit_once('/').map_or(value, |(_, file)| file))
 }
 
-/// Replaces an element's name, keeping its attributes and children.
 fn retag(mut el: Element, name: Name) -> Element {
     el.name = name;
     el
 }
 
-/// True when an element named `(ns, local)` sits anywhere under `el`.
 fn has_descendant(el: &Element, ns: &str, local: &str) -> bool {
     el.elements()
         .any(|child| child.is(ns, local) || has_descendant(child, ns, local))
@@ -1189,8 +1161,6 @@ mod tests {
             .collect()
     }
 
-    /// A divided road keeps its areas at LOD1 under spaces named after them,
-    /// and loses its own full-width surface and aggregates.
     #[test]
     fn a_divided_road_moves_its_areas_down_one_lod_under_derived_spaces() {
         let (r, w) = convert(road(vec![
@@ -1245,8 +1215,6 @@ mod tests {
         );
     }
 
-    /// A road with no LOD2 area keeps its full-width surface as a minted
-    /// space and area at LOD1, and LOD3 areas go to LOD2.
     #[test]
     fn an_undivided_road_keeps_its_full_width_surface_on_a_minted_area() {
         let (r, _) = convert(road(vec![
@@ -1288,8 +1256,6 @@ mod tests {
         );
     }
 
-    /// Granularity comes from the area's function, or from the feature's
-    /// lodType for every traffic space at once. Auxiliary spaces stay way.
     #[test]
     fn granularity_follows_the_lane_function_and_the_lod_type() {
         let (r, _) = convert(road(vec![
@@ -1311,8 +1277,6 @@ mod tests {
         assert_eq!(quality_locals(&r), ["lodType=2.2"]);
     }
 
-    /// An area held by reference becomes a reference to the space whose id
-    /// the other file derived from the same area id.
     #[test]
     fn a_referenced_area_becomes_a_reference_to_its_derived_space() {
         let mut by_ref = Element::new(Name::qualified(TRAN, "trafficArea"));
@@ -1350,8 +1314,6 @@ mod tests {
         );
     }
 
-    /// A track's network becomes the LOD0 curve of its full-width area, with
-    /// the track's own function code and the curve container 3.0 expects.
     #[test]
     fn a_network_becomes_the_full_width_areas_lod0_curve() {
         let mut network = Element::new(Name::qualified(TRAN, "lod0Network"));
@@ -1380,10 +1342,6 @@ mod tests {
         assert!(quality_locals(&r).is_empty());
         assert!(w.iter().any(|(m, _)| m.contains("lodType 8 has no entry")));
     }
-    /// The height a space is extruded by follows the run's inputs in order,
-    /// area override, feature override, run height, then the profile's
-    /// per-type default, and a type without a default gets no solid. An
-    /// extruded Railway gains the code list's lodType for that form.
     #[test]
     fn clearance_resolves_in_order_and_stamps_the_railway_lod_type() {
         let rules = Rules::from_toml(DEFAULT_PROFILE).unwrap();
