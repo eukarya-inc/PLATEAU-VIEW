@@ -39,7 +39,8 @@
 //! * keeps the feature's own full-width surface as a minted space and area at
 //!   LOD1 when no area carries an LOD2 surface, and drops it otherwise;
 //! * drops the feature's own LOD2 and LOD3 surfaces, which 2.0 defined as the
-//!   aggregate of the areas' surfaces;
+//!   aggregate of the areas' surfaces, and keeps them on the minted area when
+//!   the feature holds no area for them to aggregate;
 //! * renumbers the LOD-indexed data quality descriptors the same way the
 //!   geometry moved, and rewrites `lodType` through the profile's map;
 //! * when the run asks for it, extrudes each space's LOD1 area into a
@@ -93,6 +94,12 @@ pub struct Clearance {
 }
 
 impl Clearance {
+    /// True when `height` is usable as a clearance, finite and greater than
+    /// zero.
+    pub fn valid_height(height: f64) -> bool {
+        height.is_finite() && height > 0.0
+    }
+
     /// Reads `overrides` from CSV text with a `gml_id,height` header row. The
     /// error names the offending line.
     pub fn parse_csv(text: &str) -> std::result::Result<HashMap<String, f64>, String> {
@@ -120,9 +127,9 @@ impl Clearance {
             let height: f64 = height
                 .parse()
                 .map_err(|_| format!("line {n}: `{height}` is not a number"))?;
-            if id.is_empty() || height <= 0.0 {
+            if id.is_empty() || !Self::valid_height(height) {
                 return Err(format!(
-                    "line {n}: the id must be non-empty and the height positive"
+                    "line {n}: the id must be non-empty and the height finite and positive"
                 ));
             }
             if out.insert(id.to_owned(), height).is_some() {
@@ -168,12 +175,18 @@ pub struct TranRewrite {
 
 /// What the pass learned about one feature before rewriting it.
 struct Shape {
-    /// Some inline area carries an LOD2 surface, or the feature holds only
-    /// references and carries an LOD2 aggregate of its own.
+    /// An old LOD2 surface supplies the output's LOD1. Either some inline area
+    /// carries one, or the feature's own LOD2 aggregate stands for the areas it
+    /// holds by reference, or the feature has no area and no LOD1 of its own.
     divided: bool,
     /// Some inline area carries an LOD3 surface, or the feature holds only
     /// references and carries an LOD3 aggregate of its own.
     has_lod3: bool,
+    /// The feature carries no traffic or auxiliary traffic area, inline or by
+    /// reference.
+    arealess: bool,
+    /// The feature carries a `tran:lod1MultiSurface` of its own.
+    own_lod1: bool,
     /// The feature's `lodType` puts every traffic space at `lane`.
     lane: bool,
 }
@@ -473,6 +486,24 @@ impl TranRewrite {
                     ));
                 }
                 "lod0Network" => full_width.push(self.network(child, warnings)),
+                "lod2MultiSurface" if shape.arealess && shape.own_lod1 => warnings.add(format!(
+                    "tran:lod2MultiSurface on the {label} was dropped: the {label} holds \
+                     no area for it to aggregate, and its own tran:lod1MultiSurface \
+                     already becomes the full-width LOD1 surface"
+                )),
+                "lod2MultiSurface" | "lod3MultiSurface" if shape.arealess => {
+                    let to = match child.name.local.as_str() {
+                        "lod2MultiSurface" => "lod1MultiSurface",
+                        _ => "lod2MultiSurface",
+                    };
+                    warnings.add(format!(
+                        "tran:{} on the {label} became core:{to} on the full-width area: \
+                         the {label} holds no area for it to aggregate, so it is the only \
+                         surface the output has at that LOD",
+                        child.name.local
+                    ));
+                    full_width.push(retag(child, Name::qualified(&self.core, to)));
+                }
                 "lod2MultiSurface" | "lod3MultiSurface" => warnings.add(format!(
                     "tran:{} on the {label} was dropped: CityGML 2.0 defined it as the \
                      aggregate of its areas' surfaces, which the output still carries",
@@ -500,28 +531,35 @@ impl TranRewrite {
     }
 
     fn shape(&self, feature: &Element) -> Shape {
+        let mut areas = 0;
         let mut inline_areas = 0;
         let mut divided = false;
         let mut has_lod3 = false;
+        let mut own_lod1 = false;
         let mut own_lod2 = false;
         let mut own_lod3 = false;
         for child in feature.elements().filter(|c| c.name.in_ns(&self.tran)) {
             match child.name.local.as_str() {
                 "trafficArea" | "auxiliaryTrafficArea" => {
+                    areas += 1;
                     for area in child.elements() {
                         inline_areas += 1;
                         divided |= area.child(&self.tran, "lod2MultiSurface").is_some();
                         has_lod3 |= area.child(&self.tran, "lod3MultiSurface").is_some();
                     }
                 }
+                "lod1MultiSurface" => own_lod1 = true,
                 "lod2MultiSurface" => own_lod2 = true,
                 "lod3MultiSurface" => own_lod3 = true,
                 _ => {}
             }
         }
+        let by_reference = areas > 0 && inline_areas == 0;
         Shape {
-            divided: divided || (inline_areas == 0 && own_lod2),
+            divided: divided || (own_lod2 && (by_reference || (areas == 0 && !own_lod1))),
             has_lod3: has_lod3 || (inline_areas == 0 && own_lod3),
+            arealess: areas == 0,
+            own_lod1,
             lane: self.lod_type_lane(feature),
         }
     }

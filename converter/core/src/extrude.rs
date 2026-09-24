@@ -8,9 +8,14 @@
 //! one solid per polygon.
 //!
 //! The horizontal tokens of every tuple are copied as written. Only the third
-//! token is parsed, raised, and written back.
+//! token is parsed, raised, and written back. The `srsName` and `srsDimension`
+//! of the input multi-surface, where it carries them, are copied onto the
+//! result.
 
 use crate::xml::{Element, Name};
+
+/// The CRS attributes a generated solid takes from the surface it stands on.
+const SRS_ATTRIBUTES: &[&str] = &["srsName", "srsDimension"];
 
 /// Extrudes `multi_surface` upward by `height`.
 ///
@@ -39,9 +44,9 @@ pub fn extrude(
         }
         polygons.push(read_polygon(polygon, gml)?);
     }
-    match polygons.len() {
-        0 => Err("the multi-surface holds no polygon".to_owned()),
-        1 => Ok(solid(&polygons[0], height, gml, id)),
+    let mut out = match polygons.len() {
+        0 => return Err("the multi-surface holds no polygon".to_owned()),
+        1 => solid(&polygons[0], height, gml, id),
         _ => {
             let mut composite = Element::new(Name::qualified(gml, "CompositeSolid"));
             composite.set_attr(Name::qualified(gml, "id"), id);
@@ -50,9 +55,16 @@ pub fn extrude(
                 member.push(solid(polygon, height, gml, &format!("{id}_{}", k + 1)));
                 composite.push(member);
             }
-            Ok(composite)
+            composite
+        }
+    };
+    for name in SRS_ATTRIBUTES {
+        if let Some(value) = multi_surface.attr(None, name) {
+            let value = value.to_owned();
+            out.set_attr(Name::unqualified(*name), value);
         }
     }
+    Ok(out)
 }
 
 /// One vertex, its horizontal tokens as written and its height parsed.
@@ -241,6 +253,8 @@ mod tests {
 
     fn multi_surface(polygons: Vec<Element>) -> Element {
         let mut ms = Element::new(Name::qualified(ns::GML_32, "MultiSurface"));
+        ms.set_attr(Name::unqualified("srsName"), "EPSG:6697");
+        ms.set_attr(Name::unqualified("srsDimension"), "3");
         for polygon in polygons {
             let mut member = Element::new(Name::qualified(ns::GML_32, "surfaceMember"));
             member.push(polygon);
@@ -283,6 +297,8 @@ mod tests {
 
         assert!(solid.is(ns::GML_32, "Solid"));
         assert_eq!(solid.attr(Some(ns::GML_32), "id"), Some("s"));
+        assert_eq!(solid.attr(None, "srsName"), Some("EPSG:6697"));
+        assert_eq!(solid.attr(None, "srsDimension"), Some("3"));
         let faces = faces(&solid);
         assert_eq!(faces.len(), 10);
         assert_eq!(faces[0].attr(Some(ns::GML_32), "id"), Some("s_1"));
@@ -323,6 +339,7 @@ mod tests {
         let ms = multi_surface(vec![polygon(square, &[]), polygon(square, &[])]);
         let composite = extrude(&ms, 1.0, ns::GML_32, "c").unwrap();
         assert!(composite.is(ns::GML_32, "CompositeSolid"));
+        assert_eq!(composite.attr(None, "srsName"), Some("EPSG:6697"));
         let solids: Vec<&Element> = composite
             .elements()
             .filter_map(|m| m.elements().next())
