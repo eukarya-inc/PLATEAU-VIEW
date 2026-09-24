@@ -8,6 +8,7 @@ use serde::Deserialize;
 use toml::{Table, Value};
 
 use crate::error::{Error, Result};
+use crate::tran::Clearance;
 use crate::xml::{Name, PrefixMap};
 
 /// A conversion profile exactly as it appears on disk.
@@ -628,9 +629,10 @@ impl Rules {
         }
         let mut clearance = HashMap::new();
         for (ty, height) in &profile.tran.clearance {
-            if *height <= 0.0 {
+            if !Clearance::valid_height(*height) {
                 return Err(Error::Profile(format!(
-                    "[tran.clearance] gives `{ty}` a height of {height}, which is not positive"
+                    "[tran.clearance] gives `{ty}` a height of {height}, which is not \
+                     finite and positive"
                 )));
             }
             clearance.insert(parse_name(ty, output)?, *height);

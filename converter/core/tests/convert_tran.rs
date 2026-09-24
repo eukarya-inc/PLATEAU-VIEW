@@ -194,3 +194,60 @@ fn clearance_extrudes_every_lod1_space() {
         output.contains("<gml:upperCorner>35.71697615109303 139.80021956325191 11.71076585930391<")
     );
 }
+
+/// A transportation feature carries no geometry of its own in CityGML 3.0, so
+/// every surface has to reach a space. A feature holding areas hands its own
+/// surfaces to them; a feature holding none has nowhere else to put them.
+const AREALESS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"
+  xmlns:tran="http://www.opengis.net/citygml/transportation/2.0"
+  xmlns:gml="http://www.opengis.net/gml"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:uro="https://www.geospatial.jp/iur/uro/3.1">
+<core:cityObjectMember>
+<tran:Road gml:id="alone">
+  <tran:lod2MultiSurface><gml:MultiSurface gml:id="ms_a2"/></tran:lod2MultiSurface>
+  <tran:lod3MultiSurface><gml:MultiSurface gml:id="ms_a3"/></tran:lod3MultiSurface>
+</tran:Road>
+</core:cityObjectMember>
+<core:cityObjectMember>
+<tran:Road gml:id="full">
+  <tran:lod1MultiSurface><gml:MultiSurface gml:id="ms_f1"/></tran:lod1MultiSurface>
+  <tran:lod2MultiSurface><gml:MultiSurface gml:id="ms_f2"/></tran:lod2MultiSurface>
+</tran:Road>
+</core:cityObjectMember>
+<core:cityObjectMember>
+<tran:Square gml:id="referenced">
+  <tran:trafficArea xlink:href="../tran/x.gml#area_1"/>
+  <tran:lod2MultiSurface><gml:MultiSurface gml:id="ms_r2"/></tran:lod2MultiSurface>
+</tran:Square>
+</core:cityObjectMember>
+</core:CityModel>
+"#;
+
+#[test]
+fn a_feature_holding_no_area_keeps_its_own_surfaces() {
+    let (_, toml) = PROFILES
+        .iter()
+        .find(|(name, _)| *name == "iur-3.1-to-4.0")
+        .unwrap();
+    let rules = Rules::from_toml(toml).unwrap();
+    let converter = Converter::new(rules, Options::default()).unwrap();
+    let (output, _) = convert_to_string(&converter, "arealess", AREALESS).unwrap();
+
+    // The arealess road's LOD2 and LOD3 aggregate nothing, so they become the
+    // full-width area's LOD1 and LOD2. The road that also carries its own LOD1
+    // keeps that at LOD1 and drops its aggregate.
+    assert!(output.contains(r#"gml:id="ms_a2""#));
+    assert!(output.contains(r#"gml:id="ms_a3""#));
+    assert!(output.contains(r#"gml:id="ms_f1""#));
+    assert!(!output.contains(r#"gml:id="ms_f2""#));
+    assert_eq!(count(&output, "<core:lod1MultiSurface"), 2);
+    assert_eq!(count(&output, "<core:lod2MultiSurface"), 1);
+
+    // The square's areas are referenced, so they carry the geometry its own
+    // aggregate stands for and it mints no full-width space of its own.
+    assert!(!output.contains(r#"gml:id="ms_r2""#));
+    assert_eq!(count(&output, "<tran:TrafficSpace"), 2);
+    assert!(output.contains(r#"<tran:trafficSpace xlink:href="../tran/x.gml#area_1_space"/>"#));
+}

@@ -272,8 +272,8 @@ fn clearance(args: &ConvertArgs) -> Result<Option<Clearance>> {
         return Ok(None);
     }
     if let Some(height) = args.clearance_height {
-        if height.is_nan() || height <= 0.0 {
-            bail!("--clearance-height must be positive, got {height}");
+        if !Clearance::valid_height(height) {
+            bail!("--clearance-height must be finite and positive, got {height}");
         }
     }
     let overrides = match &args.clearance_csv {
