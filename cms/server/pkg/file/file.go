@@ -62,6 +62,16 @@ func FromURL(ctx context.Context, rawURL string) (*File, error) {
 		return nil, err
 	}
 
+	// Refuse imports that point at internal addresses. Callers are
+	// authenticated workspace members, but a "fetch from URL" primitive
+	// with no host / scheme / IP guard turns any write-capable member into
+	// a cloud-metadata / internal-network reader who can then download the
+	// result as a stored asset. Enforced both up front and at dial time
+	// (safeHTTPClient's DialContext) to close the DNS-rebinding gap.
+	if err := checkExternalURL(URL); err != nil {
+		return nil, rerror.ErrInternalBy(err)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, URL.String(), nil)
 	if err != nil {
 		return nil, errors.New("failed to request")
@@ -70,7 +80,7 @@ func FromURL(ctx context.Context, rawURL string) (*File, error) {
 	// TODO: support gzip
 	// req.Header.Set("Accept-Encoding", "gzip")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := safeHTTPClient.Do(req)
 	if err != nil {
 		return nil, rerror.ErrInternalBy(err)
 	}
