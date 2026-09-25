@@ -193,6 +193,12 @@ to = "urc:areaType"
 from = "uro:codeValue"
 to = "urc:codeValue"
 
+# The 航路 feature. CityGML 3.0 declares it in the transportation module, so
+# it becomes tran:Waterway and not the urf:UrbanFacility of the same name.
+[[element]]
+from = "uro:Waterway"
+to = "tran:Waterway"
+
 # BEGIN GENERATED -- i-UR rules
 #
 # Derived from the schemas, not written by hand. Regenerate with:
@@ -245,9 +251,6 @@ to = "urc:RiverFloodingRiskAttribute"
 [[element]]
 from = "uro:TsunamiRiskAttribute"
 to = "urc:TsunamiRiskAttribute"
-[[element]]
-from = "uro:Waterway"
-to = "urf:Waterway"
 [[element]]
 from = "uro:annotationType"
 to = "urc:annotationType"
@@ -365,8 +368,8 @@ to = "urc:visibility"
 
 # Where an i-UR class attaches in CityGML 3.0. 2.0 used a property named by
 # the extension (uro:buildingIDAttribute). 3.0 uses one general hook per host
-# class, so the wrapper is chosen by the class inside it rather than by its own
-# name.
+# class, so the wrapper is chosen by the class inside it rather than by its
+# own name.
 [ade_hooks]
 "urc:DataQualityAttribute" = "core:adeOfAbstractCityObject"
 "urc:DisasterRiskAttribute" = "core:adeOfAbstractCityObject"
@@ -669,7 +672,6 @@ to = "urc:visibility"
 #     wtrFacilityTypeAttribute
 #   urf:lod0MultiCurve: no single 4.0 module is both a match and consistent with the class holding it
 #   urf:lod1MultiSurface: no single 4.0 module is both a match and consistent with the class holding it
-#   uro:codeValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:dateValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:doubleValue: no single 4.0 module is both a match and consistent with the class holding it
 #   uro:intValue: no single 4.0 module is both a match and consistent with the class holding it
@@ -700,4 +702,6 @@ to = "urc:visibility"
 #   uro:WaterBodyInlandFloodingRiskAttribute
 #   uro:WaterBodyRiverFloodingRiskAttribute
 #   uro:WaterBodyTsunamiRiskAttribute
+#   uro:Waterway
+#   uro:codeValue
 # END GENERATED -- i-UR rules
