@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "plateau-convert"
+name = "citygml-convert"
 path = "src/main.rs"
 
 [dependencies]

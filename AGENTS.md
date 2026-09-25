@@ -27,7 +27,7 @@ This is a monorepo containing multiple interconnected services:
 /extension      # PLATEAU VIEW extension widgets
 /geo            # NestJS geo service for address search
 /tile           # Rust-based high-performance tile server (XYZ proxy + COG rendering)
-/converter      # Rust CityGML 2.0 -> 3.0 converter (CLI + Tauri UI), independent of the rest
+/citygml-converter # Rust CityGML 2.0 -> 3.0 converter (CLI + Tauri UI), independent of the rest
 /worker         # Background worker applications for PLATEAU API server
 /terraform      # Infrastructure as Code (AWS/GCP)
 /tools          # CLI tools for data migration
@@ -68,9 +68,9 @@ yarn lint              # Lint code
 yarn gql               # Generate GraphQL types (geo + plateau)
 ```
 
-### Converter (Rust) - /converter
+### Converter (Rust) - /citygml-converter
 ```bash
-cd converter
+cd citygml-converter
 cargo test                                # Run tests
 cargo fmt --all                           # Format code
 cargo clippy --all-targets -- -D warnings # Lint
@@ -166,7 +166,7 @@ The core provides an engine-agnostic map abstraction:
 - Environment variables configured in `.env` files (not committed)
 - **When investigating or modifying `/server`**: Always read `/server/CLAUDE.md` or `/server/AGENTS.md` first before using the Explore tool or making changes. These files contain critical server-specific architecture, patterns, and development guidelines.
 - **When investigating or modifying `/tile`**: Always read `/tile/CLAUDE.md` first. This contains Rust-specific development guidelines, environment variables, and layer type documentation.
-- **When investigating or modifying `/converter`**: Always read `/converter/AGENTS.md` first. `/converter` is a self-contained Cargo workspace that shares no code or build with the rest of the monorepo. Do not wire it into the root `package.json` workspaces or `go.work`.
+- **When investigating or modifying `/citygml-converter`**: Always read `/citygml-converter/AGENTS.md` first. `/citygml-converter` is a self-contained Cargo workspace that shares no code or build with the rest of the monorepo. Do not wire it into the root `package.json` workspaces or `go.work`.
 
 ## Agent Skills
 

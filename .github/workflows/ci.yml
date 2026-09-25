@@ -113,7 +113,7 @@ jobs:
         with:
           since_last_remote_commit: true
           files: |
-            converter/**
+            citygml-converter/**
             .github/workflows/ci-converter.yml
       - name: changed files for docs
         id: docs
