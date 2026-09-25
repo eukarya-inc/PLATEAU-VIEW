@@ -19,8 +19,8 @@ ui/
     └── src/lib.rs        commands wrapping Dataset + Converter
 ```
 
-`src-tauri` becomes a member of the `converter/` Cargo workspace, and the slot
-is already reserved in `converter/Cargo.toml`.
+`src-tauri` becomes a member of the `citygml-converter/` Cargo workspace, and
+the slot is already reserved in `citygml-converter/Cargo.toml`.
 
 ## What the core already exposes for it
 

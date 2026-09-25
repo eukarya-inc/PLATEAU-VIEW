@@ -1,4 +1,4 @@
-//! `plateau-convert`, a CityGML 2.0 -> 3.0 converter for PLATEAU city
+//! `citygml-convert`, a CityGML 2.0 -> 3.0 converter for PLATEAU city
 //! models.
 
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ use plateau_converter_core::{PROFILES, detect, report::Report};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "plateau-convert",
+    name = "citygml-convert",
     version,
     about = "Convert PLATEAU CityGML 2.0 city models to CityGML 3.0",
     long_about = "Convert PLATEAU CityGML 2.0 city models to CityGML 3.0.

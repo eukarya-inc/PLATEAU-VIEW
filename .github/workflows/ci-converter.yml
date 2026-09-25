@@ -16,13 +16,13 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: converter
+          workspaces: citygml-converter
       - name: Check formatting
-        working-directory: converter
+        working-directory: citygml-converter
         run: cargo fmt --all -- --check
       - name: Clippy
-        working-directory: converter
+        working-directory: citygml-converter
         run: cargo clippy --all-targets -- -D warnings
       - name: Test
-        working-directory: converter
+        working-directory: citygml-converter
         run: cargo test --all-targets
