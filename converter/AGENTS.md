@@ -36,8 +36,8 @@ cargo run -p plateau-converter-cli -- inspect <input>...
 
 The single most common mistake here is putting a mapping in the wrong layer.
 
-* **A namespace bump, an element rename, an element to drop, a child order, or a
-  value the converter has to invent** → a file under `profiles/` instead of Rust.
+* **A namespace bump, an element rename, an element to drop, or a value the
+  converter has to invent** → a file under `profiles/` instead of Rust.
   This is a table, so keep it a table. *Which* file follows from what the rule
   varies with, and getting that wrong is how profiles drift apart:
   * true of CityGML 2.0 → 3.0 whatever i-UR the input carries →
@@ -60,6 +60,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   flag-and-emit escape hatch. Emitting output you know is wrong and noting it
   afterwards is the worst outcome here, since half-converted output *looks*
   converted.
+* **A child order** → nowhere. `core/src/schema.rs` reads every CityGML 3.0
+  and i-UR 4.0 element's order off the schemas vendored in `fixtures/schemas/`,
+  so a wrong order is fixed by updating those schemas.
 * **An i-UR rule that can be read off the schemas** → do not write it. Run the
   generator (`cargo run -p plateau-converter-gen -- --source 3.1 --write
   profiles/iur-3.1-to-4.0.toml`), which rewrites the block between the

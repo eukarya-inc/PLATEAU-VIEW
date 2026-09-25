@@ -93,29 +93,6 @@ superseded = ["Building_lodType.xml", "Road_lodType.xml", "Railway_lodType.xml"]
 [codelists.kept_codes]
 "DataQualityAttribute_thematicSrcDesc.xml" = ["898"]
 
-# The child order urc:DataQualityAttribute declares, read off urbanCore.xsd.
-#
-# The type is a sequence and i-UR reordered it: 3.0 wrote lodType after
-# lod1HeightType and 4.0 writes it before, so input order does not carry over.
-# Only this family is listed, because it is the only i-UR class the corpus
-# shows out of order; the rest keep the order they arrived in.
-[[order_group]]
-types = [
-  "urc:DataQualityAttribute",
-  "urc:ExteriorDataQualityAttribute",
-  "urc:InteriorDataQualityAttribute",
-]
-children = [
-  "urc:geometrySrcDescLod0", "urc:geometrySrcDescLod1",
-  "urc:geometrySrcDescLod2", "urc:geometrySrcDescLod3",
-  "urc:thematicSrcDesc",
-  "urc:appearanceSrcDescLod0", "urc:appearanceSrcDescLod1",
-  "urc:appearanceSrcDescLod2", "urc:appearanceSrcDescLod3",
-  "urc:lodType", "urc:lod1HeightType", "urc:granularity", "urc:hasError",
-  "urc:lod0AcquisitionCriterion", "urc:tranDataAcquisition",
-  "urc:publicSurveyDataQualityAttribute",
-]
-
 # The one child i-UR 4.0 requires on a data quality attribute.
 #
 # urc:DataQualityAttribute records provenance per LOD, and geometrySrcDescLod1
@@ -126,7 +103,7 @@ children = [
 #
 # `classes` are the concrete classes carrying the requirement, `child` the
 # element to supply, and `after` the children it must follow, since the type is
-# a sequence and the profile declares no order for i-UR classes.
+# a sequence.
 [quality]
 classes = [
   "urc:DataQualityAttribute",

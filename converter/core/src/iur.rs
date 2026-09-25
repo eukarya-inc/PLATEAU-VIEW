@@ -235,8 +235,6 @@ impl IurRewrite {
             supplied.set_attr(Name::unqualified("codeSpace"), code_space.clone());
         }
 
-        // The type is a sequence and the profile declares no order for i-UR
-        // classes, so the child goes after the ones it must follow.
         let at = el
             .children
             .iter()

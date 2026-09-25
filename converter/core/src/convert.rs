@@ -15,6 +15,7 @@ use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules};
 use crate::report::{FileReport, Report, Warnings};
+use crate::schema::ChildOrder;
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::xal::XalRewrite;
@@ -32,7 +33,7 @@ pub struct Options {
     pub feature_types: Vec<String>,
     /// Mint `gml:id` for geometries that lack one, which GML 3.2 requires.
     pub generate_gml_ids: bool,
-    /// Sort children into the order the 3.0 content models declare.
+    /// Sort children into the order the target schemas declare.
     pub reorder: bool,
     pub indent: Indent,
     /// Copy `codelists/`, `schemas/` and friends alongside the converted `udx/`.
@@ -70,6 +71,7 @@ pub struct Converter {
     bldg: BuildingRewrite,
     tran: TranRewrite,
     iur: IurRewrite,
+    order: ChildOrder,
     gml_ns: String,
     options: Options,
 }
@@ -83,6 +85,11 @@ impl Converter {
         let bldg = BuildingRewrite::new(&rules)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules)?;
+        let order = if options.reorder {
+            ChildOrder::target()?
+        } else {
+            ChildOrder::default()
+        };
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
             rules,
@@ -93,6 +100,7 @@ impl Converter {
             bldg,
             tran,
             iur,
+            order,
             gml_ns,
             options,
         })
@@ -305,7 +313,7 @@ impl Converter {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
         }
         if self.options.reorder {
-            transform::reorder(&self.rules, &mut element);
+            transform::reorder(&self.order, &mut element);
         }
 
         if !element.name.in_ns(&self.gml_ns) {
