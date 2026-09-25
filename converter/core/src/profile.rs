@@ -1,7 +1,6 @@
 //! The declarative half of the mapping, loaded from a TOML profile.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -42,8 +41,6 @@ pub struct Profile {
     pub namespace_map: IndexMap<String, String>,
     #[serde(default)]
     pub element: Vec<ElementRule>,
-    #[serde(default)]
-    pub order_group: Vec<OrderGroup>,
     /// i-UR class to the CityGML property that carries it. See
     /// [`Rules::ade_hook`].
     #[serde(default)]
@@ -200,11 +197,10 @@ fn merge(
 }
 
 /// What an array-of-tables row rules on, so that a row two files both write can
-/// be named. An `[[order_group]]` claims every type it orders.
+/// be named.
 fn row_subjects(path: &str, row: &Value) -> Vec<String> {
     let field = match path {
         "element" => "from",
-        "order_group" => "types",
         _ => return Vec::new(),
     };
     match row.get(field) {
@@ -286,13 +282,6 @@ pub struct ElementRule {
     /// Remove the element, and its subtree, instead of renaming it.
     #[serde(default)]
     pub drop: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OrderGroup {
-    pub types: Vec<String>,
-    pub children: Vec<String>,
 }
 
 /// The parts of a `con:Height` that CityGML 2.0 does not record, which the
@@ -516,7 +505,6 @@ pub struct Rules {
     namespace_map: HashMap<String, String>,
     /// `None` means "drop this element".
     renames: HashMap<Name, Option<Name>>,
-    order: HashMap<Name, Arc<Vec<Name>>>,
     output_namespaces: IndexMap<String, String>,
     prefixes: PrefixMap,
     schema_location: Option<String>,
@@ -566,19 +554,6 @@ impl Rules {
                         rule.from
                     )));
                 }
-            }
-        }
-
-        let mut order = HashMap::new();
-        for group in &profile.order_group {
-            let children: Vec<Name> = group
-                .children
-                .iter()
-                .map(|c| parse_name(c, output))
-                .collect::<Result<_>>()?;
-            let children = Arc::new(children);
-            for ty in &group.types {
-                order.insert(parse_name(ty, output)?, Arc::clone(&children));
             }
         }
 
@@ -704,7 +679,6 @@ impl Rules {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             renames,
-            order,
             output_namespaces,
             prefixes,
             schema_location,
@@ -751,11 +725,6 @@ impl Rules {
             Some(mapped) => Name::qualified(mapped.clone(), name.local.clone()),
             None => name.clone(),
         }
-    }
-
-    /// The required child order for an output type, if the profile declares one.
-    pub fn child_order(&self, name: &Name) -> Option<&[Name]> {
-        self.order.get(name).map(|v| v.as_slice())
     }
 
     pub fn prefixes(&self) -> &PrefixMap {

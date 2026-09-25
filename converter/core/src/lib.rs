@@ -8,7 +8,9 @@
 //!   and hands out one fully-materialised subtree per top-level member, so a
 //!   feature can be restructured without holding the whole file in memory.
 //! * [`profile`] holds the declarative part of the mapping (namespace bumps,
-//!   element renames, child ordering) loaded from a TOML profile.
+//!   element renames, supplied values) loaded from a TOML profile.
+//! * [`schema`] reads the child order each output element requires off the
+//!   vendored CityGML 3.0 and i-UR 4.0 schemas.
 //! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`], [`tran`]
 //!   and [`iur`] apply the profile and the structural rewrites a rename table
 //!   cannot express. [`extrude`] builds the solids [`tran`] can add.
@@ -27,6 +29,7 @@ pub mod iur;
 pub mod lod4;
 pub mod profile;
 pub mod report;
+pub mod schema;
 pub mod tran;
 pub mod transform;
 pub mod xal;
@@ -97,6 +100,11 @@ pub const IUR_4_0_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../../fixtures/schemas/iur/urt/4.0/publicTransit.xsd"),
     ),
 ];
+
+// The OGC CityGML 3.0 schemas (`OGC_SCHEMAS`), vendored in
+// `fixtures/schemas/ogc/` and embedded by `build.rs`. They are read by
+// `schema::ChildOrder`.
+include!(concat!(env!("OUT_DIR"), "/ogc_schemas_gen.rs"));
 
 // The published i-UR 4.0 code lists (`CODELISTS_4_0`), vendored in
 // `fixtures/codelists/4.0/` and embedded by `build.rs`. They replace the input's
