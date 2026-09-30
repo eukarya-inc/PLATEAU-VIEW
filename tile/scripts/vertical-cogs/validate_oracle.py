@@ -24,11 +24,9 @@ and compares it with GSI's JGD2024 values pixel by pixel.
   pass a pre-made listing (``rclone lsf ... > listing``) or the script falls
   back to an ``--include``-filtered lsf (slow).
 
-For each mesh it reports the residual for several ΔH sources: ``dh.tif`` (the
-deliverable), ``dh_bm.tif``, ``dh_tr.tif`` and ``gsi_rule``
-(:func:`sampler.sample_dh_gsi`: TR inside GSI's listed secondary meshes,
-otherwise BM, falling back to TR per cell where BM is out of range -- what
-GSI did, and what a single node grid can only approximate).
+For each mesh it reports the residual for ``gsi_rule`` (the served form:
+:class:`sampler.DhGsi` over dh_bm.tif + dh_tr.tif + tr_meshes.json), for
+each grid alone, and optionally for the not-served single-grid diagnostic.
 """
 
 from __future__ import annotations
@@ -46,9 +44,6 @@ import numpy as np
 
 import gsi
 import sampler
-from build_dh import GSI_TR_FALLBACK
-
-TR_SET = set(GSI_TR_FALLBACK)
 
 NS = {"gml": "http://www.opengis.net/gml/3.2"}
 BACKUP = "r2:plateau-terrain-ortho-backup/terrain/base_terrain/kibanchizu_dem_20250129/s1_geotiff_raw"
@@ -188,7 +183,8 @@ def stats(res: np.ndarray) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("meshes", nargs="+", help="mesh6:TYPE:edition, e.g. 473121:DEM5A:20250620")
-    ap.add_argument("--dh-dir", required=True)
+    ap.add_argument("--dh-dir", required=True, help="directory with dh_bm.tif, dh_tr.tif, tr_meshes.json")
+    ap.add_argument("--diagnostic-merged", help="optional dh_merged_diagnostic.tif to score alongside")
     ap.add_argument("--work", default="work/oracle")
     ap.add_argument("--listing-dem5a")
     ap.add_argument("--listing-dem1a")
@@ -198,7 +194,10 @@ def main() -> None:
     if len(args.meshes) > 6:
         raise SystemExit("at most 6 secondary meshes may be downloaded")
 
-    dh = {k: sampler.open_cog(os.path.join(args.dh_dir, f"{k}.tif")) for k in ("dh", "dh_bm", "dh_tr")}
+    served = sampler.DhGsi.open(args.dh_dir)
+    dh = {"dh_bm": served.bm, "dh_tr": served.tr}
+    if args.diagnostic_merged:
+        dh["merged_diagnostic"] = sampler.open_cog(args.diagnostic_merged)
     cl = gsi.Client()
     report = []
     for spec in args.meshes:
@@ -206,8 +205,8 @@ def main() -> None:
         listing = args.listing_dem5a if typ == "DEM5A" else args.listing_dem1a if typ == "DEM1A" else None
         new = load_2024(cl, mesh6, typ, edition, args.work)
         old = load_2011(mesh6, typ, listing, args.work, args.rclone_conf)
-        is_tr = int(mesh6) in GSI_TR_FALLBACK
-        acc = {k: [] for k in ("dh", "dh_bm", "dh_tr", "gsi_rule")}
+        is_tr = int(mesh6) in served.tr_meshes
+        acc = {k: [] for k in ("gsi_rule", *dh)}
         only_old = only_new = dh_nan = matched_tiles = 0
         worst_tiles = []
         for key, t_new in new["tiles"].items():
@@ -226,13 +225,13 @@ def main() -> None:
             lat, lon = pixel_centres(t_new["bounds"], zn.shape)
             la, lo = lat[both], lon[both]
             samples = {k: sampler.sample_many(r, la, lo) for k, r in dh.items()}
-            samples["gsi_rule"] = sampler.sample_dh_gsi_many(dh["dh_bm"], dh["dh_tr"], TR_SET, la, lo)
+            samples["gsi_rule"] = served.sample_many(la, lo)
             for k, v in samples.items():
                 ok = ~np.isnan(v)
                 acc[k].append((zo[both][ok] + v[ok]) - zn[both][ok])
-                if k == "dh":
+                if k == "gsi_rule":
                     dh_nan += int((~ok).sum())
-            r = (zo[both] + samples["dh"]) - zn[both]
+            r = (zo[both] + samples["gsi_rule"]) - zn[both]
             r = r[~np.isnan(r)]
             if r.size:
                 worst_tiles.append((float(np.abs(r).max()), t_new["name"], float((np.abs(r) > 0.005 + 1e-6).mean())))
@@ -250,9 +249,9 @@ def main() -> None:
             "editions_2011": sorted({re.search(r"-(\d{8})\.tif$", n).group(1) for n in old["names"]}),
             "pixels_valid_2011_only": only_old,
             "pixels_valid_2024_only": only_new,
-            "pixels_dh_nan": dh_nan,
+            "pixels_gsi_rule_nan": dh_nan,
             "residual_m": {k: stats(np.concatenate(v) if v else np.array([])) for k, v in acc.items()},
-            "worst_tiles_dh": worst_tiles[:5],
+            "worst_tiles_gsi_rule": worst_tiles[:5],
         }
         report.append(entry)
         print(json.dumps(entry, ensure_ascii=False), flush=True)

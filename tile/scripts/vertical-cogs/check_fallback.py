@@ -21,7 +21,7 @@ import os
 
 import gsi
 import vref
-from build_dh import GSI_TR_FALLBACK, closure_nodes
+from build_dh import EXPECTED_TR_MESHES as GSI_TR_FALLBACK, closure_nodes
 
 
 def main() -> None:

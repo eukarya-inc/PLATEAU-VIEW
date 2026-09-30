@@ -16,9 +16,12 @@ package needs a 基盤地図情報 login (``GSI_LOGIN_CONF``, see gsi.py). Pass
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
+import html
 import io
 import os
+import re
 import zipfile
 
 import gsi
@@ -53,6 +56,31 @@ PUBLIC = [
 ]
 
 
+TR_LIST_PAGE = "https://service.gsi.go.jp/kiban/app/data_update_info_all/"
+
+
+def parse_tr_list(page_html: str) -> dict:
+    """Extract the 2025-07-31 TR-fallback secondary-mesh list from the page.
+
+    The entry reads 「…三角点標高補正（hyokorevTR_jgd2024_h.par）」、を用いて
+    標高補正を実施した区域は以下のとおりです。 2次メッシュ番号：473113、…」.
+    """
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page_html)))
+    anchor = "を用いて標高補正を実施した区域は以下のとおりです。"
+    i = text.find(anchor)
+    if i < 0:
+        raise SystemExit(f"{TR_LIST_PAGE}: TR-fallback paragraph not found")
+    j = text.find("2次メッシュ番号：", i)
+    k = text.find("今回整備", j)
+    if j < 0 or k < 0:
+        raise SystemExit(f"{TR_LIST_PAGE}: mesh list not found after the TR paragraph")
+    quote = text[j:k].strip()
+    meshes = sorted({int(m) for m in re.findall(r"\b\d{6}\b", quote)})
+    if not meshes:
+        raise SystemExit(f"{TR_LIST_PAGE}: empty mesh list")
+    return {"entry": "2025-07-31 提供データを整備・更新しました（数値標高モデル）", "quote": quote, "meshes": meshes}
+
+
 def first_line(data: bytes, encoding: str) -> str:
     return data.split(b"\n", 1)[0].decode(encoding, "replace").strip()
 
@@ -65,6 +93,16 @@ def main() -> None:
     os.makedirs(args.out, exist_ok=True)
     cl = gsi.Client()
     manifest: dict[str, dict] = {}
+
+    # GSI's list of secondary meshes whose 2025-07 DEM re-issue used TR.
+    page = cl.get(TR_LIST_PAGE)
+    manifest["tr_list"] = {
+        "page": TR_LIST_PAGE,
+        "fetched_at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "page_sha256": hashlib.sha256(page).hexdigest(),
+        **parse_tr_list(page.decode("utf-8", "replace")),
+    }
+    print(f"tr_list: {manifest['tr_list']['meshes']}")
 
     for s in PUBLIC:
         blob = cl.get(s["url"])

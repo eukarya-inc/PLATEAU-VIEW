@@ -45,6 +45,7 @@ def main() -> None:
     ap.add_argument("model", choices=sorted(MODELS))
     ap.add_argument("--src", default="work/src")
     ap.add_argument("--out", default="work/out")
+    ap.add_argument("--version", default="v1")
     args = ap.parse_args()
     m = MODELS[args.model]
     src_path = os.path.join(args.src, m["file"])
@@ -71,6 +72,7 @@ def main() -> None:
     manifest = {
         "kind": "geoid",
         "model": args.model,
+        "version": args.version,
         "model_name_in_source": gs.model,
         "vertical_datum": m["vertical_datum"],
         "note": m["note"],

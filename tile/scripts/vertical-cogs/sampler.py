@@ -234,18 +234,19 @@ def sample_many(r: Raster, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# GSI's JGD2011 -> JGD2024 DEM conversion rule (two-grid form)
+# JGD2011 -> JGD2024 height correction: the served two-grid form
 # ---------------------------------------------------------------------------
 # What GSI's 2025-07 DEM re-issue actually did, established by
-# validate_oracle.py (see README "What GSI did"):
+# validate_oracle.py (see README "What GSI did"); normative text in the
+# product's manifest.json "selection_rule":
 #
-#   dH(p) = TR(p)            if p lies in a secondary mesh on GSI's TR list
-#         = BM(p)            else, if BM(p) is defined (all used nodes present)
+#   dH(p) = TR(p)            if p lies in a secondary mesh listed in tr_meshes.json
+#         = BM(p)            else, if BM(p) is not NaN
 #         = TR(p)            else (BM out of range at p: per-cell fallback)
 #
-# with BM(p)/TR(p) = sample(dh_bm.tif / dh_tr.tif, p). This cannot be baked
-# into one node grid: a node shared by a BM cell and a TR cell would need two
-# values (the field is discontinuous along those cell edges).
+# with BM(p)/TR(p) = sample(dh_bm.tif / dh_tr.tif, p). Each point is
+# evaluated on ONE grid; nodes are never merged, so the result is
+# discontinuous along edges between BM- and TR-evaluated cells (intended).
 
 
 def mesh6_of(lat: float, lon: float) -> int:
@@ -274,6 +275,46 @@ def sample_dh_gsi_many(bm: Raster, tr: Raster, tr_meshes: set[int], lat, lon) ->
     vb = sample_many(bm, lat, lon)
     vt = sample_many(tr, lat, lon)
     return np.where(in_tr | np.isnan(vb), vt, vb)
+
+
+def load_tr_meshes(path: str) -> set[int]:
+    """Read tr_meshes.json (``{"meshes": [473113, ...], ...}``)."""
+    import json
+
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    meshes = doc["meshes"]
+    if not meshes or not all(isinstance(m, int) and 100000 <= m <= 999999 for m in meshes):
+        raise ValueError(f"{path}: 'meshes' must be a non-empty list of 6-digit secondary mesh codes")
+    return set(meshes)
+
+
+class DhGsi:
+    """dh_bm.tif + dh_tr.tif + tr_meshes.json, sampled with GSI's rule.
+
+    :meth:`open` takes a local directory holding the three files.
+    """
+
+    def __init__(self, bm: Raster, tr: Raster, tr_meshes: set[int]):
+        if (bm.x0, bm.y0, bm.dx, bm.dy, bm.data.shape) != (tr.x0, tr.y0, tr.dx, tr.dy, tr.data.shape):
+            raise ValueError("dh_bm and dh_tr must share one grid")
+        self.bm, self.tr, self.tr_meshes = bm, tr, tr_meshes
+
+    @classmethod
+    def open(cls, directory: str) -> "DhGsi":
+        import os
+
+        return cls(
+            open_cog(os.path.join(directory, "dh_bm.tif")),
+            open_cog(os.path.join(directory, "dh_tr.tif")),
+            load_tr_meshes(os.path.join(directory, "tr_meshes.json")),
+        )
+
+    def sample(self, lat: float, lon: float) -> float:
+        return sample_dh_gsi(self.bm, self.tr, self.tr_meshes, lat, lon)
+
+    def sample_many(self, lat, lon) -> np.ndarray:
+        return sample_dh_gsi_many(self.bm, self.tr, self.tr_meshes, lat, lon)
 
 
 def main(argv: list[str]) -> None:

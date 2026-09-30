@@ -220,6 +220,114 @@ def test_gsi_rule_selects_tr_in_listed_meshes_and_falls_back_per_cell():
     assert list(got) == [1.0, 2.0]
 
 
+# --- GSI selection rule on the real mesh lattice -----------------------------
+# Synthetic BM/TR node sets over 473120-473121 (Miyazaki, 473121 is on GSI's
+# TR list) and 483103-483104 (483103 is not listed; BM lacks node 48310400,
+# the SE corner of cell 48310309). Values differ per node and between BM/TR
+# so any wrong node or wrong grid shows up.
+TR_LIST = {473121}
+
+
+def _nodes(meshes, value):
+    out = {}
+    for m in meshes:
+        i0, j0 = vref.mesh6_sw_node(m)
+        for a in range(11):
+            for b in range(11):
+                out[(i0 + a, j0 + b)] = value(i0 + a, j0 + b)
+    return out
+
+
+def _bil(nodes, lat, lon):
+    fi, fj = lat / vref.LAT_STEP_DEG, (lon - vref.LON_ORIGIN_DEG) / vref.LON_STEP_DEG
+    fi = round(fi) if abs(fi - round(fi)) < 1e-9 else fi
+    fj = round(fj) if abs(fj - round(fj)) < 1e-9 else fj
+    i, j = math.floor(fi), math.floor(fj)
+    ty, tx = fi - i, fj - j
+    terms = (((i, j), (1 - tx) * (1 - ty)), ((i, j + 1), tx * (1 - ty)), ((i + 1, j), (1 - tx) * ty), ((i + 1, j + 1), tx * ty))
+    return sum(nodes[n] * w for n, w in terms if w != 0.0)
+
+
+@pytest.fixture(scope="module")
+def gsi_rule():
+    meshes = [473120, 473121, 483103, 483104]
+    bm = _nodes(meshes, lambda i, j: 0.1 + 1e-3 * (i % 7) + 1e-4 * (j % 11))
+    tr = _nodes(meshes, lambda i, j: 0.2 + 2e-3 * (i % 5) + 3e-4 * (j % 13))
+    del bm[vref.mesh8_to_node(48310400)]
+    ii = [n[0] for n in tr]
+    jj = [n[1] for n in tr]
+    bbox = (min(ii), max(ii), min(jj), max(jj))
+
+    def raster(nodes):
+        g = vref.mesh_nodes_to_grid_bbox(nodes, bbox)
+        gt = g.geotransform()
+        return sampler.from_array(g.data, gt[0], gt[3], gt[1], -gt[5])
+
+    return sampler.DhGsi(raster(bm), raster(tr), TR_LIST), bm, tr
+
+
+def _cell_point(mesh8, fx, fy):
+    i, j = vref.mesh8_to_node(mesh8)
+    return (i + fy) * vref.LAT_STEP_DEG, vref.LON_ORIGIN_DEG + (j + fx) * vref.LON_STEP_DEG
+
+
+def test_gsi_rule_inside_listed_mesh_uses_tr(gsi_rule):
+    d, bm, tr = gsi_rule
+    for cell in (47312100, 47312155, 47312199):
+        lat, lon = _cell_point(cell, 0.3, 0.7)
+        assert sampler.mesh6_of(lat, lon) == 473121
+        assert d.sample(lat, lon) == pytest.approx(_bil(tr, lat, lon), abs=1e-6)
+        assert abs(d.sample(lat, lon) - _bil(bm, lat, lon)) > 0.05
+
+
+def test_gsi_rule_bm_gap_cell_outside_list_falls_back_to_tr(gsi_rule):
+    d, bm, tr = gsi_rule
+    lat, lon = _cell_point(48310309, 0.2, 0.5)  # SE corner 48310400 missing from BM
+    assert sampler.mesh6_of(lat, lon) == 483103 and 483103 not in TR_LIST
+    assert math.isnan(sampler.sample(d.bm, lat, lon))
+    assert d.sample(lat, lon) == pytest.approx(_bil(tr, lat, lon), abs=1e-6)
+    # the neighbouring cell 48310308 has all 4 BM corners -> BM, with the
+    # shared nodes (48310309, 48310319) read from BM, not TR
+    lat, lon = _cell_point(48310308, 0.9, 0.5)
+    assert d.sample(lat, lon) == pytest.approx(_bil(bm, lat, lon), abs=1e-6)
+    # on the shared edge (lon of node 48310309) only the edge nodes are used:
+    # both exist in BM, so BM, and the missing SE corner does not matter
+    lat, lon = _cell_point(48310309, 0.0, 0.5)
+    assert d.sample(lat, lon) == pytest.approx(_bil(bm, lat, lon), abs=1e-6)
+
+
+def test_gsi_rule_across_listed_mesh_boundary(gsi_rule):
+    d, bm, tr = gsi_rule
+    # 473120's east strip reads 473121's west column of nodes -- from BM.
+    lat_w, lon_w = _cell_point(47312059, 1.0 - 1e-6, 0.4)
+    lat_e, lon_e = _cell_point(47312150, 1e-6, 0.4)
+    assert sampler.mesh6_of(lat_w, lon_w) == 473120
+    assert sampler.mesh6_of(lat_e, lon_e) == 473121
+    west, east = d.sample(lat_w, lon_w), d.sample(lat_e, lon_e)
+    assert west == pytest.approx(_bil(bm, lat_w, lon_w), abs=1e-6)
+    assert east == pytest.approx(_bil(tr, lat_e, lon_e), abs=1e-6)
+    assert abs(east - west) > 0.05  # intended discontinuity at the boundary
+    # exactly on the boundary: the point belongs to 473121 (north/east) -> TR
+    lat_b, lon_b = _cell_point(47312150, 0.0, 0.4)
+    assert sampler.mesh6_of(lat_b, lon_b) == 473121
+    assert d.sample(lat_b, lon_b) == pytest.approx(_bil(tr, lat_b, lon_b), abs=1e-6)
+    # vectorised path agrees
+    v = d.sample_many([lat_w, lat_e, lat_b], [lon_w, lon_e, lon_b])
+    assert list(v) == [d.sample(lat_w, lon_w), d.sample(lat_e, lon_e), d.sample(lat_b, lon_b)]
+
+
+def test_load_tr_meshes(tmp_path):
+    p = tmp_path / "tr_meshes.json"
+    p.write_text('{"version": "v1", "meshes": [473121, 543664]}')
+    assert sampler.load_tr_meshes(str(p)) == {473121, 543664}
+    p.write_text('{"meshes": []}')
+    with pytest.raises(ValueError):
+        sampler.load_tr_meshes(str(p))
+    p.write_text('{"meshes": ["473121"]}')
+    with pytest.raises(ValueError):
+        sampler.load_tr_meshes(str(p))
+
+
 @pytest.mark.skipif(shutil.which("gdal_translate") is None, reason="needs GDAL CLI")
 def test_cog_round_trip_keeps_geotransform_and_values():
     codes = [53394611 + d for d in (0, 1, 2, 10, 11, 12)]
