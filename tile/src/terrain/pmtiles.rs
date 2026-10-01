@@ -31,7 +31,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
-use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
+use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions};
 use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 /// Encoding used by the PMTiles archive's tile payloads.
@@ -172,7 +172,11 @@ impl DemProvider for PmtilesSource {
             .clone()
             .or_else(|| Some(self.version.clone()));
 
-        Ok(DemTile { elevations, etag })
+        Ok(DemTile {
+            elevations,
+            etag,
+            positions: Some(PixelPositions::resampled(src_w, src_h, tile_size)),
+        })
     }
 
     fn native_tile_size(&self) -> u32 {

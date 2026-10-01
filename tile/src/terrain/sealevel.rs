@@ -38,6 +38,7 @@ impl DemProvider for SeaLevelDem {
         Ok(DemTile {
             elevations: vec![0.0; n],
             etag: None,
+            positions: None,
         })
     }
 

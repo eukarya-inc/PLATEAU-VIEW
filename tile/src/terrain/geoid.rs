@@ -49,6 +49,26 @@ impl GeoidModel {
         }
     }
 
+    /// The orthometric-height datum this model turns into ellipsoidal heights,
+    /// i.e. the datum every elevation of a source bound to this model must be
+    /// in. This is what a source's height correction targets.
+    ///
+    /// - GSIGEO2011 ↔ JGD2011 heights.
+    /// - JPGEO2024+Hrefconv2024 ↔ JGD2024 heights: GSI's combined model, the one
+    ///   whose sum with JGD2024 orthometric heights reproduces JGD2024
+    ///   ellipsoidal heights, including on remote islands.
+    /// - JPGEO2024 alone has **no** orthometric datum here: without Hrefconv2024
+    ///   it is off from JGD2024 heights by up to ~0.7 m on remote islands, so a
+    ///   source using it cannot declare vertical datums or a correction.
+    pub fn target_datum(&self) -> Option<super::vertical::VerticalDatum> {
+        use super::vertical::VerticalDatum;
+        match self {
+            Self::Gsigeo2011 => Some(VerticalDatum::Jgd2011),
+            Self::Jpgeo2024Hrefconv => Some(VerticalDatum::Jgd2024),
+            Self::Jpgeo2024 => None,
+        }
+    }
+
     /// All known models in a stable order.
     pub fn all() -> &'static [Self] {
         &[Self::Gsigeo2011, Self::Jpgeo2024, Self::Jpgeo2024Hrefconv]

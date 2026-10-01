@@ -17,7 +17,9 @@ use tokio::sync::{Mutex, OnceCell, RwLock};
 use url::Url;
 use xxhash_rust::xxh64::xxh64;
 
-use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
+use super::dem::{
+    AxisPositions, DemError, DemProvider, DemTile, GeoBounds, PixelPositions, TileSpace,
+};
 use crate::cog::{CogCrs, CogReader, TileBounds, mercator_tile_bounds};
 
 /// How long to wait before retrying a failed `upstream_etag` HEAD. A transient
@@ -214,6 +216,7 @@ impl DemProvider for CogDemSource {
                 return Ok(DemTile {
                     elevations: vec![f64::NAN; (tile_size * tile_size) as usize],
                     etag: None,
+                    positions: None,
                 });
             }
         }
@@ -254,7 +257,25 @@ impl DemProvider for CogDemSource {
                 self.version, self.url_hash_hex
             )),
         };
-        Ok(DemTile { elevations, etag })
+        // `resample_to_tile` samples pixel centres of `bounds`, which for a
+        // geographic COG are linear in latitude between the tile's edges (not
+        // Mercator rows). Record that so a height correction is sampled at the
+        // very points these elevations come from.
+        let space = match reader.crs() {
+            CogCrs::Geographic => TileSpace::LinearLatLon,
+            CogCrs::WebMercator => TileSpace::Mercator,
+        };
+        let positions = PixelPositions {
+            space,
+            x: AxisPositions::Centres { n: tile_size },
+            y: AxisPositions::Centres { n: tile_size },
+            upsampled: None,
+        };
+        Ok(DemTile {
+            elevations,
+            etag,
+            positions: Some(positions),
+        })
     }
 
     fn native_tile_size(&self) -> u32 {
@@ -346,7 +367,9 @@ fn object_path_from_url(parsed: &Url) -> Result<ObjectPath, DemError> {
 /// Build an object_store backend from a URL. Mirrors the logic in
 /// `tile::cog::CogTileSource::create_object_store` but is local to keep the
 /// terrain module self-contained.
-fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), DemError> {
+pub(crate) fn build_object_store(
+    url: &str,
+) -> Result<(Arc<dyn ObjectStore>, ObjectPath), DemError> {
     let parsed = Url::parse(url).map_err(|e| DemError::Decode(format!("invalid cog URL: {e}")))?;
     let object_path = object_path_from_url(&parsed)?;
 

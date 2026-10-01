@@ -12,6 +12,11 @@ use crate::{
     terrain::{
         CogDemSource, DemProvider, GeoBounds, GeoidModel, MirrorSource, PmtilesEncoding,
         PmtilesSource, TerrainSettings, XyzDemEncoding, XyzDemSource, build_composite_dem,
+        build_corrected_composite_dem,
+        vertical::{
+            BaseDatum, DatumPlan, SourceCorrection, SourceDeclaration, check_product, load_product,
+            plan_source,
+        },
     },
     tile::{CogTileSource, CompositeTileSource, MaplibreTileSource, TileSource, XyzTileSource},
 };
@@ -295,36 +300,77 @@ impl AppState {
             .filter(|(name, cfg)| cfg.is_dem(name))
             .collect();
 
+        // Sources refused for an inconsistent vertical-datum setup. They are
+        // not served at all — in particular a refused `"dem"` must not be
+        // replaced by the bare-base fallback below, which would quietly serve
+        // different heights under the same name.
+        let mut refused: Vec<String> = Vec::new();
+
         for (name, dem_cfg) in &dem_sources {
-            let dem: Arc<dyn DemProvider> = if dem_cfg.layers.is_empty() {
-                base.clone()
-            } else {
-                let overlays: Vec<Arc<dyn DemProvider>> = dem_cfg
-                    .layers
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, layer)| {
-                        let provider = build_dem_overlay(name, i, layer)?;
-                        dem_inventory.push(LayerEntry {
-                            source_name: (*name).to_string(),
-                            layer_idx: i,
-                            layer_type: layer.layer_type_static(),
-                            url: layer.url().to_string(),
-                            version: layer.version().map(|s| s.to_string()),
-                            kind: LayerEntryKind::Dem(provider.clone()),
-                        });
-                        Some(provider)
-                    })
-                    .collect();
-                tracing::info!(
-                    source = %name,
-                    "Building composite DEM: 1 base + {} overlays",
-                    overlays.len()
-                );
-                Arc::new(build_composite_dem(base.clone(), overlays).await)
-            };
             let geoid =
                 resolve_source_geoid(name, dem_cfg.geoid.as_deref(), settings.default_geoid);
+            let mut entries: Vec<LayerEntry> = Vec::new();
+            let mut layer_datums: Vec<Option<&str>> = Vec::new();
+            let overlays: Vec<Arc<dyn DemProvider>> = dem_cfg
+                .layers
+                .iter()
+                .enumerate()
+                .filter_map(|(i, layer)| {
+                    let provider = build_dem_overlay(name, i, layer)?;
+                    entries.push(LayerEntry {
+                        source_name: (*name).to_string(),
+                        layer_idx: i,
+                        layer_type: layer.layer_type_static(),
+                        url: layer.url().to_string(),
+                        version: layer.version().map(|s| s.to_string()),
+                        kind: LayerEntryKind::Dem(provider.clone()),
+                    });
+                    layer_datums.push(layer.vertical_datum());
+                    Some(provider)
+                })
+                .collect();
+
+            let decl = SourceDeclaration {
+                default_datum: dem_cfg.vertical_datum.as_deref(),
+                layer_datums,
+                correction: dem_cfg.height_correction.as_ref(),
+            };
+            let correction = match source_correction(geoid, &decl, settings.base_datum).await {
+                Ok(c) => c,
+                Err(reason) => {
+                    tracing::error!(
+                        source = %name,
+                        geoid = %geoid,
+                        "Refusing DEM source: {reason}. It is not served until the config is fixed."
+                    );
+                    refused.push((*name).to_string());
+                    continue;
+                }
+            };
+            dem_inventory.extend(entries);
+
+            let dem: Arc<dyn DemProvider> = match correction {
+                // Today's path, unchanged, for every source without a correction.
+                None if dem_cfg.layers.is_empty() => base.clone(),
+                None => {
+                    tracing::info!(
+                        source = %name,
+                        "Building composite DEM: 1 base + {} overlays",
+                        overlays.len()
+                    );
+                    Arc::new(build_composite_dem(base.clone(), overlays).await)
+                }
+                Some(c) => {
+                    tracing::info!(
+                        source = %name,
+                        correction = %c.descriptor(),
+                        corrected_overlays = c.layers.iter().filter(|&&f| f).count(),
+                        "Building height-corrected composite DEM: 1 base + {} overlays",
+                        overlays.len()
+                    );
+                    Arc::new(build_corrected_composite_dem(base.clone(), overlays, Some(c)).await)
+                }
+            };
             terrains.insert(
                 (*name).to_string(),
                 Arc::new(super::terrain::TerrainState {
@@ -341,6 +387,9 @@ impl AppState {
         // if every configured DEM source has a non-default name, fall back to
         // a bare-base provider under the default key so legacy `/terrain/...`
         // (no name) keeps responding.
+        if refused.iter().any(|n| n == DEFAULT_DEM_SOURCE_KEY) {
+            return (terrains, dem_inventory);
+        }
         terrains
             .entry(DEFAULT_DEM_SOURCE_KEY.to_string())
             .or_insert_with(|| {
@@ -646,6 +695,41 @@ fn resolve_source_geoid(name: &str, configured: Option<&str>, fallback: GeoidMod
     GeoidModel::resolve_or(configured, fallback, &format!("sources.{name}.geoid"))
 }
 
+/// Decide and load a DEM source's height correction.
+///
+/// `Ok(None)`: nothing to correct — either nothing is declared (the source is
+/// built exactly as before) or every member is already in the target datum.
+/// `Err`: a combination that cannot be served correctly, or a product that
+/// failed to load or does not convert the needed datum pair; the caller
+/// refuses the source.
+async fn source_correction(
+    geoid: GeoidModel,
+    decl: &SourceDeclaration<'_>,
+    base_datum: BaseDatum,
+) -> Result<Option<Arc<SourceCorrection>>, String> {
+    let DatumPlan::Checked {
+        target,
+        from: Some(from),
+        base_corrected,
+        layer_corrected,
+        correction: Some((manifest, policy)),
+    } = plan_source(geoid, decl, base_datum)?
+    else {
+        return Ok(None);
+    };
+    let product = load_product(&manifest)
+        .await
+        .map_err(|e| format!("height-correction product {manifest}: {e}"))?;
+    check_product(&product, from, target)?;
+    Ok(Some(Arc::new(SourceCorrection::new(
+        product,
+        policy,
+        base_corrected,
+        base_datum,
+        layer_corrected,
+    ))))
+}
+
 /// Build a single DEM overlay from a `LayerConfig` entry inside the
 /// `sources.dem.layers` list. Returns `None` for unsupported variants
 /// (e.g. `maplibre`).
@@ -826,5 +910,98 @@ mod tests {
             ),
             GeoidModel::Gsigeo2011
         );
+    }
+
+    fn sealevel_settings() -> TerrainSettings {
+        TerrainSettings {
+            dem_url: Some("sealevel".into()),
+            dem_version: "v1".into(),
+            dem_max_zoom: 15,
+            dem_native_tile_size: 256,
+            tile_size: 256,
+            default_geoid: GeoidModel::Gsigeo2011,
+            max_zoom: 18,
+            max_error: 5.0,
+            base_datum: BaseDatum::Agnostic,
+            mirror_url: None,
+        }
+    }
+
+    fn fixture_manifest() -> String {
+        url::Url::from_file_path(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("fixtures/vertical/hyokorev-jgd2011-to-jgd2024/v1/manifest.json"),
+        )
+        .unwrap()
+        .to_string()
+    }
+
+    /// A JGD2024 source over the same layers gets a correction (and a
+    /// distinct version); the undeclared source next to it keeps the version
+    /// it has always had; inconsistent sources are refused — and a refused
+    /// `dem` is not replaced by the bare base.
+    #[tokio::test]
+    async fn datum_declarations_build_correct_or_refuse() {
+        let layer =
+            r#"{"type": "xyz", "url": "http://127.0.0.1:9/{z}/{x}/{y}.png", "maxZoom": 15}"#;
+        let json = format!(
+            r#"{{
+            "sources": {{
+                "dem": {{
+                    "type": "dem",
+                    "geoid": "jpgeo2024-hrefconv",
+                    "verticalDatum": "jgd2011",
+                    "layers": [{layer}]
+                }},
+                "legacy": {{ "type": "dem", "layers": [{layer}] }},
+                "jgd2024": {{
+                    "type": "dem",
+                    "geoid": "jpgeo2024-hrefconv",
+                    "verticalDatum": "jgd2011",
+                    "heightCorrection": {{ "manifest": "{m}", "missing": "nan" }},
+                    "layers": [{layer}, {{"type": "xyz", "url": "http://127.0.0.1:9/b/{{z}}/{{x}}/{{y}}.png", "verticalDatum": "jgd2024"}}]
+                }},
+                "inverse": {{
+                    "type": "dem",
+                    "verticalDatum": "jgd2024",
+                    "heightCorrection": {{ "manifest": "{m}" }},
+                    "layers": [{layer}]
+                }}
+            }}
+        }}"#,
+            m = fixture_manifest()
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
+        let (terrains, inventory) =
+            AppState::build_terrains(&sealevel_settings(), &config.sources).await;
+
+        // jgd2011 layers under a JGD2024 geoid with no correction: refused,
+        // and `/terrain/` does not silently fall back to the bare base.
+        assert!(!terrains.contains_key("dem"));
+        // jgd2024 layer in a JGD2011 source needs the inverse of v1: refused.
+        assert!(!terrains.contains_key("inverse"));
+        assert!(
+            inventory
+                .iter()
+                .all(|e| e.source_name != "dem" && e.source_name != "inverse")
+        );
+
+        let legacy = &terrains["legacy"];
+        let reference = build_composite_dem(
+            Arc::new(crate::terrain::sealevel::SeaLevelDem),
+            vec![build_dem_overlay("legacy", 0, &config.sources["legacy"].layers[0]).unwrap()],
+        )
+        .await;
+        assert_eq!(legacy.dem.version(), reference.version());
+        assert!(!legacy.dem.version().contains("vcorr"));
+
+        let v = terrains["jgd2024"].dem.version();
+        assert!(
+            v.contains(
+                "vcorr=hyokorev-jgd2011-to-jgd2024@v1:jgd2011-to-jgd2024:missing=nan:base=agnostic:base-dh=no:"
+            ),
+            "{v}"
+        );
+        assert_eq!(terrains["jgd2024"].geoid, GeoidModel::Jpgeo2024Hrefconv);
     }
 }

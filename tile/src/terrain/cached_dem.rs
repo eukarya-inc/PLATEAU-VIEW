@@ -127,6 +127,7 @@ mod tests {
             Ok(DemTile {
                 elevations: vec![0.0; (tile_size * tile_size) as usize],
                 etag: None,
+                positions: None,
             })
         }
 

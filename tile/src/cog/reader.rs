@@ -616,6 +616,179 @@ impl CogReader {
     }
 }
 
+/// A whole single-band float32 image (the full-resolution IFD only), kept in
+/// the COG's own chunk layout so that all-nodata chunks cost nothing.
+///
+/// Georeferencing is taken verbatim from the GeoTIFF tags — no derived bounds
+/// — so a sampler can reproduce `(lon − x0) / dx` bit for bit:
+/// pixel `(row r, col c)` covers `[x0 + c·dx, x0 + (c+1)·dx] ×
+/// [y0 − (r+1)·dy, y0 − r·dy]` (PixelIsArea), its centre at `+0.5`.
+#[derive(Debug)]
+pub struct Float32Raster {
+    pub width: u32,
+    pub height: u32,
+    /// Longitude (x) of the outer west edge of column 0.
+    pub x0: f64,
+    /// Latitude (y) of the outer north edge of row 0.
+    pub y0: f64,
+    /// Pixel width, > 0.
+    pub dx: f64,
+    /// Pixel height, > 0 (rows run north → south).
+    pub dy: f64,
+    block_w: u32,
+    block_h: u32,
+    blocks_x: u32,
+    /// Row-major chunks, each `block_w × block_h` (padded). `None` = every
+    /// pixel of the chunk is nodata.
+    blocks: Vec<Option<Box<[f32]>>>,
+}
+
+impl Float32Raster {
+    /// Value at `(row, col)`, or `None` when it is outside the image or nodata.
+    #[inline]
+    pub fn get(&self, row: i64, col: i64) -> Option<f64> {
+        if row < 0 || col < 0 || row >= self.height as i64 || col >= self.width as i64 {
+            return None;
+        }
+        let (row, col) = (row as u32, col as u32);
+        let b = (row / self.block_h) * self.blocks_x + col / self.block_w;
+        let block = self.blocks[b as usize].as_ref()?;
+        let v = block[((row % self.block_h) * self.block_w + col % self.block_w) as usize];
+        if v.is_nan() { None } else { Some(v as f64) }
+    }
+
+    /// True when both rasters share one pixel grid exactly.
+    pub fn same_grid(&self, other: &Float32Raster) -> bool {
+        (self.width, self.height, self.x0, self.y0, self.dx, self.dy)
+            == (
+                other.width,
+                other.height,
+                other.x0,
+                other.y0,
+                other.dx,
+                other.dy,
+            )
+    }
+
+    /// Bytes held by the non-empty chunks.
+    pub fn resident_bytes(&self) -> usize {
+        self.blocks
+            .iter()
+            .flatten()
+            .map(|b| b.len() * std::mem::size_of::<f32>())
+            .sum()
+    }
+}
+
+impl CogReader {
+    /// Read the full-resolution image of a single-band float32 GeoTIFF into
+    /// memory. Overviews are never read.
+    ///
+    /// Intended for small reference grids (vertical-datum corrections), not
+    /// DEMs. The georeferencing must be the plain form a sampler can trust:
+    /// one tiepoint at raster (0, 0), a pixel scale, no ModelTransformation,
+    /// PixelIsArea. Nodata is `GDAL_NODATA` (`nan` or a number, compared
+    /// exactly) — the elevation reader's tolerance and range guards are
+    /// deliberately not applied, so stored values come back bit for bit.
+    pub async fn read_full_resolution_f32(&self) -> Result<Float32Raster, CogError> {
+        let ifd = self.tiff.ifds().first().ok_or(CogError::NoIfd)?;
+        let bad = |m: &str| CogError::ReadError(m.to_string());
+
+        if ifd.model_transformation().is_some() {
+            return Err(bad(
+                "ModelTransformation is not supported (expected tiepoint + scale)",
+            ));
+        }
+        let tie = ifd
+            .model_tiepoint()
+            .ok_or_else(|| bad("no ModelTiepoint"))?;
+        if tie.len() != 6 || tie[0] != 0.0 || tie[1] != 0.0 {
+            return Err(bad("expected a single ModelTiepoint at raster (0, 0)"));
+        }
+        let scale = ifd
+            .model_pixel_scale()
+            .ok_or_else(|| bad("no ModelPixelScale"))?;
+        if scale.len() < 2 || !(scale[0] > 0.0 && scale[1] > 0.0) {
+            return Err(bad("ModelPixelScale must be positive"));
+        }
+        if let Some(rt) = ifd.geo_key_directory().and_then(|g| g.raster_type)
+            && rt != 1
+        {
+            return Err(bad("expected PixelIsArea (GTRasterTypeGeoKey = 1)"));
+        }
+        if ifd.samples_per_pixel() != 1 {
+            return Err(bad("expected a single band"));
+        }
+        let fmt = ifd.sample_format().first().copied();
+        let bits = ifd.bits_per_sample().first().copied();
+        if fmt != Some(SampleFormat::Float) || bits != Some(32) {
+            return Err(bad("expected float32 samples"));
+        }
+        let (Some(block_w), Some(block_h)) = (ifd.tile_width(), ifd.tile_height()) else {
+            return Err(bad("expected a tiled image"));
+        };
+        let (blocks_x, blocks_y) = ifd
+            .tile_count()
+            .ok_or_else(|| bad("tiled image without a tile count"))?;
+        let nodata = self.nodata_from_metadata().filter(|v| !v.is_nan());
+
+        let width = ifd.image_width();
+        let height = ifd.image_height();
+        let reader = ObjectReader::new(self.store.clone(), self.path.clone());
+        let registry = DecoderRegistry::default();
+        let mut blocks = Vec::with_capacity(blocks_x * blocks_y);
+        for ty in 0..blocks_y {
+            for tx in 0..blocks_x {
+                let tile = ifd
+                    .fetch_tile(tx, ty, &reader)
+                    .await
+                    .map_err(|e| CogError::ReadError(format!("chunk ({tx}, {ty}): {e:?}")))?;
+                let decoded = tile
+                    .decode(&registry)
+                    .map_err(|e| CogError::ReadError(format!("decode ({tx}, {ty}): {e:?}")))?;
+                let bytes: &[u8] = decoded.data().as_ref();
+                let (chunk_w, chunk_h) = chunk_extent(tx, ty, block_w, block_h, width, height);
+                let stride = decoded_chunk_stride(
+                    bytes.len(),
+                    4,
+                    block_w as usize,
+                    block_h as usize,
+                    chunk_w,
+                );
+                let mut block = vec![f32::NAN; (block_w * block_h) as usize];
+                let mut any = false;
+                for y in 0..chunk_h {
+                    for x in 0..chunk_w {
+                        let o = (y * stride + x) * 4;
+                        let Some(b) = bytes.get(o..o + 4) else {
+                            return Err(bad("decoded chunk shorter than its extent"));
+                        };
+                        let mut v = f32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+                        if nodata.is_some_and(|nd| v as f64 == nd) {
+                            v = f32::NAN;
+                        }
+                        any |= !v.is_nan();
+                        block[y * block_w as usize + x] = v;
+                    }
+                }
+                blocks.push(any.then(|| block.into_boxed_slice()));
+            }
+        }
+        Ok(Float32Raster {
+            width,
+            height,
+            x0: tie[3],
+            y0: tie[4],
+            dx: scale[0],
+            dy: scale[1],
+            block_w,
+            block_h,
+            blocks_x: blocks_x as u32,
+            blocks,
+        })
+    }
+}
+
 /// Real pixel extent of chunk `(tx, ty)`.
 ///
 /// TIFF chunks (tiles) are written padded out to `tile_w × tile_h`, but the

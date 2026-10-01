@@ -77,6 +77,19 @@ pub struct SourceConfig {
     /// terrain state is built.
     #[serde(default)]
     pub geoid: Option<String>,
+    /// DEM-only: default vertical datum (`jgd2011` | `jgd2024`) of every layer
+    /// that doesn't set its own `verticalDatum`. Absent on every existing
+    /// source, which then keeps its exact pre-correction behaviour and cache
+    /// keys. See [`crate::terrain::vertical`].
+    #[serde(default, rename = "verticalDatum")]
+    pub vertical_datum: Option<String>,
+    /// DEM-only: `{"manifest": "<url>", "missing": "keep" | "nan"}` — the
+    /// height-correction product applied to layers whose datum differs from
+    /// the target datum of `geoid`. Kept unparsed (like `geoid`) so a
+    /// malformed value refuses only this source at terrain build time instead
+    /// of failing the whole config.
+    #[serde(default, rename = "heightCorrection")]
+    pub height_correction: Option<serde_json::Value>,
     pub layers: Vec<LayerConfig>,
 }
 
@@ -120,6 +133,10 @@ pub enum LayerConfig {
         /// DEM-only: native tile size in pixels.
         #[serde(default)]
         native_tile_size: Option<u32>,
+        /// DEM-only: vertical datum of this layer's heights, overriding the
+        /// source's `verticalDatum`.
+        #[serde(default, rename = "verticalDatum")]
+        vertical_datum: Option<String>,
     },
     #[serde(rename = "cog")]
     Cog {
@@ -140,6 +157,10 @@ pub enum LayerConfig {
         /// DEM-only: native tile size in pixels.
         #[serde(default)]
         native_tile_size: Option<u32>,
+        /// DEM-only: vertical datum of this layer's heights, overriding the
+        /// source's `verticalDatum`.
+        #[serde(default, rename = "verticalDatum")]
+        vertical_datum: Option<String>,
     },
     /// MapLibre style (not yet implemented, ignored)
     #[serde(rename = "maplibre")]
@@ -168,6 +189,10 @@ pub enum LayerConfig {
         /// DEM-only: native tile size in pixels.
         #[serde(default)]
         native_tile_size: Option<u32>,
+        /// DEM-only: vertical datum of this layer's heights, overriding the
+        /// source's `verticalDatum`.
+        #[serde(default, rename = "verticalDatum")]
+        vertical_datum: Option<String>,
     },
 }
 
@@ -204,6 +229,16 @@ impl LayerConfig {
             LayerConfig::Cog { version, .. } => version.as_deref(),
             LayerConfig::MapLibre { version, .. } => version.as_deref(),
             LayerConfig::Pmtiles { version, .. } => version.as_deref(),
+        }
+    }
+
+    /// DEM-only: the layer's own `verticalDatum`, if set.
+    pub fn vertical_datum(&self) -> Option<&str> {
+        match self {
+            LayerConfig::Xyz { vertical_datum, .. }
+            | LayerConfig::Cog { vertical_datum, .. }
+            | LayerConfig::Pmtiles { vertical_datum, .. } => vertical_datum.as_deref(),
+            LayerConfig::MapLibre { .. } => None,
         }
     }
 

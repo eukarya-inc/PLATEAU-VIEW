@@ -72,6 +72,8 @@ url = "2"
 
 # Hashing
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
+# Integrity of the height-correction product files (sha256 in its manifest)
+sha2 = "0.10"
 
 # MapLibre style rendering (optional, requires Linux)
 maplibre_native = { version = "0.5", features = ["pool", "vulkan"], optional = true }
