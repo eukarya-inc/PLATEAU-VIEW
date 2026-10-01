@@ -305,8 +305,15 @@ struct CoverageKey {
     y: u32,
 }
 
+/// Keys [`CoverageKey::compute`] ran for, so tests can tell a cache hit
+/// (recomputed here) from a render (stored by the generation pass).
+#[cfg(test)]
+static COMPUTED: std::sync::Mutex<Vec<CoverageKey>> = std::sync::Mutex::new(Vec::new());
+
 impl CoverageKey {
     fn compute(&self) -> GeoidCoverage {
+        #[cfg(test)]
+        COMPUTED.lock().unwrap().push(*self);
         let geoid = Geoid::load(self.geoid);
         match self.grid {
             CoverageGrid::Mesh => {
@@ -1333,6 +1340,112 @@ mod tests {
             assert_eq!(resolve_coverage(Some(key)).await, Some(want), "{key:?}");
         }
         assert_eq!(resolve_coverage(None).await, None);
+    }
+
+    /// A tile served from the tile cache, after the coverage memo has lost
+    /// its entry, must skip generation and rebuild the same header from
+    /// positions. (Which tier served the bytes doesn't matter: the header is
+    /// resolved after `get_or_generate` returns, the same way for both.)
+    #[tokio::test]
+    async fn cache_hit_rebuilds_the_header_without_generating() {
+        use tower::Service;
+
+        let config_dir = tempfile::TempDir::new().unwrap();
+        let config_path = config_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"sources":{}}"#).unwrap();
+        let config_url = format!("file://{}", config_path.display());
+        let config_manager = Arc::new(
+            crate::config::ConfigManager::new(
+                std::slice::from_ref(&config_url),
+                std::time::Duration::from_secs(0),
+            )
+            .await
+            .unwrap(),
+        );
+        let settings = crate::terrain::TerrainSettings {
+            dem_url: Some("sealevel".to_string()),
+            dem_version: "v1".to_string(),
+            dem_max_zoom: 15,
+            dem_native_tile_size: 256,
+            tile_size: 256,
+            default_geoid: GeoidModel::Gsigeo2011,
+            max_zoom: 18,
+            max_error: 5.0,
+            mirror_url: None,
+        };
+        let state = Arc::new(
+            AppState::new(
+                config_manager,
+                64,
+                None,
+                "sync",
+                None,
+                crate::cache::CacheMode::None,
+                None,
+                None,
+                settings,
+            )
+            .await,
+        );
+        let mut app = super::super::create_router(state, None);
+
+        // Partial-coverage tiles (Tsushima) used by no other test in this
+        // binary, so `COMPUTED` entries for them can only come from here.
+        let cases = [
+            (
+                "/terrarium/8/219/101.png",
+                CoverageGrid::Xyz(256),
+                (8u8, 219u32, 101u32),
+            ),
+            (
+                "/terrain/dem/9/879/353.terrain",
+                CoverageGrid::Mesh,
+                (9, 879, 353),
+            ),
+        ];
+        for (uri, grid, (z, x, y)) in cases {
+            let key = CoverageKey {
+                geoid: GeoidModel::Gsigeo2011,
+                grid,
+                z,
+                x,
+                y,
+            };
+            let mut get = async || {
+                let req = axum::http::Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap();
+                let resp = app.call(req).await.unwrap();
+                let etag = resp.headers().get(header::ETAG).cloned();
+                let cov = resp.headers().get(GEOID_COVERAGE_HEADER).cloned();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
+                (etag, cov, body)
+            };
+            let computed = || {
+                COMPUTED
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|k| **k == key)
+                    .count()
+            };
+
+            let rendered = get().await;
+            assert_eq!(rendered.1.as_ref().unwrap(), "partial", "{uri}");
+            assert_eq!(computed(), 0, "{uri}: the render stores, never recomputes");
+
+            coverage_memo().invalidate(&key).await;
+            let hit = get().await;
+            assert_eq!(hit, rendered, "{uri}");
+            assert_eq!(
+                computed(),
+                1,
+                "{uri}: served from cache, so the header came from the recompute"
+            );
+        }
     }
 
     #[test]

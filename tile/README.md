@@ -65,7 +65,7 @@ So that clients can tell where the fill was used, DEM-generated tile responses (
 |---|---|
 | `full` | The model had a value at every sample of the tile |
 | `partial` | Some samples used the 0 fill |
-| `none` | Every sample used the 0 fill — the tile's heights are orthometric whatever the mode says |
+| `none` | Every sample used the 0 fill: `ellipsoidal` heights there equal the orthometric DEM, and `heights=geoid` is a flat 0 m surface |
 
 - "Samples" are the 65×65 grid of a quantized-mesh tile (the normal-computation halo excluded) or the pixel centres of a raster tile. The value depends only on the model and those positions, not on the DEM.
 - Sent for `heights=ellipsoidal` and `heights=geoid`. **Omitted** for `heights=orthometric` (no geoid is involved), on 404s, on `304 Not Modified`, and on the quantized-mesh mirror backend (pre-rendered tiles, no geoid at request time).

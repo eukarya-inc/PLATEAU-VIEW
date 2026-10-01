@@ -163,8 +163,13 @@ async fn orthometric_and_404_omit_the_header() {
     assert_eq!(coverage(&resp), None);
 }
 
-/// A memory-cache hit and, after a restart, a persistent-cache hit must
-/// return the bytes, ETag and coverage header of the first render.
+/// A repeated request (a memory-cache hit) returns the bytes, ETag and
+/// coverage header of the first render. That the header is then rebuilt
+/// without generating, after the coverage memo lost its entry, is covered by
+/// `cache_hit_rebuilds_the_header_without_generating` in `server/terrain.rs`,
+/// which can reach the process-wide memo. (A `file://` persistent cache can't
+/// stand in for a restart here: it drops the `etag_hash` metadata, so its
+/// entries never validate and every read regenerates.)
 #[tokio::test]
 async fn cache_hits_keep_the_header() {
     let cache = TempDir::new().unwrap();
@@ -183,18 +188,6 @@ async fn cache_hits_keep_the_header() {
             rendered.headers().get("etag")
         );
         assert_eq!(coverage(&mem_hit), coverage(&rendered), "{uri}");
-
-        // Let the background persistent write land, then read it back from
-        // a fresh state with an empty memory cache.
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        let restarted = Harness::start(&cache, None).await;
-        let (disk_hit, disk_body) = restarted.get(&uri, None).await;
-        assert_eq!(disk_body, body, "{uri}");
-        assert_eq!(
-            disk_hit.headers().get("etag"),
-            rendered.headers().get("etag")
-        );
-        assert_eq!(coverage(&disk_hit), coverage(&rendered), "{uri}");
         assert!(coverage(&rendered).is_some(), "{uri}");
     }
 }
