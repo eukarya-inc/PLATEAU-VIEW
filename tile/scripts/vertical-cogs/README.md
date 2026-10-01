@@ -128,24 +128,57 @@ login-only sources need a 基盤地図情報 login file (`GSI_LOGIN_CONF=path`,
 `GSI_USER=`/`GSI_PASS=` lines; read by Python only, never echoed or stored).
 Work files go to `./work` (git-ignored) unless `--work` says otherwise.
 
+**Rebuild and check the published versions** (read-only; every command exits 0):
+
 ```bash
 cd tile/scripts/vertical-cogs
-uv run vcog.py test                              # sampler spec + publish guard tests
+uv run vcog.py test                              # sampler spec, publish guards, validation verdicts
 uv run vcog.py list
 GSI_LOGIN_CONF=... uv run vcog.py fetch all      # -> work/src/<id>/ + sources.json
 uv run vcog.py build all                         # -> work/out/<key_prefix>/<version>/ (+ --diagnostic-merged)
 uv run vcog.py validate all                      # geoids vs japan-geoid crate + GSI calculator; mesh-list check
 GSI_LOGIN_CONF=... uv run vcog.py validate hyokorev-jgd2011-to-jgd2024 --oracle \
   --listing-dem5a work/dem5a.txt --listing-dem1a work/dem1a.txt
-uv run vcog.py publish all --dry-run             # read-only: key/manifest guards, existence, config.json
-uv run vcog.py publish <id> --sample             # the real upload (see guarantees below)
-uv run vcog.py verify all --sample               # re-check published objects against the local build
+uv run vcog.py reproduce all                     # fresh build's COGs byte-identical to the published ones?
+uv run vcog.py verify all --sample               # published objects vs the published manifest (+ /vsicurl samples)
 ```
 
-`validate` exits non-zero on failure: geoids must agree with the crate to
-< 0.1 mm with no coverage disagreement and with GSI's calculator to its
-0.1 mm print precision; each oracle mesh must be within 5 mm on ≥ 99 % of
-pixels.
+**Publish a new version** (bump `version` in `products.toml` first):
+
+```bash
+uv run vcog.py build <id> && uv run vcog.py validate <id>
+uv run vcog.py publish <id> --dry-run            # read-only: guards, key existence, config.json
+uv run vcog.py publish <id> --sample             # the upload (see guarantees below)
+uv run vcog.py verify <id> --sample
+```
+
+`publish --dry-run` on a version that is already published exits 2 ("already
+exist and are never overwritten") — by design; that is the no-overwrite guard.
+
+`verify` reads the `manifest.json` **in the bucket** and checks every object
+it lists (HEAD `content-length`, sha256 of the body); with `--sample` COGs
+whose local build is byte-identical are also compared through `/vsicurl/`.
+It does not compare against the local JSON files, which legitimately differ
+between builds (fetch times, and v1 predates the current manifest layout).
+`reproduce` is the separate reproducibility check: it compares only the COG
+payloads of the local build with the sha256 in the published manifest.
+
+`validate` exits non-zero on failure. Geoids must agree with the crate to
+< 0.1 mm with no coverage disagreement, and with GSI's calculator to its
+0.1 mm print precision at every spot point — a point for which the
+calculator returns no value (busy on every retry) is a failure; only
+`--no-calc` skips the calculator. Each oracle mesh must be within 5 mm on
+≥ 99 % of pixels, and the score only counts if it covers the whole JGD2024
+edition: every 2024 tile needs its 2011 counterpart, every pixel valid in
+2024 must be valid in 2011 and get a non-NaN dH (failures name the tiles).
+
+`build` checks every source file's size and sha256 against `sources.json`
+before parsing it, so a manifest can never claim provenance for bytes it was
+not built from. The ISG reader accepts only GSI's layout (`ISG format 2.0`,
+`data format grid`, `data ordering N-to-S, W-to-E`, `coord type geodetic`,
+`coord units dms`, explicit `nodata`) and refuses anything else rather than
+reinterpreting it; the GSIGEO ASC reader checks its 8-field header, spacing
+and value count.
 
 The oracle downloads GSI's JGD2024 DEM for at most 6 secondary meshes (the
 zips are parsed in memory; only parsed arrays are cached under
@@ -193,8 +226,11 @@ Then `fetch` → `build` → `validate` → `publish --dry-run` → `publish` �
 ## Publishing: what `publish` guarantees
 
 `publish.py` encodes the procedure used for v1; nothing is uploaded unless
-every check passes, and a failure after the upload removes exactly the
-objects that run uploaded:
+every check passes, and **any** failure once the upload has started — a
+failed check, or an unexpected error such as a config.json fetch, HEAD,
+malformed header or GDAL failure (exit 5) — removes exactly the objects that
+run uploaded. If a rollback delete itself fails, publish exits 6 and names
+every object left in the bucket; it is never swallowed.
 
 1. **Keys stay out of the terrain stack.** Every key must be under
    `allowed_prefix` (`vertical/`); keys under the prefixes the DEM config
@@ -236,13 +272,13 @@ Bucket `plateau-terrain`, public at `https://tiles.plateau.city/terrain/<key>`:
 | vertical/geoid/gsigeo2011-v2.2/v1/geoid.tif | 528,254 | 88fb79d103a8fbc15b35754b0fcec4ba6ff79d07d01c3e1c85fbbd089878a1bb |
 | vertical/geoid/gsigeo2011-v2.2/v1/manifest.json | 1,672 | a8ed58e281cd75317cb1eccf53752607d0d3d7936848c2fcf081365d350d4e0f |
 
-A fresh `fetch` + `build` reproduces all four COGs byte for byte. The JSON
-files do not: they record the fetch time, and v1 was published before the
-pipeline was generalised, so its hyokorev manifest has no machine-readable
-`selection` block (it names the files in `tr_meshes` / `selection_rule`
-text) and its geoid manifests list the COG under `cog` instead of `files`.
-`sampler.DhGsi.open` falls back to the v1 file names. `verify` therefore
-reports the v1 JSON files as different from a new build; that is expected.
+A fresh `fetch` + `build` reproduces all four COGs byte for byte
+(`reproduce all`). The JSON files do not: they record the fetch time, and v1
+was published before the pipeline was generalised, so its hyokorev manifest
+has no machine-readable `selection` block (it names the files in
+`tr_meshes` / `selection_rule` text) and its geoid manifests list the COG
+under `cog` instead of `files`. `verify` reads both layouts, and
+`sampler.DhGsi.open` falls back to the v1 file names.
 
 ## Validation results (2026-10-01)
 

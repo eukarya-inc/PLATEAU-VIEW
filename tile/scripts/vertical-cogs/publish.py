@@ -245,7 +245,11 @@ def verify_items(items: list[Item], http: Http, public_base: str, sample: bool =
         cl = headers.get("content-length")
         body_sha = hashlib.sha256(http.get(url)).hexdigest() if status == 200 else None
         r = {"key": it.key, "url": url, "status": status, "content_length": cl, "sha256_ok": body_sha == it.sha256}
-        r["ok"] = status == 200 and cl is not None and int(cl) == it.size and body_sha == it.sha256
+        try:
+            cl_ok = cl is not None and int(cl) == it.size
+        except ValueError:
+            cl_ok = False  # malformed header: a verification failure, not a crash
+        r["ok"] = status == 200 and cl_ok and body_sha == it.sha256
         if sample and r["ok"] and it.key.endswith(".tif"):
             r["vsicurl_sample_exact"] = vsicurl_sample_exact(it.local, url)
             r["ok"] = r["ok"] and r["vsicurl_sample_exact"]
@@ -330,35 +334,135 @@ def publish(
 
     uploaded: list[str] = []
 
-    def rollback(why: str, code: int):
-        log(f"[{p.id}] ROLLBACK: {why}")
-        for k in reversed(uploaded):
-            storage.delete(k)
-            log(f"  deleted {k}")
-        raise PublishError(f"[{p.id}] rolled back {len(uploaded)} object(s): {why}", code)
+    def rollback(why: str, code: int, cause: BaseException | None = None):
+        """Delete exactly the objects this run uploaded, then raise.
 
+        A delete that fails is never swallowed: the error names every object
+        left behind (exit 6) so it can be removed by hand.
+        """
+        log(f"[{p.id}] ROLLBACK: {why}")
+        left: list[str] = []
+        for k in reversed(uploaded):
+            try:
+                storage.delete(k)
+                log(f"  deleted {k}")
+            except BaseException as e:  # keep going: remove as much as possible
+                left.append(k)
+                log(f"  !! FAILED to delete {k}: {e!r}")
+        if left:
+            raise PublishError(
+                f"[{p.id}] ROLLBACK INCOMPLETE after: {why}. These uploaded objects are STILL IN THE BUCKET and must be deleted by hand: {left}",
+                6,
+            ) from cause
+        raise PublishError(f"[{p.id}] rolled back {len(uploaded)} object(s): {why}", code) from cause
+
+    class _Fail(Exception):
+        def __init__(self, why: str, code: int):
+            super().__init__(why)
+            self.why, self.code = why, code
+
+    # Everything from the first put onwards runs under one handler, so no
+    # exception (upload error, config.json fetch, HEAD, malformed headers,
+    # GDAL in --sample, Ctrl-C) can leave this run's objects behind silently.
     try:
         for it in items:
-            storage.put(it.local, it.key, it.content_type)
+            try:
+                storage.put(it.local, it.key, it.content_type)
+            except BaseException:
+                # the object may exist partially or fully: treat it as ours
+                # if it is there now and was not before (checked above)
+                try:
+                    if storage.exists(it.key):
+                        uploaded.append(it.key)
+                except BaseException:
+                    uploaded.append(it.key)
+                raise
             uploaded.append(it.key)
             log(f"  uploaded {it.key}")
-    except Exception as e:  # partial upload: undo what this run wrote
-        rollback(f"upload failed: {e}", 3)
 
-    after = config_snapshot(http, config_url)
-    log(f"[{p.id}] config.json after: {json.dumps(_brief(after))}")
-    reasons = config_decision(before, after, uploaded, allowed_prefix)
-    if reasons:
-        rollback("; ".join(reasons), 3)
+        after = config_snapshot(http, config_url)
+        log(f"[{p.id}] config.json after: {json.dumps(_brief(after))}")
+        reasons = config_decision(before, after, uploaded, allowed_prefix)
+        if reasons:
+            raise _Fail("; ".join(reasons), 3)
 
-    checks = verify_items(items, http, public_base, sample=sample)
-    bad = [c["key"] for c in checks if not c["ok"]]
-    if bad:
-        rollback(f"public verification failed for {bad}", 4)
+        checks = verify_items(items, http, public_base, sample=sample)
+        bad = [c["key"] for c in checks if not c["ok"]]
+        if bad:
+            raise _Fail(f"public verification failed for {bad}", 4)
+    except _Fail as f:
+        rollback(f.why, f.code)
+    except BaseException as e:
+        rollback(f"unexpected error after the upload started: {e!r}", 5, e)
     return {"product": p.id, "uploaded": [it.__dict__ for it in items], "config_before": _brief(before), "config_after": _brief(after), "verify": checks}
 
 
-def verify(p: Product, local_dir: str, http: Http, *, allowed_prefix: str, public_base: str, sample: bool = False) -> list[dict]:
-    """Check already-published objects against the local build (read-only)."""
-    items = plan(local_dir, p.keys_dir(), allowed_prefix)
-    return verify_items(items, http, public_base, sample=sample, retries=1)
+def published_manifest(http: Http, public_base: str, keys_dir: str) -> dict:
+    url = f"{public_base.rstrip('/')}/{keys_dir}/manifest.json"
+    try:
+        return json.loads(http.get(url))
+    except Exception as e:
+        raise PublishError(f"cannot read the published manifest {url}: {e!r}", 7) from e
+
+
+def manifest_files(manifest: dict) -> dict[str, dict]:
+    """``{file name: {"sha256", "bytes"}}`` of a manifest.
+
+    Current manifests list everything under ``files``; the v1 geoid
+    manifests (published before the pipeline was generalised) name their
+    single COG under ``cog`` instead.
+    """
+    if manifest.get("files"):
+        return {n: {"sha256": m["sha256"], "bytes": m["bytes"]} for n, m in manifest["files"].items()}
+    if manifest.get("cog"):
+        c = manifest["cog"]
+        return {c["file"]: {"sha256": c["sha256"], "bytes": c["bytes"]}}
+    raise PublishError("manifest lists no files")
+
+
+def verify(p: Product, http: Http, *, allowed_prefix: str, public_base: str, local_dir: str | None = None, sample: bool = False) -> list[dict]:
+    """Check the published objects against the PUBLISHED manifest (read-only).
+
+    The manifest in the bucket is the source of truth for what is there, so
+    this passes for any correctly published version regardless of what the
+    local build looks like. With ``sample`` each COG is also read through
+    /vsicurl and compared with the local file -- only where the local file is
+    byte-identical to the published one (otherwise there is nothing to
+    compare; ``reproduce`` reports that case).
+    """
+    keys_dir = p.keys_dir()
+    check_key(f"{keys_dir}/manifest.json", allowed_prefix)
+    files = manifest_files(published_manifest(http, public_base, keys_dir))
+    items = []
+    for name, m in sorted(files.items()):
+        key = f"{keys_dir}/{name}"
+        check_key(key, allowed_prefix)
+        local = os.path.join(local_dir, name) if local_dir else ""
+        if not (sample and local and os.path.exists(local) and sha256_of(local) == m["sha256"]):
+            local = ""
+        items.append(Item(local, key, m["bytes"], m["sha256"], CONTENT_TYPES.get(os.path.splitext(name)[1].lower(), "application/octet-stream")))
+    res = verify_items([i for i in items if i.local], http, public_base, sample=True, retries=1) if sample else []
+    sampled = {r["key"] for r in res}
+    res += verify_items([i for i in items if i.key not in sampled], http, public_base, sample=False, retries=1)
+    return res
+
+
+def reproduce(p: Product, local_dir: str, http: Http, *, public_base: str) -> list[dict]:
+    """Compare the COG payloads of a fresh local build with the published ones.
+
+    Only the rasters are compared: the JSON files legitimately differ between
+    builds (they record fetch times, and v1's manifests predate the current
+    manifest layout). Returns one row per published .tif.
+    """
+    files = manifest_files(published_manifest(http, public_base, p.keys_dir()))
+    rows = []
+    for name, m in sorted(files.items()):
+        if not name.endswith(".tif"):
+            continue
+        path = os.path.join(local_dir, name)
+        local_sha = sha256_of(path) if os.path.exists(path) else None
+        rows.append({"file": f"{p.keys_dir()}/{name}", "published_sha256": m["sha256"], "local_sha256": local_sha, "identical": local_sha == m["sha256"]})
+        print(json.dumps(rows[-1]))
+    if not rows:
+        raise PublishError(f"[{p.id}] published manifest lists no .tif payloads", 7)
+    return rows

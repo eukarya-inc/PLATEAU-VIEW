@@ -181,8 +181,9 @@ def test_refuses_when_config_already_lists_the_allowed_prefix(product_dir):
 def test_partial_upload_failure_rolls_back(product_dir):
     p, d = product_dir
     st = FakeStorage(fail_on="vertical/x/v1/list.json")
-    with pytest.raises(publish.PublishError, match="upload failed"):
+    with pytest.raises(publish.PublishError, match="simulated upload failure") as e:
         run(p, d, st, FakeHttp(st, [DEM_LAYERS]))
+    assert e.value.code == 5
     assert st.objects == {} and st.deletes == ["vertical/x/v1/a.tif"]
 
 
@@ -229,3 +230,114 @@ def test_rclone_exists_does_not_trust_lsjson_stat(monkeypatch, tmp_path):
     monkeypatch.setattr(publish.subprocess, "run", lambda *a, **k: R("", 1, "permission denied"))
     with pytest.raises(publish.PublishError):
         s.exists("vertical/x/v1/geoid.tif")
+
+
+# --- review follow-ups: any failure after the upload starts rolls back ------
+class BoomHttp(FakeHttp):
+    """Serves the first config.json, then fails in a chosen way."""
+
+    def __init__(self, storage, mode):
+        super().__init__(storage, [DEM_LAYERS])
+        self.mode = mode
+
+    def get(self, url):
+        if url.startswith(CONFIG) and self.config_reads >= 1 and self.mode == "config":
+            raise OSError("config.json fetch failed")
+        return super().get(url)
+
+    def head(self, url):
+        if self.mode == "head":
+            raise ConnectionError("HEAD exploded")
+        if self.mode == "content-length":
+            return 200, {"content-length": "not-a-number"}
+        return super().head(url)
+
+
+@pytest.mark.parametrize("mode,code", [("config", 5), ("head", 5), ("content-length", 4)])
+def test_any_post_upload_error_rolls_back(product_dir, monkeypatch, mode, code):
+    p, d = product_dir
+    st = FakeStorage(existing={"vertical/other/keep.tif": b"not ours"})
+    monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    with pytest.raises(publish.PublishError, match="rolled back 3") as e:
+        run(p, d, st, BoomHttp(st, mode))
+    assert e.value.code == code
+    assert st.objects == {"vertical/other/keep.tif": b"not ours"}
+
+
+def test_sample_check_crash_rolls_back(product_dir, monkeypatch):
+    p, d = product_dir
+    st = FakeStorage()
+
+    def gdal_fails(local, url):
+        raise RuntimeError("gdal_translate failed")
+
+    monkeypatch.setattr(publish, "vsicurl_sample_exact", gdal_fails)
+    with pytest.raises(publish.PublishError, match="gdal_translate failed") as e:
+        run(p, d, st, FakeHttp(st, [DEM_LAYERS]), sample=True)
+    assert e.value.code == 5 and st.objects == {}
+
+
+def test_rollback_failure_is_loud_and_names_leftovers(product_dir):
+    p, d = product_dir
+
+    class StickyStorage(FakeStorage):
+        def delete(self, key):
+            if key.endswith("a.tif"):
+                raise PermissionError("delete denied")
+            super().delete(key)
+
+    st = StickyStorage()
+    after = DEM_LAYERS + [f"{BASE}/vertical/x/v1/a.tif"]
+    with pytest.raises(publish.PublishError, match="ROLLBACK INCOMPLETE") as e:
+        run(p, d, st, FakeHttp(st, [DEM_LAYERS, after]))
+    assert e.value.code == 6
+    assert "vertical/x/v1/a.tif" in str(e.value)
+    assert list(st.objects) == ["vertical/x/v1/a.tif"]  # the others were still removed
+
+
+# --- verify reads the PUBLISHED manifest; reproduce compares only COGs -------
+def _published(st, manifest, files):
+    for n, b in files.items():
+        st.objects[f"vertical/x/v1/{n}"] = b
+    st.objects["vertical/x/v1/manifest.json"] = json.dumps(manifest).encode()
+
+
+def _entry(b):
+    return {"sha256": hashlib.sha256(b).hexdigest(), "bytes": len(b)}
+
+
+def test_verify_against_published_manifest_ignores_local_json_drift(product_dir):
+    p, d = product_dir
+    st = FakeStorage()
+    files = {"a.tif": b"tiff-bytes", "list.json": b'{"meshes": [1], "fetched_at": "earlier"}'}
+    _published(st, {"files": {n: _entry(b) for n, b in files.items()}}, files)
+    res = publish.verify(p, FakeHttp(st, [DEM_LAYERS]), allowed_prefix="vertical/", public_base=BASE, local_dir=d)
+    assert all(r["ok"] for r in res) and len(res) == 2
+
+
+def test_verify_reads_v1_geoid_manifest_layout(product_dir):
+    p, d = product_dir
+    st = FakeStorage()
+    _published(st, {"cog": {"file": "a.tif", **_entry(b"tiff-bytes")}}, {"a.tif": b"tiff-bytes"})
+    res = publish.verify(p, FakeHttp(st, [DEM_LAYERS]), allowed_prefix="vertical/", public_base=BASE)
+    assert [r["ok"] for r in res] == [True]
+
+
+def test_verify_flags_objects_that_differ_from_published_manifest(product_dir):
+    p, d = product_dir
+    st = FakeStorage()
+    _published(st, {"files": {"a.tif": _entry(b"tiff-bytes")}}, {"a.tif": b"corrupted!"})
+    res = publish.verify(p, FakeHttp(st, [DEM_LAYERS]), allowed_prefix="vertical/", public_base=BASE)
+    assert [r["ok"] for r in res] == [False]
+
+
+def test_reproduce_compares_cog_payloads_only(product_dir):
+    p, d = product_dir
+    st = FakeStorage()
+    files = {"a.tif": b"tiff-bytes", "list.json": b"different json"}
+    _published(st, {"files": {n: _entry(b) for n, b in files.items()}}, files)
+    rows = publish.reproduce(p, d, FakeHttp(st, [DEM_LAYERS]), public_base=BASE)
+    assert [(r["file"], r["identical"]) for r in rows] == [("vertical/x/v1/a.tif", True)]
+    _published(st, {"files": {"a.tif": _entry(b"other tiff")}}, {"a.tif": b"other tiff"})
+    rows = publish.reproduce(p, d, FakeHttp(st, [DEM_LAYERS]), public_base=BASE)
+    assert [r["identical"] for r in rows] == [False]
