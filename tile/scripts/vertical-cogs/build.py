@@ -47,6 +47,29 @@ def _sources(p: Product, work: str) -> dict:
         return json.load(f)
 
 
+class SourceMismatch(ValueError):
+    pass
+
+
+def verified_source(src_dir: str, meta: dict) -> str:
+    """Path of a fetched source file after checking it against sources.json.
+
+    The manifest copies its provenance from sources.json, so the bytes we are
+    about to parse must be exactly the bytes sources.json describes; a
+    replaced, truncated or edited source refuses to build.
+    """
+    path = os.path.join(src_dir, meta["file"])
+    if not os.path.exists(path):
+        raise SourceMismatch(f"{path}: missing; run fetch")
+    size = os.path.getsize(path)
+    if size != meta["file_bytes"]:
+        raise SourceMismatch(f"{path}: {size} bytes, sources.json says {meta['file_bytes']}; re-run fetch")
+    sha = vref.sha256_file(path)
+    if sha != meta["file_sha256"]:
+        raise SourceMismatch(f"{path}: sha256 {sha} != sources.json {meta['file_sha256']}; re-run fetch")
+    return path
+
+
 def closure_nodes(mesh6: int) -> list[tuple[int, int]]:
     """Nodes read when interpolating anywhere inside secondary mesh ``mesh6``."""
     i0, j0 = vref.mesh6_sw_node(mesh6)
@@ -112,7 +135,7 @@ def build_height_correction(p: Product, work: str, diagnostic_merged: bool = Fal
     src = p.src_dir(work)
     grids = p.get("grid")
     sel = p.get("selection")
-    pars = {g["name"]: vref.read_par(os.path.join(src, os.path.basename(g["source"]["member"]))) for g in grids}
+    pars = {g["name"]: vref.read_par(verified_source(src, sources[g["name"]])) for g in grids}
     all_nodes = set().union(*(par.nodes for par in pars.values()))
     bbox = (min(n[0] for n in all_nodes), max(n[0] for n in all_nodes), min(n[1] for n in all_nodes), max(n[1] for n in all_nodes))
     frm, to = p.get("from"), p.get("to")
@@ -236,7 +259,7 @@ def build_height_correction(p: Product, work: str, diagnostic_merged: bool = Fal
 def build_geoid(p: Product, work: str) -> dict:
     sources = _sources(p, work)
     src_meta = sources["geoid"]
-    src_path = os.path.join(p.src_dir(work), src_meta["file"])
+    src_path = verified_source(p.src_dir(work), src_meta)
     gs = GEOID_READERS[p.get("format")](src_path)
     g = gs.grid
     out_dir = p.out_dir(work)

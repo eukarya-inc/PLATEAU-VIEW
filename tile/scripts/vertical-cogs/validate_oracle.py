@@ -197,9 +197,11 @@ def run(dh_dir: str, specs: list[str], work: str, listings: dict[str, str | None
         acc = {k: [] for k in ("gsi_rule", *dh)}
         only_old = only_new = dh_nan = matched_tiles = 0
         worst_tiles = []
+        unmatched = []
         for key, t_new in new["tiles"].items():
             t_old = old["tiles"].get(key)
             if t_old is None:
+                unmatched.append(t_new["name"])  # counted against the mesh by verdict()
                 continue
             if t_old["z"].shape != t_new["z"].shape:
                 raise SystemExit(f"{spec} {t_new['name']}: shape {t_new['z'].shape} vs {t_old['z'].shape}")
@@ -234,6 +236,7 @@ def run(dh_dir: str, specs: list[str], work: str, listings: dict[str, str | None
             "tiles_2024": len(new["tiles"]),
             "tiles_2011": len(old["tiles"]),
             "tiles_matched": matched_tiles,
+            "tiles_2024_without_2011": sorted(unmatched),
             "editions_2011": sorted({re.search(r"-(\d{8})\.tif$", n).group(1) for n in old["names"]}),
             "pixels_valid_2011_only": only_old,
             "pixels_valid_2024_only": only_new,
@@ -246,3 +249,26 @@ def run(dh_dir: str, specs: list[str], work: str, listings: dict[str, str | None
     with open(os.path.join(work, "oracle_report.json"), "w") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     return report
+
+
+def verdict(entry: dict, min_frac: float = 0.99) -> list[str]:
+    """Reasons an oracle mesh fails (empty = pass).
+
+    The score only means something if it covers the whole JGD2024 edition:
+    every 2024 tile must have its 2011 counterpart, every pixel valid in 2024
+    must be predicted (valid in 2011 and a non-NaN dH), and there must be
+    residuals at all. Otherwise a subset could pass the threshold.
+    """
+    bad = []
+    if entry["tiles_2024_without_2011"]:
+        bad.append(f"{len(entry['tiles_2024_without_2011'])} JGD2024 tile(s) have no JGD2011 counterpart: {entry['tiles_2024_without_2011']}")
+    if entry["pixels_valid_2024_only"]:
+        bad.append(f"{entry['pixels_valid_2024_only']} pixel(s) valid in 2024 but not in 2011 (not a pure re-issue?)")
+    if entry["pixels_gsi_rule_nan"]:
+        bad.append(f"{entry['pixels_gsi_rule_nan']} pixel(s) where dH is NaN but both DEMs are valid")
+    r = entry["residual_m"]["gsi_rule"]
+    if not r.get("n"):
+        bad.append("no residuals at all")
+    elif r["frac_le_0.005"] < min_frac:
+        bad.append(f"only {r['frac_le_0.005'] * 100:.3f}% of pixels within 5 mm (< {min_frac * 100:.0f}%)")
+    return bad

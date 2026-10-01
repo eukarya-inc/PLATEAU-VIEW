@@ -117,3 +117,34 @@ def validate(cog: str, cfg: dict, n: int = 5000, seed: int = 20261001, calc: boo
             spots.append({"name": name, "lat": la, "lon": lo, "gsi": gsi, "cog": round(ours, 6), "diff_m": round(ours - gsi, 6) if not math.isnan(gsi) else None, "gsi_raw": j})
         out["gsi_calculator"] = spots
     return out
+
+
+def verdict(rep: dict, calc: bool, tol_m: float = 1e-4) -> list[str]:
+    """Reasons ``rep`` fails (empty = pass).
+
+    With ``calc`` the GSI calculator spot checks are mandatory: a point for
+    which the calculator gave no usable value (server busy on every retry,
+    unparseable answer) is a failure, not a skip. Only ``calc=False``
+    (``--no-calc``) skips them.
+    """
+    bad = []
+    if not rep["random_max_abs_diff_m"] < tol_m:
+        bad.append(f"crate: max |diff| {rep['random_max_abs_diff_m']} m at random points")
+    if not rep["nodes_max_abs_diff_m"] < tol_m:
+        bad.append(f"crate: max |diff| {rep['nodes_max_abs_diff_m']} m at nodes")
+    if rep["coverage_disagreements_in_bbox"]:
+        bad.append(f"crate: coverage disagrees at {rep['coverage_disagreements_in_bbox']} random points")
+    if rep["nodes_nan_in_cog_only"]:
+        bad.append(f"{rep['nodes_nan_in_cog_only']} nodes NaN in the COG but valid in the crate")
+    if rep["nodes_nan_in_crate_only"] and not rep["nodes_nan_in_crate_only_all_next_to_nodata"]:
+        bad.append("nodes NaN in the crate only that are not on the coverage edge")
+    if calc:
+        spots = rep.get("gsi_calculator") or []
+        if not spots:
+            bad.append("GSI calculator: no spot checks were run")
+        for s in spots:
+            if s.get("diff_m") is None:
+                bad.append(f"GSI calculator: no value at {s['name']} ({s['lat']}, {s['lon']}): {s.get('gsi_raw')}")
+            elif abs(s["diff_m"]) > tol_m:
+                bad.append(f"GSI calculator: {s['name']} differs by {s['diff_m']} m")
+    return bad

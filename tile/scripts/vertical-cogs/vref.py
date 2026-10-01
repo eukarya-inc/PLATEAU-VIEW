@@ -204,12 +204,43 @@ class GeoidSource:
     model: str
 
 
-def read_isg(path: str) -> GeoidSource:
-    """ISG 2.0 (JPGEO2024 family). Rows run N->S, columns W->E.
+def _norm(v: str | None) -> str:
+    return " ".join((v or "").replace(",", ", ").split()).lower()
 
-    ISG 2.0 with ``coord type = geodetic`` and ``data ordering = N-to-S,
-    W-to-E`` stores values *on grid nodes*: the first value is the node at
-    (lat max, lon min). We verify the header says so rather than assume it.
+
+def check_isg_header(header: dict[str, str], path: str = "ISG") -> None:
+    """Refuse any ISG header that is not exactly the layout read_isg handles."""
+    want = {
+        "ISG format": "2.0",
+        "data format": "grid",
+        "data ordering": "n-to-s, w-to-e",
+        "coord type": "geodetic",
+        "coord units": "dms",
+    }
+    for key, value in want.items():
+        if key not in header:
+            raise ValueError(f"{path}: header lacks '{key}' (expected {value!r}); refusing to guess")
+        if _norm(header[key]) != value.lower():
+            raise ValueError(f"{path}: {key} = {header[key]!r}, only {value!r} is supported")
+    for key in ("lat min", "lat max", "lon min", "lon max", "delta lat", "delta lon", "nrows", "ncols", "nodata"):
+        if key not in header:
+            raise ValueError(f"{path}: header lacks '{key}'")
+
+
+def read_isg(path: str) -> GeoidSource:
+    """ISG 2.0 grid (JPGEO2024 family) -> north-up NodeGrid.
+
+    Only the layout GSI publishes is accepted, and every part of it is
+    checked in the header rather than assumed; anything else is refused
+    (never silently mirrored or reinterpreted):
+
+    * ``ISG format = 2.0``, ``data format : grid``;
+    * ``data ordering : N-to-S, W-to-E`` -- both axes: rows run north to
+      south, values within a row west to east, so the first value is the
+      node at (lat max, lon min);
+    * ``coord type : geodetic`` and ``coord units : dms`` must be present;
+    * ``nodata`` must be present;
+    * the extent must be node-registered: (max - min) / delta == n - 1.
     """
     header: dict[str, str] = {}
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -227,14 +258,11 @@ def read_isg(path: str) -> GeoidSource:
                     header[k.strip()] = v.strip()
                     break
         vals = np.loadtxt(lines, dtype=np.float64, ndmin=2)
+    check_isg_header(header, path)
     nrows = int(header["nrows"])
     ncols = int(header["ncols"])
     if vals.shape != (nrows, ncols):
         raise ValueError(f"{path}: data {vals.shape} != header {(nrows, ncols)}")
-    if "N-to-S" not in header.get("data ordering", ""):
-        raise ValueError(f"{path}: unexpected data ordering {header.get('data ordering')}")
-    if header.get("coord type", "geodetic") != "geodetic":
-        raise ValueError(f"{path}: coord type {header.get('coord type')}")
     lat_min = parse_dms(header["lat min"])
     lat_max = parse_dms(header["lat max"])
     lon_min = parse_dms(header["lon min"])
@@ -244,7 +272,7 @@ def read_isg(path: str) -> GeoidSource:
     # Node-registered grid: extent spans (n-1) intervals.
     if abs((lat_max - lat_min) / dlat - (nrows - 1)) > 1e-6 or abs((lon_max - lon_min) / dlon - (ncols - 1)) > 1e-6:
         raise ValueError(f"{path}: header extent is not node-registered")
-    nodata = float(header.get("nodata", "-9999"))
+    nodata = float(header["nodata"])
     a = vals.astype(np.float32)
     a[vals == nodata] = np.nan
     return GeoidSource(
@@ -260,10 +288,22 @@ def read_gsigeo_asc(path: str) -> GeoidSource:
     Rows run S->N (first row = lat0), columns W->E; each latitude row is
     wrapped over several text lines. 999.0000 = no data. Values are on nodes
     (GSI's reference Fortran interpolates bilinearly between them).
+
+    The format has no ordering field: the S->N / W->E order and the 1' x 1.5'
+    spacing are fixed by GSI's reader (gsigeome_asc.for: BILINEAR indexes
+    dat(IY, IX) from YMIN/XMIN = lat0/lon0). What the header does state is
+    checked: 8 fields, the spacing, positive counts, and that exactly
+    nlat x nlon finite values follow.
     """
     with open(path, encoding="ascii") as f:
         head = f.readline().split()
         vals = np.array(f.read().split(), dtype=np.float64)
+    if len(head) != 8:
+        raise ValueError(f"{path}: header has {len(head)} fields, expected 8 (lat0 lon0 dlat dlon nlat nlon ikind version)")
+    if int(head[4]) <= 1 or int(head[5]) <= 1:
+        raise ValueError(f"{path}: bad grid size {head[4:6]}")
+    if not np.all(np.isfinite(vals)):
+        raise ValueError(f"{path}: non-finite values in the grid")
     lat0, lon0 = float(head[0]), float(head[1])
     nlat, nlon = int(head[4]), int(head[5])
     # 0.016667 / 0.025000 are rounded prints of 1' and 1.5'.

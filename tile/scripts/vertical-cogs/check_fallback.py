@@ -14,11 +14,12 @@ derivable from the parameter files (see README).
 
 from __future__ import annotations
 
+import json
 import os
 
 import gsi
 import vref
-from build import closure_nodes
+from build import closure_nodes, verified_source
 from products import Product
 
 
@@ -27,8 +28,11 @@ def check(p: Product, work: str, catalogue: bool = False) -> dict:
     by_name = {g["name"]: g for g in p.get("grid")}
     src = p.src_dir(work)
 
+    with open(os.path.join(src, "sources.json"), encoding="utf-8") as f:
+        sources = json.load(f)
+
     def nodes(role: str):
-        return vref.read_par(os.path.join(src, os.path.basename(by_name[sel[role]]["source"]["member"]))).nodes
+        return vref.read_par(verified_source(src, sources[by_name[sel[role]]["name"]])).nodes
 
     P, L = nodes("primary"), nodes("listed")
     secs = {vref.node_to_mesh6(*n) for n in set(P) | set(L)}
