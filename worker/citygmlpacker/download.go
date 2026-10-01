@@ -36,8 +36,14 @@ func (d *Download) CloseWithError(err error) error {
 	return d.pw.CloseWithError(err)
 }
 
+// downloadBufferSize is the read-ahead each in-flight download may hold before
+// it blocks on the pipe. The zip writer drains downloads strictly in list order,
+// so up to maxConcurrentDownloads-1 of these buffers sit full at once; keep it
+// small enough that the product stays well inside the Cloud Build machine.
+const downloadBufferSize = 64 * 1024
+
 func (d *Download) Download(client *http.Client) bool {
-	bw := bufio.NewWriterSize(d.pw, 2*1024*1024)
+	bw := bufio.NewWriterSize(d.pw, downloadBufferSize)
 
 	resp, err := client.Do(d.req)
 	if err != nil {

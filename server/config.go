@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
@@ -114,7 +115,35 @@ func NewConfig() (*Config, error) {
 }
 
 func (c *Config) Print() string {
-	return noColorPP.Sprint(c)
+	s := noColorPP.Sprint(c)
+
+	for _, secret := range c.secrets() {
+		if secret == "" {
+			continue
+		}
+		s = strings.ReplaceAll(s, secret, "***")
+	}
+
+	return s
+}
+
+// secrets returns every credential-like config value so Print can redact them.
+// Add new secret fields here whenever they are introduced.
+func (c *Config) secrets() []string {
+	return []string{
+		c.Secret,
+		c.CMS_Webhook_Secret,
+		c.CMS_Token,
+		c.FME_Token,
+		c.Ckan_Token,
+		c.SDK_Token,
+		c.SendGrid_APIKey,
+		c.Sidebar_Token,
+		c.DataCatalog_CacheUpdateKey,
+		c.DataCatalog_GeocodingAppID,
+		c.Flow_Token,
+		c.Proxy_ODPT_ConsumerKey,
+	}
 }
 
 func (c *Config) LocalURL(path string) string {

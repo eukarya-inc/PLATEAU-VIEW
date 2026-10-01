@@ -51,8 +51,16 @@ func (p *packer) handleGetZip(c echo.Context, hash string) error {
 	ctx := c.Request().Context()
 	obj := p.bucket.Object(hash + ".zip")
 	attrs, err := obj.Attrs(ctx)
-	if errors.Is(err, storage.ErrObjectNotExist) {
-		return c.JSON(http.StatusNotFound, map[string]any{"error": "not found"})
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return c.JSON(http.StatusNotFound, map[string]any{"error": "not found"})
+		}
+
+		// Attrs returns nil attrs for any error, so anything else must not fall through.
+		log.Errorfc(ctx, "citygml: packer: failed to get object attrs: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": "failed to get status",
+		})
 	}
 
 	if status := getStatus(attrs.Metadata); status != PackStatusSucceeded {
@@ -80,9 +88,18 @@ func (p *packer) handleGetZip(c echo.Context, hash string) error {
 func (p *packer) handleGetStatus(c echo.Context, hash string) error {
 	ctx := c.Request().Context()
 	attrs, err := p.bucket.Object(hash + ".zip").Attrs(ctx)
-	if errors.Is(err, storage.ErrObjectNotExist) {
-		return c.JSON(http.StatusNotFound, map[string]any{"error": "not found"})
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return c.JSON(http.StatusNotFound, map[string]any{"error": "not found"})
+		}
+
+		// Attrs returns nil attrs for any error, so anything else must not fall through.
+		log.Errorfc(ctx, "citygml: packer: failed to get object attrs: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": "failed to get status",
+		})
 	}
+
 	status := getStatus(attrs.Metadata)
 	resp := map[string]any{
 		"status": status,
@@ -275,7 +292,7 @@ func (p *packer) packAsync(ctx context.Context, req PackAsyncRequest) error {
 
 	if p.conf.WorkerRegion != "" {
 		call := p.build.Projects.Locations.Builds.Create(path.Join("projects", p.conf.WorkerProject, "locations", p.conf.WorkerRegion), build)
-		op, err = call.Do()
+		op, err = call.Context(ctx).Do()
 	} else {
 		call := p.build.Projects.Builds.Create(p.conf.WorkerProject, build)
 		op, err = call.Context(ctx).Do()

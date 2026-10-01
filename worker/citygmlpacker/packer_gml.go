@@ -14,6 +14,10 @@ import (
 	"github.com/reearth/reearthx/log"
 )
 
+// maxConcurrentDownloads bounds in-flight dependency downloads. Each one holds
+// a downloadBufferSize buffer while it waits for the sequential zip writer.
+const maxConcurrentDownloads = 512
+
 func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) error {
 	upath := getBasePath(u.Path)
 	if upath == "" {
@@ -81,7 +85,7 @@ func (p *Packer) writeGML(ctx context.Context, u *url.URL, pctx *packerContext) 
 	}
 
 	go func() {
-		sem := make(chan struct{}, 512)
+		sem := make(chan struct{}, maxConcurrentDownloads)
 		for _, d := range downloads {
 			select {
 			case sem <- struct{}{}:
