@@ -161,6 +161,8 @@ interface TileSource {
   verticalDatum?: string;
   /** Height-correction product (`DemProfile.heightCorrection`); profile-only. */
   heightCorrection?: DemHeightCorrection;
+  /** Base under the layers (`DemProfile.base`, e.g. `sealevel`); profile-only. */
+  base?: string;
   description: string;
   layers: TileCogLayer[];
 }
@@ -185,6 +187,8 @@ export interface DemProfile {
   geoid?: string;
   verticalDatum?: string;
   heightCorrection?: DemHeightCorrection;
+  /** `sealevel` puts the stack on the flat 0 m base instead of the tile server's shared DEM_URL base. */
+  base?: string;
 }
 
 interface TileConfig {
@@ -356,6 +360,7 @@ function demSource(
       ...(sourceGeoid ? { geoid: sourceGeoid } : {}),
       ...(profile?.verticalDatum ? { verticalDatum: profile.verticalDatum } : {}),
       ...(profile?.heightCorrection ? { heightCorrection: profile.heightCorrection } : {}),
+      ...(profile?.base ? { base: profile.base } : {}),
       description: `${dataset} DEM overlay stack (${cogs.length} COGs, bottom->top)`,
       layers: ordered.map((o) => ({
         type: "cog",
