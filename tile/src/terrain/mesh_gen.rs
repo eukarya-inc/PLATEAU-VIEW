@@ -64,11 +64,11 @@ pub fn generate_quantized_mesh_tile(
 /// blow up the bounding sphere and horizon occlusion in the quantized-mesh
 /// header, and Cesium would false-cull the entire tile.
 ///
-/// This is the served-surface policy for every terrain encoding: the
+/// This is the invalid-sample policy for every terrain encoding: the
 /// Terrarium / Mapbox raster endpoints apply the same function before
-/// encoding, so a pixel reads the same height in a raster tile as at the
-/// corresponding mesh vertex rather than the format's minimum code
-/// (−32768 m / −10000 m).
+/// encoding, so an invalid sample becomes 0 m there too rather than the
+/// format's minimum code (−32768 m / −10000 m). Valid heights are still
+/// subject to each format's own range and quantisation.
 #[inline]
 pub(crate) fn sanitize_height(h: f64) -> f64 {
     if h.is_finite() && h.abs() <= crate::cog::MAX_PHYSICAL_ELEVATION_M {

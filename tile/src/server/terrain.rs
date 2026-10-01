@@ -1132,9 +1132,9 @@ mod tests {
         }
     }
 
-    /// Raster output must read the same height as the mesh path for the same
-    /// sample: NaN / ±inf / beyond-physical values become 0 m, never the
-    /// encoder's floor (−32768 m Terrarium, −10000 m Mapbox).
+    /// Raster output must treat invalid samples as the mesh path does:
+    /// NaN / ±inf / beyond-physical values become 0 m, never the encoder's
+    /// floor (−32768 m Terrarium, −10000 m Mapbox).
     #[test]
     fn raster_encoders_sanitise_like_the_mesh_path() {
         use terrain_codec::heightmap::decode_pixel;
