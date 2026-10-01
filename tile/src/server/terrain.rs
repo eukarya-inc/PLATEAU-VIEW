@@ -48,7 +48,7 @@ use crate::terrain::{
     },
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
-    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile},
+    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile, sanitize_height},
     webmercator::xyz_tile_bounds,
 };
 
@@ -105,17 +105,36 @@ impl RasterEncoding {
     /// `Vec<f32>` (for the f64→f32 cast) or `Vec<u8>` (for the RGB stream)
     /// is allocated — only the final `RgbaImage` that the PNG/WebP encoder
     /// consumes.
+    ///
+    /// Each height goes through [`sanitize_height`] first — the same policy
+    /// the quantized-mesh path applies — so NaN / ±inf / beyond-physical
+    /// values become 0 m instead of the encoder's floor (−32768 m Terrarium,
+    /// −10000 m Mapbox).
     fn encode_to_rgba(self, elevations: &[f64], width: u32, height: u32) -> image::RgbaImage {
         let fmt = self.heightmap_format();
         debug_assert_eq!(elevations.len(), (width as usize) * (height as usize));
         let mut out = image::RgbaImage::new(width, height);
         for (dst, &elev) in out.pixels_mut().zip(elevations.iter()) {
-            let [r, g, b] = encode_heightmap_pixel(fmt, elev as f32);
+            let [r, g, b] = encode_heightmap_pixel(fmt, sanitize_height(elev) as f32);
             *dst = image::Rgba([r, g, b, 255]);
         }
         out
     }
 }
+
+/// Version tag for the bytes the raster endpoints (`/terrarium`, `/mapbox`)
+/// produce from unchanged DEM input. It goes into both the ETag and the
+/// persistent-cache prefix, so bump it on any change that alters those bytes —
+/// the raster counterpart of `TERRAIN_MESH_ALGO_VERSION`. Without it, a tile
+/// rendered by an older build keeps being served from the R2 cache forever,
+/// because nothing else in its key moves.
+///
+/// v2: NaN no longer reaches the encoders. The composite's parent-tile
+/// upsample left a NaN rim along child edges at sea (encoded as −32768 m /
+/// −10000 m), and raster output now goes through the mesh path's
+/// `sanitize_height`. (v1 was the unversioned `terrarium-xyz` / `mapbox-xyz`
+/// prefix.)
+const RASTER_ALGO_VERSION: &str = "v2-nan-free";
 
 /// Approximate bounds of the Japan geoid coverage, used for `layer.json`
 /// availability. GSIGEO2011 and JPGEO2024 both cover Japan including
@@ -621,7 +640,13 @@ async fn terrain_tile_impl(
     // NaN, so tiles near every integer meridian encoded wrong heights from
     // DEM input that never changed — exactly the case this tag exists for.
     // The six patch/shizuoka overlays also began resolving at the same time.
-    const TERRAIN_MESH_ALGO_VERSION: &str = "v4-edge-chunk-stride";
+    // v5: the composite's parent-tile upsample no longer leaves a NaN rim
+    // along child edges (offshore, where the base DEM 404s and falls back to
+    // a parent). A mesh vertex whose four DEM neighbours all fell in the rim
+    // read NaN and was sanitised to 0 m. A byte comparison of z5–z10 tiles
+    // offshore Japan found no tile that actually changed, but the bytes can
+    // change, and these DEM-generated tiles are cheap to re-key.
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v5-upsample-edge-clamp";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
     let etag_keys: Vec<String> = vec![
@@ -641,7 +666,7 @@ async fn terrain_tile_impl(
     // Mesh-algo tag goes into the cache prefix so persistent storage rolls
     // forward independently of DEM upstream changes — see the comment on
     // `TERRAIN_MESH_ALGO_VERSION` above. The raster endpoints use their own
-    // prefix ("terrarium-xyz" / "mapbox-xyz") and stay untouched.
+    // prefix ("terrarium-xyz" / "mapbox-xyz" + `RASTER_ALGO_VERSION`).
     let terrain_cache_prefix = format!("terrain/{TERRAIN_MESH_ALGO_VERSION}");
     let cache_key = TerrainCacheKey {
         prefix: &terrain_cache_prefix,
@@ -893,6 +918,7 @@ async fn raster_tile(
         format!("size:{}", tile_size),
         format!("proj:webmercator"),
         upsample_marker,
+        format!("raster-algo:{RASTER_ALGO_VERSION}"),
     ];
     let etag = compute_etag(&etag_keys, encoding.cache_prefix(), format, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
@@ -901,8 +927,9 @@ async fn raster_tile(
         return not_modified_response(&etag, state.cache_control.as_deref());
     }
 
+    let raster_cache_prefix = format!("{}/{RASTER_ALGO_VERSION}", encoding.cache_prefix());
     let cache_key = TerrainCacheKey {
-        prefix: encoding.cache_prefix(),
+        prefix: &raster_cache_prefix,
         dem_slug: terrain.dem.slug(),
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
@@ -1102,6 +1129,34 @@ mod tests {
             heights: heights.map(str::to_string),
             geoid: geoid.map(str::to_string),
             format: None,
+        }
+    }
+
+    /// Raster output must treat invalid samples as the mesh path does:
+    /// NaN / ±inf / beyond-physical values become 0 m, never the encoder's
+    /// floor (−32768 m Terrarium, −10000 m Mapbox).
+    #[test]
+    fn raster_encoders_sanitise_like_the_mesh_path() {
+        use terrain_codec::heightmap::decode_pixel;
+        let input = [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -2.748191709909388e37,
+            1234.5,
+        ];
+        for enc in [RasterEncoding::Terrarium, RasterEncoding::Mapbox] {
+            let img = enc.encode_to_rgba(&input, input.len() as u32, 1);
+            for (px, &h) in img.pixels().zip(input.iter()) {
+                let got = decode_pixel(enc.heightmap_format(), [px[0], px[1], px[2]]) as f64;
+                let want = sanitize_height(h);
+                // Mapbox quantises to 0.1 m, Terrarium to 1/256 m.
+                assert!(
+                    (got - want).abs() <= 0.1,
+                    "{}: input {h} decoded as {got}, mesh path uses {want}",
+                    enc.slug()
+                );
+            }
         }
     }
 

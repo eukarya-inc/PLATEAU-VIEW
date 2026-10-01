@@ -276,7 +276,16 @@ impl DemProvider for CompositeDemProvider {
 /// `parent` is a `tile_size × tile_size` grid covering one parent tile. The
 /// child tile occupies the `(sub_x, sub_y)`-th cell of a `factor × factor`
 /// subdivision of the parent. Pixel centers are sampled with bilinear
-/// interpolation; out-of-range neighbours and NaNs propagate as NaN.
+/// interpolation; NaN samples in the parent propagate as NaN.
+///
+/// A child pixel centre within half a parent pixel of the parent's border
+/// lies outside the parent's outermost pixel centres, so one of its four
+/// neighbours is off the grid. Those neighbours clamp to the nearest edge
+/// sample — the same rule as `terrain_codec::mercator::MercatorDem::sample` —
+/// rather than becoming NaN. The parent does have data there; treating the
+/// half-pixel rim as missing used to put a NaN band (1 px at factor 2, 2 px
+/// from factor 4) along every edge a child shares with its parent, which the
+/// raster endpoints encoded as −32768 m (Terrarium) / −10000 m (Mapbox).
 fn upsample_subregion(
     parent: &[f64],
     tile_size: u32,
@@ -305,12 +314,11 @@ fn bilinear_at(grid: &[f64], width: u32, x: f64, y: f64) -> f64 {
     let y0 = y.floor() as i64;
     let dx = x - x0 as f64;
     let dy = y - y0 as f64;
+    // Off-grid neighbours clamp to the edge sample (see `upsample_subregion`).
     let get = |xi: i64, yi: i64| -> f64 {
-        if xi < 0 || yi < 0 || xi >= w || yi >= w {
-            f64::NAN
-        } else {
-            grid[(yi * w + xi) as usize]
-        }
+        let xi = xi.clamp(0, w - 1);
+        let yi = yi.clamp(0, w - 1);
+        grid[(yi * w + xi) as usize]
     };
     let v00 = get(x0, y0);
     let v10 = get(x0 + 1, y0);
@@ -505,6 +513,93 @@ mod tests {
         assert_eq!(tokyo_z14.elevations, vec![0.0; 4]);
         // Etag must NOT include the antarctic overlay (was pruned).
         assert!(!tokyo_z14.etag.unwrap().contains("ant"));
+    }
+
+    /// Every child of a parent, at every factor, must come out NaN-free from
+    /// a NaN-free parent — including the rim pixels whose centres sit within
+    /// half a parent pixel of the parent's border.
+    #[test]
+    fn upsample_subregion_has_no_nan_rim() {
+        let size = 16u32;
+        let parent: Vec<f64> = (0..size * size)
+            .map(|i| (i / size) as f64 * 100.0 + (i % size) as f64)
+            .collect();
+        for factor in [2u32, 4, 8] {
+            for sub_y in 0..factor {
+                for sub_x in 0..factor {
+                    let child = upsample_subregion(&parent, size, factor, sub_x, sub_y);
+                    let nan = child.iter().filter(|v| v.is_nan()).count();
+                    assert_eq!(
+                        nan, 0,
+                        "factor {factor} sub ({sub_x},{sub_y}): {nan} NaN px"
+                    );
+                }
+            }
+        }
+        // The rim extends the edge sample: the top-left child's first pixel
+        // is the parent's corner, the bottom-right child's last pixel the
+        // opposite corner.
+        let tl = upsample_subregion(&parent, size, 4, 0, 0);
+        assert_eq!(tl[0], parent[0]);
+        let br = upsample_subregion(&parent, size, 4, 3, 3);
+        assert_eq!(br[br.len() - 1], parent[parent.len() - 1]);
+    }
+
+    /// Base that only serves zooms up to `max_zoom` (like Mapterhorn over
+    /// open sea, which 404s above z6 around 145°E 30°N), so deeper requests
+    /// go through `fetch_base_upsampled`.
+    struct ShallowBase {
+        max_zoom: u8,
+    }
+
+    #[async_trait]
+    impl DemProvider for ShallowBase {
+        async fn get_tile_elevations(
+            &self,
+            z: u8,
+            _x: u32,
+            _y: u32,
+            tile_size: u32,
+        ) -> Result<DemTile, DemError> {
+            if z > self.max_zoom {
+                return Err(DemError::NotFound);
+            }
+            Ok(DemTile {
+                elevations: vec![0.0; (tile_size * tile_size) as usize],
+                etag: None,
+            })
+        }
+        fn native_tile_size(&self) -> u32 {
+            256
+        }
+        fn max_zoom(&self) -> u8 {
+            18
+        }
+        fn version(&self) -> &str {
+            "v1"
+        }
+        fn slug(&self) -> &str {
+            "shallow"
+        }
+    }
+
+    /// Regression for the −32768 m stripes at sea: z8/231/105 is the
+    /// right-hand child of its z6 parent, and its last two columns used to
+    /// come back NaN.
+    #[tokio::test]
+    async fn base_parent_fallback_has_no_nan_edges() {
+        let base: Arc<dyn DemProvider> = Arc::new(ShallowBase { max_zoom: 6 });
+        let overlay = provider(
+            "far",
+            Some(GeoBounds::new(130.4, 32.8, 130.7, 33.0)),
+            vec![],
+        );
+        let comp = build(base, vec![overlay]).await;
+        for (x, y) in [(231, 105), (228, 104), (231, 107)] {
+            let tile = comp.get_tile_elevations(8, x, y, 256).await.unwrap();
+            let nan = tile.elevations.iter().filter(|v| v.is_nan()).count();
+            assert_eq!(nan, 0, "z8/{x}/{y}: {nan} NaN px");
+        }
     }
 
     #[tokio::test]

@@ -89,6 +89,7 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 - The source named `"dem"` is **not** exposed under `/tiles/dem/...`; its layers feed the terrain endpoint instead.
 - `"geoid"` fixes the vertical datum for that source. Two DEM sources can therefore carry different models — e.g. a JGD2011 `dem` alongside a future JGD2024 `dem-2024` — each addressable at `/terrain/{name}/...`. An unrecognised value is logged at ERROR and the source falls back to `TERRAIN_DEFAULT_GEOID`; it never silently picks a neighbouring model.
 - Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
+- Where the base DEM has no tile at the requested zoom (Mapterhorn 404s offshore above roughly z6), the composite bilinear-upsamples the nearest parent. Child pixels within half a parent pixel of the parent's border clamp to the edge sample, so the result is NaN-free wherever the parent is.
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
 - Each pod refreshes every COG overlay's upstream ETag every **5 minutes** (single HEAD per overlay), so a CMS-side file swap that doesn't bump the config hash is picked up automatically — no `/reload` needed. The pod's own memory and persistent caches invalidate on ETag mismatch; downstream HTTP caches still honour their `Cache-Control: max-age` so end-users see the new tiles after at most one CDN TTL.
@@ -152,7 +153,7 @@ Any sentinel works for the tile server, but **small magnitudes are easier on eve
 >
 > 1. **Adaptive nodata tolerance** (`src/cog/reader.rs`) — `max(0.5 m, |nodata| · 1e-3)`. Small sentinels get the 0.5 m floor that catches `254.99996` next to `255`; huge sentinels get a proportional band wide enough to absorb bilinear-blended fringe values.
 > 2. **Physical elevation guard** (`src/cog/decode.rs`, `MAX_PHYSICAL_ELEVATION_M = 50_000`) — anything beyond ±50 km is dropped to NaN at decode time. Mt. Everest is 8.85 km, Mariana Trench −10.9 km; anything bigger is corruption.
-> 3. **Mesh-generator sanitisation** (`src/terrain/mesh_gen.rs`) — `find_height_range` and the Martini sample callback both reject non-finite / out-of-range heights so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point.
+> 3. **Output sanitisation** (`sanitize_height` in `src/terrain/mesh_gen.rs`) — every served height that is non-finite or beyond ±50 km becomes 0 m. The Martini sample callback uses it so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point, and the `/terrarium` / `/mapbox` encoders use it so the same sample reads 0 m there too instead of the format floor (−32768 m / −10000 m).
 >
 > Mosaicking with `-r near` is still the right thing to do — keeping the data clean upstream means *other* tools (QGIS, downstream processors) also see well-formed values.
 
