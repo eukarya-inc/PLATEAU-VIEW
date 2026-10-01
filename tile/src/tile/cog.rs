@@ -37,7 +37,7 @@ pub struct CogTileSource {
 
 impl CogTileSource {
     pub fn new(url: String, nodata: Option<NoDataConfig>) -> Self {
-        let etag_key = format!("cog:{}", url);
+        let etag_key = format!("cog:{}:{}", url, crate::cog::COG_SAMPLING_VERSION);
         Self {
             reader: Arc::new(RwLock::new(None)),
             url,
@@ -50,8 +50,8 @@ impl CogTileSource {
 
     pub fn with_version(url: String, nodata: Option<NoDataConfig>, version: Option<&str>) -> Self {
         let etag_key = match version {
-            Some(v) => format!("cog:{}:{}", url, v),
-            None => format!("cog:{}", url),
+            Some(v) => format!("cog:{}:{}:{}", url, v, crate::cog::COG_SAMPLING_VERSION),
+            None => format!("cog:{}:{}", url, crate::cog::COG_SAMPLING_VERSION),
         };
         Self {
             reader: Arc::new(RwLock::new(None)),

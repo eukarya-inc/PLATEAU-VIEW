@@ -1,68 +1,114 @@
 //! Bilinear interpolation utilities.
+//!
+//! Coordinates are **centre-based**: `(x, y) = (k, m)` is the centre of
+//! buffer pixel `(k, m)`, so a pixel's own value comes back exactly at its
+//! centre and the mean of two neighbours at their shared edge. Callers that
+//! start from an edge-based coordinate (e.g. [`super::bounds::geo_to_pixel_x`],
+//! where 0 is the west edge of pixel 0) must subtract 0.5 first — see
+//! `resample::resample_to_tile`.
+//!
+//! `valid_w × valid_h` is the part of the buffer that holds real raster pixels
+//! (the buffer is chunk-aligned and may extend past the image's east/south
+//! edge). Within half a pixel outside that extent — the outer half of the
+//! raster's edge pixels — neighbours are clamped to the edge pixel, so the
+//! raster's own footprint is covered right to its border with no NaN /
+//! transparent fringe; beyond it the result is NaN / transparent.
 
-/// Bilinear interpolation for f64 elevation data.
-/// Returns NaN if any of the four surrounding pixels is NaN.
-pub fn bilinear_f64(buffer: &[f64], width: usize, height: usize, x: f64, y: f64) -> f64 {
-    if x < 0.0 || y < 0.0 || x >= width as f64 || y >= height as f64 {
-        return f64::NAN;
+/// Snap tolerance, in source pixels, for centre-based coordinates.
+const SNAP_PX: f64 = 1e-9;
+
+/// The one snap policy for centre-based coordinates: within [`SNAP_PX`] of an
+/// integer (a pixel centre) the coordinate *is* that centre. Floating point
+/// turns an aligned centre into e.g. `511.9999999999`, which would otherwise
+/// give the neighbour a ~1e-10 weight — and, for the window computation, pull
+/// in the neighbouring chunk. Both [`TileRange`](super::resample::TileRange)
+/// and the interpolators go through [`support`], so they can never disagree
+/// about which pixels are read. Idempotent, and exact under subtraction of an
+/// integer (the buffer origin).
+#[inline]
+pub(crate) fn snap(c: f64) -> f64 {
+    let k = c.round();
+    if (c - k).abs() < SNAP_PX { k } else { c }
+}
+
+/// Pixels with a non-zero bilinear weight at centre-based coordinate `c`
+/// along one axis of `n` pixels: `(i0, i1, t)` with weight `1 − t` on `i0`
+/// and `t` on `i1`. `None` when `c` lies outside the raster (more than half a
+/// pixel beyond its edge pixels). Inside the outer half of an edge pixel the
+/// neighbour is clamped to it. When `t == 0` (an exact centre) `i1 == i0`: a
+/// zero-weight neighbour is never read, so it can neither poison the result
+/// with NaN nor lie outside the fetched window.
+#[inline]
+pub(crate) fn support(c: f64, n: usize) -> Option<(usize, usize, f64)> {
+    let c = snap(c);
+    if n == 0 || !(c >= -0.5 && c < n as f64 - 0.5) {
+        return None;
     }
+    let f0 = c.floor();
+    let t = c - f0;
+    let last = (n - 1) as i64;
+    let i0 = (f0 as i64).clamp(0, last) as usize;
+    let i1 = if t == 0.0 {
+        i0
+    } else {
+        (f0 as i64 + 1).clamp(0, last) as usize
+    };
+    Some((i0, i1, t))
+}
 
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(width - 1);
-    let y1 = (y0 + 1).min(height - 1);
+#[inline]
+fn axis(v: f64, valid: usize) -> Option<(usize, usize, f64)> {
+    support(v, valid)
+}
 
-    let fx = x - x0 as f64;
-    let fy = y - y0 as f64;
+/// Bilinear interpolation for f64 elevation data (centre-based coordinates).
+/// Returns NaN outside the raster or if any neighbour with a non-zero weight
+/// is NaN (a NaN pixel next to an exact pixel centre does not matter).
+pub fn bilinear_f64(
+    buffer: &[f64],
+    width: usize,
+    valid_w: usize,
+    valid_h: usize,
+    x: f64,
+    y: f64,
+) -> f64 {
+    let (Some((x0, x1, fx)), Some((y0, y1, fy))) = (axis(x, valid_w), axis(y, valid_h)) else {
+        return f64::NAN;
+    };
 
     let get_pixel = |px: usize, py: usize| -> Option<f64> {
-        let idx = py * width + px;
-        if idx < buffer.len() {
-            let v = buffer[idx];
-            if v.is_nan() { None } else { Some(v) }
-        } else {
-            None
-        }
+        let v = *buffer.get(py * width + px)?;
+        if v.is_nan() { None } else { Some(v) }
     };
 
-    // Get all four surrounding pixels
-    let v00 = match get_pixel(x0, y0) {
-        Some(v) => v,
-        None => return f64::NAN,
-    };
-    let v10 = match get_pixel(x1, y0) {
-        Some(v) => v,
-        None => return f64::NAN,
-    };
-    let v01 = match get_pixel(x0, y1) {
-        Some(v) => v,
-        None => return f64::NAN,
-    };
-    let v11 = match get_pixel(x1, y1) {
-        Some(v) => v,
-        None => return f64::NAN,
+    let (Some(v00), Some(v10), Some(v01), Some(v11)) = (
+        get_pixel(x0, y0),
+        get_pixel(x1, y0),
+        get_pixel(x0, y1),
+        get_pixel(x1, y1),
+    ) else {
+        return f64::NAN;
     };
 
-    // Bilinear interpolation
     let v0 = v00 * (1.0 - fx) + v10 * fx;
     let v1 = v01 * (1.0 - fx) + v11 * fx;
     v0 * (1.0 - fy) + v1 * fy
 }
 
-/// Bilinear interpolation for RGBA data.
-/// Uses nearest neighbor if any surrounding pixel is transparent (alpha=0).
-pub fn bilinear_rgba(buffer: &[u8], width: usize, height: usize, x: f64, y: f64) -> [u8; 4] {
-    if x < 0.0 || y < 0.0 || x >= width as f64 || y >= height as f64 {
+/// Bilinear interpolation for RGBA data (centre-based coordinates).
+/// Uses nearest neighbour if any surrounding pixel is transparent (alpha=0);
+/// transparent outside the raster.
+pub fn bilinear_rgba(
+    buffer: &[u8],
+    width: usize,
+    valid_w: usize,
+    valid_h: usize,
+    x: f64,
+    y: f64,
+) -> [u8; 4] {
+    let (Some((x0, x1, fx)), Some((y0, y1, fy))) = (axis(x, valid_w), axis(y, valid_h)) else {
         return [0, 0, 0, 0];
-    }
-
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(width - 1);
-    let y1 = (y0 + 1).min(height - 1);
-
-    let fx = x - x0 as f64;
-    let fy = y - y0 as f64;
+    };
 
     let get_pixel = |px: usize, py: usize| -> [u8; 4] {
         let idx = (py * width + px) * 4;
@@ -87,7 +133,7 @@ pub fn bilinear_rgba(buffer: &[u8], width: usize, height: usize, x: f64, y: f64)
     let any_transparent = p00[3] == 0 || p10[3] == 0 || p01[3] == 0 || p11[3] == 0;
 
     if any_transparent {
-        // Nearest neighbor
+        // Nearest neighbour: with centre-based coordinates the nearer centre.
         let near_x = if fx < 0.5 { x0 } else { x1 };
         let near_y = if fy < 0.5 { y0 } else { y1 };
         return get_pixel(near_x, near_y);
@@ -125,19 +171,19 @@ mod tests {
         let buffer = vec![0.0, 10.0, 20.0, 30.0];
 
         // Corner values
-        assert!((bilinear_f64(&buffer, 2, 2, 0.0, 0.0) - 0.0).abs() < 1e-6);
-        assert!((bilinear_f64(&buffer, 2, 2, 1.0, 0.0) - 10.0).abs() < 1e-6);
-        assert!((bilinear_f64(&buffer, 2, 2, 0.0, 1.0) - 20.0).abs() < 1e-6);
-        assert!((bilinear_f64(&buffer, 2, 2, 1.0, 1.0) - 30.0).abs() < 1e-6);
+        assert!((bilinear_f64(&buffer, 2, 2, 2, 0.0, 0.0) - 0.0).abs() < 1e-6);
+        assert!((bilinear_f64(&buffer, 2, 2, 2, 1.0, 0.0) - 10.0).abs() < 1e-6);
+        assert!((bilinear_f64(&buffer, 2, 2, 2, 0.0, 1.0) - 20.0).abs() < 1e-6);
+        assert!((bilinear_f64(&buffer, 2, 2, 2, 1.0, 1.0) - 30.0).abs() < 1e-6);
 
         // Center
-        assert!((bilinear_f64(&buffer, 2, 2, 0.5, 0.5) - 15.0).abs() < 1e-6);
+        assert!((bilinear_f64(&buffer, 2, 2, 2, 0.5, 0.5) - 15.0).abs() < 1e-6);
     }
 
     #[test]
     fn test_bilinear_f64_nan() {
         let buffer = vec![0.0, f64::NAN, 20.0, 30.0];
-        assert!(bilinear_f64(&buffer, 2, 2, 0.5, 0.5).is_nan());
+        assert!(bilinear_f64(&buffer, 2, 2, 2, 0.5, 0.5).is_nan());
     }
 
     #[test]
@@ -150,7 +196,7 @@ mod tests {
             255, 255, 255, 255, // white
         ];
 
-        let result = bilinear_rgba(&buffer, 2, 2, 0.5, 0.5);
+        let result = bilinear_rgba(&buffer, 2, 2, 2, 0.5, 0.5);
         // Should be interpolated mix
         assert!(result[3] == 255); // Alpha should be 255
     }
@@ -166,7 +212,67 @@ mod tests {
         ];
 
         // Should use nearest neighbor due to transparency
-        let result = bilinear_rgba(&buffer, 2, 2, 0.3, 0.3);
+        let result = bilinear_rgba(&buffer, 2, 2, 2, 0.3, 0.3);
         assert_eq!(result, [255, 0, 0, 255]); // Nearest to (0,0) = red
+    }
+
+    /// The convention the COG reader relies on: a pixel centre returns that
+    /// pixel exactly, a shared edge returns the mean of its two neighbours.
+    #[test]
+    fn centre_returns_pixel_edge_returns_mean() {
+        // 3x2 grid, row-major.
+        let b = vec![1.0, 2.0, 4.0, 8.0, 16.0, 32.0];
+        for (k, m, v) in [
+            (0, 0, 1.0),
+            (1, 0, 2.0),
+            (2, 0, 4.0),
+            (0, 1, 8.0),
+            (2, 1, 32.0),
+        ] {
+            assert_eq!(bilinear_f64(&b, 3, 3, 2, k as f64, m as f64), v);
+        }
+        // Edge between (0,0) and (1,0); edge between rows at column 2.
+        assert_eq!(bilinear_f64(&b, 3, 3, 2, 0.5, 0.0), 1.5);
+        assert_eq!(bilinear_f64(&b, 3, 3, 2, 2.0, 0.5), 18.0);
+        // Corner shared by four pixels.
+        assert_eq!(
+            bilinear_f64(&b, 3, 3, 2, 0.5, 0.5),
+            (1.0 + 2.0 + 8.0 + 16.0) / 4.0
+        );
+    }
+
+    /// The outer half of the raster's edge pixels is covered by clamping (no
+    /// fringe); beyond the raster it is NaN / transparent.
+    #[test]
+    fn raster_edges_clamp_then_end() {
+        let b = vec![1.0, 2.0, 4.0, 8.0];
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, -0.5, 0.0), 1.0);
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 1.49, 1.0), 8.0);
+        assert!(bilinear_f64(&b, 2, 2, 2, -0.51, 0.0).is_nan());
+        assert!(bilinear_f64(&b, 2, 2, 2, 1.5, 0.0).is_nan());
+        // A chunk-padded buffer: width 4 but only 2 valid columns; the padding
+        // (NaN) is never read, the edge clamps to column 1.
+        let padded = vec![1.0, 2.0, f64::NAN, f64::NAN, 4.0, 8.0, f64::NAN, f64::NAN];
+        assert_eq!(bilinear_f64(&padded, 4, 2, 2, 1.3, 0.0), 2.0);
+        let rgba = vec![10u8, 0, 0, 255, 20, 0, 0, 255];
+        assert_eq!(bilinear_rgba(&rgba, 2, 2, 1, -0.4, 0.0), [10, 0, 0, 255]);
+        assert_eq!(bilinear_rgba(&rgba, 2, 2, 1, 2.0, 0.0), [0, 0, 0, 0]);
+    }
+
+    /// A zero-weight neighbour is never read: an exact pixel centre next to a
+    /// NaN pixel (or next to the buffer's end) returns the pixel; any non-zero
+    /// weight on the NaN still gives NaN. Matches the P1 reference sampler.
+    #[test]
+    fn zero_weight_neighbour_is_not_read() {
+        let b = vec![5.0, f64::NAN, 7.0, f64::NAN];
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 0.0, 0.0), 5.0);
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 0.0, 1.0), 7.0);
+        assert!(bilinear_f64(&b, 2, 2, 2, 0.25, 0.0).is_nan());
+        // Within 1e-9 px of a centre counts as the centre.
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 1e-10, -1e-10), 5.0);
+        // Exact centre on the last column of a 1-wide valid extent in a buffer
+        // whose next element is a different row: only (0,0) is read.
+        let b = vec![3.0, 99.0];
+        assert_eq!(bilinear_f64(&b, 1, 1, 1, 0.0, 0.0), 3.0);
     }
 }
