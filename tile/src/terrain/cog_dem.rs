@@ -257,10 +257,13 @@ impl DemProvider for CogDemSource {
                 self.version, self.url_hash_hex
             )),
         };
-        // `resample_to_tile` samples pixel centres of `bounds`, which for a
-        // geographic COG are linear in latitude between the tile's edges (not
-        // Mercator rows). Record that so a height correction is sampled at the
-        // very points these elevations come from.
+        // `resample_to_tile` evaluates the COG at the output pixel centres of
+        // `bounds` (`cog::resample::sample_x/sample_y`; since the centre-based
+        // sampling fix the value really is the COG's surface at that point,
+        // up to the 1e-9 px snap). For a geographic COG those centres are
+        // linear in latitude between the tile's edges (not Mercator rows).
+        // Record that so a height correction is sampled at the very points
+        // these elevations come from.
         let space = match reader.crs() {
             CogCrs::Geographic => TileSpace::LinearLatLon,
             CogCrs::WebMercator => TileSpace::Mercator,
