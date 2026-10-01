@@ -53,7 +53,24 @@ Aliases: `ortho`, `ellipsoid`, `geoid-only`. Each mode lives in its own cache ke
 
 > **Breaking change.** The old `?geoid=<model>` selector is **gone**. Any request that still carries a `geoid` query parameter gets a **400** naming `heights=` and its valid values — it is never silently ignored and never silently falls back to another model. `?geoid=none` in particular becomes `?heights=orthometric`.
 
-Tiles whose bounds lie **entirely outside** the source's geoid coverage respond `404` — in every height mode, since coverage is a property of the source's model. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
+Tiles whose bounds lie **entirely outside** the source's geoid coverage box respond `404` — in every height mode, since coverage is a property of the source's model.
+
+#### Where the model has no value: the 0 fill and `X-Geoid-Coverage`
+
+Inside that box the model's grid still has **no value** over most of the sea, over foreign land (e.g. the Korean peninsula for GSIGEO2011) and at some remote islands. Those samples are currently served with a geoid height of **0**: `ellipsoidal` output there is just the orthometric height — tens of metres off the true ellipsoidal height — and `geoid` reads 0 m. This is an interim policy, not a datum statement. Whether and how to extrapolate a single model beyond its grid is pending consultation with MLIT; models are never mixed to fill the gap.
+
+So that clients can tell where the fill was used, DEM-generated tile responses (`/terrain/{source}/…`, `/terrarium/…`, `/mapbox/…`) carry an informational header:
+
+| `X-Geoid-Coverage` | Meaning |
+|---|---|
+| `full` | The model had a value at every sample of the tile |
+| `partial` | Some samples used the 0 fill |
+| `none` | Every sample used the 0 fill — the tile's heights are orthometric whatever the mode says |
+
+- "Samples" are the 65×65 grid of a quantized-mesh tile (the normal-computation halo excluded) or the pixel centres of a raster tile. The value depends only on the model and those positions, not on the DEM.
+- Sent for `heights=ellipsoidal` and `heights=geoid`. **Omitted** for `heights=orthometric` (no geoid is involved), on 404s, on `304 Not Modified`, and on the quantized-mesh mirror backend (pre-rendered tiles, no geoid at request time).
+- The header never changes a response body, status code, ETag or cache key. Tiles served from the memory or persistent cache return the same value: it is remembered from the render and, when that memory is gone, recomputed from the same sample positions.
+- With an explicit `CORS_ORIGINS` list the header is listed in `Access-Control-Expose-Headers`; with `*` every header is exposed.
 
 ### Layering DEM overlays on top of the base
 

@@ -7,7 +7,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use http::HeaderValue;
+use http::{HeaderName, HeaderValue};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
@@ -25,8 +25,10 @@ use super::{
 use crate::{ConfigManager, cache::CacheMode, terrain::TerrainSettings};
 
 /// Create CORS layer from origins configuration.
-/// - None or "*" -> permissive (allow all origins)
-/// - Comma-separated list -> only allow specified origins
+/// - None or "*" -> permissive (allow all origins; exposes every response
+///   header via `Access-Control-Expose-Headers: *`)
+/// - Comma-separated list -> only allow specified origins, and expose
+///   `X-Geoid-Coverage` explicitly so browser clients can still read it
 fn create_cors_layer(origins: Option<&str>) -> CorsLayer {
     match origins {
         None | Some("*") => CorsLayer::permissive(),
@@ -39,6 +41,9 @@ fn create_cors_layer(origins: Option<&str>) -> CorsLayer {
                 .allow_origin(origins)
                 .allow_methods(tower_http::cors::Any)
                 .allow_headers(tower_http::cors::Any)
+                .expose_headers([HeaderName::from_static(
+                    terrain_handlers::GEOID_COVERAGE_HEADER,
+                )])
         }
     }
 }
