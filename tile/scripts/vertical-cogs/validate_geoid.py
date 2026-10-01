@@ -1,19 +1,13 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = ["numpy", "tifffile", "imagecodecs", "japan-geoid==0.6.0"]
-# ///
-"""Validate a geoid COG against the japan-geoid 0.6 crate and GSI's calculator.
+"""``vcog.py validate`` for geoid products.
 
-    uv run validate_geoid.py work/out/geoid/jpgeo2024-hrefconv2024/geoid.tif
-    uv run validate_geoid.py work/out/geoid/gsigeo2011-v2.2/geoid.tif
-
-The PyPI ``japan-geoid`` 0.6.0 wheel is the same Rust crate the tile server
-links (tile/Cargo.toml: japan-geoid 0.6), with the same embedded grids.
+Compares the built COG, through the reference sampler, with the
+``japan-geoid`` 0.6.0 crate (the same crate the tile server links; its PyPI
+wheel embeds the same grids) at random points in coverage and at every valid
+node, and spot-checks GSI's online geoid calculator.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import time
@@ -22,17 +16,6 @@ import urllib.request
 import numpy as np
 
 import sampler
-
-CALC = {
-    "jpgeo2024-hrefconv2024": (
-        "https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/cgi/geoidcalc.pl",
-        "geoidHeight+HeightReferenceConversion",
-    ),
-    "gsigeo2011-v2.2": (
-        "https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh2011/cgi/geoidcalc.pl",
-        "geoidHeight",
-    ),
-}
 
 # Spread over the main islands plus islands where Hrefconv2024 is non-zero.
 SPOT = [
@@ -46,28 +29,14 @@ SPOT = [
 ]
 
 
-def crate(model: str):
+def validate(cog: str, cfg: dict, n: int = 5000, seed: int = 20261001, calc: bool = True) -> dict:
+    """``cfg`` is the product's [product.validate] table."""
     import japan_geoid as jg
 
-    if model == "jpgeo2024-hrefconv2024":
-        return jg.load_embedded_jpgeo2024_hrefconv2024()
-    if model == "gsigeo2011-v2.2":
-        return jg.load_embedded_gsigeo2011()
-    raise SystemExit(model)
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("cog")
-    ap.add_argument("--n", type=int, default=5000)
-    ap.add_argument("--seed", type=int, default=20261001)
-    ap.add_argument("--no-calc", action="store_true")
-    args = ap.parse_args()
-
-    r = sampler.open_cog(args.cog)
+    g = getattr(jg, cfg["crate_loader"])()
+    r = sampler.open_cog(cog)
     model = r.metadata["VREF_MODEL"]
-    g = crate(model)
-    rng = np.random.default_rng(args.seed)
+    rng = np.random.default_rng(seed)
 
     # Random points inside the valid-node bbox; keep the ones the crate covers
     # until we have --n of them.
@@ -79,7 +48,7 @@ def main() -> None:
     lats, lons, want = [], [], []
     tried = 0
     nan_mismatch = 0
-    while len(lats) < args.n:
+    while len(lats) < n:
         la = rng.uniform(lat_lo, lat_hi, 20000)
         lo = rng.uniform(lon_lo, lon_hi, 20000)
         ref = np.asarray(g.get_heights(lo, la), dtype=np.float64)
@@ -90,9 +59,9 @@ def main() -> None:
         lats.extend(la[ok])
         lons.extend(lo[ok])
         want.extend(ref[ok])
-    lats = np.array(lats[: args.n])
-    lons = np.array(lons[: args.n])
-    want = np.array(want[: args.n])
+    lats = np.array(lats[: n])
+    lons = np.array(lons[: n])
+    want = np.array(want[: n])
     got = sampler.sample_many(r, lats, lons)
     d = got - want
     # Also every valid node exactly.
@@ -112,9 +81,9 @@ def main() -> None:
     next_to_nodata = nb[1:-1, 1:-1][rows, cols]
 
     out = {
-        "cog": args.cog,
+        "cog": cog,
         "model": model,
-        "random_points": int(args.n),
+        "random_points": int(n),
         "random_tried_in_bbox": int(tried),
         "coverage_disagreements_in_bbox": int(nan_mismatch),
         "random_nan_in_cog_where_crate_valid": int(np.isnan(got).sum()),
@@ -128,8 +97,8 @@ def main() -> None:
         "nodes_max_abs_diff_m": float(np.nanmax(np.abs(nd))),
     }
 
-    if not args.no_calc:
-        url, key = CALC[model]
+    if calc:
+        url, key = cfg["calculator"], cfg["calculator_key"]
         spots = []
         for name, la, lo in SPOT:
             q = f"{url}?outputType=json&latitude={la}&longitude={lo}"
@@ -147,8 +116,4 @@ def main() -> None:
             ours = sampler.sample(r, la, lo)
             spots.append({"name": name, "lat": la, "lon": lo, "gsi": gsi, "cog": round(ours, 6), "diff_m": round(ours - gsi, 6) if not math.isnan(gsi) else None, "gsi_raw": j})
         out["gsi_calculator"] = spots
-    print(json.dumps(out, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+    return out

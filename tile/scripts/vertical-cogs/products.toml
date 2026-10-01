@@ -1,0 +1,118 @@
+# Vertical-reference products built and published by vcog.py.
+#
+# One [[product]] per published artifact set. Adding a product is an entry
+# here; see README "Adding a product". Kinds:
+#
+#   height-correction  PatchJGD(H) parameter file(s) -> node-centred dH COG(s)
+#                      ([[product.grid]], one per .par), optionally combined by
+#                      a [product.selection] rule.
+#   geoid              GSI geoid grid (ISG 2.0 or GSIGEO ASC) -> one COG.
+#
+# Every published key is <key_prefix>/<version>/<file>. Versions are never
+# overwritten: a changed input means a new version.
+
+[defaults]
+remote = "r2"                       # rclone remote name
+rclone_config = "rclone.r2.conf"    # relative to the repo root unless absolute
+bucket = "plateau-terrain"
+allowed_prefix = "vertical/"        # publish refuses any key outside this
+public_base = "https://tiles.plateau.city/terrain"   # public URL of the bucket root
+config_url = "https://tiles.plateau.city/terrain/config.json"  # DEM config generated from this bucket
+
+# ---------------------------------------------------------------------------
+[[product]]
+id = "hyokorev-jgd2011-to-jgd2024"
+kind = "height-correction"
+version = "v1"
+key_prefix = "vertical/hyokorev-jgd2011-to-jgd2024"
+from = "jgd2011"
+to = "jgd2024"
+
+  [[product.grid]]
+  name = "bm"
+  file = "dh_bm.tif"
+  content = "hyokorevBM_jgd2024_h.par as-is (水準点標高補正)"
+  [product.grid.source]
+  url = "https://www.gsi.go.jp/common/000268787.zip"
+  member = "hyokorevBM_jgd2024_h.par"
+  page = "https://www.gsi.go.jp/sokuchikijun/sokuchikijun41012.html#hyokorev2024"
+  note = "測地成果2024移行のための水準点標高補正パラメータ (published 2025-04-01)"
+
+  [[product.grid]]
+  name = "tr"
+  file = "dh_tr.tif"
+  content = "hyokorevTR_jgd2024_h.par as-is (三角点標高補正)"
+  [product.grid.source]
+  url = "https://www.gsi.go.jp/common/000268789.zip"
+  member = "hyokorevTR_jgd2024_h.par"
+  page = "https://www.gsi.go.jp/sokuchikijun/sokuchikijun41012.html#hyokorev2024"
+  note = "測地成果2024移行のための三角点標高補正パラメータ (published 2025-04-01)"
+
+  # dH = <listed> inside the listed secondary meshes, else <primary>, else
+  # <fallback> where <primary> is out of range (see README / manifest).
+  [product.selection]
+  kind = "listed-meshes"
+  primary = "bm"
+  listed = "tr"
+  fallback = "tr"
+  list_file = "tr_meshes.json"
+  list_description = "JIS X 0410 secondary meshes (6-digit codes) whose JGD2024 DEM re-issue GSI computed with hyokorevTR_jgd2024_h.par instead of hyokorevBM_jgd2024_h.par. Used by step 2 of the selection rule in manifest.json."
+  page = "https://service.gsi.go.jp/kiban/app/data_update_info_all/"
+  entry = "2025-07-31 提供データを整備・更新しました（数値標高モデル）"
+  anchor = "を用いて標高補正を実施した区域は以下のとおりです。"
+  # The list as reviewed on 2026-10-01. fetch re-reads the page every run and
+  # build refuses to continue if it says anything else.
+  expected = [
+    473113, 473121, 473122, 473123, 473131, 473132, 473133, 473141, 473142, 473143,
+    473151, 473152, 473153, 473161, 473162, 473163, 473173,
+    543664, 543665, 543674, 543675, 553605,
+  ]
+
+  # Oracle: GSI's own JGD2024 DEM re-issue (mesh6:TYPE:edition). At most 6.
+  [product.oracle]
+  meshes = [
+    "473121:DEM5A:20250620", "473120:DEM5A:20250620", "483103:DEM5A:20250620",
+    "543664:DEM5A:20250620", "574037:DEM1A:20250423", "664241:DEM5A:20250620",
+  ]
+
+# ---------------------------------------------------------------------------
+[[product]]
+id = "jpgeo2024-hrefconv2024"
+kind = "geoid"
+version = "v1"
+key_prefix = "vertical/geoid/jpgeo2024-hrefconv2024"
+format = "isg"
+vertical_datum = "JGD2024 (標高 = 楕円体高 - ジオイド高; includes Hrefconv2024 island offsets)"
+note = "GSI's combined JPGEO2024 + Hrefconv2024 grid as published in JPGEO2024_isg.zip; GSI Q&A A2-15 permits it nationwide. Not re-derived."
+
+  [product.source]
+  login = true                       # 基盤地図情報 login (GSI_LOGIN_CONF)
+  catalogue = { version = "2024", type = "ISG" }
+  member = "JPGEO2024+Hrefconv2024.isg"
+  page = "https://service.gsi.go.jp/kiban/app/geoid/"
+
+  [product.validate]
+  crate_loader = "load_embedded_jpgeo2024_hrefconv2024"
+  calculator = "https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/cgi/geoidcalc.pl"
+  calculator_key = "geoidHeight+HeightReferenceConversion"
+
+# ---------------------------------------------------------------------------
+[[product]]
+id = "gsigeo2011-v2.2"
+kind = "geoid"
+version = "v1"
+key_prefix = "vertical/geoid/gsigeo2011-v2.2"
+format = "gsigeo-asc"
+vertical_datum = "JGD2011 (日本のジオイド2011 Ver.2.2)"
+note = "Kept for parity with the existing JGD2011 terrain dataset."
+
+  [product.source]
+  url = "https://www.gsi.go.jp/common/000275008.zip"
+  member = "gsigeo2011_ver2_2_asc/program/gsigeo2011_ver2_2.asc"
+  page = "https://www.gsi.go.jp/buturisokuchi/grageo_reference.html"
+  note = "日本のジオイド2011 (Ver.2.2)"
+
+  [product.validate]
+  crate_loader = "load_embedded_gsigeo2011"
+  calculator = "https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh2011/cgi/geoidcalc.pl"
+  calculator_key = "geoidHeight"

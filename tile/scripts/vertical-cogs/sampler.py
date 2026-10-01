@@ -258,27 +258,32 @@ def mesh6_of(lat: float, lon: float) -> int:
     return ((p * 100 + q) * 10 + r) * 10 + s
 
 
-def sample_dh_gsi(bm: Raster, tr: Raster, tr_meshes: set[int], lat: float, lon: float) -> float:
-    if mesh6_of(lat, lon) in tr_meshes:
-        return sample(tr, lat, lon)
-    v = sample(bm, lat, lon)
-    return v if not math.isnan(v) else sample(tr, lat, lon)
+def sample_dh_gsi(primary: Raster, listed: Raster, meshes: set[int], lat: float, lon: float, fallback: Raster | None = None) -> float:
+    """Listed-meshes rule (manifest "selection_rule"). For hyokorev:
+    primary = dh_bm, listed = fallback = dh_tr, meshes = tr_meshes.json."""
+    fallback = listed if fallback is None else fallback
+    if mesh6_of(lat, lon) in meshes:
+        return sample(listed, lat, lon)
+    v = sample(primary, lat, lon)
+    return v if not math.isnan(v) else sample(fallback, lat, lon)
 
 
-def sample_dh_gsi_many(bm: Raster, tr: Raster, tr_meshes: set[int], lat, lon) -> np.ndarray:
+def sample_dh_gsi_many(primary: Raster, listed: Raster, meshes: set[int], lat, lon, fallback: Raster | None = None) -> np.ndarray:
+    fallback = listed if fallback is None else fallback
     lat = np.asarray(lat, dtype=np.float64)
     lon = np.asarray(lon, dtype=np.float64)
     i5 = np.floor(lat * 12.0).astype(np.int64)
     j75 = np.floor((lon - 100.0) * 8.0).astype(np.int64)
     m6 = ((i5 // 8 * 100 + j75 // 8) * 10 + i5 % 8) * 10 + j75 % 8
-    in_tr = np.isin(m6, np.fromiter(tr_meshes, dtype=np.int64))
-    vb = sample_many(bm, lat, lon)
-    vt = sample_many(tr, lat, lon)
-    return np.where(in_tr | np.isnan(vb), vt, vb)
+    in_list = np.isin(m6, np.fromiter(meshes, dtype=np.int64))
+    vp = sample_many(primary, lat, lon)
+    vl = sample_many(listed, lat, lon)
+    vf = vl if fallback is listed else sample_many(fallback, lat, lon)
+    return np.where(in_list, vl, np.where(np.isnan(vp), vf, vp))
 
 
 def load_tr_meshes(path: str) -> set[int]:
-    """Read tr_meshes.json (``{"meshes": [473113, ...], ...}``)."""
+    """Read a mesh-list file such as tr_meshes.json (``{"meshes": [473113, ...]}``)."""
     import json
 
     with open(path, encoding="utf-8") as f:
@@ -289,32 +294,54 @@ def load_tr_meshes(path: str) -> set[int]:
     return set(meshes)
 
 
-class DhGsi:
-    """dh_bm.tif + dh_tr.tif + tr_meshes.json, sampled with GSI's rule.
+# File names used by the v1 hyokorev product, whose published manifest
+# predates the machine-readable "selection" block.
+V1_SELECTION = {"primary": "dh_bm.tif", "listed": "dh_tr.tif", "fallback": "dh_tr.tif", "list": "tr_meshes.json"}
 
-    :meth:`open` takes a local directory holding the three files.
+
+class DhGsi:
+    """A listed-meshes height-correction product, sampled with GSI's rule.
+
+    :meth:`open` takes a local directory with the product's files; file
+    roles come from manifest.json "selection" (or :data:`V1_SELECTION`).
     """
 
-    def __init__(self, bm: Raster, tr: Raster, tr_meshes: set[int]):
-        if (bm.x0, bm.y0, bm.dx, bm.dy, bm.data.shape) != (tr.x0, tr.y0, tr.dx, tr.dy, tr.data.shape):
-            raise ValueError("dh_bm and dh_tr must share one grid")
-        self.bm, self.tr, self.tr_meshes = bm, tr, tr_meshes
+    def __init__(self, primary: Raster, listed: Raster, meshes: set[int], fallback: Raster | None = None):
+        fallback = listed if fallback is None else fallback
+        for r in (listed, fallback):
+            if (primary.x0, primary.y0, primary.dx, primary.dy, primary.data.shape) != (r.x0, r.y0, r.dx, r.dy, r.data.shape):
+                raise ValueError("all grids of a product must share one grid")
+        self.primary, self.listed, self.fallback, self.meshes = primary, listed, fallback, meshes
+
+    # hyokorev names
+    bm = property(lambda self: self.primary)
+    tr = property(lambda self: self.listed)
+    tr_meshes = property(lambda self: self.meshes)
 
     @classmethod
     def open(cls, directory: str) -> "DhGsi":
+        import json
         import os
 
-        return cls(
-            open_cog(os.path.join(directory, "dh_bm.tif")),
-            open_cog(os.path.join(directory, "dh_tr.tif")),
-            load_tr_meshes(os.path.join(directory, "tr_meshes.json")),
-        )
+        sel = V1_SELECTION
+        mf = os.path.join(directory, "manifest.json")
+        if os.path.exists(mf):
+            with open(mf, encoding="utf-8") as f:
+                sel = json.load(f).get("selection", V1_SELECTION)
+        cache: dict[str, Raster] = {}
+
+        def grid(name: str) -> Raster:
+            if name not in cache:
+                cache[name] = open_cog(os.path.join(directory, name))
+            return cache[name]
+
+        return cls(grid(sel["primary"]), grid(sel["listed"]), load_tr_meshes(os.path.join(directory, sel["list"])), grid(sel["fallback"]))
 
     def sample(self, lat: float, lon: float) -> float:
-        return sample_dh_gsi(self.bm, self.tr, self.tr_meshes, lat, lon)
+        return sample_dh_gsi(self.primary, self.listed, self.meshes, lat, lon, self.fallback)
 
     def sample_many(self, lat, lon) -> np.ndarray:
-        return sample_dh_gsi_many(self.bm, self.tr, self.tr_meshes, lat, lon)
+        return sample_dh_gsi_many(self.primary, self.listed, self.meshes, lat, lon, self.fallback)
 
 
 def main(argv: list[str]) -> None:

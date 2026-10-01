@@ -1,7 +1,3 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = ["numpy", "tifffile", "imagecodecs"]
-# ///
 """End-to-end check of the ΔH COG + sampler against GSI's own DEM conversion.
 
 GSI produced the JGD2024 edition of its 5 m / 1 m DEMs (the 2025-07-31
@@ -10,28 +6,27 @@ mesh whose JGD2024 edition is a pure re-issue of the 2011 edition, this
 script recomputes ``H_2011 + dH(sampled from our COG at the pixel centre)``
 and compares it with GSI's JGD2024 values pixel by pixel.
 
-    GSI_LOGIN_CONF=... uv run validate_oracle.py \\
-        --dh-dir work/out/hyokorev-jgd2011-to-jgd2024 --work work/oracle \\
-        --listing-dem5a dem5a_list.txt --listing-dem1a dem1a_list.txt \\
-        473121:DEM5A:20250620 574037:DEM1A:20250423 ...
+    GSI_LOGIN_CONF=... uv run vcog.py validate hyokorev-jgd2011-to-jgd2024 --oracle \\
+        --listing-dem5a work/dem5a.txt --listing-dem1a work/dem1a.txt
+
+Meshes come from the product's [product.oracle] meshes ("mesh6:TYPE:edition").
 
 * JGD2024 side: the named edition, downloaded from the 基盤地図情報 service
   (login; the zip is parsed in memory and never written to disk; only the
   parsed arrays are cached as .npz under --work).
 * JGD2011 side: the per-tertiary GeoTIFFs in the R2 backup
   ``r2:plateau-terrain-ortho-backup/terrain/base_terrain/kibanchizu_dem_20250129/s1_geotiff_raw/<type>/``
-  (``rclone --config rclone.r2.conf``). That directory is huge and flat, so
+  (``rclone --config <rclone_config>``). That directory is huge and flat, so
   pass a pre-made listing (``rclone lsf ... > listing``) or the script falls
   back to an ``--include``-filtered lsf (slow).
 
-For each mesh it reports the residual for ``gsi_rule`` (the served form:
-:class:`sampler.DhGsi` over dh_bm.tif + dh_tr.tif + tr_meshes.json), for
-each grid alone, and optionally for the not-served single-grid diagnostic.
+For each mesh it reports the residual for ``gsi_rule`` (the published form:
+:class:`sampler.DhGsi` over the product's grids + mesh list), for each grid
+alone, and optionally for the not-published single-grid diagnostic.
 """
 
 from __future__ import annotations
 
-import argparse
 import io
 import json
 import os
@@ -180,32 +175,25 @@ def stats(res: np.ndarray) -> dict:
     }
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("meshes", nargs="+", help="mesh6:TYPE:edition, e.g. 473121:DEM5A:20250620")
-    ap.add_argument("--dh-dir", required=True, help="directory with dh_bm.tif, dh_tr.tif, tr_meshes.json")
-    ap.add_argument("--diagnostic-merged", help="optional dh_merged_diagnostic.tif to score alongside")
-    ap.add_argument("--work", default="work/oracle")
-    ap.add_argument("--listing-dem5a")
-    ap.add_argument("--listing-dem1a")
-    ap.add_argument("--rclone-conf", default="rclone.r2.conf")
-    args = ap.parse_args()
-    os.makedirs(args.work, exist_ok=True)
-    if len(args.meshes) > 6:
+def run(dh_dir: str, specs: list[str], work: str, listings: dict[str, str | None], rclone_conf: str, diagnostic: str | None = None) -> list[dict]:
+    """Score ``dh_dir`` (a built listed-meshes product) on ``specs``."""
+    os.makedirs(work, exist_ok=True)
+    if len(specs) > 6:
         raise SystemExit("at most 6 secondary meshes may be downloaded")
-
-    served = sampler.DhGsi.open(args.dh_dir)
-    dh = {"dh_bm": served.bm, "dh_tr": served.tr}
-    if args.diagnostic_merged:
-        dh["merged_diagnostic"] = sampler.open_cog(args.diagnostic_merged)
+    served = sampler.DhGsi.open(dh_dir)
+    dh = {"primary": served.primary, "listed": served.listed}
+    if served.fallback is not served.listed:
+        dh["fallback"] = served.fallback
+    if diagnostic:
+        dh["merged_diagnostic"] = sampler.open_cog(diagnostic)
     cl = gsi.Client()
     report = []
-    for spec in args.meshes:
+    for spec in specs:
         mesh6, typ, edition = spec.split(":")
-        listing = args.listing_dem5a if typ == "DEM5A" else args.listing_dem1a if typ == "DEM1A" else None
-        new = load_2024(cl, mesh6, typ, edition, args.work)
-        old = load_2011(mesh6, typ, listing, args.work, args.rclone_conf)
-        is_tr = int(mesh6) in served.tr_meshes
+        listing = listings.get(typ)
+        new = load_2024(cl, mesh6, typ, edition, work)
+        old = load_2011(mesh6, typ, listing, work, rclone_conf)
+        is_tr = int(mesh6) in served.meshes
         acc = {k: [] for k in ("gsi_rule", *dh)}
         only_old = only_new = dh_nan = matched_tiles = 0
         worst_tiles = []
@@ -242,7 +230,7 @@ def main() -> None:
             "edition_2024": edition,
             "file_2024": new["meta"]["file_name"],
             "srs_2024": new["meta"]["srs"],
-            "gsi_tr_fallback": is_tr,
+            "on_mesh_list": is_tr,
             "tiles_2024": len(new["tiles"]),
             "tiles_2011": len(old["tiles"]),
             "tiles_matched": matched_tiles,
@@ -255,9 +243,6 @@ def main() -> None:
         }
         report.append(entry)
         print(json.dumps(entry, ensure_ascii=False), flush=True)
-    with open(os.path.join(args.work, "oracle_report.json"), "w") as f:
+    with open(os.path.join(work, "oracle_report.json"), "w") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
-
-
-if __name__ == "__main__":
-    main()
+    return report
