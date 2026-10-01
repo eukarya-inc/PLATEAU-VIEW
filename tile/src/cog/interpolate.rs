@@ -14,23 +14,56 @@
 //! raster's own footprint is covered right to its border with no NaN /
 //! transparent fringe; beyond it the result is NaN / transparent.
 
-/// Neighbour indices and weight along one axis, or `None` when `v` lies
-/// outside the raster (more than half a pixel beyond the valid extent).
+/// Snap tolerance, in source pixels, for centre-based coordinates.
+const SNAP_PX: f64 = 1e-9;
+
+/// The one snap policy for centre-based coordinates: within [`SNAP_PX`] of an
+/// integer (a pixel centre) the coordinate *is* that centre. Floating point
+/// turns an aligned centre into e.g. `511.9999999999`, which would otherwise
+/// give the neighbour a ~1e-10 weight — and, for the window computation, pull
+/// in the neighbouring chunk. Both [`TileRange`](super::resample::TileRange)
+/// and the interpolators go through [`support`], so they can never disagree
+/// about which pixels are read. Idempotent, and exact under subtraction of an
+/// integer (the buffer origin).
 #[inline]
-fn axis(v: f64, valid: usize) -> Option<(usize, usize, f64)> {
-    if valid == 0 || !(v >= -0.5 && v < valid as f64 - 0.5) {
+pub(crate) fn snap(c: f64) -> f64 {
+    let k = c.round();
+    if (c - k).abs() < SNAP_PX { k } else { c }
+}
+
+/// Pixels with a non-zero bilinear weight at centre-based coordinate `c`
+/// along one axis of `n` pixels: `(i0, i1, t)` with weight `1 − t` on `i0`
+/// and `t` on `i1`. `None` when `c` lies outside the raster (more than half a
+/// pixel beyond its edge pixels). Inside the outer half of an edge pixel the
+/// neighbour is clamped to it. When `t == 0` (an exact centre) `i1 == i0`: a
+/// zero-weight neighbour is never read, so it can neither poison the result
+/// with NaN nor lie outside the fetched window.
+#[inline]
+pub(crate) fn support(c: f64, n: usize) -> Option<(usize, usize, f64)> {
+    let c = snap(c);
+    if n == 0 || !(c >= -0.5 && c < n as f64 - 0.5) {
         return None;
     }
-    let f0 = v.floor();
-    let t = v - f0;
-    let last = (valid - 1) as i64;
+    let f0 = c.floor();
+    let t = c - f0;
+    let last = (n - 1) as i64;
     let i0 = (f0 as i64).clamp(0, last) as usize;
-    let i1 = (f0 as i64 + 1).clamp(0, last) as usize;
+    let i1 = if t == 0.0 {
+        i0
+    } else {
+        (f0 as i64 + 1).clamp(0, last) as usize
+    };
     Some((i0, i1, t))
 }
 
+#[inline]
+fn axis(v: f64, valid: usize) -> Option<(usize, usize, f64)> {
+    support(v, valid)
+}
+
 /// Bilinear interpolation for f64 elevation data (centre-based coordinates).
-/// Returns NaN outside the raster or if any of the four neighbours is NaN.
+/// Returns NaN outside the raster or if any neighbour with a non-zero weight
+/// is NaN (a NaN pixel next to an exact pixel centre does not matter).
 pub fn bilinear_f64(
     buffer: &[f64],
     width: usize,
@@ -224,5 +257,22 @@ mod tests {
         let rgba = vec![10u8, 0, 0, 255, 20, 0, 0, 255];
         assert_eq!(bilinear_rgba(&rgba, 2, 2, 1, -0.4, 0.0), [10, 0, 0, 255]);
         assert_eq!(bilinear_rgba(&rgba, 2, 2, 1, 2.0, 0.0), [0, 0, 0, 0]);
+    }
+
+    /// A zero-weight neighbour is never read: an exact pixel centre next to a
+    /// NaN pixel (or next to the buffer's end) returns the pixel; any non-zero
+    /// weight on the NaN still gives NaN. Matches the P1 reference sampler.
+    #[test]
+    fn zero_weight_neighbour_is_not_read() {
+        let b = vec![5.0, f64::NAN, 7.0, f64::NAN];
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 0.0, 0.0), 5.0);
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 0.0, 1.0), 7.0);
+        assert!(bilinear_f64(&b, 2, 2, 2, 0.25, 0.0).is_nan());
+        // Within 1e-9 px of a centre counts as the centre.
+        assert_eq!(bilinear_f64(&b, 2, 2, 2, 1e-10, -1e-10), 5.0);
+        // Exact centre on the last column of a 1-wide valid extent in a buffer
+        // whose next element is a different row: only (0,0) is read.
+        let b = vec![3.0, 99.0];
+        assert_eq!(bilinear_f64(&b, 1, 1, 1, 0.0, 0.0), 3.0);
     }
 }

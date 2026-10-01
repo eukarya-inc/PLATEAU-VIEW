@@ -328,6 +328,7 @@ impl CogReader {
             cog_tile_w,
             cog_tile_h,
             ifd.tile_count().unwrap_or((1, 1)),
+            tile_size,
         );
 
         // No intersection
@@ -481,6 +482,7 @@ impl CogReader {
             cog_tile_w,
             cog_tile_h,
             ifd.tile_count().unwrap_or((1, 1)),
+            tile_size,
         );
 
         // No intersection
