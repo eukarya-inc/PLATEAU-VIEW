@@ -1,0 +1,38 @@
+{
+  "product": "hyokorev-jgd2011-to-jgd2024",
+  "version": "v1",
+  "description": "JIS X 0410 secondary meshes (6-digit codes) whose JGD2024 DEM re-issue GSI computed with hyokorevTR_jgd2024_h.par instead of hyokorevBM_jgd2024_h.par. Used by step 2 of the selection rule in manifest.json.",
+  "meshes": [
+    473113,
+    473121,
+    473122,
+    473123,
+    473131,
+    473132,
+    473133,
+    473141,
+    473142,
+    473143,
+    473151,
+    473152,
+    473153,
+    473161,
+    473162,
+    473163,
+    473173,
+    543664,
+    543665,
+    543674,
+    543675,
+    553605
+  ],
+  "source": {
+    "publisher": "国土地理院 (GSI), 基盤地図情報ダウンロードサービス",
+    "page": "https://service.gsi.go.jp/kiban/app/data_update_info_all/",
+    "entry": "2025-07-31 提供データを整備・更新しました（数値標高モデル）",
+    "quote": "2次メッシュ番号：473113、473121、473122、473123、473131、473132，473133、473141、473142、473143、473151、473152、473153、473161、473162、473163、473173、543664、543665、543674、543675、553605",
+    "fetched_at": "2026-09-30T15:18:42Z",
+    "page_sha256_at_fetch": "d054cc0807d156ef891dde2adb8b7a96d706baf440517275c83cf079126d922c"
+  },
+  "note": "Not derivable from the parameter files (see README); taken verbatim from GSI's page. Validated against GSI's own JGD2024 DEM files by validate_oracle.py."
+}

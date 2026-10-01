@@ -1,0 +1,147 @@
+{
+  "kind": "height_correction",
+  "product": "hyokorev-jgd2011-to-jgd2024",
+  "version": "v1",
+  "from": "jgd2011",
+  "to": "jgd2024",
+  "units": "m",
+  "sign": "H_jgd2024 = H_jgd2011 + dH",
+  "crs": "EPSG:6668",
+  "nodata": "NaN",
+  "dtype": "float32",
+  "grid": {
+    "convention": "node-centred (pixel centre == SW-corner node of the tertiary mesh; PixelIsArea geotransform offset by half a cell)",
+    "rows": 2603,
+    "cols": 2491,
+    "nw_node_lat": 45.7,
+    "nw_node_lon": 122.875,
+    "dlat_deg": 0.008333333333333333,
+    "dlon_deg": 0.0125,
+    "geotransform": [
+      122.86875,
+      0.0125,
+      0.0,
+      45.70416666666667,
+      0.0,
+      -0.008333333333333333
+    ],
+    "note": "dh_bm.tif and dh_tr.tif share this exact grid"
+  },
+  "files": {
+    "dh_bm.tif": {
+      "content": "hyokorevBM_jgd2024_h.par as-is (水準点標高補正)",
+      "par_version": "Ver.1.0.0",
+      "valid_nodes": 643467,
+      "sha256": "a439f9e2a1337f400550a82a01e5c639e2a78502925324ce3eceb82e2e492ee8",
+      "bytes": 2363601
+    },
+    "dh_tr.tif": {
+      "content": "hyokorevTR_jgd2024_h.par as-is (三角点標高補正)",
+      "par_version": "Ver.1.0.0",
+      "valid_nodes": 645301,
+      "sha256": "a857ef9ccaf201043b37a5a57bfeee9a85d4b2c1c40e9712a51b27233f1a3d58",
+      "bytes": 2577201
+    },
+    "tr_meshes.json": {
+      "content": "GSI's TR secondary-mesh list",
+      "sha256": "0289b2421d07b8d11b30c079b2198814a2b40b75002fb84b13eea03836179d43",
+      "bytes": 1399
+    }
+  },
+  "selection_rule": {
+    "summary": "dH(p) = TR(p) if p is in a listed secondary mesh; otherwise BM(p) if BM is in range at p; otherwise TR(p). BM(p) / TR(p) = the standard sample (sampler.py) of dh_bm.tif / dh_tr.tif.",
+    "steps": [
+      "1. Secondary mesh of p=(lat, lon) in degrees (JIS X 0410): i5 = floor(lat * 12), j75 = floor((lon - 100) * 8), mesh6 = (i5 div 8) * 10000 + (j75 div 8) * 100 + (i5 mod 8) * 10 + (j75 mod 8). A point exactly on a secondary-mesh boundary belongs to the mesh to its north / east (that is what floor gives).",
+      "2. If mesh6 is in tr_meshes.json 'meshes': dH = sample(dh_tr.tif, p). If that is NaN the result is NaN (no fallback to BM).",
+      "3. Otherwise vb = sample(dh_bm.tif, p). If vb is not NaN, dH = vb.",
+      "4. Otherwise ('BM out of range at p'): dH = sample(dh_tr.tif, p), NaN if that is NaN too."
+    ],
+    "bm_out_of_range": "sample(dh_bm.tif, p) is NaN, i.e. ANY corner node that carries a non-zero bilinear weight at p is missing from BM (or outside the raster). For p strictly inside a tertiary cell that is 'any of the 4 corners missing', not 'all 4'. On a cell edge only the 2 nodes of that edge count, on a node only that node (zero-weight neighbours are not used). The fallback is therefore per point; for interior points it is exactly per tertiary cell, which is what GSI did (483103: only cell 48310309, whose SE corner 48310400 is absent from BM, was converted with TR).",
+    "shared_nodes": "No node is ever merged. Each point is evaluated entirely on ONE grid - all four corners from dh_bm.tif or all four from dh_tr.tif - chosen by steps 1-4 for that point. A node shared by a BM-evaluated cell and a TR-evaluated cell contributes its BM value to the first and its TR value to the second, so dH is discontinuous along such cell edges (e.g. the 473120 | 473121 boundary). This is intended: it is what GSI's DEM conversion produced.",
+    "sampling": "sampler.py: bilinear between pixel centres (pixel centre == node), zero-weight neighbours unused, NaN if a used neighbour is nodata/outside, 1e-9-cell snap.",
+    "reference_implementation": "tile/scripts/vertical-cogs/sampler.py: DhGsi / sample_dh_gsi"
+  },
+  "tr_meshes": [
+    473113,
+    473121,
+    473122,
+    473123,
+    473131,
+    473132,
+    473133,
+    473141,
+    473142,
+    473143,
+    473151,
+    473152,
+    473153,
+    473161,
+    473162,
+    473163,
+    473173,
+    543664,
+    543665,
+    543674,
+    543675,
+    553605
+  ],
+  "listed_mesh_nodes_without_tr": [],
+  "sources": {
+    "hyokorevBM": {
+      "url": "https://www.gsi.go.jp/common/000268787.zip",
+      "page": "https://www.gsi.go.jp/sokuchikijun/sokuchikijun41012.html#hyokorev2024",
+      "note": "測地成果2024移行のための水準点標高補正パラメータ (published 2025-04-01)",
+      "archive_sha256": "0bec6259f364953f0b381144f42291602b2f11927c81eb6027c54037528b0aff",
+      "archive_bytes": 3426363,
+      "file": "hyokorevBM_jgd2024_h.par",
+      "file_sha256": "ea40957c9ec61803b2e5f4d9e627454f944de6f7238d0f3990b0cb4e24f5cf95",
+      "file_bytes": 19304853,
+      "file_mtime_in_zip": "2025-03-31T14:49:22",
+      "header": "for PatchJGD(H)       Ver.1.0.0         101"
+    },
+    "hyokorevTR": {
+      "url": "https://www.gsi.go.jp/common/000268789.zip",
+      "page": "https://www.gsi.go.jp/sokuchikijun/sokuchikijun41012.html#hyokorev2024",
+      "note": "測地成果2024移行のための三角点標高補正パラメータ (published 2025-04-01)",
+      "archive_sha256": "a832347aab2ca5acb5b1f845c4bed04255fb50e399ee8e0d7ed85b4693e73bcb",
+      "archive_bytes": 3610455,
+      "file": "hyokorevTR_jgd2024_h.par",
+      "file_sha256": "da7590d8204d700377d3738cf9da2dda5c765ebdf07dbc6afae50661d6e1ec08",
+      "file_bytes": 19359683,
+      "file_mtime_in_zip": "2025-03-31T14:43:40",
+      "header": "for PatchJGD(H)       Ver.1.0.0         101"
+    },
+    "tr_list": {
+      "page": "https://service.gsi.go.jp/kiban/app/data_update_info_all/",
+      "fetched_at": "2026-09-30T15:18:42Z",
+      "page_sha256": "d054cc0807d156ef891dde2adb8b7a96d706baf440517275c83cf079126d922c",
+      "entry": "2025-07-31 提供データを整備・更新しました（数値標高モデル）",
+      "quote": "2次メッシュ番号：473113、473121、473122、473123、473131、473132，473133、473141、473142、473143、473151、473152、473153、473161、473162、473163、473173、543664、543665、543674、543675、553605",
+      "meshes": [
+        473113,
+        473121,
+        473122,
+        473123,
+        473131,
+        473132,
+        473133,
+        473141,
+        473142,
+        473143,
+        473151,
+        473152,
+        473153,
+        473161,
+        473162,
+        473163,
+        473173,
+        543664,
+        543665,
+        543674,
+        543675,
+        553605
+      ]
+    }
+  },
+  "validation": "validate_oracle.py: 2011 + dH vs GSI's JGD2024 DEM re-issue on 473121, 473120, 483103, 543664 (DEM5A), 574037 (DEM1A), 664241 (DEM5A); see README"
+}
