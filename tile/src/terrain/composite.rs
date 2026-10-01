@@ -23,6 +23,7 @@ use futures::future::join_all;
 use rstar::{AABB, RTree, RTreeObject};
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
+use super::upsample_subregion;
 
 /// One bbox entry in the R*-tree.
 #[derive(Debug, Clone)]
@@ -269,65 +270,6 @@ impl DemProvider for CompositeDemProvider {
         // _within_ the base). We expose the base's bounds.
         self.base.bounds()
     }
-}
-
-/// Bilinear-upsample one sub-tile of a parent grid to `tile_size × tile_size`.
-///
-/// `parent` is a `tile_size × tile_size` grid covering one parent tile. The
-/// child tile occupies the `(sub_x, sub_y)`-th cell of a `factor × factor`
-/// subdivision of the parent. Pixel centers are sampled with bilinear
-/// interpolation; NaN samples in the parent propagate as NaN.
-///
-/// A child pixel centre within half a parent pixel of the parent's border
-/// lies outside the parent's outermost pixel centres, so one of its four
-/// neighbours is off the grid. Those neighbours clamp to the nearest edge
-/// sample — the same rule as `terrain_codec::mercator::MercatorDem::sample` —
-/// rather than becoming NaN. The parent does have data there; treating the
-/// half-pixel rim as missing used to put a NaN band (1 px at factor 2, 2 px
-/// from factor 4) along every edge a child shares with its parent, which the
-/// raster endpoints encoded as −32768 m (Terrarium) / −10000 m (Mapbox).
-fn upsample_subregion(
-    parent: &[f64],
-    tile_size: u32,
-    factor: u32,
-    sub_x: u32,
-    sub_y: u32,
-) -> Vec<f64> {
-    let n = (tile_size * tile_size) as usize;
-    let mut out = Vec::with_capacity(n);
-    let scale = 1.0 / factor as f64;
-    let off_x = sub_x as f64 * tile_size as f64 * scale;
-    let off_y = sub_y as f64 * tile_size as f64 * scale;
-    for cy in 0..tile_size {
-        let py = off_y + (cy as f64 + 0.5) * scale - 0.5;
-        for cx in 0..tile_size {
-            let px = off_x + (cx as f64 + 0.5) * scale - 0.5;
-            out.push(bilinear_at(parent, tile_size, px, py));
-        }
-    }
-    out
-}
-
-fn bilinear_at(grid: &[f64], width: u32, x: f64, y: f64) -> f64 {
-    let w = width as i64;
-    let x0 = x.floor() as i64;
-    let y0 = y.floor() as i64;
-    let dx = x - x0 as f64;
-    let dy = y - y0 as f64;
-    // Off-grid neighbours clamp to the edge sample (see `upsample_subregion`).
-    let get = |xi: i64, yi: i64| -> f64 {
-        let xi = xi.clamp(0, w - 1);
-        let yi = yi.clamp(0, w - 1);
-        grid[(yi * w + xi) as usize]
-    };
-    let v00 = get(x0, y0);
-    let v10 = get(x0 + 1, y0);
-    let v01 = get(x0, y0 + 1);
-    let v11 = get(x0 + 1, y0 + 1);
-    if v00.is_nan() || v10.is_nan() || v01.is_nan() || v11.is_nan() {
-        return f64::NAN;
-    }
-    v00 * (1.0 - dx) * (1.0 - dy) + v10 * dx * (1.0 - dy) + v01 * (1.0 - dx) * dy + v11 * dx * dy
 }
 
 /// Paint `overlay` onto `base` per pixel. Where overlay is finite, it wins.
