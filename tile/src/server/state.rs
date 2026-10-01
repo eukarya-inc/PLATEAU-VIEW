@@ -287,10 +287,14 @@ impl AppState {
         // 200 entries × ~2 MiB ≈ 400 MiB upper bound — well within the
         // Cloud Run memory budget and dramatically cuts per-request
         // memory pressure under concurrent quantized-mesh load.
-        let base: Arc<dyn DemProvider> = Arc::new(crate::terrain::CachedDemProvider::new(
+        let shared_base: Arc<dyn DemProvider> = Arc::new(crate::terrain::CachedDemProvider::new(
             settings.build_dem(),
             200,
         ));
+        // For sources that declare `"base": "sealevel"`. Flat and free, so no
+        // LRU in front of it.
+        let sea_level: Arc<dyn DemProvider> = Arc::new(crate::terrain::sealevel::SeaLevelDem);
+        let base = &shared_base;
         let mut dem_inventory: Vec<LayerEntry> = Vec::new();
         let mut terrains: HashMap<String, Arc<super::terrain::TerrainState>> = HashMap::new();
 
@@ -335,7 +339,23 @@ impl AppState {
                 layer_datums,
                 correction: dem_cfg.height_correction.as_ref(),
             };
-            let correction = match source_correction(geoid, &decl, settings.base_datum).await {
+            // Per-source base: the shared env base unless the source asks for
+            // the sea-level base. The base's slug/version are part of the
+            // composite's slug, version and etag, so switching it re-keys this
+            // source only.
+            let (base, base_datum) = match resolve_source_base(dem_cfg.base.as_deref()) {
+                Ok(SourceBase::Shared) => (shared_base.clone(), settings.base_datum),
+                Ok(SourceBase::SeaLevel) => (sea_level.clone(), BaseDatum::Agnostic),
+                Err(reason) => {
+                    tracing::error!(
+                        source = %name,
+                        "Refusing DEM source: {reason}. It is not served until the config is fixed."
+                    );
+                    refused.push((*name).to_string());
+                    continue;
+                }
+            };
+            let correction = match source_correction(geoid, &decl, base_datum).await {
                 Ok(c) => c,
                 Err(reason) => {
                     tracing::error!(
@@ -695,6 +715,25 @@ fn resolve_source_geoid(name: &str, configured: Option<&str>, fallback: GeoidMod
     GeoidModel::resolve_or(configured, fallback, &format!("sources.{name}.geoid"))
 }
 
+/// Which base a DEM source is built on.
+#[derive(Debug, PartialEq, Eq)]
+enum SourceBase {
+    /// The env-configured `DEM_URL` base shared by every source (default).
+    Shared,
+    /// The flat sea-level base (datum-agnostic, never corrected).
+    SeaLevel,
+}
+
+fn resolve_source_base(configured: Option<&str>) -> Result<SourceBase, String> {
+    match configured.map(str::trim) {
+        None | Some("") => Ok(SourceBase::Shared),
+        Some(s) if crate::terrain::sealevel::is_sea_level_url(s) => Ok(SourceBase::SeaLevel),
+        Some(other) => Err(format!(
+            "unknown base `{other}` (valid: \"sealevel\", or omit it for the shared DEM_URL base)"
+        )),
+    }
+}
+
 /// Decide and load a DEM source's height correction.
 ///
 /// `Ok(None)`: nothing to correct — either nothing is declared (the source is
@@ -1003,5 +1042,64 @@ mod tests {
             "{v}"
         );
         assert_eq!(terrains["jgd2024"].geoid, GeoidModel::Jpgeo2024Hrefconv);
+    }
+
+    /// A source can put its layers on the sea-level base while every other
+    /// source keeps the shared base: the JGD2024 source then needs no
+    /// DEM_VERTICAL_DATUM, an undeclared shared base still refuses a
+    /// corrected source that uses it, and the base shows in the slug (→ keys).
+    #[tokio::test]
+    async fn per_source_sea_level_base() {
+        let settings = TerrainSettings {
+            dem_url: Some("http://127.0.0.1:9/{z}/{x}/{y}.webp".into()),
+            base_datum: BaseDatum::Unknown,
+            ..sealevel_settings()
+        };
+        let layer =
+            r#"{"type": "xyz", "url": "http://127.0.0.1:9/{z}/{x}/{y}.png", "maxZoom": 15}"#;
+        let corrected = |base: &str| {
+            format!(
+                r#"{{ "type": "dem", "geoid": "jpgeo2024-hrefconv", "verticalDatum": "jgd2011",
+                     {base} "heightCorrection": {{ "manifest": "{m}" }}, "layers": [{layer}] }}"#,
+                m = fixture_manifest()
+            )
+        };
+        let json = format!(
+            r#"{{ "sources": {{
+                "legacy": {{ "type": "dem", "layers": [{layer}] }},
+                "jgd2024": {c1},
+                "jgd2024-shared": {c2},
+                "bad-base": {{ "type": "dem", "base": "mapterhorn", "layers": [{layer}] }},
+                "flat": {{ "type": "dem", "base": "sealevel", "layers": [] }}
+            }} }}"#,
+            c1 = corrected(r#""base": "sealevel","#),
+            c2 = corrected(""),
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
+        let (terrains, _) = AppState::build_terrains(&settings, &config.sources).await;
+
+        assert!(
+            terrains.contains_key("jgd2024"),
+            "sea-level base needs no DEM_VERTICAL_DATUM"
+        );
+        assert!(
+            !terrains.contains_key("jgd2024-shared"),
+            "unknown shared base still refused"
+        );
+        assert!(!terrains.contains_key("bad-base"));
+        let j = terrains["jgd2024"].dem.slug().to_string();
+        let l = terrains["legacy"].dem.slug().to_string();
+        assert!(j.starts_with("composite[base:sealevel"), "{j}");
+        assert!(!l.contains("sealevel"), "{l}");
+        assert!(terrains["jgd2024"].dem.version().contains("base=agnostic"));
+        assert_eq!(terrains["flat"].dem.slug(), "sealevel");
+        // The legacy source is exactly what the shared base gives it.
+        let reference = build_composite_dem(
+            settings.build_dem(),
+            vec![build_dem_overlay("legacy", 0, &config.sources["legacy"].layers[0]).unwrap()],
+        )
+        .await;
+        assert_eq!(terrains["legacy"].dem.version(), reference.version());
+        assert_eq!(terrains["legacy"].dem.slug(), reference.slug());
     }
 }

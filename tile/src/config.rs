@@ -90,6 +90,14 @@ pub struct SourceConfig {
     /// of failing the whole config.
     #[serde(default, rename = "heightCorrection")]
     pub height_correction: Option<serde_json::Value>,
+    /// DEM-only: the base under this source's layers. Absent = the shared
+    /// base from `DEM_URL` (what every existing source uses, unchanged).
+    /// `"sealevel"` (aliases as for `DEM_URL`) = the flat 0 m sea-level base,
+    /// which is datum-agnostic and never height-corrected — e.g. for a JGD2024
+    /// source that must not show an upstream DEM of another datum through its
+    /// gaps. Anything else refuses the source.
+    #[serde(default)]
+    pub base: Option<String>,
     pub layers: Vec<LayerConfig>,
 }
 
