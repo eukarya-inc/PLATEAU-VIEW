@@ -611,6 +611,7 @@ The default `must-revalidate` ensures that expired cache entries are always reva
 | `gs://` | `gs://bucket/path/file.tif` | Google Cloud Storage |
 | `s3://` | `s3://bucket/path/file.tif` | Amazon S3 |
 | `r2://` | `r2://bucket/path/file.tif` | Cloudflare R2 (set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) |
+| `file://` | `file:///abs/path/file.tif` | Local file — **DEM overlay layers (`type: "dem"` sources) only**, for tests and local validation. Raster `/tiles` COG layers do not accept it |
 
 ## Architecture
 
