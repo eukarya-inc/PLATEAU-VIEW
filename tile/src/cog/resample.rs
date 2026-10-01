@@ -2,6 +2,10 @@
 
 use super::bounds::{TileBounds, geo_to_pixel_x, geo_to_pixel_y};
 
+/// Source pixels fetched beyond the requested bounds on every side, so that
+/// bilinear interpolation near the window edge has its outer neighbour.
+pub(crate) const INTERPOLATION_MARGIN_PX: f64 = 1.0;
+
 /// Tile coordinate range for reading COG tiles.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TileRange {
@@ -13,6 +17,11 @@ pub(crate) struct TileRange {
 
 impl TileRange {
     /// Calculate tile range from geographic bounds and COG parameters.
+    ///
+    /// The window is widened by [`INTERPOLATION_MARGIN_PX`] source pixels on
+    /// every side: a sample half a pixel inside the requested bounds reads a
+    /// neighbour whose centre lies outside them, and that neighbour may sit in
+    /// the next chunk.
     pub fn from_bounds(
         bounds: &TileBounds,
         cog_bounds: &TileBounds,
@@ -22,10 +31,12 @@ impl TileRange {
         cog_tile_h: u32,
         tile_count: (usize, usize),
     ) -> Self {
-        let px_west = geo_to_pixel_x(bounds.west, cog_bounds, img_width);
-        let px_east = geo_to_pixel_x(bounds.east, cog_bounds, img_width);
-        let px_north = geo_to_pixel_y(bounds.north, cog_bounds, img_height);
-        let px_south = geo_to_pixel_y(bounds.south, cog_bounds, img_height);
+        // Edge-based pixel coordinates (0 = west / north edge of pixel 0).
+        let m = INTERPOLATION_MARGIN_PX;
+        let px_west = geo_to_pixel_x(bounds.west, cog_bounds, img_width) - m;
+        let px_east = geo_to_pixel_x(bounds.east, cog_bounds, img_width) + m;
+        let px_north = geo_to_pixel_y(bounds.north, cog_bounds, img_height) - m;
+        let px_south = geo_to_pixel_y(bounds.south, cog_bounds, img_height) + m;
 
         let (tile_count_x, tile_count_y) = tile_count;
 
@@ -59,6 +70,24 @@ impl TileRange {
         self.x_end <= self.x_start || self.y_end <= self.y_start
     }
 
+    /// Width / height of the part of the buffer that holds real image pixels
+    /// (edge chunks are padded past the image's east / south edge).
+    pub fn valid_size(
+        &self,
+        cog_tile_w: u32,
+        cog_tile_h: u32,
+        img_width: u32,
+        img_height: u32,
+    ) -> (usize, usize) {
+        let (bw, bh) = self.buffer_size(cog_tile_w, cog_tile_h);
+        let ox = self.x_start * cog_tile_w as usize;
+        let oy = self.y_start * cog_tile_h as usize;
+        (
+            bw.min((img_width as usize).saturating_sub(ox)),
+            bh.min((img_height as usize).saturating_sub(oy)),
+        )
+    }
+
     /// Calculate buffer dimensions for this tile range.
     pub fn buffer_size(&self, cog_tile_w: u32, cog_tile_h: u32) -> (usize, usize) {
         let width = (self.x_end - self.x_start) * cog_tile_w as usize;
@@ -68,6 +97,14 @@ impl TileRange {
 }
 
 /// Resample a buffer to output tile using bilinear interpolation.
+///
+/// Output pixel centres are mapped to **centre-based** buffer coordinates
+/// (`(k, m)` = centre of buffer pixel `(k, m)`) and handed to `interpolate`.
+/// `geo_to_pixel_*` is edge-based (0 = the west / north edge of pixel 0, the
+/// convention [`TileRange`] uses for chunk selection), so the half pixel is
+/// subtracted here — the one place that feeds the interpolators. Before this
+/// was done every COG read came back half a source pixel north-west of where
+/// it belongs.
 pub(crate) fn resample_to_tile<T, F>(
     bounds: &TileBounds,
     cog_bounds: &TileBounds,
@@ -94,9 +131,9 @@ where
             let px_x = geo_to_pixel_x(geo_x, cog_bounds, img_width);
             let px_y = geo_to_pixel_y(geo_y, cog_bounds, img_height);
 
-            // Convert to buffer coordinate
-            let buf_x = px_x - buffer_origin.0;
-            let buf_y = px_y - buffer_origin.1;
+            // Edge-based pixel coordinate -> centre-based buffer coordinate.
+            let buf_x = px_x - buffer_origin.0 - 0.5;
+            let buf_y = px_y - buffer_origin.1 - 0.5;
 
             output.push(interpolate(buf_x, buf_y));
         }

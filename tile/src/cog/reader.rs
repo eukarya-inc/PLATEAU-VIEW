@@ -420,6 +420,9 @@ impl CogReader {
             tile_range.x_start as f64 * cog_tile_w as f64,
             tile_range.y_start as f64 * cog_tile_h as f64,
         );
+        // Real raster pixels in the (chunk-aligned, possibly padded) buffer.
+        let (valid_w, valid_h) =
+            tile_range.valid_size(cog_tile_w, cog_tile_h, img_width, img_height);
 
         let pixels: Vec<[u8; 4]> = resample_to_tile(
             bounds,
@@ -428,7 +431,9 @@ impl CogReader {
             img_height,
             tile_size,
             buffer_origin,
-            |buf_x, buf_y| bilinear_rgba(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y),
+            |buf_x, buf_y| {
+                bilinear_rgba(&pixel_buffer, buffer_width, valid_w, valid_h, buf_x, buf_y)
+            },
         );
 
         // Flatten [u8; 4] to Vec<u8>
@@ -589,6 +594,9 @@ impl CogReader {
             tile_range.x_start as f64 * cog_tile_w as f64,
             tile_range.y_start as f64 * cog_tile_h as f64,
         );
+        // Real raster pixels in the (chunk-aligned, possibly padded) buffer.
+        let (valid_w, valid_h) =
+            tile_range.valid_size(cog_tile_w, cog_tile_h, img_width, img_height);
 
         let output = resample_to_tile(
             bounds,
@@ -597,7 +605,9 @@ impl CogReader {
             img_height,
             tile_size,
             buffer_origin,
-            |buf_x, buf_y| bilinear_f64(&pixel_buffer, buffer_width, buffer_height, buf_x, buf_y),
+            |buf_x, buf_y| {
+                bilinear_f64(&pixel_buffer, buffer_width, valid_w, valid_h, buf_x, buf_y)
+            },
         );
 
         Ok(output)

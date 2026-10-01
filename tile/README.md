@@ -9,7 +9,7 @@ High-performance tile server with Cloud Optimized GeoTIFF (COG) overlay support,
 - **Layer Composition**: Overlay multiple COG layers on top of base XYZ tiles
 - **Multi-band NoData**: Support for multi-band nodata values with multiple patterns (e.g., black AND white as transparent)
 - **Auto Overview Selection**: Automatically select the best resolution overview for each zoom level
-- **Bilinear Interpolation**: Smooth tile rendering with bilinear interpolation
+- **Bilinear Interpolation**: Smooth tile rendering with bilinear interpolation between COG pixel centres (a tile pixel that coincides with a source pixel returns it exactly; the outer half of a COG's edge pixels is clamped, so there is no fringe along COG borders)
 - **Memory Caching**: Fast in-memory tile cache using moka
 - **Remote Configuration**: Load configuration from remote URL with manual reload
 - **HTTP/2 (h2c)**: Support for HTTP/2 cleartext connections (auto-detects HTTP/1.1 and HTTP/2)
@@ -585,6 +585,7 @@ ETag calculation:
 - Format is included in ETag, so different formats have different ETags
 - Clients can send `If-None-Match` header to receive `304 Not Modified` if cache is valid
 - **Granular invalidation**: Changing a COG layer's version only invalidates tiles within that COG's geographic bounds
+- COG layers also carry the server's COG sampling version (`cog::COG_SAMPLING_VERSION`, currently `centre-v1`), so a change in how COG pixels are sampled re-keys exactly the tiles COGs contribute to — for `/tiles` COG layers and, via the per-tile overlay ETag, for COG DEM overlays on `/terrain`, `/terrarium` and `/mapbox`. XYZ / PMTiles / MapLibre layers, Mapterhorn-only terrain tiles and the quantized-mesh mirror keep their keys.
 
 #### Cache-Control Header
 

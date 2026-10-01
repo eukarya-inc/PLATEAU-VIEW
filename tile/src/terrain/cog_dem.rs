@@ -243,9 +243,16 @@ impl DemProvider for CogDemSource {
         // serve tiles from the wrong asset URL via the cache. Hashing the
         // URL keeps swapped assets at distinct cache keys even when HEAD
         // can't reach the upstream.
+        // The sampling version keys only tiles this COG actually contributes
+        // to, so a sampling change re-renders exactly those (and leaves e.g.
+        // Mapterhorn-only tiles at their keys).
+        let sampling = crate::cog::COG_SAMPLING_VERSION;
         let etag = match self.upstream_etag().await {
-            Some(e) => Some(format!("{}:{e}", self.version)),
-            None => Some(format!("{}:no-etag:{}", self.version, self.url_hash_hex)),
+            Some(e) => Some(format!("{}:{sampling}:{e}", self.version)),
+            None => Some(format!(
+                "{}:{sampling}:no-etag:{}",
+                self.version, self.url_hash_hex
+            )),
         };
         Ok(DemTile { elevations, etag })
     }
