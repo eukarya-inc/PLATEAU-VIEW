@@ -200,13 +200,22 @@ impl CogReader {
     /// value lets the elevation reader treat those pixels as NaN without the
     /// caller having to know the per-file sentinel — which matters for DEM
     /// overlays added via CMS where no explicit `nodata` config is supplied.
+    ///
+    /// async-tiff ≥ 0.3 parses the tag into [`ImageFileDirectory::gdal_nodata`]
+    /// and no longer leaves it in `other_tags()`; reading only `other_tags()`
+    /// silently returned `None` for every COG, so `-9999` sentinels were served
+    /// as elevations. `other_tags()` is still consulted as a fallback in case a
+    /// future version moves it back.
     pub fn nodata_from_metadata(&self) -> Option<f64> {
         let ifd = self.tiff.ifds().first()?;
-        let value = ifd.other_tags().get(&Tag::GdalNodata)?;
-        match value {
-            TagValue::Ascii(s) => s.trim_end_matches('\0').trim().parse::<f64>().ok(),
-            _ => None,
-        }
+        let raw = match ifd.gdal_nodata() {
+            Some(s) => s,
+            None => match ifd.other_tags().get(&Tag::GdalNodata)? {
+                TagValue::Ascii(s) => s.as_str(),
+                _ => return None,
+            },
+        };
+        raw.trim_end_matches('\0').trim().parse::<f64>().ok()
     }
 
     /// Get the image dimensions (width, height).
