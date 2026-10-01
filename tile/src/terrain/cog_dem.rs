@@ -378,6 +378,16 @@ fn build_object_store(url: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), D
                 .map_err(|e| DemError::Http(format!("S3 store init: {e}")))?;
             Ok((Arc::new(store), object_path))
         }
+        "file" => {
+            // Local COGs (tests, local validation). Same key rule as the
+            // other schemes: the decoded path, absolute.
+            let p = parsed
+                .to_file_path()
+                .map_err(|_| DemError::Decode(format!("invalid file URL: {url}")))?;
+            let path = ObjectPath::from_absolute_path(&p)
+                .map_err(|e| DemError::Decode(format!("invalid file path: {e}")))?;
+            Ok((Arc::new(object_store::local::LocalFileSystem::new()), path))
+        }
         "r2" => {
             // Cloudflare R2 (S3-compatible). Credentials + endpoint from R2_*
             // env vars via the shared factory, which derives its path with the
