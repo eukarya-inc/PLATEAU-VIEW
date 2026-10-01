@@ -63,8 +63,14 @@ pub fn generate_quantized_mesh_tile(
 /// a huge-sentinel COG) would otherwise drag the height range to ~−10³⁷,
 /// blow up the bounding sphere and horizon occlusion in the quantized-mesh
 /// header, and Cesium would false-cull the entire tile.
+///
+/// This is the served-surface policy for every terrain encoding: the
+/// Terrarium / Mapbox raster endpoints apply the same function before
+/// encoding, so a pixel reads the same height in a raster tile as at the
+/// corresponding mesh vertex rather than the format's minimum code
+/// (−32768 m / −10000 m).
 #[inline]
-fn sanitize_height(h: f64) -> f64 {
+pub(crate) fn sanitize_height(h: f64) -> f64 {
     if h.is_finite() && h.abs() <= crate::cog::MAX_PHYSICAL_ELEVATION_M {
         h
     } else {
