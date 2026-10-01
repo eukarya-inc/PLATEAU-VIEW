@@ -34,6 +34,18 @@ DEM_DATASETS = "terrain"
 # server default.
 DEM_GEOIDS = { terrain = "gsigeo2011" }
 
+# Extra declarations for *named* DEM sources (dataset -> source name -> fields),
+# emitted only into `/<dataset>/config.json?name=<that name>`. Every other name
+# (including the default `dem` and `plateau-terrain-experimental`) gets exactly
+# the config it got before. This one declares a JGD2024 view of the JGD2011 COG
+# stack: the tile server adds the JGD2011->JGD2024 height correction (dH) to each
+# layer and uses the JGD2024 geoid. Opt-in: nothing requests this name until it
+# is added to the tile server's CONFIG_URL.
+[vars.DEM_PROFILES.terrain.plateau-terrain-jgd2024]
+geoid = "jpgeo2024-hrefconv"
+verticalDatum = "jgd2011"
+heightCorrection = { manifest = "https://tiles.plateau.city/terrain/vertical/hyokorev-jgd2011-to-jgd2024/v1/manifest.json", missing = "keep" }
+
 [observability]
 enabled = true
 
