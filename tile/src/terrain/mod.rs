@@ -27,7 +27,9 @@ pub use cached_dem::CachedDemProvider;
 pub use cog_dem::CogDemSource;
 pub use composite::{CompositeDemProvider, build as build_composite_dem};
 pub use dem::{DemError, DemProvider, DemTile, GeoBounds};
-pub use geoid::{Geoid, GeoidModel, HeightMode, UnknownGeoidModel, UnknownHeightMode};
+pub use geoid::{
+    Geoid, GeoidCoverage, GeoidModel, HeightMode, UnknownGeoidModel, UnknownHeightMode,
+};
 pub use mapterhorn::MapterhornSource;
 pub use mirror::MirrorSource;
 pub use pmtiles::{PmtilesEncoding, PmtilesSource};

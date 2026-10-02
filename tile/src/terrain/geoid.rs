@@ -12,9 +12,10 @@
 //! What a request may still choose is the [`HeightMode`] — the orthometric DEM
 //! as-is, the geoid surface alone, or their sum (ellipsoidal, the default).
 //!
-//! Out-of-coverage queries return NaN from the underlying crate; callers decide
-//! whether to fall back to 0 (partial coverage) or reject the tile (full
-//! out-of-coverage).
+//! Out-of-coverage queries return NaN from the underlying crate. Tiles whose
+//! bounds miss the model's coverage bbox are rejected (404); inside the bbox
+//! a NaN sample is filled with 0 by `ellipsoid.rs` and reported as
+//! [`GeoidCoverage`].
 
 use std::fmt;
 use std::str::FromStr;
@@ -152,6 +153,12 @@ impl HeightMode {
         }
     }
 
+    /// Whether this surface involves the geoid at all. `false` only for
+    /// orthometric, which serves the DEM as-is.
+    pub fn uses_geoid(&self) -> bool {
+        !matches!(self, Self::Orthometric)
+    }
+
     /// All modes in a stable order.
     pub fn all() -> &'static [Self] {
         &[Self::Orthometric, Self::GeoidOnly, Self::Ellipsoidal]
@@ -203,6 +210,68 @@ impl fmt::Display for UnknownHeightMode {
 
 impl std::error::Error for UnknownHeightMode {}
 
+/// How much of a tile's sample grid the source's geoid model has a value for.
+///
+/// Inside a model's coverage bbox the grid still has no value over most of the
+/// sea, foreign land and some remote islands. Those samples are currently
+/// served with a geoid height of **0** — ellipsoidal output there is just the
+/// orthometric height, and `heights=geoid` reads 0 m. That fill is an interim
+/// policy, pending a decision (with MLIT) on whether and how to extrapolate a
+/// single model; models are never mixed. This value only *reports* it, via the
+/// `X-Geoid-Coverage` response header: it never changes a served height.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GeoidCoverage {
+    /// Every sample had a model value.
+    Full,
+    /// Some samples had a model value and the rest used the 0 fill.
+    Partial,
+    /// No sample had a model value: the whole tile used the 0 fill.
+    None,
+}
+
+impl GeoidCoverage {
+    /// Header value.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Partial => "partial",
+            Self::None => "none",
+        }
+    }
+}
+
+impl fmt::Display for GeoidCoverage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Running count of samples with / without a geoid model value.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CoverageTally {
+    covered: usize,
+    total: usize,
+}
+
+impl CoverageTally {
+    #[inline]
+    pub fn record(&mut self, covered: bool) {
+        self.total += 1;
+        self.covered += usize::from(covered);
+    }
+
+    /// An empty tally reads as [`GeoidCoverage::None`]: nothing was covered.
+    pub fn coverage(&self) -> GeoidCoverage {
+        if self.covered == 0 {
+            GeoidCoverage::None
+        } else if self.covered == self.total {
+            GeoidCoverage::Full
+        } else {
+            GeoidCoverage::Partial
+        }
+    }
+}
+
 /// Lazily-loaded geoid grid. Each model's data is embedded in the `japan-geoid`
 /// crate and parsed on first use. The loaded grid is cached for the lifetime
 /// of the process via `OnceLock`.
@@ -226,15 +295,6 @@ impl Geoid {
     #[inline]
     pub fn height(&self, lng: f64, lat: f64) -> f64 {
         self.grid.get_height(lng, lat)
-    }
-
-    /// Geoid height, NaN falling back to 0 (used for partial-coverage tiles
-    /// where we still want to render the in-coverage pixels and flatten the
-    /// rest to the orthometric height).
-    #[inline]
-    pub fn height_or_zero(&self, lng: f64, lat: f64) -> f64 {
-        let h = self.height(lng, lat);
-        if h.is_finite() { h } else { 0.0 }
     }
 
     /// Bounding box (west, south, east, north) of this model's coverage, in degrees.
