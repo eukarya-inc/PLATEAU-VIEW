@@ -50,6 +50,11 @@ pub struct AppState {
     pub cache: Arc<TileCache>,
     /// Cached tile sources (rebuilt on config reload)
     sources: Arc<RwLock<HashMap<String, Arc<dyn TileSource>>>>,
+    /// TileJSON `attribution` per raster source, built from the same config
+    /// snapshot as `sources`. Lock order: `sources` before this, both on
+    /// reload (write) and in [`Self::get_source_attribution`] (read), so a
+    /// reader never pairs a source with another config's credit.
+    source_attributions: Arc<RwLock<HashMap<String, String>>>,
     /// Per-layer inventory for raster sources, rebuilt on config reload.
     inventory: Arc<RwLock<Vec<LayerEntry>>>,
     /// Per-layer inventory for DEM overlays, rebuilt alongside `terrain` on
@@ -129,6 +134,7 @@ impl AppState {
 
         let mut inventory = Vec::new();
         let sources = Self::build_sources(&config.sources, &mut inventory);
+        let source_attributions = Self::build_source_attributions(&config.sources);
 
         // Preload sources based on mode
         match preload_mode {
@@ -169,6 +175,7 @@ impl AppState {
             config_manager,
             cache,
             sources: Arc::new(RwLock::new(sources)),
+            source_attributions: Arc::new(RwLock::new(source_attributions)),
             inventory: Arc::new(RwLock::new(inventory)),
             dem_inventory: Arc::new(RwLock::new(dem_inventory)),
             reload_secret,
@@ -610,6 +617,41 @@ impl AppState {
         Arc::new(composite)
     }
 
+    /// TileJSON credit of each raster source: its config `attribution`, else
+    /// the PLATEAU credit.
+    fn build_source_attributions(
+        source_configs: &HashMap<String, SourceConfig>,
+    ) -> HashMap<String, String> {
+        source_configs
+            .iter()
+            .filter(|(name, cfg)| !cfg.is_dem(name))
+            .map(|(name, cfg)| {
+                let line = cfg
+                    .attribution
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(crate::terrain::attribution::PLATEAU_CREDIT);
+                (name.clone(), line.to_string())
+            })
+            .collect()
+    }
+
+    /// The raster source `name` is served and its TileJSON credit, read from
+    /// one consistent snapshot. `None` if the source is not served.
+    pub async fn get_source_attribution(&self, name: &str) -> Option<String> {
+        let sources = self.sources.read().await;
+        sources.get(name)?;
+        let attributions = self.source_attributions.read().await;
+        Some(
+            attributions
+                .get(name)
+                .map(String::as_str)
+                .unwrap_or(crate::terrain::attribution::PLATEAU_CREDIT)
+                .to_string(),
+        )
+    }
+
     /// Get a tile source by name.
     pub async fn get_source(&self, name: &str) -> Option<Arc<dyn TileSource>> {
         let sources = self.sources.read().await;
@@ -639,6 +681,7 @@ impl AppState {
 
         let mut new_inventory = Vec::new();
         let new_sources = Self::build_sources(&config.sources, &mut new_inventory);
+        let new_attributions = Self::build_source_attributions(&config.sources);
         Self::preload_sources(&new_sources).await;
 
         let (new_terrains, new_dem_inventory) =
@@ -646,6 +689,8 @@ impl AppState {
 
         let mut sources = self.sources.write().await;
         *sources = new_sources;
+        // Under the `sources` write guard (held to the end of this fn).
+        *self.source_attributions.write().await = new_attributions;
         let mut inv = self.inventory.write().await;
         *inv = new_inventory;
         let mut dem_inv = self.dem_inventory.write().await;

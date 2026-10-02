@@ -442,10 +442,11 @@ pub async fn get_tilejson(
     Path(name): Path<String>,
     axum::extract::Query(query): axum::extract::Query<TileJsonQuery>,
 ) -> Response {
-    // Check if source exists
-    if state.get_source(&name).await.is_none() {
+    // Check the source exists, and take its credit from the same snapshot:
+    // its config `attribution`, else the PLATEAU credit.
+    let Some(attribution) = state.get_source_attribution(&name).await else {
         return (StatusCode::NOT_FOUND, "Source not found").into_response();
-    }
+    };
 
     // Validate format
     let format = match query.format.as_str() {
@@ -465,20 +466,6 @@ pub async fn get_tilejson(
     // Cesium resolve relative URLs against the tilejson location, matching
     // the behavior of the terrain `raster_tilejson` handler.
     let tile_url = format!("/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
-
-    // The source's own `attribution` (same config field DEM sources use),
-    // else the PLATEAU credit.
-    let attribution = state
-        .config_manager
-        .get()
-        .await
-        .sources
-        .get(&name)
-        .and_then(|s| s.attribution.as_deref())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(crate::terrain::attribution::PLATEAU_CREDIT)
-        .to_string();
 
     let tilejson = TileJson {
         tilejson: "3.0.0",
