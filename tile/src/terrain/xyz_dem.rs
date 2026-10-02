@@ -114,11 +114,7 @@ impl DemProvider for XyzDemSource {
         let view = HeightmapView::new(fmt, rgb.as_raw(), src_w, src_h);
         let native: Vec<f64> = view.iter().map(|e| e as f64).collect();
 
-        let elevations = if src_w == tile_size && src_h == tile_size {
-            native
-        } else {
-            super::resample_bilinear(&native, src_w, src_h, tile_size, tile_size)
-        };
+        let (elevations, etag) = super::fit_to_tile_size(native, src_w, src_h, tile_size, etag);
 
         Ok(DemTile { elevations, etag })
     }

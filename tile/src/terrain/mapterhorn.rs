@@ -107,12 +107,10 @@ impl DemProvider for MapterhornSource {
         let view = HeightmapView::new(HeightmapFormat::Terrarium, rgb.as_raw(), src_w, src_h);
         let native: Vec<f64> = view.iter().map(|e| e as f64).collect();
 
-        // If the caller asked for a different tile size, bilinear-resample.
-        let elevations = if src_w == tile_size && src_h == tile_size {
-            native
-        } else {
-            super::resample_bilinear(&native, src_w, src_h, tile_size, tile_size)
-        };
+        // The raster endpoints ask for `TERRAIN_TILE_SIZE` (256 by default),
+        // so the 512 px tile is reduced 2:1 between pixel centres; the mesh
+        // path asks for the native size and gets it untouched.
+        let (elevations, etag) = super::fit_to_tile_size(native, src_w, src_h, tile_size, etag);
 
         Ok(DemTile { elevations, etag })
     }

@@ -242,9 +242,9 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_VERSION` | No | `v1` | Internal version key, mixed into cache keys. Bump for an explicit cache break |
 | `DEM_MAX_ZOOM` | No | `15` | Upstream DEM max zoom (clamps `/terrain/` requests above this) |
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
-| `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/` |
+| `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/`. A DEM tile of another native size is resampled between pixel centres — for Mapterhorn's 512 px tiles at the default 256, each output pixel is the mean of a 2×2 block |
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Geoid model for DEM sources that don't declare their own `geoid` in the config JSON. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`. **Not** overridable per request |
-| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region. |
+| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region, sampling at child pixel centres. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
 | `TERRAIN_MIRROR_URL` | No | — | Pre-rendered quantized-mesh mirror bucket (`r2://`, `s3://`, `gs://`, `file://`). When set, `/terrain/`, `/terrain/mirror/`, and `/terrain-mirror/` serve directly from this bucket instead of generating from DEM. The DEM pipeline remains reachable at `/terrain/dem/` for side-by-side validation. See [Quantized-mesh mirror](#quantized-mesh-mirror-pre-rendered-passthrough) below. |
 

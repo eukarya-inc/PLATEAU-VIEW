@@ -49,7 +49,7 @@ use super::response::{compute_etag, etag_matches, not_modified_response, tile_re
 use super::state::{AppState, TerrainBackend};
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
-    DemProvider, Geoid, GeoidCoverage, GeoidModel, HeightMode, MirrorSource,
+    DEM_RESAMPLE_VERSION, DemProvider, Geoid, GeoidCoverage, GeoidModel, HeightMode, MirrorSource,
     ellipsoid::{
         apply_height_mode_to_grid, apply_height_mode_to_grid_sized, apply_height_mode_to_xyz_grid,
         geoid_coverage_of_grid, geoid_coverage_of_xyz_grid,
@@ -142,6 +142,10 @@ impl RasterEncoding {
 /// −10000 m), and raster output now goes through the mesh path's
 /// `sanitize_height`. (v1 was the unversioned `terrarium-xyz` / `mapbox-xyz`
 /// prefix.)
+///
+/// Not bumped for DEM resampling changes: those re-key through
+/// `DEM_RESAMPLE_VERSION` in the per-tile DEM ETag, which only tiles that
+/// were actually resampled carry (and which upsampled children add below).
 const RASTER_ALGO_VERSION: &str = "v2-nan-free";
 
 /// Approximate bounds of the Japan geoid coverage, used for `layer.json`
@@ -740,6 +744,10 @@ async fn terrain_tile_impl(
     // read NaN and was sanitised to 0 m. A byte comparison of z5–z10 tiles
     // offshore Japan found no tile that actually changed, but the bytes can
     // change, and these DEM-generated tiles are cheap to re-key.
+    // DEM resampling changes don't bump this: they re-key through
+    // `DEM_RESAMPLE_VERSION`, carried in the ETag of each DEM tile that was
+    // resampled (the mesh path fetches the base at its native size, so only
+    // overlays of another size are).
     const TERRAIN_MESH_ALGO_VERSION: &str = "v5-upsample-edge-clamp";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
@@ -1009,7 +1017,14 @@ async fn raster_tile(
         }
     };
 
-    let source_etag = dem_tile.etag.unwrap_or_default();
+    let mut source_etag = dem_tile.etag.unwrap_or_default();
+    // An upsampled child is resampled here rather than by the DEM provider,
+    // so it takes the resample version into its key itself (see
+    // `DEM_RESAMPLE_VERSION`). Tiles at or below the DEM's max zoom keep
+    // whatever key their provider gave them.
+    if upsample_info.is_some() {
+        source_etag.push_str(&format!("+upsample:{DEM_RESAMPLE_VERSION}"));
+    }
     let upstream_etag_digest = digest(&source_etag);
     let upsample_marker = upsample_info
         .map(|(d, _, _)| format!("upsample:{d}"))
