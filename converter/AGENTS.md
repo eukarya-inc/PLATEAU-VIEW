@@ -36,8 +36,8 @@ cargo run -p plateau-converter-cli -- inspect <input>...
 
 The single most common mistake here is putting a mapping in the wrong layer.
 
-* **A namespace bump, an element rename, an element to drop, a child order, or a
-  value the converter has to invent** → a file under `profiles/` instead of Rust.
+* **A namespace bump, an element rename, an element to drop, or a value the
+  converter has to invent** → a file under `profiles/` instead of Rust.
   This is a table, so keep it a table. *Which* file follows from what the rule
   varies with, and getting that wrong is how profiles drift apart:
   * true of CityGML 2.0 → 3.0 whatever i-UR the input carries →
@@ -60,6 +60,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   flag-and-emit escape hatch. Emitting output you know is wrong and noting it
   afterwards is the worst outcome here, since half-converted output *looks*
   converted.
+* **A child order** → nowhere. `core/src/schema.rs` reads every CityGML 3.0
+  and i-UR 4.0 element's order off the schemas vendored in `fixtures/schemas/`,
+  so a wrong order is fixed by updating those schemas.
 * **An i-UR rule that can be read off the schemas** → do not write it. Run the
   generator (`cargo run -p plateau-converter-gen -- --source 3.1 --write
   profiles/iur-3.1-to-4.0.toml`), which rewrites the block between the
@@ -78,20 +81,26 @@ The single most common mistake here is putting a mapping in the wrong layer.
   (generic attributes, lifespan dates). `measuredHeight` → `con:height` belongs
   in `bldg.rs` because it invents a `con:Height` object, while
   `bldg:lod1Solid` → `core:lod1Solid` is a table row.
-* **A new thematic module** (`tran`, `frn`, …) → a sibling of `bldg.rs` plus its
-  own profile rules. Do not grow `bldg.rs` sideways.
+* **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
+  own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
+  the transportation module. Do not grow `bldg.rs` sideways.
+* **A geometry construction** → its own module with no module knowledge, the
+  way `core/src/extrude.rs` turns a multi-surface into a solid and `tran.rs`
+  decides when to call it. Coordinates are copied as strings, never
+  reformatted, except the one value the construction changes.
 
-`common.rs`, `lod4.rs`, `bldg.rs` and `iur.rs` run **after** the rename pass, so
-they speak CityGML **3.0** and i-UR **4.0** names only. Writing a 2.0 namespace
-constant in there is a bug. The order is
-`common` -> `xal` -> `app` -> `lod4` -> `bldg` -> `iur`, and each step is placed
-so that a wrapper it introduces is never mistaken for something the next step
-handles. `common`'s `core:genericAttribute` is not a building property, `lod4`
-has retagged every `lod4*` before `bldg` looks at geometry so `bldg` can never
-emit an LOD4 slot, and `iur`'s `bldg:adeOfAbstractBuilding` would be a building
-property if it ran before `bldg`. `xal` and `app` touch only address and
-appearance content respectively, which no later pass reads, so their slots are
-free.
+`common.rs`, `lod4.rs`, `bldg.rs`, `tran.rs` and `iur.rs` run **after** the
+rename pass, so they speak CityGML **3.0** and i-UR **4.0** names only. Writing
+a 2.0 namespace constant in there is a bug. The order is
+`common` -> `xal` -> `app` -> `lod4` -> `bldg` -> `tran` -> `iur`, and each step
+is placed so that a wrapper it introduces is never mistaken for something the
+next step handles. `common`'s `core:genericAttribute` is not a building
+property, `lod4` has retagged every `lod4*` before `bldg` looks at geometry so
+`bldg` can never emit an LOD4 slot, `tran` has renumbered the LOD-indexed
+quality descriptors before `iur` supplies the one i-UR requires, and `iur`'s
+`bldg:adeOfAbstractBuilding` would be a building property if it ran before
+`bldg`. `xal` and `app` touch only address and appearance content
+respectively, which no later pass reads, so their slots are free.
 
 ## Invariants worth not breaking
 

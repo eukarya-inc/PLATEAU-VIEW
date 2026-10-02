@@ -279,8 +279,9 @@ fn generate(
 
     out.push_str(&format!(
         "\n# Where an i-UR class attaches in CityGML 3.0. 2.0 used a property named by\n\
-         # the extension ({}); 3.0 uses one general hook per host class, so the\n\
-         # wrapper is chosen by the class inside it rather than by its own name.\n\
+         # the extension ({}). 3.0 uses one general hook per host\n\
+         # class, so the wrapper is chosen by the class inside it rather than by its\n\
+         # own name.\n\
          [ade_hooks]\n",
         "uro:buildingIDAttribute"
     ));
