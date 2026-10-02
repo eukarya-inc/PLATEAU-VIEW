@@ -331,6 +331,12 @@ struct Manifest {
     version: String,
     from: String,
     to: String,
+    /// Must be `m`: values are added to elevations in metres.
+    units: String,
+    /// Must be `H_<to> = H_<from> + dH`: the sign the correction is added with.
+    sign: String,
+    /// Must be `EPSG:6668`: the grids are sampled as JGD2011 geographic degrees.
+    crs: String,
     files: HashMap<String, ManifestFile>,
     #[serde(default)]
     selection: Option<ManifestSelection>,
@@ -389,6 +395,28 @@ async fn fetch_product(manifest_url: &str) -> Result<DhProduct, String> {
     let to: VerticalDatum = m.to.parse()?;
     if from == to {
         return Err(format!("{manifest_url}: from == to ({from})"));
+    }
+    // Semantics the sampler relies on. Anything else is refused rather than
+    // reinterpreted: centimetres added as metres, a projected grid read as
+    // degrees, or a reversed sign would all load and serve wrong heights.
+    if m.units != "m" {
+        return Err(format!(
+            "{manifest_url}: units `{}` (only `m` is supported)",
+            m.units
+        ));
+    }
+    let sign = format!("H_{to} = H_{from} + dH");
+    if m.sign.trim() != sign {
+        return Err(format!(
+            "{manifest_url}: sign `{}` (expected `{sign}`)",
+            m.sign
+        ));
+    }
+    if m.crs != "EPSG:6668" {
+        return Err(format!(
+            "{manifest_url}: crs `{}` (only EPSG:6668, JGD2011 geographic, is supported)",
+            m.crs
+        ));
     }
 
     // File roles: the manifest's `selection` block; else the v1 layout; else a
@@ -568,6 +596,10 @@ async fn read_grid(name: &str, bytes: bytes::Bytes) -> Result<Float32Raster, Str
     let reader = CogReader::open(store, path)
         .await
         .map_err(|e| format!("{name}: {e}"))?;
+    // The sampler works in longitude / latitude degrees.
+    if reader.crs() != crate::cog::CogCrs::Geographic {
+        return Err(format!("{name}: not a geographic (degree) grid"));
+    }
     reader
         .read_full_resolution_f32()
         .await
@@ -993,17 +1025,17 @@ mod tests {
                     v.label
                 ),
                 Some(h) => {
+                    // The contract is bit identity with the reference, not
+                    // a tolerance: same operations, same order, in f64.
                     let want = parse_hex_float(h);
-                    let d = (got - want).abs();
-                    assert!(
-                        d <= 1e-6,
-                        "{}: {lon},{lat}: got {got}, want {want}",
+                    assert_eq!(
+                        got.to_bits(),
+                        want.to_bits(),
+                        "{}: {lon},{lat}: got {got:e}, want {want:e}",
                         v.label
                     );
-                    max_abs = max_abs.max(d);
-                    if got.to_bits() == want.to_bits() {
-                        bit_exact += 1;
-                    }
+                    max_abs = max_abs.max((got - want).abs());
+                    bit_exact += 1;
                 }
             }
             *by_label.entry(v.label.as_str()).or_default() += 1;
@@ -1082,6 +1114,45 @@ mod tests {
         let url = Url::from_file_path(dir.path().join("manifest.json")).unwrap();
         let err = fetch_product(url.as_str()).await.err().unwrap();
         assert!(err.contains("tr_meshes.json"), "{err}");
+    }
+
+    /// Manifest semantics the sampler relies on are checked, not assumed.
+    #[tokio::test]
+    async fn manifest_semantics_are_enforced() {
+        for (field, value) in [
+            ("units", "cm"),
+            ("crs", "EPSG:3857"),
+            ("sign", "H_jgd2011 = H_jgd2024 + dH"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            for f in ["dh_bm.tif", "dh_tr.tif", "tr_meshes.json"] {
+                std::fs::copy(fixture_dir().join(f), dir.path().join(f)).unwrap();
+            }
+            let mut m: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(fixture_dir().join("manifest.json")).unwrap(),
+            )
+            .unwrap();
+            m[field] = serde_json::Value::String(value.into());
+            std::fs::write(dir.path().join("manifest.json"), m.to_string()).unwrap();
+            let url = Url::from_file_path(dir.path().join("manifest.json")).unwrap();
+            let err = fetch_product(url.as_str()).await.err().unwrap();
+            assert!(err.contains(field), "{field}: {err}");
+        }
+    }
+
+    /// A numeric GDAL_NODATA sentinel (not just NaN) comes back as no value,
+    /// so it can never be added to terrain as a ΔH. Uses the -9999 fixture.
+    #[tokio::test]
+    async fn numeric_nodata_is_honoured_by_full_resolution_reader() {
+        let bytes = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/dem_nodata.tif"),
+        )
+        .unwrap();
+        let r = read_grid("dem_nodata.tif", bytes.into()).await.unwrap();
+        // Column 0 holds data, columns 128.. are -9999 in the file.
+        assert!(r.get(0, 0).is_some());
+        assert_eq!(r.get(0, 200), None);
+        assert_eq!(r.get(255, 255), None);
     }
 
     #[test]
