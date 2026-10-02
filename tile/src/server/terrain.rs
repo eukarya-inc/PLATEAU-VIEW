@@ -60,10 +60,12 @@ use crate::terrain::{
     webmercator::xyz_tile_bounds,
 };
 
-/// Attribution shown for both the DEM-generated `/terrain/dem/...` source and
-/// the R2 quantized-mesh mirror — same upstream lineage (PLATEAU + Mapterhorn
-/// + 国土地理院), so the credit line is identical.
-const TERRAIN_ATTRIBUTION_HTML: &str = r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#;
+/// Credit line the quantized-mesh mirror's `layer.json` is rewritten to. The
+/// mirror has no config source to derive one from, so it keeps the line every
+/// terrain endpoint used before attribution became per source (PLATEAU +
+/// Mapterhorn + 国土地理院). DEM sources derive theirs instead — see
+/// [`crate::terrain::attribution`].
+const MIRROR_ATTRIBUTION_HTML: &str = r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#;
 
 /// Output encoding for the elevation raster endpoints.
 #[derive(Debug, Clone, Copy)]
@@ -181,6 +183,11 @@ pub struct TerrainState {
     pub geoid: GeoidModel,
     pub max_zoom: u8,
     pub max_error: f64,
+    /// Credit line for this source's `layer.json` / TileJSONs, derived from
+    /// what it is built from (or the config override) — see
+    /// [`crate::terrain::attribution`]. Metadata only: never in a tile, ETag
+    /// or cache key.
+    pub attribution: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -443,7 +450,7 @@ fn dem_layer_json_response(
     let config = LayerJsonConfig {
         tiles_template,
         version: terrain.dem.version().to_string(),
-        attribution: Some(TERRAIN_ATTRIBUTION_HTML.to_string()),
+        attribution: Some(terrain.attribution.clone()),
         available: japan_availability(terrain.max_zoom),
         min_zoom: Some(0),
         max_zoom: Some(terrain.max_zoom),
@@ -521,7 +528,7 @@ async fn mirror_layer_json_response(mirror: Arc<MirrorSource>, state: &AppState)
     if let Some(obj) = layer.as_object_mut() {
         obj.insert(
             "attribution".into(),
-            serde_json::Value::String(TERRAIN_ATTRIBUTION_HTML.into()),
+            serde_json::Value::String(MIRROR_ATTRIBUTION_HTML.into()),
         );
         obj.insert(
             "tiles".into(),
@@ -1218,8 +1225,7 @@ async fn raster_tilejson(
         tilejson: "3.0.0",
         tiles: vec![tile_url],
         name: encoding.name(height_mode),
-        attribution:
-            r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#,
+        attribution: &terrain.attribution,
         scheme: "xyz",
         minzoom: 0,
         maxzoom: terrain.max_zoom,
@@ -1387,6 +1393,7 @@ mod tests {
             max_zoom: 18,
             max_error: 5.0,
             base_datum: crate::terrain::vertical::BaseDatum::Agnostic,
+            base_attribution: None,
             mirror_url: None,
         };
         let state = Arc::new(

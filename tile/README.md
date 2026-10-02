@@ -28,7 +28,7 @@ The server generates Cesium quantized-mesh-1.0 (`/terrain/`, **TMS Geodetic** ad
 
 - **Single source, global coverage with high-resolution Japan.** Mapterhorn merges many open national DEMs into one consistent set. For Japan it builds on **国土地理院 (GSI)** elevation data, so we get the local resolution we need without stitching multiple providers ourselves.
 - **Distributed as PMTiles.** Every region is a single `.pmtiles` archive, and `pmtiles extract --bbox=...` downloads only the bytes inside a bounding box. That makes a Japan-only, production-ready mirror a single command — see [`scripts/japan-pmtiles/`](scripts/japan-pmtiles/).
-- **Friendly licensing.** Code is BSD-3, terrain data is CC-BY-4.0 / OGL / CC0 family. The full attribution list is at [mapterhorn.com/attribution](https://www.mapterhorn.com/attribution); we credit Mapterhorn and 国土地理院 in the layer.json automatically.
+- **Friendly licensing.** Code is BSD-3, terrain data is CC-BY-4.0 / OGL / CC0 family. The full attribution list is at [mapterhorn.com/attribution](https://www.mapterhorn.com/attribution); every DEM source built on the Mapterhorn base credits Mapterhorn and 国土地理院 in its `layer.json` / TileJSONs automatically (see [Attribution](#attribution)).
 - **Modern format.** 512 px Terrarium-encoded WebP — smaller transfers and a strict drop-in replacement for the deprecated AWS Elevation Tiles.
 
 In production the recommended setup is to mirror Mapterhorn's Japan slice into your own R2 / GCS bucket and point the tile server at it; this avoids hitting `tiles.mapterhorn.com` for every request and keeps you in control of cache invalidation.
@@ -142,6 +142,33 @@ A geoid model only gives correct ellipsoidal heights when every elevation it is 
 - **Refused at config load** (logged at ERROR; the source is not served — a refused `dem` does *not* fall back to the bare base): a layer or base in a datum other than the target with no `heightCorrection`; a correction whose product does not convert exactly *layer datum → target* (e.g. a `jgd2024` layer in a `jgd2011` source — no inverse correction exists); a correction on a base of unknown datum; a geoid without a target datum; unknown `verticalDatum` / `missing` / `base` values; a product that fails to load or verify.
 - **Known limitation — Tohoku 2011 height revision (pending an MLIT decision).** In the area GSI revised after the 2011 Tohoku earthquake (Aomori, Iwate, Miyagi, Akita, Yamagata, Fukushima, Ibaraki; parameter `touhokutaiheiyouoki2011_h.par`), the `base/dem10` COGs are labelled JGD2000 (EPSG:4612) and hold **pre-2011 (測地成果2000) heights**. They are bit-identical to GSI's 2009-02-01 DEM10B editions and up to ~+1.2 m above JGD2011 near Oshika. The JGD2024 correction assumes JGD2011 input, so those `dem10` pixels come out under-corrected there by the 2011 revision. Chaining the 2011 correction before ΔH is not implemented; whether to do it is pending a decision. The datum model would express it as a third datum on those layers.
 - **Cache keys / ETags**: a source that applies a correction appends `vcorr=<product>@<version>:<from>-to-<to>:missing=<policy>:base=<datum>:base-dh=<yes|no>:layers=<mask hash>` to its DEM version, which feeds every terrain cache key and ETag. A source that declares nothing — every existing source — is built exactly as before and keeps its keys byte for byte (no cache flush).
+
+### Attribution
+
+Every DEM source's `layer.json` and terrain TileJSONs (`/terrain/{source}/layer.json`, `/terrarium/{source}/tilejson.json`, `/mapbox/{source}/tilejson.json`) carry an `attribution` **derived from what that source is built from** (`src/terrain/attribution.rs`), so the credit cannot drift from the config. Parts, joined with ` | ` (exact duplicates dropped):
+
+| Part | Credited when |
+|------|---------------|
+| PLATEAU | always |
+| Base | the source uses the shared `DEM_URL` base: `DEM_ATTRIBUTION` if set, else Mapterhorn (the `{z}/{x}/{y}` template default and the PMTiles mirror from `scripts/japan-pmtiles/`). Nothing for the sea-level base (`"base": "sealevel"` or `DEM_URL=sealevel`) |
+| Layers | each overlay layer's own `"attribution"`, bottom → top, when it declares one |
+| 国土地理院 | always — every source applies a GSI geoid model, and overlay layers without their own `"attribution"` are taken to be GSI elevation data (as the PLATEAU COGs are). A source that applies a `heightCorrection` gets `国土地理院（基盤地図情報 数値標高モデル、標高補正パラメータを適用して加工）`, since GSI's terms ask processed data to say so (wording pending review) |
+
+A source's own `"attribution"` (HTML) replaces the derived line entirely — for cases derivation cannot know, e.g. COGs whose provenance the server can't see:
+
+```jsonc
+"dem": { "type": "dem", "attribution": "<a href=\"https://www.mlit.go.jp/plateau/\">PLATEAU</a> | …", "layers": [ … ] }
+```
+
+What that gives the sources served today (`DEM_URL` = Mapterhorn):
+
+| Source | `attribution` |
+|--------|---------------|
+| `dem`, `plateau-terrain-experimental` (shared base + COGs) | `PLATEAU \| Mapterhorn \| 国土地理院` (unchanged) |
+| `plateau-terrain-jgd2024` (`"base": "sealevel"` + `heightCorrection`) | `PLATEAU \| 国土地理院（基盤地図情報 数値標高モデル、標高補正パラメータを適用して加工）` |
+| `/terrain/layer.json` from the quantized-mesh mirror | `PLATEAU \| Mapterhorn \| 国土地理院` (fixed; the mirror has no config source) |
+
+The attribution is metadata only: it never enters a tile body, an ETag or a cache key, so changing it needs no cache flush. `/tiles/{name}/tilejson.json` honours the same source-level `"attribution"` field and otherwise keeps the PLATEAU credit.
 
 ### Supported COG tile compressions
 
@@ -276,6 +303,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
 | `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/`. A DEM tile of another native size is resampled between pixel centres — for Mapterhorn's 512 px tiles at the default 256, each output pixel is the mean of a 2×2 block |
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Geoid model for DEM sources that don't declare their own `geoid` in the config JSON. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`. **Not** overridable per request |
+| `DEM_ATTRIBUTION` | No | Mapterhorn credit | Credit (HTML) for the shared `DEM_URL` base, part of the derived `attribution` of every DEM source built on it (see [Attribution](#attribution)). Set it when `DEM_URL` points at something other than Mapterhorn or a Mapterhorn mirror. Ignored for `DEM_URL=sealevel` |
 | `DEM_VERTICAL_DATUM` | No | — (unknown) | Vertical datum of the shared `DEM_URL` base: `jgd2011` or `jgd2024`. Only read by sources that declare vertical datums and use the shared base (see [Vertical datums](#vertical-datums-and-the-jgd2011--jgd2024-height-correction)); such a source with a `heightCorrection` refuses to build while it is unset. Not needed for sources with `"base": "sealevel"`; ignored for `DEM_URL=sealevel`, which is datum-agnostic and never corrected |
 | `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region, sampling at child pixel centres. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
@@ -327,7 +355,7 @@ Routing once `TERRAIN_MIRROR_URL` is set:
 | `/terrain/dem/{z}/{x}/{y}.terrain`         | DEM pipeline (Mapterhorn etc.) — used for side-by-side validation |
 | `/terrain/{other}/...`                     | DEM, looked up under the source name in the config JSON |
 
-The mirror handler stamps `Content-Encoding: gzip` and the standard quantized-mesh `Content-Type` on every tile response and rewrites `attribution` + `tiles` on the upstream `layer.json` so the credit line and tile template match the rest of the server (`PLATEAU | Mapterhorn | 国土地理院`, relative `{z}/{x}/{y}.terrain`). `/terrarium/...` and `/mapbox/...` raster endpoints are unaffected — they still go through the DEM pipeline.
+The mirror handler stamps `Content-Encoding: gzip` and the standard quantized-mesh `Content-Type` on every tile response and rewrites `attribution` + `tiles` on the upstream `layer.json` so the credit line and tile template match the DEM pipeline over the Mapterhorn base (fixed `PLATEAU | Mapterhorn | 国土地理院` — the mirror has no config source to derive one from; relative `{z}/{x}/{y}.terrain`). `/terrarium/...` and `/mapbox/...` raster endpoints are unaffected — they still go through the DEM pipeline.
 
 ### Persistent Cache Configuration
 
@@ -431,6 +459,8 @@ Response:
   "maxzoom": 22
 }
 ```
+
+`attribution` is the source's `"attribution"` from the config JSON when set, else the PLATEAU credit shown above.
 
 Query parameters:
 | Parameter | Default | Description |

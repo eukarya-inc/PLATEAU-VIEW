@@ -11,8 +11,9 @@ use crate::{
     config::{ConfigManager, LayerConfig, SourceConfig},
     terrain::{
         CogDemSource, DemProvider, GeoBounds, GeoidModel, MirrorSource, PmtilesEncoding,
-        PmtilesSource, TerrainSettings, XyzDemEncoding, XyzDemSource, build_composite_dem,
-        build_corrected_composite_dem,
+        PmtilesSource, TerrainSettings, XyzDemEncoding, XyzDemSource,
+        attribution::SourceCredits,
+        build_composite_dem, build_corrected_composite_dem,
         vertical::{
             BaseDatum, DatumPlan, SourceCorrection, SourceDeclaration, check_product, load_product,
             plan_source,
@@ -315,6 +316,7 @@ impl AppState {
                 resolve_source_geoid(name, dem_cfg.geoid.as_deref(), settings.default_geoid);
             let mut entries: Vec<LayerEntry> = Vec::new();
             let mut layer_datums: Vec<Option<&str>> = Vec::new();
+            let mut layer_credits: Vec<Option<&str>> = Vec::new();
             let overlays: Vec<Arc<dyn DemProvider>> = dem_cfg
                 .layers
                 .iter()
@@ -330,6 +332,7 @@ impl AppState {
                         kind: LayerEntryKind::Dem(provider.clone()),
                     });
                     layer_datums.push(layer.vertical_datum());
+                    layer_credits.push(layer.attribution());
                     Some(provider)
                 })
                 .collect();
@@ -343,9 +346,14 @@ impl AppState {
             // the sea-level base. The base's slug/version are part of the
             // composite's slug, version and etag, so switching it re-keys this
             // source only.
-            let (base, base_datum) = match resolve_source_base(dem_cfg.base.as_deref()) {
-                Ok(SourceBase::Shared) => (shared_base.clone(), settings.base_datum),
-                Ok(SourceBase::SeaLevel) => (sea_level.clone(), BaseDatum::Agnostic),
+            let (base, base_datum, base_credit) = match resolve_source_base(dem_cfg.base.as_deref())
+            {
+                Ok(SourceBase::Shared) => (
+                    shared_base.clone(),
+                    settings.base_datum,
+                    settings.base_attribution.as_deref(),
+                ),
+                Ok(SourceBase::SeaLevel) => (sea_level.clone(), BaseDatum::Agnostic, None),
                 Err(reason) => {
                     tracing::error!(
                         source = %name,
@@ -368,6 +376,13 @@ impl AppState {
                 }
             };
             dem_inventory.extend(entries);
+            let attribution = SourceCredits {
+                override_line: dem_cfg.attribution.as_deref(),
+                base: base_credit,
+                layers: &layer_credits,
+                height_corrected: correction.is_some(),
+            }
+            .line();
 
             let dem: Arc<dyn DemProvider> = match correction {
                 // Today's path, unchanged, for every source without a correction.
@@ -399,6 +414,7 @@ impl AppState {
                     geoid,
                     max_zoom: settings.max_zoom,
                     max_error: settings.max_error,
+                    attribution,
                 }),
             );
         }
@@ -420,6 +436,11 @@ impl AppState {
                     geoid: settings.default_geoid,
                     max_zoom: settings.max_zoom,
                     max_error: settings.max_error,
+                    attribution: SourceCredits {
+                        base: settings.base_attribution.as_deref(),
+                        ..Default::default()
+                    }
+                    .line(),
                 })
             });
 
@@ -962,6 +983,7 @@ mod tests {
             max_zoom: 18,
             max_error: 5.0,
             base_datum: BaseDatum::Agnostic,
+            base_attribution: None,
             mirror_url: None,
         }
     }
@@ -1101,5 +1123,56 @@ mod tests {
         .await;
         assert_eq!(terrains["legacy"].dem.version(), reference.version());
         assert_eq!(terrains["legacy"].dem.slug(), reference.slug());
+    }
+
+    /// Attribution follows what each source is built from: the shared
+    /// Mapterhorn base keeps the historical line, a sea-level source applying
+    /// the GSI height correction drops Mapterhorn and says the data was
+    /// processed, layer credits are added, and a config override wins.
+    #[tokio::test]
+    async fn attribution_is_derived_per_source() {
+        use crate::terrain::attribution::{
+            GSI_CORRECTED_CREDIT, GSI_CREDIT, MAPTERHORN_CREDIT, PLATEAU_CREDIT,
+        };
+        let settings = TerrainSettings {
+            dem_url: Some("http://127.0.0.1:9/{z}/{x}/{y}.webp".into()),
+            base_datum: BaseDatum::Unknown,
+            base_attribution: Some(MAPTERHORN_CREDIT.into()),
+            ..sealevel_settings()
+        };
+        let layer =
+            r#"{"type": "xyz", "url": "http://127.0.0.1:9/{z}/{x}/{y}.png", "maxZoom": 15}"#;
+        let json = format!(
+            r#"{{ "sources": {{
+                "legacy": {{ "type": "dem", "layers": [{layer}] }},
+                "jgd2024": {{ "type": "dem", "geoid": "jpgeo2024-hrefconv", "verticalDatum": "jgd2011",
+                    "base": "sealevel", "heightCorrection": {{ "manifest": "{m}" }}, "layers": [{layer}] }},
+                "flat": {{ "type": "dem", "base": "sealevel", "layers": [] }},
+                "credited": {{ "type": "dem", "layers": [
+                    {{"type": "xyz", "url": "http://127.0.0.1:9/a/{{z}}/{{x}}/{{y}}.png", "attribution": "Sea"}}, {layer}] }},
+                "custom": {{ "type": "dem", "attribution": "Custom", "layers": [{layer}] }}
+            }} }}"#,
+            m = fixture_manifest()
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
+        let (terrains, _) = AppState::build_terrains(&settings, &config.sources).await;
+        let legacy = format!("{PLATEAU_CREDIT} | {MAPTERHORN_CREDIT} | {GSI_CREDIT}");
+
+        assert_eq!(terrains["legacy"].attribution, legacy);
+        assert_eq!(
+            terrains["jgd2024"].attribution,
+            format!("{PLATEAU_CREDIT} | {GSI_CORRECTED_CREDIT}")
+        );
+        assert_eq!(
+            terrains["flat"].attribution,
+            format!("{PLATEAU_CREDIT} | {GSI_CREDIT}")
+        );
+        assert_eq!(
+            terrains["credited"].attribution,
+            format!("{PLATEAU_CREDIT} | {MAPTERHORN_CREDIT} | Sea | {GSI_CREDIT}")
+        );
+        assert_eq!(terrains["custom"].attribution, "Custom");
+        // The implicit default source (no `dem` in the config) is the bare base.
+        assert_eq!(terrains[DEFAULT_DEM_SOURCE_KEY].attribution, legacy);
     }
 }

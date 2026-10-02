@@ -98,6 +98,13 @@ pub struct SourceConfig {
     /// gaps. Anything else refuses the source.
     #[serde(default)]
     pub base: Option<String>,
+    /// Credit line (HTML) shown as `attribution` in this source's metadata,
+    /// replacing the derived one: for a DEM source the `layer.json` /
+    /// terrain TileJSONs (derived from its base, layers and geoid /
+    /// height-correction products — see [`crate::terrain::attribution`]), for a
+    /// `/tiles` source its TileJSON (default: PLATEAU). Blank = unset.
+    #[serde(default)]
+    pub attribution: Option<String>,
     pub layers: Vec<LayerConfig>,
 }
 
@@ -145,6 +152,10 @@ pub enum LayerConfig {
         /// source's `verticalDatum`.
         #[serde(default, rename = "verticalDatum")]
         vertical_datum: Option<String>,
+        /// DEM-only: credit for this layer's data, added to the source's
+        /// derived attribution (see [`crate::terrain::attribution`]).
+        #[serde(default)]
+        attribution: Option<String>,
     },
     #[serde(rename = "cog")]
     Cog {
@@ -169,6 +180,10 @@ pub enum LayerConfig {
         /// source's `verticalDatum`.
         #[serde(default, rename = "verticalDatum")]
         vertical_datum: Option<String>,
+        /// DEM-only: credit for this layer's data, added to the source's
+        /// derived attribution (see [`crate::terrain::attribution`]).
+        #[serde(default)]
+        attribution: Option<String>,
     },
     /// MapLibre style (not yet implemented, ignored)
     #[serde(rename = "maplibre")]
@@ -201,6 +216,10 @@ pub enum LayerConfig {
         /// source's `verticalDatum`.
         #[serde(default, rename = "verticalDatum")]
         vertical_datum: Option<String>,
+        /// DEM-only: credit for this layer's data, added to the source's
+        /// derived attribution (see [`crate::terrain::attribution`]).
+        #[serde(default)]
+        attribution: Option<String>,
     },
 }
 
@@ -246,6 +265,16 @@ impl LayerConfig {
             LayerConfig::Xyz { vertical_datum, .. }
             | LayerConfig::Cog { vertical_datum, .. }
             | LayerConfig::Pmtiles { vertical_datum, .. } => vertical_datum.as_deref(),
+            LayerConfig::MapLibre { .. } => None,
+        }
+    }
+
+    /// DEM-only: the layer's own `attribution`, if set.
+    pub fn attribution(&self) -> Option<&str> {
+        match self {
+            LayerConfig::Xyz { attribution, .. }
+            | LayerConfig::Cog { attribution, .. }
+            | LayerConfig::Pmtiles { attribution, .. } => attribution.as_deref(),
             LayerConfig::MapLibre { .. } => None,
         }
     }

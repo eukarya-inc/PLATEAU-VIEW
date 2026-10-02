@@ -48,6 +48,7 @@ fn settings() -> TerrainSettings {
         max_zoom: 18,
         max_error: 5.0,
         base_datum: tile::terrain::vertical::BaseDatum::Agnostic,
+        base_attribution: None,
         mirror_url: None,
     }
 }

@@ -7,6 +7,7 @@
 
 #![allow(dead_code)]
 
+pub mod attribution;
 pub mod cached_dem;
 pub mod cog_dem;
 pub mod composite;

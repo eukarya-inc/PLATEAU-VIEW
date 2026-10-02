@@ -415,7 +415,7 @@ pub struct TileJson {
     tiles: Vec<String>,
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    attribution: Option<&'static str>,
+    attribution: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scheme: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -466,13 +466,25 @@ pub async fn get_tilejson(
     // the behavior of the terrain `raster_tilejson` handler.
     let tile_url = format!("/tiles/{name}/{{z}}/{{x}}/{{y}}.{format}");
 
+    // The source's own `attribution` (same config field DEM sources use),
+    // else the PLATEAU credit.
+    let attribution = state
+        .config_manager
+        .get()
+        .await
+        .sources
+        .get(&name)
+        .and_then(|s| s.attribution.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(crate::terrain::attribution::PLATEAU_CREDIT)
+        .to_string();
+
     let tilejson = TileJson {
         tilejson: "3.0.0",
         tiles: vec![tile_url],
         name,
-        attribution: Some(
-            "<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>",
-        ),
+        attribution: Some(attribution),
         scheme: Some("xyz"),
         minzoom: Some(0),
         maxzoom: Some(22),

@@ -8,6 +8,7 @@
 use std::env;
 use std::sync::Arc;
 
+use super::attribution::shared_base_credit;
 use super::dem::DemProvider;
 use super::geoid::GeoidModel;
 use super::mapterhorn::{
@@ -52,6 +53,10 @@ pub struct TerrainSettings {
     /// [`BaseDatum::Unknown`] until declared, and a source that applies a
     /// height correction refuses to build on an unknown base.
     pub base_datum: BaseDatum,
+    /// Credit line part for the shared `DEM_URL` base, shown in the metadata
+    /// of every DEM source built on it: `DEM_ATTRIBUTION`, else Mapterhorn;
+    /// `None` for the sea-level base. See [`super::attribution`].
+    pub base_attribution: Option<String>,
     /// Pre-rendered quantized-mesh mirror URL. When set, /terrain/ (no
     /// `{name}`) and /terrain/mirror/ and /terrain-mirror/ pass-through to
     /// this bucket. Supports `file://`, `gs://`, `s3://`, `r2://`.
@@ -66,9 +71,14 @@ impl TerrainSettings {
             dem_url.as_deref().is_some_and(is_sea_level_url),
             env::var("DEM_VERTICAL_DATUM").ok().as_deref(),
         );
+        let base_attribution = shared_base_credit(
+            dem_url.as_deref().is_some_and(is_sea_level_url),
+            env::var("DEM_ATTRIBUTION").ok().as_deref(),
+        );
         Self {
             dem_url,
             base_datum,
+            base_attribution,
             dem_version: env::var("DEM_VERSION")
                 .unwrap_or_else(|_| DEFAULT_DEM_VERSION.to_string()),
             dem_max_zoom: parse_env_u8("DEM_MAX_ZOOM", MAPTERHORN_DEFAULT_MAX_ZOOM),
