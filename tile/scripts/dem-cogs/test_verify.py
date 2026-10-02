@@ -122,3 +122,9 @@ def test_inventory_summary_flags_mixed_primaries():
     s = inventory.summarize(rows, cfg)
     assert s["mixed_primaries"] == {"dem10/4730": {"jgd2011": 1, "jgd2000": 2}}
     assert s["labels"]["DEM10B"] == {"jgd2011": 1, "jgd2000": 1, "EPSG:None": 1} and s["unreadable"] == ["d"]
+
+
+@pytest.mark.parametrize("key", ["patch/../../etc/x.tif", "base/dem10/4730.tif", "patch/x.tif"])
+def test_reproduce_patch_refuses_bad_keys(tmp_path, key):
+    with pytest.raises((ValueError, Exception)):
+        verify.reproduce_patch(stacks.load(), key, str(tmp_path), str(tmp_path))

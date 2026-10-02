@@ -235,6 +235,22 @@ def test_rollback_on_upload_error_keeps_going(tmp_path):
     with pytest.raises(publish.PublishError, match="unexpected error") as e:
         run(built(tmp_path, KEYS), KEYS, s, FakeHttp(s), execute=True)
     assert e.value.code == 5 and set(s.objects) == set(EXISTING) and len(s.deletes) == 2
+    assert "NOT deleted" in str(e.value) and "base/dem10/4931-fill.tif" in str(e.value)
+
+
+def test_failed_put_never_deletes_someone_elses_object(tmp_path):
+    class Racing(FakeStorage):
+        def put(self, local, key, content_type):
+            if key == "base/dem10/4931-fill.tif":
+                self.objects[key] = b"another writer"  # appeared after the preflight
+                raise RuntimeError("immutable: destination exists")
+            super().put(local, key, content_type)
+
+    s = Racing(EXISTING)
+    with pytest.raises(publish.PublishError, match="NOT deleted"):
+        run(built(tmp_path, KEYS), KEYS, s, FakeHttp(s), execute=True)
+    assert s.objects["base/dem10/4931-fill.tif"] == b"another writer"
+    assert "base/dem10/4931-fill.tif" not in s.deletes
 
 
 def test_incomplete_rollback_names_leftovers(tmp_path):

@@ -26,6 +26,7 @@ import os
 import subprocess
 import tempfile
 
+import fggml
 import meshcode
 import plan
 import sources
@@ -77,8 +78,11 @@ def load_provenance(src_root: str) -> dict[str, dict]:
     return out
 
 
-def inspect_grid(path: str, pixel) -> int | None:
-    """EPSG of a source grid, after checking its type, nodata and spacing."""
+def inspect_grid(path: str, pixel, mesh: str | None = None, product: str | None = None) -> int | None:
+    """EPSG of a source grid, after checking its type, nodata, spacing and --
+    when ``mesh`` is given -- that it covers exactly that mesh (origin aligned
+    with the mesh's north-west corner, the product's grid size). A shifted or
+    truncated grid would otherwise be mosaicked at the wrong footprint."""
     import rasterio
 
     with rasterio.open(path) as d:
@@ -89,6 +93,13 @@ def inspect_grid(path: str, pixel) -> int | None:
         px = float(pixel)
         if abs(d.transform.a - px) > 1e-11 or abs(-d.transform.e - px) > 1e-11:
             raise BuildError(f"{path}: pixel {d.transform.a!r} x {-d.transform.e!r}, expected {px!r}")
+        if mesh is not None:
+            west, south, east, north = meshcode.bounds(mesh)
+            if abs(d.transform.c - west) > px * 1e-3 or abs(d.transform.f - north) > px * 1e-3:
+                raise BuildError(f"{path}: origin ({d.transform.c!r}, {d.transform.f!r}) is not mesh {mesh}'s north-west corner ({west!r}, {north!r})")
+            want = fggml.SHAPES.get((product or "").upper()) or (round((east - west) / px), round((north - south) / px))
+            if (d.width, d.height) != want:
+                raise BuildError(f"{path}: {d.width}x{d.height} px, expected {want[0]}x{want[1]} for {product or 'mesh'} {mesh}")
         return d.crs.to_epsg() if d.crs else None
 
 
@@ -140,7 +151,8 @@ def build_primary(stack, primary: str, tree: sources.SourceTree, out_root: str, 
     if not files:
         raise BuildError(f"{stack.id}/{primary}: no input grids under {tree.root}")
     prov = load_provenance(tree.root)
-    grids = [plan.Grid(f.name, f.grid.mesh, f.grid.product, f.grid.edition, inspect_grid(f.path, stack.pixel), os.path.abspath(f.path)) for f in files]
+    grids = [plan.Grid(f.name, f.grid.mesh, f.grid.product, f.grid.edition, inspect_grid(f.path, stack.pixel, f.grid.mesh, f.grid.product), os.path.abspath(f.path))
+             for f in files]
     groups = plan.plan_primary(grids, stack.products, main_epsg)
     if len(groups) == 2:
         log(f"  {stack.id}/{primary}: MIXED CRS -> {primary}.tif {groups[0].label} ({len(groups[0].grids)} grids), "

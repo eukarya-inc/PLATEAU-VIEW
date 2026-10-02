@@ -191,8 +191,9 @@ def mirror(defaults: dict, rclone_config: str, listing_dir: str, products, prima
 
     tree = SourceTree("/vsis3/listing-only", listing_dir)  # only the listing is read, never the root
     n = 0
+    prims = set(primaries)
     for p in products:
-        want = [f for f in tree.files(p) if f.grid.primary in set(primaries)]
+        want = [f for f in tree.files(p) if f.grid.primary in prims]
         if not want:
             continue
         d = os.path.join(dst_root, p.lower())

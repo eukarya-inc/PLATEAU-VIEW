@@ -164,6 +164,7 @@ def strict_primary(stack, primary: str, tree: sources.SourceTree, public_base: s
     out = {}
     try:
         for mesh, fs in sorted(by_mesh.items()):
+            plan.check_unique([plan.Grid(f.name, f.grid.mesh, f.grid.product, f.grid.edition, None) for f in fs])
             fs.sort(key=lambda f: stack.rank(f.grid.product))
             prods = []
             for f in fs:
@@ -298,8 +299,9 @@ def attribute_diffs(served_path: str, rebuilt_path: str, diff_mask: np.ndarray, 
 
     * ``served_nodata``  -- the served COG has no data where the rebuild has (a grid the served file lacks)
     * ``rebuilt_nodata`` -- the other way round
-    * ``order``          -- both valid; the served value is another product's value for that pixel
-                            (the served file painted overlapping products in another order)
+    * ``order``          -- both valid; the served value is one product's value and the rebuilt
+                            value a different product's value for that pixel (the served file
+                            painted overlapping products in another order)
     * ``other``          -- anything else
     """
     import rasterio
@@ -309,7 +311,7 @@ def attribute_diffs(served_path: str, rebuilt_path: str, diff_mask: np.ndarray, 
         by_mesh[g["mesh"]].append(g)
     tot = collections.Counter()
     meshes = {}
-    with rasterio.open(served_path) as s, rasterio.open(rebuilt_path) as b:
+    with rasterio.open(served_path) as served, rasterio.open(rebuilt_path) as rebuilt:
         for mesh, gs in sorted(by_mesh.items()):
             arrs = []
             for g in gs:
@@ -320,10 +322,14 @@ def attribute_diffs(served_path: str, rebuilt_path: str, diff_mask: np.ndarray, 
             dm = diff_mask[max(ri, 0) : ri + shape[0], max(ci, 0) : ci + shape[1]]
             if dm.shape != shape or not dm.any():
                 continue
-            sv, bv = cut(s, mesh, shape), cut(b, mesh, shape)
+            sv, bv = cut(served, mesh, shape), cut(rebuilt, mesh, shape)
+            # "order": the served pixel is (exactly) one product's value and the
+            # rebuilt pixel another product's value there
             explained = np.zeros(shape, bool)
-            for a in arrs:
-                explained |= valid(a) & (np.abs(sv - a) <= TOL)
+            for i, x in enumerate(arrs):
+                for j, y in enumerate(arrs):
+                    if i != j:
+                        explained |= valid(x) & valid(y) & (sv == x) & (bv == y)
             c = {
                 "different_px": int(dm.sum()),
                 "served_nodata": int((dm & ~valid(sv) & valid(bv)).sum()),
@@ -341,6 +347,8 @@ def reproduce_patch(cfg, key: str, src_dir: str, work: str, log=print) -> dict:
     """Rebuild one served patch COG from its source directory and compare it."""
     import patch
 
+    if not key.startswith("patch/") or publish.check_key(key) != "cog":
+        raise ValueError(f"{key!r} is not a patch COG key")
     d = cfg.defaults
     served_path = os.path.join(work, "served", *key.split("/"))
     sha, md5, n = download(f"{d['public_base'].rstrip('/')}/{urllib.request.quote(key)}", served_path)
@@ -367,7 +375,7 @@ def reproduce_key(cfg, key: str, tree, work: str, log=print) -> dict:
         epsg = s.crs.to_epsg()
     log(f"{key}: served {n:,} B sha256 {sha} ({meshcode.EPSG_LABEL.get(epsg, epsg)})")
     # the rebuilt group must get the served file's CRS *and* role
-    grids = [plan.Grid(f.name, f.grid.mesh, f.grid.product, f.grid.edition, build.inspect_grid(f.path, stack.pixel), os.path.abspath(f.path))
+    grids = [plan.Grid(f.name, f.grid.mesh, f.grid.product, f.grid.edition, build.inspect_grid(f.path, stack.pixel, f.grid.mesh, f.grid.product), os.path.abspath(f.path))
              for f in tree.for_primary(stack.products, primary)]
     epsgs = sorted({g.epsg for g in grids})
     if role == "main":

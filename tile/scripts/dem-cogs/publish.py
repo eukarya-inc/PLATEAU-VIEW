@@ -30,7 +30,9 @@ So this module is deliberately conservative:
    list of ``{"name", "layers": [...]}`` objects) lists them too.
 
 Any failure after the first upload -- a failed check, a timeout, an
-unexpected exception, Ctrl-C -- deletes exactly the objects this run uploaded.
+unexpected exception, Ctrl-C -- deletes exactly the objects this run uploaded
+successfully. An object whose upload itself failed is not deleted (its
+existence afterwards does not prove it is ours) and is named in the error.
 If a delete fails, publish exits 6 and names every object left behind.
 """
 
@@ -306,6 +308,7 @@ def publish(
         return {"dry_run": True, "items": [it.__dict__ for it in items], "config_before": {"version": version, "layers": len(before)}}
 
     uploaded: list[str] = []
+    uncertain: list[str] = []  # a put that failed: state unknown, left alone
 
     def rollback(why: str, code: int, cause: BaseException | None = None):
         log(f"ROLLBACK: {why}")
@@ -317,9 +320,11 @@ def publish(
             except BaseException as e:  # keep going
                 left.append(k)
                 log(f"  !! FAILED to delete {k}: {e!r}")
+        note = (f" The upload of {uncertain} failed and was NOT deleted (it may be partial, ours, or another writer's): check it by hand."
+                if uncertain else "")
         if left:
-            raise PublishError(f"ROLLBACK INCOMPLETE after: {why}. STILL IN THE BUCKET (and possibly served), delete by hand: {left}", 6) from cause
-        raise PublishError(f"rolled back {len(uploaded)} object(s): {why}", code) from cause
+            raise PublishError(f"ROLLBACK INCOMPLETE after: {why}. STILL IN THE BUCKET (and possibly served), delete by hand: {left}.{note}", 6) from cause
+        raise PublishError(f"rolled back {len(uploaded)} object(s): {why}.{note}", code) from cause
 
     class _Fail(Exception):
         def __init__(self, why: str, code: int):
@@ -331,11 +336,10 @@ def publish(
             try:
                 storage.put(it.local, it.key, it.content_type)
             except BaseException:
-                try:
-                    if storage.exists(it.key):
-                        uploaded.append(it.key)
-                except BaseException:
-                    uploaded.append(it.key)
+                # Existence after a failed put does not prove the object is ours
+                # (another writer may have created the key since the preflight;
+                # `--immutable` then fails). Never delete it: name it instead.
+                uncertain.append(it.key)
                 raise
             uploaded.append(it.key)
             log(f"  uploaded {it.key}")

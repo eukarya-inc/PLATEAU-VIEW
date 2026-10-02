@@ -175,3 +175,19 @@ def test_secondary_summary_groups_tertiaries():
 def test_plan_grid_label():
     assert plan.Grid("n", "473067", "DEM10B", "2016-10-01", 4612).label == "jgd2000"
 
+
+
+@pytest.mark.skipif(not GDAL, reason="needs the GDAL CLI")
+@pytest.mark.parametrize("dx, size, match", [(1 / 9000, (1125, 750), "origin"), (0.0, (1125, 700), "expected 1125x750")])
+def test_build_refuses_grid_off_its_mesh(tmp_path, dx, size, match):
+    import rasterio
+    from rasterio.transform import from_origin
+
+    w, _, _, n = meshcode.bounds("473067")
+    d = tmp_path / "src" / "dem10b"
+    d.mkdir(parents=True)
+    with rasterio.open(d / "FG-GML-4730-67-DEM10B-20161001.tif", "w", driver="GTiff", height=size[1], width=size[0], count=1,
+                       dtype="float32", crs="EPSG:4612", transform=from_origin(w + dx, n, 1 / 9000, 1 / 9000), nodata=-9999) as ds:
+        ds.write(np.ones((1, size[1], size[0]), np.float32))
+    with pytest.raises(build.BuildError, match=match):
+        build.build_primary(stacks.load().stack("dem10"), "4730", sources.SourceTree(str(tmp_path / "src")), str(tmp_path / "out"))

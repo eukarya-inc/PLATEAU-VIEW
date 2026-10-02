@@ -30,7 +30,7 @@ Work files go to `./work` (git-ignored) unless `--work` says otherwise.
 
 ```bash
 cd tile/scripts/dem-cogs
-uv run demcog.py test                                   # 68 tests, no network (GDAL CLI needed)
+uv run demcog.py test                                   # 74 tests, no network (GDAL CLI needed)
 
 # sources -- either from GSI (login) ...
 GSI_LOGIN_CONF=~/gsi_login.conf uv run demcog.py fetch dem10 4730 --before 2025-04-01
@@ -110,8 +110,9 @@ Each rule exists because the original batch got it wrong without noticing.
    `<mesh4>.tif` (`demPriority`, then key order: `-` < `.`). If a mesh's
    better product would land in the fill and a worse one in the main COG,
    the build is refused.
-5. One grid per (product, mesh); pixel spacing, NoData and type are checked
-   on every input.
+5. One grid per (product, mesh); pixel spacing, NoData, type, and the
+   footprint (origin at the mesh's north-west corner, the product's grid
+   size) are checked on every input.
 
 ## Manifest (`<key>.manifest.json`)
 
@@ -146,8 +147,8 @@ served value is the lower product's. `--exclude KEY` leaves a served COG out.
 **`reproduce <key>...`** downloads a served COG, rebuilds it from the sources
 (the served file's CRS decides which group and role is rebuilt), and compares
 bytes, grid, overviews and every full-resolution pixel. Differing pixels are
-attributed per mesh: `order` (the served value is another product's value
-there), `served_nodata`, `rebuilt_nodata`, `other`. **Bytes match only with
+attributed per mesh: `order` (the served value is one product's value and
+the rebuilt value another product's value there), `served_nodata`, `rebuilt_nodata`, `other`. **Bytes match only with
 the same GDAL version** (the original batch ran an older GDAL, which e.g.
 did not write `OVERVIEW_RESAMPLING` metadata), so pixels are the criterion.
 `patch/...` keys are rebuilt from their `stacks.toml` source directory.
@@ -335,7 +336,10 @@ server revalidates that config about every 60 s (`CONFIG_TTL_SECS`) into
 
 Any failure after the first upload — a failed check, a timeout, an
 exception, Ctrl-C — deletes exactly the objects this run uploaded (exit 3/4/5);
-a failed delete exits 6 and names what is left. All HTTP requests send a
+a failed delete exits 6 and names what is left. An object whose upload itself
+failed is never deleted (its existence afterwards does not prove it is ours,
+e.g. when another writer created the key after the preflight); it is named in
+the error for a manual check. All HTTP requests send a
 browser User-Agent (Cloudflare answers 403 to Python's default).
 
 ## Ported from the scratch scripts, and what was not
