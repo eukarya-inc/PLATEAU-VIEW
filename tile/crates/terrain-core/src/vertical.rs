@@ -258,14 +258,30 @@ pub struct DhGrid {
 }
 
 impl DhGrid {
+    ///
+    /// An `n` whose grid cannot be allocated gives an empty grid (every
+    /// [`DhGrid::get`] is NaN) instead of a trap.
     pub fn new(p: PixelPositions, z: u8, x: u32, y: u32, n: u32) -> Self {
-        let lons = (0..n).map(|i| p.lonlat(z, x, y, i, 0).0).collect();
-        let lats = (0..n).map(|j| p.lonlat(z, x, y, 0, j).1).collect();
-        Self {
-            lons,
-            lats,
-            values: vec![f64::INFINITY; (n as usize) * (n as usize)],
-        }
+        let empty = Self {
+            lons: Vec::new(),
+            lats: Vec::new(),
+            values: Vec::new(),
+        };
+        let len = n as usize;
+        let Some(cells) = len.checked_mul(len) else {
+            return empty;
+        };
+        let (Some(mut lons), Some(mut lats), Some(mut values)) = (
+            crate::try_vec(len),
+            crate::try_vec(len),
+            crate::try_vec(cells),
+        ) else {
+            return empty;
+        };
+        lons.extend((0..n).map(|i| p.lonlat(z, x, y, i, 0).0));
+        lats.extend((0..n).map(|j| p.lonlat(z, x, y, 0, j).1));
+        values.resize(cells, f64::INFINITY);
+        Self { lons, lats, values }
     }
 
     /// ΔH at column `i`, row `j` (NaN outside the tile).
@@ -397,5 +413,10 @@ mod tests {
         assert!(grid.get(&sel, 4, 0).is_nan());
         assert!(grid.get(&sel, 0, usize::MAX).is_nan());
         let _ = memo.grid(PixelPositions::centres(0), 255, u32::MAX, u32::MAX, 0);
+        // A tile size whose grid cannot exist: empty grid, NaN, no trap.
+        if cfg!(target_pointer_width = "32") {
+            let huge = memo.grid(PixelPositions::centres(u32::MAX), 0, 0, 0, u32::MAX);
+            assert!(huge.get(&sel, 0, 0).is_nan());
+        }
     }
 }
