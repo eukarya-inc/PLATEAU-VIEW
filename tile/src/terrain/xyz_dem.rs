@@ -16,7 +16,7 @@ use serde::Deserialize;
 /// connection-pool slots faster than they drain.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
-use super::dem::{DemError, DemProvider, DemTile, GeoBounds};
+use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions};
 use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -116,7 +116,11 @@ impl DemProvider for XyzDemSource {
 
         let (elevations, etag) = super::fit_to_tile_size(native, src_w, src_h, tile_size, etag);
 
-        Ok(DemTile { elevations, etag })
+        Ok(DemTile {
+            elevations,
+            etag,
+            positions: Some(PixelPositions::resampled(src_w, src_h, tile_size)),
+        })
     }
 
     fn native_tile_size(&self) -> u32 {

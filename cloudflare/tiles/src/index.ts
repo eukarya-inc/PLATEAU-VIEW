@@ -15,7 +15,7 @@
  *   - the root (/)                                 -> index of available datasets
  */
 
-import { corsHeaders, listPrefix, serveObject, tileConfig } from "./r2";
+import { type DemProfile, corsHeaders, listPrefix, serveObject, tileConfig } from "./r2";
 
 /** Read PATH_BUCKETS, tolerating a missing/malformed binding (fail closed). */
 function pathBuckets(env: Env): Record<string, string> {
@@ -50,6 +50,19 @@ function geoidForDataset(env: Env, segment: string): string | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const v = (raw as Record<string, unknown>)[segment];
   return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+/**
+ * Named-source profiles of a DEM dataset, from the `DEM_PROFILES` var
+ * (dataset -> source name -> profile; see `DemProfile`). A profile only affects
+ * `config.json?name=<that name>`; every other name gets exactly the config it
+ * got before. Missing or malformed means "no profiles".
+ */
+function demProfilesForDataset(env: Env, segment: string): Record<string, DemProfile> | undefined {
+  const raw = (env as unknown as Record<string, unknown>).DEM_PROFILES;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const v = (raw as Record<string, unknown>)[segment];
+  return typeof v === "object" && v !== null ? (v as Record<string, DemProfile>) : undefined;
 }
 
 /** Resolve the R2 bucket for a dataset segment (e.g. "terrain"), or null. */
@@ -122,6 +135,7 @@ export default {
         request.method,
         demDatasets(env).includes(segment),
         geoidForDataset(env, segment),
+        demProfilesForDataset(env, segment),
       );
     }
 

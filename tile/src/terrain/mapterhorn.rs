@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use image::GenericImageView;
 use reqwest::StatusCode;
 
-use super::dem::{DemError, DemProvider, DemTile};
+use super::dem::{DemError, DemProvider, DemTile, PixelPositions};
 use terrain_codec::heightmap::{HeightmapFormat, HeightmapView};
 
 /// Default public Mapterhorn tile endpoint.
@@ -112,7 +112,11 @@ impl DemProvider for MapterhornSource {
         // path asks for the native size and gets it untouched.
         let (elevations, etag) = super::fit_to_tile_size(native, src_w, src_h, tile_size, etag);
 
-        Ok(DemTile { elevations, etag })
+        Ok(DemTile {
+            elevations,
+            etag,
+            positions: Some(PixelPositions::resampled(src_w, src_h, tile_size)),
+        })
     }
 
     fn native_tile_size(&self) -> u32 {

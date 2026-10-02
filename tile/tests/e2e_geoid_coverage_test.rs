@@ -47,6 +47,7 @@ fn settings() -> TerrainSettings {
         default_geoid: GeoidModel::Gsigeo2011,
         max_zoom: 18,
         max_error: 5.0,
+        base_datum: tile::terrain::vertical::BaseDatum::Agnostic,
         mirror_url: None,
     }
 }

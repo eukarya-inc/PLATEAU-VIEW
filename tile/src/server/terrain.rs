@@ -1386,6 +1386,7 @@ mod tests {
             default_geoid: GeoidModel::Gsigeo2011,
             max_zoom: 18,
             max_error: 5.0,
+            base_datum: crate::terrain::vertical::BaseDatum::Agnostic,
             mirror_url: None,
         };
         let state = Arc::new(

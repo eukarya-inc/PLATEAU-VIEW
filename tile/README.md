@@ -104,12 +104,44 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 ```
 
 - The source named `"dem"` is **not** exposed under `/tiles/dem/...`; its layers feed the terrain endpoint instead.
-- `"geoid"` fixes the vertical datum for that source. Two DEM sources can therefore carry different models — e.g. a JGD2011 `dem` alongside a future JGD2024 `dem-2024` — each addressable at `/terrain/{name}/...`. An unrecognised value is logged at ERROR and the source falls back to `TERRAIN_DEFAULT_GEOID`; it never silently picks a neighbouring model.
+- `"geoid"` fixes the vertical datum for that source. Two DEM sources can therefore carry different models — e.g. a JGD2011 `dem` alongside a JGD2024 `dem-2024` (which may reuse the JGD2011 COGs through a [height correction](#vertical-datums-and-the-jgd2011--jgd2024-height-correction)) — each addressable at `/terrain/{name}/...`. An unrecognised value is logged at ERROR and the source falls back to `TERRAIN_DEFAULT_GEOID`; it never silently picks a neighbouring model.
 - Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
 - Where the base DEM has no tile at the requested zoom (Mapterhorn 404s offshore above roughly z6), the composite bilinear-upsamples the nearest parent. Child pixels within half a parent pixel of the parent's border clamp to the edge sample, so the result is NaN-free wherever the parent is.
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
 - Each pod refreshes every COG overlay's upstream ETag every **5 minutes** (single HEAD per overlay), so a CMS-side file swap that doesn't bump the config hash is picked up automatically — no `/reload` needed. The pod's own memory and persistent caches invalidate on ETag mismatch; downstream HTTP caches still honour their `Cache-Control: max-age` so end-users see the new tiles after at most one CDN TTL.
+
+### Vertical datums and the JGD2011 → JGD2024 height correction
+
+A geoid model only gives correct ellipsoidal heights when every elevation it is added to is in *its* orthometric datum. GSI's 2025 標高改定 moved Japanese heights from JGD2011 to JGD2024 by a few centimetres to ~0.4 m, so a JGD2024 source built from JGD2011 COGs needs that change — ΔH — added to each elevation. The server applies it **on the fly, per layer**; the COGs are never rewritten.
+
+```jsonc
+"plateau-terrain-jgd2024": {
+  "type": "dem",
+  "geoid": "jpgeo2024-hrefconv",   // target datum: jgd2024
+  "verticalDatum": "jgd2011",      // default for every layer below
+  "base": "sealevel",              // flat 0 m base instead of the shared DEM_URL base
+  "heightCorrection": {
+    "manifest": "https://tiles.plateau.city/terrain/vertical/hyokorev-jgd2011-to-jgd2024/v1/manifest.json",
+    "missing": "keep"              // keep | nan — see below (pending a decision)
+  },
+  "layers": [
+    { "type": "cog", "url": ".../base/dem5/5339.tif" },
+    { "type": "cog", "url": ".../jgd2024/dem5/5339.tif", "verticalDatum": "jgd2024" }  // per-layer override
+  ]
+}
+```
+
+- **Target datum** = the datum of the source's `geoid`: `gsigeo2011` → `jgd2011`, `jpgeo2024-hrefconv` → `jgd2024`. `jpgeo2024` alone has no target datum (without Hrefconv2024 it is off from JGD2024 heights by up to ~0.7 m on remote islands), so a source using it cannot declare datums or a correction.
+- **Layer datum** = the layer's `verticalDatum`, else the source's. Once a source declares any datum, every layer must resolve to one. Mixed stacks are the intended next step: when GSI's JGD2024 DEM5A/DEM1A re-issue replaces those layers, they are declared `jgd2024` (served as-is) while the remaining JGD2011 layers (e.g. DEM10) keep getting ΔH.
+- **Base** = the source's `"base"`: omitted → the shared `DEM_URL` base (what every existing source uses, unchanged); `"sealevel"` → the flat 0 m sea-level base for this source only. Its slug is part of the source's slug, version and per-tile etag, so switching it re-keys that source only. The intended JGD2024 setup uses `"sealevel"`, so no DEM of another datum (or another edition) shows through its gaps — they are 0 m = mean sea level instead.
+- **Base datum** = for the shared base, `DEM_VERTICAL_DATUM` (`jgd2011` | `jgd2024`) for a real `DEM_URL` upstream, **unknown** when unset. The sea-level base (`"base": "sealevel"` or `DEM_URL=sealevel`) is **datum-agnostic** and is **never** corrected: it means "no data → 0 m = mean sea level", and adding ΔH to it would warp the sea surface. A source on the sea-level base therefore needs no `DEM_VERTICAL_DATUM`.
+- Every member (base or layer) whose datum differs from the target gets ΔH added to each elevation **before** the priority composite, at the exact points that member's elevations were evaluated (a geographic COG's XYZ pixels are latitude-linear within the tile, a Mercator upstream's are Mercator pixel centres; parent-tile upsampling is followed through). The composite is therefore in one datum, and the geoid is added once at the end as before. The quantized-mesh 65×65 grid and its normal halo are warped from that corrected composite, so they carry the same correction.
+- **`heightCorrection.manifest`** names the correction product by the URL of its `manifest.json` (the version is in the path, so swapping versions is a config change). The manifest's files are fetched once per process through the object-store backends (https / gs / s3 / r2 / file), checked against the manifest's size and sha256, decoded from the COGs' full-resolution image only, and kept in memory (only the non-empty 512² blocks: 30 MiB for v1, vs. ~49 MiB dense). ΔH is evaluated exactly like the reference sampler `scripts/vertical-cogs/sampler.py` — including GSI's selection rule over `dh_bm.tif` / `dh_tr.tif` / `tr_meshes.json` and the v1 manifest layout (no `selection` block) — and a golden test pins the Rust sampler to vectors generated by that reference (bit-identical on all 2,510 finite vectors).
+- **`heightCorrection.missing`** — what to do with an elevation that needs ΔH where the product has none (Northern Territories, Iwo-to, the Senkaku islands, Nanatsu-jima, open sea): `keep` serves it uncorrected, `nan` drops the pixel so lower layers (ultimately the base) show through. **This is a pending policy decision**; `keep` is the default only because it changes nothing that is served today. The choice is part of the cache key.
+- **Refused at config load** (logged at ERROR; the source is not served — a refused `dem` does *not* fall back to the bare base): a layer or base in a datum other than the target with no `heightCorrection`; a correction whose product does not convert exactly *layer datum → target* (e.g. a `jgd2024` layer in a `jgd2011` source — no inverse correction exists); a correction on a base of unknown datum; a geoid without a target datum; unknown `verticalDatum` / `missing` / `base` values; a product that fails to load or verify.
+- **Known limitation — Tohoku 2011 height revision (pending an MLIT decision).** In the area GSI revised after the 2011 Tohoku earthquake (Aomori, Iwate, Miyagi, Akita, Yamagata, Fukushima, Ibaraki; parameter `touhokutaiheiyouoki2011_h.par`), the `base/dem10` COGs are labelled JGD2000 (EPSG:4612) and hold **pre-2011 (測地成果2000) heights**. They are bit-identical to GSI's 2009-02-01 DEM10B editions and up to ~+1.2 m above JGD2011 near Oshika. The JGD2024 correction assumes JGD2011 input, so those `dem10` pixels come out under-corrected there by the 2011 revision. Chaining the 2011 correction before ΔH is not implemented; whether to do it is pending a decision. The datum model would express it as a third datum on those layers.
+- **Cache keys / ETags**: a source that applies a correction appends `vcorr=<product>@<version>:<from>-to-<to>:missing=<policy>:base=<datum>:base-dh=<yes|no>:layers=<mask hash>` to its DEM version, which feeds every terrain cache key and ETag. A source that declares nothing — every existing source — is built exactly as before and keeps its keys byte for byte (no cache flush).
 
 ### Supported COG tile compressions
 
@@ -244,6 +276,7 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
 | `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/`. A DEM tile of another native size is resampled between pixel centres — for Mapterhorn's 512 px tiles at the default 256, each output pixel is the mean of a 2×2 block |
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Geoid model for DEM sources that don't declare their own `geoid` in the config JSON. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`. **Not** overridable per request |
+| `DEM_VERTICAL_DATUM` | No | — (unknown) | Vertical datum of the shared `DEM_URL` base: `jgd2011` or `jgd2024`. Only read by sources that declare vertical datums and use the shared base (see [Vertical datums](#vertical-datums-and-the-jgd2011--jgd2024-height-correction)); such a source with a `heightCorrection` refuses to build while it is unset. Not needed for sources with `"base": "sealevel"`; ignored for `DEM_URL=sealevel`, which is datum-agnostic and never corrected |
 | `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region, sampling at child pixel centres. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
 | `TERRAIN_MIRROR_URL` | No | — | Pre-rendered quantized-mesh mirror bucket (`r2://`, `s3://`, `gs://`, `file://`). When set, `/terrain/`, `/terrain/mirror/`, and `/terrain-mirror/` serve directly from this bucket instead of generating from DEM. The DEM pipeline remains reachable at `/terrain/dem/` for side-by-side validation. See [Quantized-mesh mirror](#quantized-mesh-mirror-pre-rendered-passthrough) below. |

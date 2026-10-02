@@ -239,6 +239,7 @@ mod tests {
             Ok(DemTile {
                 elevations: vec![self.value; (tile_size * tile_size) as usize],
                 etag: Some("flat".to_string()),
+                positions: None,
             })
         }
 
@@ -385,6 +386,7 @@ mod tests {
                 Ok(DemTile {
                     elevations,
                     etag: None,
+                    positions: None,
                 })
             }
 

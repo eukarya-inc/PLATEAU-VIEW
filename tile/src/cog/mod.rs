@@ -23,4 +23,4 @@ pub use bounds::{CogCrs, TileBounds, mercator_tile_bounds};
 pub const COG_SAMPLING_VERSION: &str = "centre-v1";
 pub use decode::MAX_PHYSICAL_ELEVATION_M;
 pub use error::CogError;
-pub use reader::CogReader;
+pub use reader::{CogReader, Float32Raster};

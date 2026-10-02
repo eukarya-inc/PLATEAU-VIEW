@@ -157,8 +157,38 @@ interface TileSource {
    * (gsigeo2011). Omitted when unconfigured, leaving the server's default.
    */
   geoid?: string;
+  /** Vertical datum of the layers (`DemProfile.verticalDatum`); profile-only. */
+  verticalDatum?: string;
+  /** Height-correction product (`DemProfile.heightCorrection`); profile-only. */
+  heightCorrection?: DemHeightCorrection;
+  /** Base under the layers (`DemProfile.base`, e.g. `sealevel`); profile-only. */
+  base?: string;
   description: string;
   layers: TileCogLayer[];
+}
+
+interface DemHeightCorrection {
+  /** URL of the correction product's manifest.json (the version is in the URL). */
+  manifest: string;
+  /** Missing-ΔH policy, `keep` | `nan`; the tile server defaults to `keep`. */
+  missing?: string;
+}
+
+/**
+ * Extra declarations for one named DEM source of a dataset (`DEM_PROFILES`,
+ * dataset -> source name -> profile). They are emitted only into
+ * `/<dataset>/config.json?name=<that name>`, so a profile adds a *second*
+ * source over the same COGs — e.g. a JGD2024 view of the JGD2011 stack
+ * (`geoid: "jpgeo2024-hrefconv"`, `verticalDatum: "jgd2011"`, plus the ΔH
+ * product) — without changing the config any other name gets. `geoid` here
+ * overrides the dataset's `DEM_GEOIDS` entry for that name only.
+ */
+export interface DemProfile {
+  geoid?: string;
+  verticalDatum?: string;
+  heightCorrection?: DemHeightCorrection;
+  /** `sealevel` puts the stack on the flat 0 m base instead of the tile server's shared DEM_URL base. */
+  base?: string;
 }
 
 interface TileConfig {
@@ -318,14 +348,19 @@ function demSource(
   origin: string,
   name: string,
   geoid?: string,
+  profile?: DemProfile,
 ): Record<string, TileSource> {
+  const sourceGeoid = profile?.geoid ?? geoid;
   const ordered = [...cogs].sort(
     (a, b) => demPriority(a.key) - demPriority(b.key) || (a.key < b.key ? -1 : 1),
   );
   return {
     [name]: {
       type: "dem",
-      ...(geoid ? { geoid } : {}),
+      ...(sourceGeoid ? { geoid: sourceGeoid } : {}),
+      ...(profile?.verticalDatum ? { verticalDatum: profile.verticalDatum } : {}),
+      ...(profile?.heightCorrection ? { heightCorrection: profile.heightCorrection } : {}),
+      ...(profile?.base ? { base: profile.base } : {}),
       description: `${dataset} DEM overlay stack (${cogs.length} COGs, bottom->top)`,
       layers: ordered.map((o) => ({
         type: "cog",
@@ -371,6 +406,7 @@ export async function tileConfig(
   method: string,
   isDem: boolean,
   geoid?: string,
+  profiles?: Record<string, DemProfile>,
 ): Promise<Response> {
   const headers = new Headers(cors);
   headers.set("content-type", "application/json; charset=utf-8");
@@ -399,8 +435,12 @@ export async function tileConfig(
   }
   cogs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
+  const name = params.get("name")?.trim() || "dem";
+  // Own keys only: a `?name=constructor` must not pick up Object.prototype.
+  const profile =
+    profiles && Object.prototype.hasOwnProperty.call(profiles, name) ? profiles[name] : undefined;
   const sources = isDem
-    ? demSource(cogs, dataset, origin, params.get("name")?.trim() || "dem", geoid)
+    ? demSource(cogs, dataset, origin, name, geoid, profile)
     : rasterSources(cogs, dataset, origin);
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.

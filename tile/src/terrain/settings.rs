@@ -16,6 +16,7 @@ use super::mapterhorn::{
 };
 use super::pmtiles::{PmtilesEncoding, PmtilesSource};
 use super::sealevel::{SeaLevelDem, is_sea_level_url};
+use super::vertical::BaseDatum;
 
 const DEFAULT_TERRAIN_TILE_SIZE: u32 = 256;
 const DEFAULT_TERRAIN_MAX_ZOOM: u8 = 18;
@@ -45,6 +46,12 @@ pub struct TerrainSettings {
     pub max_zoom: u8,
     /// Martini mesh-simplification error (meters).
     pub max_error: f64,
+    /// Vertical datum of the base DEM, from `DEM_VERTICAL_DATUM`
+    /// (`jgd2011` | `jgd2024`). The sea-level base is always
+    /// [`BaseDatum::Agnostic`] and never height-corrected; any other base is
+    /// [`BaseDatum::Unknown`] until declared, and a source that applies a
+    /// height correction refuses to build on an unknown base.
+    pub base_datum: BaseDatum,
     /// Pre-rendered quantized-mesh mirror URL. When set, /terrain/ (no
     /// `{name}`) and /terrain/mirror/ and /terrain-mirror/ pass-through to
     /// this bucket. Supports `file://`, `gs://`, `s3://`, `r2://`.
@@ -54,8 +61,14 @@ pub struct TerrainSettings {
 impl TerrainSettings {
     /// Read settings from environment variables.
     pub fn from_env() -> Self {
+        let dem_url = env::var("DEM_URL").ok().filter(|s| !s.is_empty());
+        let base_datum = BaseDatum::resolve(
+            dem_url.as_deref().is_some_and(is_sea_level_url),
+            env::var("DEM_VERTICAL_DATUM").ok().as_deref(),
+        );
         Self {
-            dem_url: env::var("DEM_URL").ok().filter(|s| !s.is_empty()),
+            dem_url,
+            base_datum,
             dem_version: env::var("DEM_VERSION")
                 .unwrap_or_else(|_| DEFAULT_DEM_VERSION.to_string()),
             dem_max_zoom: parse_env_u8("DEM_MAX_ZOOM", MAPTERHORN_DEFAULT_MAX_ZOOM),
