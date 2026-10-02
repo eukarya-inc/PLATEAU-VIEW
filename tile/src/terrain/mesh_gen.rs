@@ -57,26 +57,9 @@ pub fn generate_quantized_mesh_tile(
     )
 }
 
-/// Replace NaN, infinite, or physically-impossible elevations with 0.0 so
-/// they don't propagate into the mesh as garbage vertex heights. A single
-/// corrupted pixel (e.g. a bilinear-resampled `f32::MIN` nodata fringe from
-/// a huge-sentinel COG) would otherwise drag the height range to ~−10³⁷,
-/// blow up the bounding sphere and horizon occlusion in the quantized-mesh
-/// header, and Cesium would false-cull the entire tile.
-///
-/// This is the invalid-sample policy for every terrain encoding: the
-/// Terrarium / Mapbox raster endpoints apply the same function before
-/// encoding, so an invalid sample becomes 0 m there too rather than the
-/// format's minimum code (−32768 m / −10000 m). Valid heights are still
-/// subject to each format's own range and quantisation.
-#[inline]
-pub(crate) fn sanitize_height(h: f64) -> f64 {
-    if h.is_finite() && h.abs() <= crate::cog::MAX_PHYSICAL_ELEVATION_M {
-        h
-    } else {
-        0.0
-    }
-}
+// The invalid-sample policy lives in `terrain-core` (shared with the
+// WebAssembly build); re-exported here so existing paths keep working.
+pub(crate) use terrain_core::sanitize::sanitize_height;
 
 #[cfg(test)]
 mod tests {
@@ -91,14 +74,6 @@ mod tests {
             .read_to_end(&mut out)
             .expect("gunzip");
         out
-    }
-
-    #[test]
-    fn test_sanitize_height() {
-        assert_eq!(sanitize_height(123.4), 123.4);
-        assert_eq!(sanitize_height(f64::NAN), 0.0);
-        assert_eq!(sanitize_height(f64::INFINITY), 0.0);
-        assert_eq!(sanitize_height(-2.7e+37), 0.0);
     }
 
     /// Regression for the western-Japan blackout: a single corrupted

@@ -25,6 +25,7 @@ use rstar::{AABB, RTree, RTreeObject};
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions, Upsampled};
 use super::upsample_subregion;
 use super::vertical::{DhMemo, SourceCorrection};
+use terrain_core::paint::paint_over;
 
 /// One bbox entry in the R*-tree.
 #[derive(Debug, Clone)]
@@ -328,16 +329,6 @@ impl DemProvider for CompositeDemProvider {
         // The composite covers wherever the base covers (overlays only patch
         // _within_ the base). We expose the base's bounds.
         self.base.bounds()
-    }
-}
-
-/// Paint `overlay` onto `base` per pixel. Where overlay is finite, it wins.
-fn paint_over(base: &mut [f64], overlay: &[f64]) {
-    let n = base.len().min(overlay.len());
-    for i in 0..n {
-        if overlay[i].is_finite() {
-            base[i] = overlay[i];
-        }
     }
 }
 
