@@ -55,21 +55,42 @@ pub enum AxisPositions {
     /// `(i + 0.5) / n` — pixel centres of an `n`-pixel tile.
     Centres { n: u32 },
     /// What [`super::resample_bilinear`] produces when it resizes a `src`-pixel
-    /// tile to `dst` pixels: output `i` is source pixel `i·(src−1)/(dst−1)`,
-    /// whose centre is at `(that + 0.5) / src`.
-    CornerAligned { src: u32, dst: u32 },
+    /// tile to `dst` pixels (centre-aligned): output `i` reads source position
+    /// `s = clamp((i + 0.5)·src/dst − 0.5, 0, src − 1)`, whose centre is at
+    /// `(s + 0.5) / src`. Unclamped that is exactly `(i + 0.5) / dst`; the
+    /// clamp (upsampling only) pins the outer half pixel to the edge sample,
+    /// and the value there *is* the edge sample, so that is where it lies.
+    Resampled { src: u32, dst: u32 },
 }
 
 impl AxisPositions {
-    /// Tile fraction of (possibly fractional) index `i`. Bilinear resampling
-    /// is linear in the index, so a fractional index maps linearly too.
-    pub fn fraction(self, i: f64) -> f64 {
+    /// Tile fraction of whole pixel `i`.
+    pub fn pixel_fraction(self, i: u32) -> f64 {
         match self {
-            Self::Centres { n } => (i + 0.5) / n as f64,
-            Self::CornerAligned { src, dst } => {
-                let s = i * (src - 1) as f64 / (dst - 1).max(1) as f64;
+            Self::Centres { n } => (i as f64 + 0.5) / n as f64,
+            Self::Resampled { src, dst } => {
+                let s =
+                    ((i as f64 + 0.5) * src as f64 / dst as f64 - 0.5).clamp(0.0, (src - 1) as f64);
                 (s + 0.5) / src as f64
             }
+        }
+    }
+
+    /// Tile fraction of fractional index `p` on an `n`-pixel grid, as
+    /// `upsample_subregion` reads it: the bilinear blend of the two
+    /// neighbouring pixels' positions, neighbours clamped to the grid (the
+    /// value is that same blend of their values, so this is where it lies).
+    pub fn blended_fraction(self, p: f64, n: u32) -> f64 {
+        let x0 = p.floor();
+        let d = p - x0;
+        let last = n as i64 - 1;
+        let a = (x0 as i64).clamp(0, last) as u32;
+        let b = (x0 as i64 + 1).clamp(0, last) as u32;
+        let (fa, fb) = (self.pixel_fraction(a), self.pixel_fraction(b));
+        if d == 0.0 {
+            fa
+        } else {
+            fa * (1.0 - d) + fb * d
         }
     }
 }
@@ -129,8 +150,8 @@ impl PixelPositions {
         }
         Self {
             space: TileSpace::Mercator,
-            x: AxisPositions::CornerAligned { src: src_w, dst },
-            y: AxisPositions::CornerAligned { src: src_h, dst },
+            x: AxisPositions::Resampled { src: src_w, dst },
+            y: AxisPositions::Resampled { src: src_h, dst },
             upsampled: None,
         }
     }
@@ -138,25 +159,26 @@ impl PixelPositions {
     /// Longitude / latitude (degrees) at which element `(i, j)` (column, row)
     /// of tile `z/x/y` was evaluated.
     pub fn lonlat(&self, z: u8, x: u32, y: u32, i: u32, j: u32) -> (f64, f64) {
-        let (z, x, y, fi, fj) = match self.upsampled {
-            None => (z, x, y, i as f64, j as f64),
+        let (z, x, y, tx, ty) = match self.upsampled {
+            None => (z, x, y, self.x.pixel_fraction(i), self.y.pixel_fraction(j)),
             Some(u) => {
-                // Same arithmetic as `upsample_subregion`.
+                // Same arithmetic as `terrain::upsample_subregion`, whose
+                // off-grid neighbours clamp to the parent's edge.
                 let scale = 1.0 / u.factor as f64;
                 let off_x = u.sub_x as f64 * u.tile_size as f64 * scale;
                 let off_y = u.sub_y as f64 * u.tile_size as f64 * scale;
                 let dz = u.factor.trailing_zeros() as u8;
+                let fi = off_x + (i as f64 + 0.5) * scale - 0.5;
+                let fj = off_y + (j as f64 + 0.5) * scale - 0.5;
                 (
                     z - dz,
                     x / u.factor,
                     y / u.factor,
-                    off_x + (i as f64 + 0.5) * scale - 0.5,
-                    off_y + (j as f64 + 0.5) * scale - 0.5,
+                    self.x.blended_fraction(fi, u.tile_size),
+                    self.y.blended_fraction(fj, u.tile_size),
                 )
             }
         };
-        let tx = self.x.fraction(fi);
-        let ty = self.y.fraction(fj);
         let n = (1u64 << z) as f64;
         match self.space {
             TileSpace::Mercator => {
@@ -248,5 +270,68 @@ pub trait DemProvider: Send + Sync {
     /// stable after `preload()`.
     fn bounds(&self) -> Option<GeoBounds> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terrain::{resample_bilinear, upsample_subregion};
+
+    /// Bilinear interpolation reproduces a linear function exactly, and edge
+    /// clamping returns the edge sample, so feeding the resamplers a grid
+    /// whose value *is* each pixel's tile fraction must give back exactly the
+    /// fractions `PixelPositions` records.
+    fn ramp(n: u32, f: impl Fn(u32) -> f64) -> Vec<f64> {
+        (0..n * n).map(|k| f(k % n)).collect()
+    }
+
+    #[test]
+    fn resampled_positions_match_resample_bilinear() {
+        for (src, dst) in [(512u32, 256u32), (256, 512), (64, 100), (300, 7)] {
+            let grid = ramp(src, |c| (c as f64 + 0.5) / src as f64);
+            let out = resample_bilinear(&grid, src, src, dst, dst);
+            let p = PixelPositions::resampled(src, src, dst);
+            for i in 0..dst {
+                let got = out[i as usize];
+                let want = p.x.pixel_fraction(i);
+                assert!(
+                    (got - want).abs() < 1e-12,
+                    "{src}->{dst} px {i}: {got} vs {want}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn upsampled_positions_match_upsample_subregion() {
+        // A 512-px parent resized to 256, then upsampled by 4 (sub-tiles at
+        // the parent's edges included, where neighbours clamp).
+        let (src, n, factor) = (512u32, 256u32, 4u32);
+        let parent_pos = PixelPositions::resampled(src, src, n);
+        let parent = ramp(n, |c| parent_pos.x.pixel_fraction(c));
+        for sub in [0u32, 1, 3] {
+            let child = upsample_subregion(&parent, n, factor, sub, 0);
+            let pos = PixelPositions {
+                upsampled: Some(Upsampled {
+                    factor,
+                    sub_x: sub,
+                    sub_y: 0,
+                    tile_size: n,
+                }),
+                ..parent_pos
+            };
+            for i in 0..n {
+                // Parent tile fraction of child pixel i (lonlat works in the
+                // parent tile; recover the fraction from the longitude).
+                let (lon, _) = pos.lonlat(10, 4 * 3 + sub, 0, i, 0);
+                let parent_frac = (lon + 180.0) / 360.0 * 2f64.powi(8) - 3.0;
+                let got = child[i as usize];
+                assert!(
+                    (got - parent_frac).abs() < 1e-9,
+                    "sub {sub} px {i}: value {got} vs recorded {parent_frac}"
+                );
+            }
+        }
     }
 }

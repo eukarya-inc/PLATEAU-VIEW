@@ -19,8 +19,15 @@
 //! parameter is therefore rejected with 400 rather than ignored.
 //!
 //! Tiles entirely outside the geoid's coverage area respond 404.
+//!
+//! DEM-generated tile responses (not the quantized-mesh mirror) carry
+//! `X-Geoid-Coverage: full | partial | none` when the mode uses the geoid
+//! (`ellipsoidal`, `geoid`): whether the source's model had a value at every,
+//! some, or none of the tile's samples. Samples without one are served with a
+//! geoid of 0 — an interim policy the header only reports; see
+//! [`GeoidCoverage`]. `heights=orthometric` responses omit the header.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use axum::{
     body::Body,
@@ -42,13 +49,14 @@ use super::response::{compute_etag, etag_matches, not_modified_response, tile_re
 use super::state::{AppState, TerrainBackend};
 use crate::cache::CacheObjectMeta;
 use crate::terrain::{
-    DemProvider, Geoid, GeoidModel, HeightMode, MirrorSource,
+    DEM_RESAMPLE_VERSION, DemProvider, Geoid, GeoidCoverage, GeoidModel, HeightMode, MirrorSource,
     ellipsoid::{
         apply_height_mode_to_grid, apply_height_mode_to_grid_sized, apply_height_mode_to_xyz_grid,
+        geoid_coverage_of_grid, geoid_coverage_of_xyz_grid,
     },
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
-    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile},
+    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile, sanitize_height},
     webmercator::xyz_tile_bounds,
 };
 
@@ -105,17 +113,40 @@ impl RasterEncoding {
     /// `Vec<f32>` (for the f64→f32 cast) or `Vec<u8>` (for the RGB stream)
     /// is allocated — only the final `RgbaImage` that the PNG/WebP encoder
     /// consumes.
+    ///
+    /// Each height goes through [`sanitize_height`] first — the same policy
+    /// the quantized-mesh path applies — so NaN / ±inf / beyond-physical
+    /// values become 0 m instead of the encoder's floor (−32768 m Terrarium,
+    /// −10000 m Mapbox).
     fn encode_to_rgba(self, elevations: &[f64], width: u32, height: u32) -> image::RgbaImage {
         let fmt = self.heightmap_format();
         debug_assert_eq!(elevations.len(), (width as usize) * (height as usize));
         let mut out = image::RgbaImage::new(width, height);
         for (dst, &elev) in out.pixels_mut().zip(elevations.iter()) {
-            let [r, g, b] = encode_heightmap_pixel(fmt, elev as f32);
+            let [r, g, b] = encode_heightmap_pixel(fmt, sanitize_height(elev) as f32);
             *dst = image::Rgba([r, g, b, 255]);
         }
         out
     }
 }
+
+/// Version tag for the bytes the raster endpoints (`/terrarium`, `/mapbox`)
+/// produce from unchanged DEM input. It goes into both the ETag and the
+/// persistent-cache prefix, so bump it on any change that alters those bytes —
+/// the raster counterpart of `TERRAIN_MESH_ALGO_VERSION`. Without it, a tile
+/// rendered by an older build keeps being served from the R2 cache forever,
+/// because nothing else in its key moves.
+///
+/// v2: NaN no longer reaches the encoders. The composite's parent-tile
+/// upsample left a NaN rim along child edges at sea (encoded as −32768 m /
+/// −10000 m), and raster output now goes through the mesh path's
+/// `sanitize_height`. (v1 was the unversioned `terrarium-xyz` / `mapbox-xyz`
+/// prefix.)
+///
+/// Not bumped for DEM resampling changes: those re-key through
+/// `DEM_RESAMPLE_VERSION` in the per-tile DEM ETag, which only tiles that
+/// were actually resampled carry (and which upsampled children add below).
+const RASTER_ALGO_VERSION: &str = "v2-nan-free";
 
 /// Approximate bounds of the Japan geoid coverage, used for `layer.json`
 /// availability. GSIGEO2011 and JPGEO2024 both cover Japan including
@@ -249,6 +280,92 @@ fn vertical_etag_keys(geoid: GeoidModel, heights: HeightMode) -> [String; 2] {
         format!("geoid:{}", geoid.slug()),
         format!("heights:{}", heights.slug()),
     ]
+}
+
+/// Response header reporting how much of a tile the source's geoid model
+/// covers. Listed in the CORS `Access-Control-Expose-Headers` so browser
+/// clients can read it.
+pub const GEOID_COVERAGE_HEADER: &str = "x-geoid-coverage";
+
+/// The sample grid a [`GeoidCoverage`] was computed over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum CoverageGrid {
+    /// The 65×65 quantized-mesh grid of a TMS geodetic tile (halo excluded).
+    Mesh,
+    /// The pixel centres of a Web Mercator XYZ tile of this size.
+    Xyz(u32),
+}
+
+/// Everything a tile's geoid coverage depends on. The coverage is a pure
+/// function of the model and the sample positions — not of the DEM, the height
+/// mode (ellipsoidal and geoid-only sample the same points) or the encoding —
+/// so this is far coarser than the tile cache key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct CoverageKey {
+    geoid: GeoidModel,
+    grid: CoverageGrid,
+    z: u8,
+    x: u32,
+    y: u32,
+}
+
+/// Keys [`CoverageKey::compute`] ran for, so tests can tell a cache hit
+/// (recomputed here) from a render (stored by the generation pass).
+#[cfg(test)]
+static COMPUTED: std::sync::Mutex<Vec<CoverageKey>> = std::sync::Mutex::new(Vec::new());
+
+impl CoverageKey {
+    fn compute(&self) -> GeoidCoverage {
+        #[cfg(test)]
+        COMPUTED.lock().unwrap().push(*self);
+        let geoid = Geoid::load(self.geoid);
+        match self.grid {
+            CoverageGrid::Mesh => {
+                geoid_coverage_of_grid(&geodetic_tms_bounds(self.z, self.x, self.y), &geoid)
+            }
+            CoverageGrid::Xyz(size) => {
+                geoid_coverage_of_xyz_grid(self.z, self.x, self.y, size, &geoid)
+            }
+        }
+    }
+}
+
+/// Entries kept in [`coverage_memo`]: a 1-byte value per tile plus moka's
+/// per-entry overhead, ~10 MB at most, and several times the tile count the
+/// default memory cache holds (~10k at 512 MB).
+const COVERAGE_MEMO_CAPACITY: u64 = 1 << 16;
+
+/// Coverage computed during tile generation, so a response served from the
+/// memory or persistent cache can return the same `X-Geoid-Coverage` without
+/// re-evaluating the geoid at every sample. A miss (eviction, restart, a tile
+/// another pod rendered) recomputes via [`CoverageKey::compute`], which walks
+/// the same sample positions as the generation pass and so gives the same
+/// answer. Kept out of the tile cache on purpose: the cached bytes, their keys
+/// and their stored metadata stay exactly as they were.
+fn coverage_memo() -> &'static moka::future::Cache<CoverageKey, GeoidCoverage> {
+    static MEMO: OnceLock<moka::future::Cache<CoverageKey, GeoidCoverage>> = OnceLock::new();
+    MEMO.get_or_init(|| moka::future::Cache::new(COVERAGE_MEMO_CAPACITY))
+}
+
+/// The coverage to report for `key`, from the memo or computed now.
+async fn resolve_coverage(key: Option<CoverageKey>) -> Option<GeoidCoverage> {
+    let key = key?;
+    Some(
+        coverage_memo()
+            .get_with(key, async move { key.compute() })
+            .await,
+    )
+}
+
+/// Attach `X-Geoid-Coverage` to a tile response (no-op for `None`).
+fn with_coverage_header(mut resp: Response, coverage: Option<GeoidCoverage>) -> Response {
+    if let Some(c) = coverage {
+        resp.headers_mut().insert(
+            header::HeaderName::from_static(GEOID_COVERAGE_HEADER),
+            header::HeaderValue::from_static(c.as_str()),
+        );
+    }
+    resp
 }
 
 fn digest(s: &str) -> String {
@@ -621,7 +738,17 @@ async fn terrain_tile_impl(
     // NaN, so tiles near every integer meridian encoded wrong heights from
     // DEM input that never changed — exactly the case this tag exists for.
     // The six patch/shizuoka overlays also began resolving at the same time.
-    const TERRAIN_MESH_ALGO_VERSION: &str = "v4-edge-chunk-stride";
+    // v5: the composite's parent-tile upsample no longer leaves a NaN rim
+    // along child edges (offshore, where the base DEM 404s and falls back to
+    // a parent). A mesh vertex whose four DEM neighbours all fell in the rim
+    // read NaN and was sanitised to 0 m. A byte comparison of z5–z10 tiles
+    // offshore Japan found no tile that actually changed, but the bytes can
+    // change, and these DEM-generated tiles are cheap to re-key.
+    // DEM resampling changes don't bump this: they re-key through
+    // `DEM_RESAMPLE_VERSION`, carried in the ETag of each DEM tile that was
+    // resampled (the mesh path fetches the base at its native size, so only
+    // overlays of another size are).
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v5-upsample-edge-clamp";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
     let etag_keys: Vec<String> = vec![
@@ -641,7 +768,7 @@ async fn terrain_tile_impl(
     // Mesh-algo tag goes into the cache prefix so persistent storage rolls
     // forward independently of DEM upstream changes — see the comment on
     // `TERRAIN_MESH_ALGO_VERSION` above. The raster endpoints use their own
-    // prefix ("terrarium-xyz" / "mapbox-xyz") and stay untouched.
+    // prefix ("terrarium-xyz" / "mapbox-xyz" + `RASTER_ALGO_VERSION`).
     let terrain_cache_prefix = format!("terrain/{TERRAIN_MESH_ALGO_VERSION}");
     let cache_key = TerrainCacheKey {
         prefix: &terrain_cache_prefix,
@@ -683,6 +810,13 @@ async fn terrain_tile_impl(
         north: bounds.north + cell_lat * halo_cells as f64,
     };
     let halo_grid_size = 65 + 2 * halo_cells as usize;
+    let coverage_key = height_mode.uses_geoid().then_some(CoverageKey {
+        geoid: geoid_model,
+        grid: CoverageGrid::Mesh,
+        z,
+        x,
+        y,
+    });
 
     let result = state
         .cache
@@ -695,7 +829,11 @@ async fn terrain_tile_impl(
                 // halo gets the same treatment as the interior so the
                 // gradient-based normals stay in one datum.
                 let g = Geoid::load(geoid_for_gen);
-                apply_height_mode_to_grid(&bounds_copy, &mut elevations, &g, height_mode);
+                let coverage =
+                    apply_height_mode_to_grid(&bounds_copy, &mut elevations, &g, height_mode);
+                if let (Some(key), Some(c)) = (coverage_key, coverage) {
+                    coverage_memo().insert(key, c).await;
+                }
                 apply_height_mode_to_grid_sized(
                     &halo_bounds,
                     &mut elevations_with_halo,
@@ -737,7 +875,7 @@ async fn terrain_tile_impl(
                 tile_response_raw(bytes, "application/vnd.quantized-mesh", Some(&etag), cc);
             resp.headers_mut()
                 .insert(header::CONTENT_ENCODING, "gzip".parse().unwrap());
-            resp
+            with_coverage_header(resp, resolve_coverage(coverage_key).await)
         }
         Err(e) => {
             tracing::error!("terrain generate failed: {e}");
@@ -879,7 +1017,14 @@ async fn raster_tile(
         }
     };
 
-    let source_etag = dem_tile.etag.unwrap_or_default();
+    let mut source_etag = dem_tile.etag.unwrap_or_default();
+    // An upsampled child is resampled here rather than by the DEM provider,
+    // so it takes the resample version into its key itself (see
+    // `DEM_RESAMPLE_VERSION`). Tiles at or below the DEM's max zoom keep
+    // whatever key their provider gave them.
+    if upsample_info.is_some() {
+        source_etag.push_str(&format!("+upsample:{DEM_RESAMPLE_VERSION}"));
+    }
     let upstream_etag_digest = digest(&source_etag);
     let upsample_marker = upsample_info
         .map(|(d, _, _)| format!("upsample:{d}"))
@@ -893,6 +1038,7 @@ async fn raster_tile(
         format!("size:{}", tile_size),
         format!("proj:webmercator"),
         upsample_marker,
+        format!("raster-algo:{RASTER_ALGO_VERSION}"),
     ];
     let etag = compute_etag(&etag_keys, encoding.cache_prefix(), format, z as u32, x, y);
     let etag_hash = format!("{:x}", xxh64(etag_keys.join("|").as_bytes(), 0));
@@ -901,8 +1047,9 @@ async fn raster_tile(
         return not_modified_response(&etag, state.cache_control.as_deref());
     }
 
+    let raster_cache_prefix = format!("{}/{RASTER_ALGO_VERSION}", encoding.cache_prefix());
     let cache_key = TerrainCacheKey {
-        prefix: encoding.cache_prefix(),
+        prefix: &raster_cache_prefix,
         dem_slug: terrain.dem.slug(),
         dem_version: terrain.dem.version(),
         dem_etag_digest: &upstream_etag_digest,
@@ -928,6 +1075,13 @@ async fn raster_tile(
         dem_tile.elevations
     };
     let geoid_for_gen = geoid_model;
+    let coverage_key = height_mode.uses_geoid().then_some(CoverageKey {
+        geoid: geoid_model,
+        grid: CoverageGrid::Xyz(tile_size),
+        z,
+        x,
+        y,
+    });
 
     let result = state
         .cache
@@ -937,7 +1091,18 @@ async fn raster_tile(
             Some(meta),
             move || async move {
                 let g = Geoid::load(geoid_for_gen);
-                apply_height_mode_to_xyz_grid(z, x, y, tile_size, &mut elevations, &g, height_mode);
+                let coverage = apply_height_mode_to_xyz_grid(
+                    z,
+                    x,
+                    y,
+                    tile_size,
+                    &mut elevations,
+                    &g,
+                    height_mode,
+                );
+                if let (Some(key), Some(c)) = (coverage_key, coverage) {
+                    coverage_memo().insert(key, c).await;
+                }
 
                 let img_rgba = encoding.encode_to_rgba(&elevations, tile_size, tile_size);
                 encode_image(&img_rgba, format)
@@ -947,7 +1112,10 @@ async fn raster_tile(
         .await;
 
     match result {
-        Ok(bytes) => tile_response(bytes, format, Some(&etag), state.cache_control.as_deref()),
+        Ok(bytes) => with_coverage_header(
+            tile_response(bytes, format, Some(&etag), state.cache_control.as_deref()),
+            resolve_coverage(coverage_key).await,
+        ),
         Err(e) => {
             tracing::error!(encoding = encoding.slug(), "raster generate failed: {e}");
             (
@@ -1102,6 +1270,197 @@ mod tests {
             heights: heights.map(str::to_string),
             geoid: geoid.map(str::to_string),
             format: None,
+        }
+    }
+
+    /// Raster output must treat invalid samples as the mesh path does:
+    /// NaN / ±inf / beyond-physical values become 0 m, never the encoder's
+    /// floor (−32768 m Terrarium, −10000 m Mapbox).
+    #[test]
+    fn raster_encoders_sanitise_like_the_mesh_path() {
+        use terrain_codec::heightmap::decode_pixel;
+        let input = [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -2.748191709909388e37,
+            1234.5,
+        ];
+        for enc in [RasterEncoding::Terrarium, RasterEncoding::Mapbox] {
+            let img = enc.encode_to_rgba(&input, input.len() as u32, 1);
+            for (px, &h) in img.pixels().zip(input.iter()) {
+                let got = decode_pixel(enc.heightmap_format(), [px[0], px[1], px[2]]) as f64;
+                let want = sanitize_height(h);
+                // Mapbox quantises to 0.1 m, Terrarium to 1/256 m.
+                assert!(
+                    (got - want).abs() <= 0.1,
+                    "{}: input {h} decoded as {got}, mesh path uses {want}",
+                    enc.slug()
+                );
+            }
+        }
+    }
+
+    /// A response served from cache after the memo lost its entry recomputes
+    /// the coverage from positions alone, and must match what the render
+    /// stored — for both grids and all three outcomes.
+    #[tokio::test]
+    async fn coverage_memo_miss_recomputes_the_rendered_value() {
+        let cases = [
+            (CoverageGrid::Xyz(256), (10, 905, 401), GeoidCoverage::Full),
+            (
+                CoverageGrid::Xyz(256),
+                (8, 227, 102),
+                GeoidCoverage::Partial,
+            ),
+            (CoverageGrid::Xyz(256), (10, 918, 422), GeoidCoverage::None),
+            (CoverageGrid::Mesh, (9, 905, 358), GeoidCoverage::Full),
+            (CoverageGrid::Mesh, (9, 908, 352), GeoidCoverage::Partial),
+            (CoverageGrid::Mesh, (9, 918, 341), GeoidCoverage::None),
+        ];
+        let geoid = Geoid::load(GeoidModel::Gsigeo2011);
+        for (grid, (z, x, y), want) in cases {
+            let key = CoverageKey {
+                geoid: GeoidModel::Gsigeo2011,
+                grid,
+                z,
+                x,
+                y,
+            };
+            let rendered = match grid {
+                CoverageGrid::Mesh => {
+                    let mut g = vec![0.0; 65 * 65];
+                    apply_height_mode_to_grid(
+                        &geodetic_tms_bounds(z, x, y),
+                        &mut g,
+                        &geoid,
+                        HeightMode::Ellipsoidal,
+                    )
+                }
+                CoverageGrid::Xyz(size) => {
+                    let mut g = vec![0.0; (size * size) as usize];
+                    apply_height_mode_to_xyz_grid(
+                        z,
+                        x,
+                        y,
+                        size,
+                        &mut g,
+                        &geoid,
+                        HeightMode::Ellipsoidal,
+                    )
+                }
+            };
+            assert_eq!(rendered, Some(want), "{key:?}");
+            coverage_memo().invalidate(&key).await;
+            assert_eq!(resolve_coverage(Some(key)).await, Some(want), "{key:?}");
+        }
+        assert_eq!(resolve_coverage(None).await, None);
+    }
+
+    /// A tile served from the tile cache, after the coverage memo has lost
+    /// its entry, must skip generation and rebuild the same header from
+    /// positions. (Which tier served the bytes doesn't matter: the header is
+    /// resolved after `get_or_generate` returns, the same way for both.)
+    #[tokio::test]
+    async fn cache_hit_rebuilds_the_header_without_generating() {
+        use tower::Service;
+
+        let config_dir = tempfile::TempDir::new().unwrap();
+        let config_path = config_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"sources":{}}"#).unwrap();
+        let config_url = format!("file://{}", config_path.display());
+        let config_manager = Arc::new(
+            crate::config::ConfigManager::new(
+                std::slice::from_ref(&config_url),
+                std::time::Duration::from_secs(0),
+            )
+            .await
+            .unwrap(),
+        );
+        let settings = crate::terrain::TerrainSettings {
+            dem_url: Some("sealevel".to_string()),
+            dem_version: "v1".to_string(),
+            dem_max_zoom: 15,
+            dem_native_tile_size: 256,
+            tile_size: 256,
+            default_geoid: GeoidModel::Gsigeo2011,
+            max_zoom: 18,
+            max_error: 5.0,
+            base_datum: crate::terrain::vertical::BaseDatum::Agnostic,
+            mirror_url: None,
+        };
+        let state = Arc::new(
+            AppState::new(
+                config_manager,
+                64,
+                None,
+                "sync",
+                None,
+                crate::cache::CacheMode::None,
+                None,
+                None,
+                settings,
+            )
+            .await,
+        );
+        let mut app = super::super::create_router(state, None);
+
+        // Partial-coverage tiles (Tsushima) used by no other test in this
+        // binary, so `COMPUTED` entries for them can only come from here.
+        let cases = [
+            (
+                "/terrarium/8/219/101.png",
+                CoverageGrid::Xyz(256),
+                (8u8, 219u32, 101u32),
+            ),
+            (
+                "/terrain/dem/9/879/353.terrain",
+                CoverageGrid::Mesh,
+                (9, 879, 353),
+            ),
+        ];
+        for (uri, grid, (z, x, y)) in cases {
+            let key = CoverageKey {
+                geoid: GeoidModel::Gsigeo2011,
+                grid,
+                z,
+                x,
+                y,
+            };
+            let mut get = async || {
+                let req = axum::http::Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap();
+                let resp = app.call(req).await.unwrap();
+                let etag = resp.headers().get(header::ETAG).cloned();
+                let cov = resp.headers().get(GEOID_COVERAGE_HEADER).cloned();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
+                (etag, cov, body)
+            };
+            let computed = || {
+                COMPUTED
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|k| **k == key)
+                    .count()
+            };
+
+            let rendered = get().await;
+            assert_eq!(rendered.1.as_ref().unwrap(), "partial", "{uri}");
+            assert_eq!(computed(), 0, "{uri}: the render stores, never recomputes");
+
+            coverage_memo().invalidate(&key).await;
+            let hit = get().await;
+            assert_eq!(hit, rendered, "{uri}");
+            assert_eq!(
+                computed(),
+                1,
+                "{uri}: served from cache, so the header came from the recompute"
+            );
         }
     }
 

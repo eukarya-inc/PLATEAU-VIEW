@@ -53,7 +53,24 @@ Aliases: `ortho`, `ellipsoid`, `geoid-only`. Each mode lives in its own cache ke
 
 > **Breaking change.** The old `?geoid=<model>` selector is **gone**. Any request that still carries a `geoid` query parameter gets a **400** naming `heights=` and its valid values — it is never silently ignored and never silently falls back to another model. `?geoid=none` in particular becomes `?heights=orthometric`.
 
-Tiles whose bounds lie **entirely outside** the source's geoid coverage respond `404` — in every height mode, since coverage is a property of the source's model. Tiles partially outside the coverage are rendered, with the out-of-coverage pixels treated as geoid offset = 0.
+Tiles whose bounds lie **entirely outside** the source's geoid coverage box respond `404` — in every height mode, since coverage is a property of the source's model.
+
+#### Where the model has no value: the 0 fill and `X-Geoid-Coverage`
+
+Inside that box the model's grid still has **no value** over most of the sea, over foreign land (e.g. the Korean peninsula for GSIGEO2011) and at some remote islands. Those samples are currently served with a geoid height of **0**: `ellipsoidal` output there is just the orthometric height — tens of metres off the true ellipsoidal height — and `geoid` reads 0 m. This is an interim policy, not a datum statement. Whether and how to extrapolate a single model beyond its grid is pending consultation with MLIT; models are never mixed to fill the gap.
+
+So that clients can tell where the fill was used, DEM-generated tile responses (`/terrain/{source}/…`, `/terrarium/…`, `/mapbox/…`) carry an informational header:
+
+| `X-Geoid-Coverage` | Meaning |
+|---|---|
+| `full` | The model had a value at every sample of the tile |
+| `partial` | Some samples used the 0 fill |
+| `none` | Every sample used the 0 fill: `ellipsoidal` heights there equal the orthometric DEM, and `heights=geoid` is a flat 0 m surface |
+
+- "Samples" are the 65×65 grid of a quantized-mesh tile (the normal-computation halo excluded) or the pixel centres of a raster tile. The value depends only on the model and those positions, not on the DEM.
+- Sent for `heights=ellipsoidal` and `heights=geoid`. **Omitted** for `heights=orthometric` (no geoid is involved), on 404s, on `304 Not Modified`, and on the quantized-mesh mirror backend (pre-rendered tiles, no geoid at request time).
+- The header never changes a response body, status code, ETag or cache key. Tiles served from the memory or persistent cache return the same value: it is remembered from the render and, when that memory is gone, recomputed from the same sample positions.
+- With an explicit `CORS_ORIGINS` list the header is listed in `Access-Control-Expose-Headers`; with `*` every header is exposed.
 
 ### Layering DEM overlays on top of the base
 
@@ -89,6 +106,7 @@ The base DEM is set via `DEM_URL` (env var). To **patch in higher-resolution dat
 - The source named `"dem"` is **not** exposed under `/tiles/dem/...`; its layers feed the terrain endpoint instead.
 - `"geoid"` fixes the vertical datum for that source. Two DEM sources can therefore carry different models — e.g. a JGD2011 `dem` alongside a JGD2024 `dem-2024` (which may reuse the JGD2011 COGs through a [height correction](#vertical-datums-and-the-jgd2011--jgd2024-height-correction)) — each addressable at `/terrain/{name}/...`. An unrecognised value is logged at ERROR and the source falls back to `TERRAIN_DEFAULT_GEOID`; it never silently picks a neighbouring model.
 - Each overlay paints over the layers below it pixel-by-pixel. Where an overlay has no data (NaN / nodata), the layer underneath shows through.
+- Where the base DEM has no tile at the requested zoom (Mapterhorn 404s offshore above roughly z6), the composite bilinear-upsamples the nearest parent. Child pixels within half a parent pixel of the parent's border clamp to the edge sample, so the result is NaN-free wherever the parent is.
 - At startup, every COG / PMTiles overlay's metadata is fetched in parallel and indexed into an R*-tree. Per-tile rendering only fetches overlays whose bbox intersects the tile, so the cost stays flat as you add more local overlays.
 - Cache keys aggregate base + every overlay's ETag (or `failed:slug` markers when an overlay's fetch fails for that tile), so updating any archive in place rolls all serving caches without a CDN partial purge.
 - Each pod refreshes every COG overlay's upstream ETag every **5 minutes** (single HEAD per overlay), so a CMS-side file swap that doesn't bump the config hash is picked up automatically — no `/reload` needed. The pod's own memory and persistent caches invalidate on ETag mismatch; downstream HTTP caches still honour their `Cache-Control: max-age` so end-users see the new tiles after at most one CDN TTL.
@@ -122,6 +140,7 @@ A geoid model only gives correct ellipsoidal heights when every elevation it is 
 - **`heightCorrection.manifest`** names the correction product by the URL of its `manifest.json` (the version is in the path, so swapping versions is a config change). The manifest's files are fetched once per process through the object-store backends (https / gs / s3 / r2 / file), checked against the manifest's size and sha256, decoded from the COGs' full-resolution image only, and kept in memory (only the non-empty 512² blocks: 30 MiB for v1, vs. ~49 MiB dense). ΔH is evaluated exactly like the reference sampler `scripts/vertical-cogs/sampler.py` — including GSI's selection rule over `dh_bm.tif` / `dh_tr.tif` / `tr_meshes.json` and the v1 manifest layout (no `selection` block) — and a golden test pins the Rust sampler to vectors generated by that reference (bit-identical on all 2,510 finite vectors).
 - **`heightCorrection.missing`** — what to do with an elevation that needs ΔH where the product has none (Northern Territories, Iwo-to, the Senkaku islands, Nanatsu-jima, open sea): `keep` serves it uncorrected, `nan` drops the pixel so lower layers (ultimately the base) show through. **This is a pending policy decision**; `keep` is the default only because it changes nothing that is served today. The choice is part of the cache key.
 - **Refused at config load** (logged at ERROR; the source is not served — a refused `dem` does *not* fall back to the bare base): a layer or base in a datum other than the target with no `heightCorrection`; a correction whose product does not convert exactly *layer datum → target* (e.g. a `jgd2024` layer in a `jgd2011` source — no inverse correction exists); a correction on a base of unknown datum; a geoid without a target datum; unknown `verticalDatum` / `missing` / `base` values; a product that fails to load or verify.
+- **Known limitation — Tohoku 2011 height revision (pending an MLIT decision).** In the area GSI revised after the 2011 Tohoku earthquake (Aomori, Iwate, Miyagi, Akita, Yamagata, Fukushima, Ibaraki; parameter `touhokutaiheiyouoki2011_h.par`), the `base/dem10` COGs are labelled JGD2000 (EPSG:4612) and hold **pre-2011 (測地成果2000) heights**. They are bit-identical to GSI's 2009-02-01 DEM10B editions and up to ~+1.2 m above JGD2011 near Oshika. The JGD2024 correction assumes JGD2011 input, so those `dem10` pixels come out under-corrected there by the 2011 revision. Chaining the 2011 correction before ΔH is not implemented; whether to do it is pending a decision. The datum model would express it as a third datum on those layers.
 - **Cache keys / ETags**: a source that applies a correction appends `vcorr=<product>@<version>:<from>-to-<to>:missing=<policy>:base=<datum>:base-dh=<yes|no>:layers=<mask hash>` to its DEM version, which feeds every terrain cache key and ETag. A source that declares nothing — every existing source — is built exactly as before and keeps its keys byte for byte (no cache flush).
 
 ### Supported COG tile compressions
@@ -183,7 +202,7 @@ Any sentinel works for the tile server, but **small magnitudes are easier on eve
 >
 > 1. **Adaptive nodata tolerance** (`src/cog/reader.rs`) — `max(0.5 m, |nodata| · 1e-3)`. Small sentinels get the 0.5 m floor that catches `254.99996` next to `255`; huge sentinels get a proportional band wide enough to absorb bilinear-blended fringe values.
 > 2. **Physical elevation guard** (`src/cog/decode.rs`, `MAX_PHYSICAL_ELEVATION_M = 50_000`) — anything beyond ±50 km is dropped to NaN at decode time. Mt. Everest is 8.85 km, Mariana Trench −10.9 km; anything bigger is corruption.
-> 3. **Mesh-generator sanitisation** (`src/terrain/mesh_gen.rs`) — `find_height_range` and the Martini sample callback both reject non-finite / out-of-range heights so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point.
+> 3. **Output sanitisation** (`sanitize_height` in `src/terrain/mesh_gen.rs`) — every served height that is non-finite or beyond ±50 km becomes 0 m. The Martini sample callback uses it so a stray bad value can't drag `min_height` to −10³⁷ and collapse the quantized-mesh bounding sphere or horizon-occlusion point, and the `/terrarium` / `/mapbox` encoders use it so the same sample reads 0 m there too instead of the format floor (−32768 m / −10000 m).
 >
 > Mosaicking with `-r near` is still the right thing to do — keeping the data clean upstream means *other* tools (QGIS, downstream processors) also see well-formed values.
 
@@ -255,10 +274,10 @@ The terrain endpoint's base DEM and output settings are operational concerns and
 | `DEM_VERSION` | No | `v1` | Internal version key, mixed into cache keys. Bump for an explicit cache break |
 | `DEM_MAX_ZOOM` | No | `15` | Upstream DEM max zoom (clamps `/terrain/` requests above this) |
 | `DEM_NATIVE_TILE_SIZE` | No | `512` | Native tile pixel size in the upstream archive (PMTiles only; Mapterhorn is always 512) |
-| `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/` |
+| `TERRAIN_TILE_SIZE` | No | `256` | Output raster tile pixel size for `/terrarium/` and `/mapbox/`. A DEM tile of another native size is resampled between pixel centres — for Mapterhorn's 512 px tiles at the default 256, each output pixel is the mean of a 2×2 block |
 | `TERRAIN_DEFAULT_GEOID` | No | `gsigeo2011` | Geoid model for DEM sources that don't declare their own `geoid` in the config JSON. One of `gsigeo2011`, `jpgeo2024`, `jpgeo2024-hrefconv`. **Not** overridable per request |
 | `DEM_VERTICAL_DATUM` | No | — (unknown) | Vertical datum of the shared `DEM_URL` base: `jgd2011` or `jgd2024`. Only read by sources that declare vertical datums and use the shared base (see [Vertical datums](#vertical-datums-and-the-jgd2011--jgd2024-height-correction)); such a source with a `heightCorrection` refuses to build while it is unset. Not needed for sources with `"base": "sealevel"`; ignored for `DEM_URL=sealevel`, which is datum-agnostic and never corrected |
-| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region. |
+| `TERRAIN_MAX_ZOOM` | No | `18` | Max zoom advertised in `/terrain/layer.json` and the raster `tilejson.json` endpoints. Above `DEM_MAX_ZOOM` both the quantized-mesh and raster endpoints fall back to the parent DEM tile and bilinear-upsample the relevant sub-region, sampling at child pixel centres. |
 | `TERRAIN_MAX_ERROR` | No | `5.0` | Martini mesh-simplification error in meters (lower = more triangles) |
 | `TERRAIN_MIRROR_URL` | No | — | Pre-rendered quantized-mesh mirror bucket (`r2://`, `s3://`, `gs://`, `file://`). When set, `/terrain/`, `/terrain/mirror/`, and `/terrain-mirror/` serve directly from this bucket instead of generating from DEM. The DEM pipeline remains reachable at `/terrain/dem/` for side-by-side validation. See [Quantized-mesh mirror](#quantized-mesh-mirror-pre-rendered-passthrough) below. |
 
