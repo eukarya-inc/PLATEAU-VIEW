@@ -78,3 +78,56 @@ async fn test_source_not_found() {
 
     assert_eq!(response.status(), 404);
 }
+
+/// `attribution` in the metadata follows each source: a config override on a
+/// `/tiles` source or a DEM source wins, a sea-level DEM source credits no base
+/// (no Mapterhorn), and a `/tiles` source without one keeps the PLATEAU credit.
+#[tokio::test]
+async fn attribution_is_per_source() {
+    let layer = serde_json::json!({"type": "xyz", "url": "http://127.0.0.1:9/{z}/{x}/{y}.png"});
+    let config = serde_json::json!({
+        "sources": {
+            "plain": { "layers": [layer] },
+            "credited": { "attribution": "Ortho credit", "layers": [layer] },
+            "flat": { "type": "dem", "base": "sealevel", "layers": [] },
+            "custom": { "type": "dem", "base": "sealevel", "attribution": "Custom DEM", "layers": [] }
+        }
+    });
+    let server = TestServer::start(config).await;
+    let client = server.client();
+    let attribution = async |path: &str| -> String {
+        let r = client
+            .get(format!("{}{path}", server.base_url))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200, "{path}");
+        let v: serde_json::Value = r.json().await.unwrap();
+        v["attribution"].as_str().unwrap().to_string()
+    };
+
+    use tile::terrain::attribution::{GSI_CREDIT, PLATEAU_CREDIT};
+    assert_eq!(
+        attribution("/tiles/plain/tilejson.json").await,
+        PLATEAU_CREDIT
+    );
+    assert_eq!(
+        attribution("/tiles/credited/tilejson.json").await,
+        "Ortho credit"
+    );
+    let flat = format!("{PLATEAU_CREDIT} | {GSI_CREDIT}");
+    for path in [
+        "/terrain/flat/layer.json",
+        "/terrarium/flat/tilejson.json",
+        "/mapbox/flat/tilejson.json",
+    ] {
+        assert_eq!(attribution(path).await, flat, "{path}");
+    }
+    for path in [
+        "/terrain/custom/layer.json",
+        "/terrarium/custom/tilejson.json",
+        "/mapbox/custom/tilejson.json",
+    ] {
+        assert_eq!(attribution(path).await, "Custom DEM", "{path}");
+    }
+}

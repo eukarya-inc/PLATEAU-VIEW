@@ -415,7 +415,7 @@ pub struct TileJson {
     tiles: Vec<String>,
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    attribution: Option<&'static str>,
+    attribution: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scheme: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -442,10 +442,11 @@ pub async fn get_tilejson(
     Path(name): Path<String>,
     axum::extract::Query(query): axum::extract::Query<TileJsonQuery>,
 ) -> Response {
-    // Check if source exists
-    if state.get_source(&name).await.is_none() {
+    // Check the source exists, and take its credit from the same snapshot:
+    // its config `attribution`, else the PLATEAU credit.
+    let Some(attribution) = state.get_source_attribution(&name).await else {
         return (StatusCode::NOT_FOUND, "Source not found").into_response();
-    }
+    };
 
     // Validate format
     let format = match query.format.as_str() {
@@ -470,9 +471,7 @@ pub async fn get_tilejson(
         tilejson: "3.0.0",
         tiles: vec![tile_url],
         name,
-        attribution: Some(
-            "<a href=\"https://www.mlit.go.jp/plateau/\" target=\"_blank\">PLATEAU</a>",
-        ),
+        attribution: Some(attribution),
         scheme: Some("xyz"),
         minzoom: Some(0),
         maxzoom: Some(22),
