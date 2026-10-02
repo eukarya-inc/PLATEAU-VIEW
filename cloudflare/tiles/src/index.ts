@@ -54,9 +54,10 @@ function geoidForDataset(env: Env, segment: string): string | undefined {
 
 /**
  * Named-source profiles of a DEM dataset, from the `DEM_PROFILES` var
- * (dataset -> source name -> profile; see `DemProfile`). A profile only affects
- * `config.json?name=<that name>`; every other name gets exactly the config it
- * got before. Missing or malformed means "no profiles".
+ * (dataset -> source name -> profile; see `DemProfile`). Each profile is emitted
+ * as an extra source in that dataset's `config.json` (or alone, for
+ * `?name=<that name>`); the requested source itself is unchanged. Missing or
+ * malformed means "no profiles".
  */
 function demProfilesForDataset(env: Env, segment: string): Record<string, DemProfile> | undefined {
   const raw = (env as unknown as Record<string, unknown>).DEM_PROFILES;

@@ -34,13 +34,14 @@ DEM_DATASETS = "terrain"
 # server default.
 DEM_GEOIDS = { terrain = "gsigeo2011" }
 
-# Extra declarations for *named* DEM sources (dataset -> source name -> fields),
-# emitted only into `/<dataset>/config.json?name=<that name>`. Every other name
-# (including the default `dem` and `plateau-terrain-experimental`) gets exactly
-# the config it got before. This one declares a JGD2024 view of the JGD2011 COG
+# Extra DEM sources declared per dataset (dataset -> source name -> fields).
+# Each one is emitted alongside the requested source in every
+# `/<dataset>/config.json` (so the tile server picks it up from the URL it already
+# reads); `?name=<that name>` returns just that source. The requested source
+# itself (default `dem`, `plateau-terrain-experimental`, ...) is unchanged.
+# This one declares a JGD2024 view of the JGD2011 COG
 # stack: the tile server adds the JGD2011->JGD2024 height correction (dH) to each
-# layer and uses the JGD2024 geoid. Opt-in: nothing requests this name until it
-# is added to the tile server's CONFIG_URL. `base = "sealevel"`: the JGD2024
+# layer and uses the JGD2024 geoid. `base = "sealevel"`: the JGD2024
 # source sits on the flat 0 m base (never corrected) instead of the shared
 # Mapterhorn base, so no upstream DEM of another datum shows through its gaps.
 [vars.DEM_PROFILES.terrain.plateau-terrain-jgd2024]

@@ -381,8 +381,10 @@ function demSource(
  *   acquisition year): `<dataset>-<group>` (e.g. `ortho-2024`), each a footprint
  *   mosaic, plus a cumulative `<dataset>-all` stacking every COG with layer
  *   `order` = numeric group (newer on top).
- * - **dem** (terrain) — a single `type: "dem"` source (name from `?name=`,
- *   default `dem` = the tile server's default DEM source) stacking every COG
+ * - **dem** (terrain) — a `type: "dem"` source (name from `?name=`,
+ *   default `dem` = the tile server's default DEM source), plus one source per
+ *   `DEM_PROFILES` entry for this dataset (unless `?name=` names a profile, which
+ *   returns only that one), each stacking every COG
  *   bottom→top via `demPriority` (`sea` < `base/dem10` < `dem5` < `dem1` <
  *   `patch`). No per-layer `nodata` — the tile server reads each COG's own tag.
  *
@@ -442,6 +444,16 @@ export async function tileConfig(
   const sources = isDem
     ? demSource(cogs, dataset, origin, name, geoid, profile)
     : rasterSources(cogs, dataset, origin);
+  // Every profiled source rides along with whatever name was requested, so a
+  // tile server already reading this dataset's config.json (e.g. for
+  // `plateau-terrain-experimental`) serves them too without a CONFIG_URL change.
+  // Asking for a profile by name still returns just that source.
+  if (isDem && profiles && !profile) {
+    for (const [pname, p] of Object.entries(profiles)) {
+      if (pname === name) continue;
+      Object.assign(sources, demSource(cogs, dataset, origin, pname, geoid, p));
+    }
+  }
 
   // FNV-1a over key+etag pairs; Math.imul keeps the mix 32-bit.
   let h = 0x811c9dc5;
