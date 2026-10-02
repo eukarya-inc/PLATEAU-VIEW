@@ -23,8 +23,8 @@ use futures::future::join_all;
 use rstar::{AABB, RTree, RTreeObject};
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions, Upsampled};
-use super::upsample_subregion;
 use super::vertical::{DhMemo, SourceCorrection};
+use super::{DEM_RESAMPLE_VERSION, upsample_subregion};
 
 /// One bbox entry in the R*-tree.
 #[derive(Debug, Clone)]
@@ -140,36 +140,7 @@ impl CompositeDemProvider {
                 .get_tile_elevations(try_z, parent_x, parent_y, tile_size)
                 .await
             {
-                Ok(parent) => {
-                    if factor == 1 {
-                        return Ok(parent);
-                    }
-                    let elevations = upsample_subregion(
-                        &parent.elevations,
-                        tile_size,
-                        factor,
-                        x % factor,
-                        y % factor,
-                    );
-                    // The parent comes straight from the base provider, so it
-                    // is never itself an upsampled tile.
-                    let parent_positions = parent
-                        .positions
-                        .unwrap_or_else(|| PixelPositions::centres(tile_size));
-                    return Ok(DemTile {
-                        elevations,
-                        etag: parent.etag,
-                        positions: Some(PixelPositions {
-                            upsampled: Some(Upsampled {
-                                factor,
-                                sub_x: x % factor,
-                                sub_y: y % factor,
-                                tile_size,
-                            }),
-                            ..parent_positions
-                        }),
-                    });
-                }
+                Ok(parent) => return Ok(upsample_from_ancestor(parent, factor, x, y, tile_size)),
                 Err(DemError::NotFound | DemError::OutOfRange) if try_z > 0 => {
                     try_z -= 1;
                 }
@@ -235,11 +206,16 @@ impl DemProvider for CompositeDemProvider {
         let futures = candidates.iter().map(|&idx| {
             let provider = self.overlays[idx].clone();
             async move {
-                let z_clamped = z.min(provider.max_zoom());
+                // Above the overlay's own max zoom, read the ancestor tile at
+                // its max zoom — the one covering this tile's area — and
+                // upsample our sub-region of it, exactly as the base does.
+                let fetch_z = z.min(provider.max_zoom());
+                let factor = 1u32 << (z - fetch_z);
                 let result = provider
-                    .get_tile_elevations(z_clamped, x, y, tile_size)
-                    .await;
-                (idx, z_clamped, result)
+                    .get_tile_elevations(fetch_z, x / factor, y / factor, tile_size)
+                    .await
+                    .map(|parent| upsample_from_ancestor(parent, factor, x, y, tile_size));
+                (idx, z - fetch_z, result)
             }
         });
         let results = join_all(futures).await;
@@ -251,24 +227,29 @@ impl DemProvider for CompositeDemProvider {
         } else {
             etag_parts.push(format!("base:{}:{}", self.base.slug(), self.base.version()));
         }
-        for (idx, z_eval, result) in results {
+        for (idx, zoom_diff, result) in results {
             let provider = &self.overlays[idx];
             match result {
                 Ok(mut overlay) => {
                     if let Some(c) = &self.correction
                         && c.layers[idx]
                     {
-                        // ΔH at the points this member was evaluated at.
-                        c.apply(&mut overlay, z_eval, x, y, tile_size, &mut dh_memo);
+                        // ΔH at the points this member was evaluated at; an
+                        // upsampled overlay's positions map the served tile
+                        // onto its ancestor's grid, like the base's.
+                        c.apply(&mut overlay, z, x, y, tile_size, &mut dh_memo);
                     }
                     paint_over(&mut base_tile.elevations, &overlay.elevations);
-                    etag_parts.push(format!(
-                        "{}:{}",
-                        provider.slug(),
-                        overlay
-                            .etag
-                            .unwrap_or_else(|| provider.version().to_string()),
-                    ));
+                    let mut etag = overlay
+                        .etag
+                        .unwrap_or_else(|| provider.version().to_string());
+                    if zoom_diff > 0 {
+                        // An upsampled overlay re-keys on its own when the
+                        // resampling changes — and apart from the misplaced
+                        // reads served before overlays were upsampled at all.
+                        etag.push_str(&format!("+upsample:{zoom_diff}:{DEM_RESAMPLE_VERSION}"));
+                    }
+                    etag_parts.push(format!("{}:{}", provider.slug(), etag));
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -328,6 +309,37 @@ impl DemProvider for CompositeDemProvider {
         // The composite covers wherever the base covers (overlays only patch
         // _within_ the base). We expose the base's bounds.
         self.base.bounds()
+    }
+}
+
+/// Serve tile `z/x/y` from its `parent` `factor` = 2^dz levels up (already
+/// fetched at `x / factor, y / factor`): bilinear-upsample the child's
+/// sub-region with [`upsample_subregion`] and record the child-in-parent
+/// mapping in its positions, so a height correction is sampled at the exact
+/// points the served elevations stand for. `factor == 1` returns `parent`.
+fn upsample_from_ancestor(parent: DemTile, factor: u32, x: u32, y: u32, tile_size: u32) -> DemTile {
+    if factor == 1 {
+        return parent;
+    }
+    let (sub_x, sub_y) = (x % factor, y % factor);
+    let elevations = upsample_subregion(&parent.elevations, tile_size, factor, sub_x, sub_y);
+    // The parent comes straight from a member provider, so it is never
+    // itself an upsampled tile.
+    let parent_positions = parent
+        .positions
+        .unwrap_or_else(|| PixelPositions::centres(tile_size));
+    DemTile {
+        elevations,
+        etag: parent.etag,
+        positions: Some(PixelPositions {
+            upsampled: Some(Upsampled {
+                factor,
+                sub_x,
+                sub_y,
+                tile_size,
+            }),
+            ..parent_positions
+        }),
     }
 }
 
@@ -611,6 +623,144 @@ mod tests {
             let tile = comp.get_tile_elevations(8, x, y, 256).await.unwrap();
             let nan = tile.elevations.iter().filter(|v| v.is_nan()).count();
             assert_eq!(nan, 0, "z8/{x}/{y}: {nan} NaN px");
+        }
+    }
+
+    /// Overlay whose value at each pixel centre is that centre's global Web
+    /// Mercator column, in units of z`max_zoom` tiles — a field linear in
+    /// position, so a correctly placed (and upsampled) read reproduces it
+    /// exactly away from the parent's rim. Like the real providers it refuses
+    /// zooms above its `max_zoom`.
+    struct ColumnField {
+        max_zoom: u8,
+    }
+
+    #[async_trait]
+    impl DemProvider for ColumnField {
+        async fn get_tile_elevations(
+            &self,
+            z: u8,
+            x: u32,
+            _y: u32,
+            tile_size: u32,
+        ) -> Result<DemTile, DemError> {
+            if z > self.max_zoom {
+                return Err(DemError::OutOfRange);
+            }
+            let scale = (1u64 << (self.max_zoom - z)) as f64;
+            let n = tile_size as usize;
+            let elevations = (0..n * n)
+                .map(|k| (x as f64 + ((k % n) as f64 + 0.5) / tile_size as f64) * scale)
+                .collect();
+            Ok(DemTile {
+                elevations,
+                etag: Some("etag-field".to_string()),
+                positions: None,
+            })
+        }
+        fn native_tile_size(&self) -> u32 {
+            256
+        }
+        fn max_zoom(&self) -> u8 {
+            self.max_zoom
+        }
+        fn version(&self) -> &str {
+            "v1"
+        }
+        fn slug(&self) -> &str {
+            "field"
+        }
+    }
+
+    /// An overlay asked for a zoom above its `max_zoom` must be read at its
+    /// `max_zoom` *over the same area*: the ancestor tile, upsampled. The
+    /// sea-level base (max zoom 20) over COG overlays (18) is the production
+    /// case — `plateau-terrain-jgd2024` at z19/z20 used to read the overlays
+    /// at z18 with the z19/z20 x/y (off the map), and came back flat 0 m.
+    #[tokio::test]
+    async fn overlay_above_max_zoom_reads_ancestor_area() {
+        let base: Arc<dyn DemProvider> = Arc::new(crate::terrain::sealevel::SeaLevelDem);
+        let overlay: Arc<dyn DemProvider> = Arc::new(ColumnField { max_zoom: 18 });
+        let comp = build(base, vec![overlay]).await;
+        assert_eq!(comp.max_zoom(), 20);
+        let n = 8u32;
+        // Tokyo Station at z18 … z20 (each a child of the previous one).
+        for (z, x, y) in [
+            (18u8, 232_847u32, 103_226u32),
+            (19, 465_694, 206_453),
+            (20, 931_389, 412_906),
+        ] {
+            let tile = comp.get_tile_elevations(z, x, y, n).await.unwrap();
+            let factor = 1u32 << (z - 18);
+            let scale = 1.0 / factor as f64;
+            for i in 0..n {
+                // Columns whose centre lies within half a parent pixel of the
+                // parent's border are edge-clamped; the rest are exact.
+                let parent_px = (x % factor) as f64 * n as f64 * scale + (i as f64 + 0.5) * scale;
+                if parent_px < 0.5 || parent_px > n as f64 - 0.5 {
+                    continue;
+                }
+                let want = (x as f64 + (i as f64 + 0.5) / n as f64) * scale;
+                let got = tile.elevations[i as usize];
+                assert!(
+                    (got - want).abs() < 1e-9,
+                    "z{z}/{x}/{y} col {i}: got {got}, want {want}"
+                );
+            }
+            let etag = tile.etag.unwrap();
+            assert_eq!(
+                etag.contains("+upsample:"),
+                z > 18,
+                "z{z}: upsampled overlay must be marked in the etag: {etag}"
+            );
+        }
+    }
+
+    /// ΔH for an upsampled overlay is sampled at the points its served
+    /// elevations stand for (the ancestor grid blended into the child), at the
+    /// served tile — not at the ancestor's zoom with the child's x/y.
+    #[tokio::test]
+    async fn correction_on_upsampled_overlay_uses_served_tile_positions() {
+        use crate::terrain::dem::Upsampled;
+        use crate::terrain::vertical::{BaseDatum, MissingDhPolicy, SourceCorrection};
+        let product = v1_product().await;
+        let n = 4u32;
+        let len = (n * n) as usize;
+        let corr = Arc::new(SourceCorrection::new(
+            product.clone(),
+            MissingDhPolicy::Keep,
+            false,
+            BaseDatum::Agnostic,
+            vec![true],
+        ));
+        let base: Arc<dyn DemProvider> = Arc::new(crate::terrain::sealevel::SeaLevelDem);
+        let comp =
+            build_with_correction(base, vec![provider("a", None, vec![50.0; len])], Some(corr))
+                .await;
+        // A z19 descendant of the z14 tile used above (the stub overlay
+        // reports max zoom 18).
+        let (z, x, y) = (19u8, 14163u32 * 32 + 5, 6677u32 * 32 + 6);
+        let tile = comp.get_tile_elevations(z, x, y, n).await.unwrap();
+        let p = PixelPositions {
+            upsampled: Some(Upsampled {
+                factor: 2,
+                sub_x: x % 2,
+                sub_y: y % 2,
+                tile_size: n,
+            }),
+            ..PixelPositions::centres(n)
+        };
+        for j in 0..n {
+            for i in 0..n {
+                let (lon, lat) = p.lonlat(z, x, y, i, j);
+                let dh = product.sample(lat, lon);
+                assert!(dh.is_finite() && dh != 0.0);
+                assert_eq!(
+                    tile.elevations[(j * n + i) as usize],
+                    50.0 + dh,
+                    "({i},{j})"
+                );
+            }
         }
     }
 
