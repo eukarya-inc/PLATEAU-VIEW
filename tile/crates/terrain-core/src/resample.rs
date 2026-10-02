@@ -3,7 +3,7 @@
 //!
 //! Malformed input (zero sizes, a grid shorter than its stated size, a zero
 //! factor) yields an all-NaN result of the requested size — or an empty one
-//! when that size itself overflows — instead of a panic. Valid input takes
+//! when that size overflows or cannot be allocated — instead of a panic. Valid input takes
 //! exactly the arithmetic it always did.
 
 /// Version of the DEM-tile resampling below ([`fit_to_tile_size`],
@@ -25,9 +25,16 @@ fn area(w: u32, h: u32) -> Option<usize> {
     w.checked_mul(h).map(|n| n as usize)
 }
 
-/// All-NaN fallback for malformed input.
+/// All-NaN fallback for malformed input (empty when it cannot be allocated).
 fn nan_grid(w: u32, h: u32) -> Vec<f64> {
-    vec![f64::NAN; area(w, h).unwrap_or(0)]
+    let len = area(w, h).unwrap_or(0);
+    match crate::try_vec(len) {
+        Some(mut v) => {
+            v.resize(len, f64::NAN);
+            v
+        }
+        None => Vec::new(),
+    }
 }
 
 /// Fit a decoded native DEM tile to the requested `tile_size`, returning the
@@ -100,7 +107,9 @@ pub fn resample_bilinear(src: &[f64], src_w: u32, src_h: u32, dst_w: u32, dst_h:
     let sy_scale = src_h as f64 / dst_h as f64;
     let max_x = (src_w - 1) as f64;
     let max_y = (src_h - 1) as f64;
-    let mut out = Vec::with_capacity(dst_len);
+    let Some(mut out) = crate::try_vec(dst_len) else {
+        return Vec::new();
+    };
     for dy in 0..dst_h {
         let sy = ((dy as f64 + 0.5) * sy_scale - 0.5).clamp(0.0, max_y);
         let y0 = sy.floor() as u32;
@@ -148,7 +157,9 @@ pub fn upsample_subregion(
     if n == 0 || factor == 0 || parent.len() < n {
         return nan_grid(tile_size, tile_size);
     }
-    let mut out = Vec::with_capacity(n);
+    let Some(mut out) = crate::try_vec(n) else {
+        return Vec::new();
+    };
     let scale = 1.0 / factor as f64;
     let off_x = sub_x as f64 * tile_size as f64 * scale;
     let off_y = sub_y as f64 * tile_size as f64 * scale;
@@ -343,6 +354,13 @@ mod tests {
         assert_eq!(resample_bilinear(&g, 4, 4, 3, 0).len(), 0);
         assert!(resample_bilinear(&g, u32::MAX, u32::MAX, 2, 2).is_empty());
         assert!(resample_bilinear(&[], 1, 1, u32::MAX, u32::MAX).is_empty());
+        // Element counts that fit u32 but not memory: empty, not a trap.
+        // (On 64-bit hosts 32 GiB may be reservable; only check it on wasm32,
+        // where it cannot be.)
+        if cfg!(target_pointer_width = "32") {
+            assert!(resample_bilinear(&[], 1, 1, u32::MAX, 1).is_empty());
+            assert!(resample_bilinear(&g, 4, 4, 65535, 65535).is_empty());
+        }
         assert!(
             upsample_subregion(&g, 4, 0, 0, 0)
                 .iter()

@@ -27,6 +27,16 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+/// An empty `Vec` with room for `len` elements, or `None` when that cannot
+/// be allocated (a capacity overflow, or memory the instance cannot grow
+/// to). The infallible `Vec::with_capacity` / `vec![…; len]` would trap
+/// instead, which poisons a WebAssembly instance for later requests.
+pub(crate) fn try_vec<T>(len: usize) -> Option<Vec<T>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).ok()?;
+    Some(v)
+}
+
 pub mod hexfloat;
 pub mod paint;
 pub mod positions;

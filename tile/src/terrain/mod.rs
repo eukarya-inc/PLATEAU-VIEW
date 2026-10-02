@@ -44,6 +44,9 @@ pub use xyz_dem::{XyzDemEncoding, XyzDemSource};
 // DEM tile resampling lives in `terrain-core` (shared with the WebAssembly
 // build); re-exported here so existing paths keep working.
 pub use terrain_core::resample::DEM_RESAMPLE_VERSION;
+// `resample_bilinear` has no caller in the server any more (the DEM
+// providers go through `fit_to_tile_size`); kept so the old path stays.
+#[allow(unused_imports)]
 pub(crate) use terrain_core::resample::{
-    extract_and_upsample, fit_to_tile_size, upsample_subregion,
+    extract_and_upsample, fit_to_tile_size, resample_bilinear, upsample_subregion,
 };
