@@ -1,0 +1,600 @@
+[
+ {
+  "key": "base/dem5/4730.tif",
+  "bytes": 405166147,
+  "sha256": "d39ec2feeb933a6902e5c5006f2d2e74c8969b95f670cae42f3b66f5cef84794",
+  "md5": "664e0d4c80f8a61dbe6007e537cc05a0",
+  "served_bytes": 405166147,
+  "zips": [
+   {
+    "zip": "FG-GML-473000-DEM5A-20161001.zip",
+    "zip_bytes": 44051,
+    "zip_sha256": "933fb915ff0a71a842b91df2875e99fc084ebdad03736412c465fbb5f88ce399"
+   },
+   {
+    "zip": "FG-GML-473000-DEM5B-20161001.zip",
+    "zip_bytes": 3669,
+    "zip_sha256": "40d330342be7a6d05349c87e424b4a66de8ec6fa277e1c451d9ff39b14b31aa7"
+   },
+   {
+    "zip": "FG-GML-473001-DEM5A-20161001.zip",
+    "zip_bytes": 5440645,
+    "zip_sha256": "cca4c8aaca91881c65125fd0549f628f8a0577dbd058f35f59c01935737bae67"
+   },
+   {
+    "zip": "FG-GML-473001-DEM5B-20161001.zip",
+    "zip_bytes": 6422,
+    "zip_sha256": "669fd58687a87a10e2cf130a10485b5a972fc85d08b64701202f15cd8d5623f4"
+   },
+   {
+    "zip": "FG-GML-473002-DEM5A-20241213.zip",
+    "zip_bytes": 9005760,
+    "zip_sha256": "458319a284f431c7d9ee1ff747e567ad1e38877d649c68122288ee3f5cb7d748"
+   },
+   {
+    "zip": "FG-GML-473003-DEM5A-20241213.zip",
+    "zip_bytes": 8783265,
+    "zip_sha256": "d7f92ce0d1e726b499ce2a9f166ff9fcef221962323ac65fae9ae03c9c2a80ab"
+   },
+   {
+    "zip": "FG-GML-473004-DEM5A-20241213.zip",
+    "zip_bytes": 3498038,
+    "zip_sha256": "9fba1c32f965c9e9998e13d35b79f5267b0dc1c3ee4e452459633a11226476e4"
+   },
+   {
+    "zip": "FG-GML-473006-DEM5A-20241227.zip",
+    "zip_bytes": 5090078,
+    "zip_sha256": "a788f7e377cc7754a5f966e5f51d32778bd3714b24a953a0021fe485e1a49e5f"
+   },
+   {
+    "zip": "FG-GML-473006-DEM5B-20161001.zip",
+    "zip_bytes": 4657645,
+    "zip_sha256": "ba8e5e8f1ecd8aa25116c8725a17a4dca36b9de36e002d98742081bb12ce5960"
+   },
+   {
+    "zip": "FG-GML-473006-DEM5C-20200117.zip",
+    "zip_bytes": 52772,
+    "zip_sha256": "38f11cdef32d027091ed038aa14171301dfba87708009fe85769e171c669a8d1"
+   },
+   {
+    "zip": "FG-GML-473007-DEM5A-20241227.zip",
+    "zip_bytes": 6522369,
+    "zip_sha256": "b1e3510dbccc419f4da44456a55f8f4964785fb93058547a58572d8066b0f73b"
+   },
+   {
+    "zip": "FG-GML-473007-DEM5B-20161001.zip",
+    "zip_bytes": 2615913,
+    "zip_sha256": "e24336d3fa71364997dc9484defaf6f640b14ea531daa668ccbd314e12013b4f"
+   },
+   {
+    "zip": "FG-GML-473010-DEM5A-20161001.zip",
+    "zip_bytes": 94357,
+    "zip_sha256": "5ab877a9a842f50740ee6cb7666bde692da56875c1e401e4aae6f732a4cf95bb"
+   },
+   {
+    "zip": "FG-GML-473010-DEM5B-20161001.zip",
+    "zip_bytes": 7723,
+    "zip_sha256": "a85ff572115051d9bff5fe1dbfa2b77424220bdfe42a17849a69d05025df08f5"
+   },
+   {
+    "zip": "FG-GML-473011-DEM5A-20161001.zip",
+    "zip_bytes": 622242,
+    "zip_sha256": "f540d549df063e91c21e96662cf085957edd77acbf56d404cae208164cba3404"
+   },
+   {
+    "zip": "FG-GML-473011-DEM5B-20161001.zip",
+    "zip_bytes": 6392,
+    "zip_sha256": "d5995a4d35a5a95207d01f1315b839aab87ef9663b9f8756e3902dd7fb8a8ca6"
+   },
+   {
+    "zip": "FG-GML-473012-DEM5A-20241213.zip",
+    "zip_bytes": 5026528,
+    "zip_sha256": "c90fc295d42b6e1dd277e3acd2a618dcca8b512e8a6a6784ce9d5b478501523f"
+   },
+   {
+    "zip": "FG-GML-473012-DEM5B-20161001.zip",
+    "zip_bytes": 4169,
+    "zip_sha256": "3b1584c0df6086776d70e27b52a3a1f9b8f31aa416ca5deace8509eb3825e62e"
+   },
+   {
+    "zip": "FG-GML-473012-DEM5C-20200117.zip",
+    "zip_bytes": 193903,
+    "zip_sha256": "f5bd88f1525c9354506e79abc1a523ebe180e79de7793d56aa08c9fdebae5ac3"
+   },
+   {
+    "zip": "FG-GML-473013-DEM5A-20161001.zip",
+    "zip_bytes": 9758979,
+    "zip_sha256": "7013f8b0cd6349046bd569b6d39d1ec73beabd1be1889e31e7a670a79a8b3d65"
+   },
+   {
+    "zip": "FG-GML-473014-DEM5A-20180226.zip",
+    "zip_bytes": 1285622,
+    "zip_sha256": "929746c6f958029603d774a666e7c46c3e4694575645ae38d0db21c9b1e2b78a"
+   },
+   {
+    "zip": "FG-GML-473015-DEM5A-20170202.zip",
+    "zip_bytes": 2206970,
+    "zip_sha256": "45c7890087c183e37a2431f333896633dc0452c6bc2a7c2784fc47a34002c0f6"
+   },
+   {
+    "zip": "FG-GML-473015-DEM5C-20200117.zip",
+    "zip_bytes": 4944,
+    "zip_sha256": "cea1698bdc324721392025bed7fc2ac86124faf3ffd4b16c0683df5f08daacbe"
+   },
+   {
+    "zip": "FG-GML-473016-DEM5A-20241227.zip",
+    "zip_bytes": 9143271,
+    "zip_sha256": "68a5ada4107f5739c62ad9a2f1630ec33225ab70c2bf46e61840ca7b2417974b"
+   },
+   {
+    "zip": "FG-GML-473016-DEM5B-20161001.zip",
+    "zip_bytes": 818661,
+    "zip_sha256": "33869998cd0a1e9aa5ee1ea6e2e4e3939cd610ba70fe3ca0b9d4a0090cb2da17"
+   },
+   {
+    "zip": "FG-GML-473016-DEM5C-20200117.zip",
+    "zip_bytes": 954398,
+    "zip_sha256": "e2ab219de19e384759e0142c48c0974694e868ecd3d710509ec94f2488b26c01"
+   },
+   {
+    "zip": "FG-GML-473017-DEM5A-20241227.zip",
+    "zip_bytes": 7273169,
+    "zip_sha256": "73f2e9a6e1949d490870414e697ba176fc962d671635e88600451b3fd7caae37"
+   },
+   {
+    "zip": "FG-GML-473017-DEM5B-20180226.zip",
+    "zip_bytes": 168386,
+    "zip_sha256": "54dae7fa7ac0295ac4523c17cb1de0ef44215611fe5a1e689ec03ad6d007c1da"
+   },
+   {
+    "zip": "FG-GML-473017-DEM5C-20200117.zip",
+    "zip_bytes": 853328,
+    "zip_sha256": "5ac08cc93f0fa436c2b97ec476355908850abd86fb68cd19e0acfe3697ee3726"
+   },
+   {
+    "zip": "FG-GML-473022-DEM5A-20241213.zip",
+    "zip_bytes": 3074635,
+    "zip_sha256": "9e14da5b9c095d26da30c0cc871f069e91c81dd97f55b6cfbbc03e9738b54356"
+   },
+   {
+    "zip": "FG-GML-473022-DEM5C-20200117.zip",
+    "zip_bytes": 1309590,
+    "zip_sha256": "05caeb5b76fa7caa22ab63a3b964f6cc4711fd031eb0eed30339d02bdc6b7368"
+   },
+   {
+    "zip": "FG-GML-473023-DEM5A-20241213.zip",
+    "zip_bytes": 9355173,
+    "zip_sha256": "5f55e6f823e423a1817db6337b1c6b8a10e3f2bc8b8deaefb81d7587dbeed5bc"
+   },
+   {
+    "zip": "FG-GML-473023-DEM5B-20161001.zip",
+    "zip_bytes": 969606,
+    "zip_sha256": "db5fbfa4098d9d82deb9398948807f5d66eb51b977bbce320b240728f841c485"
+   },
+   {
+    "zip": "FG-GML-473023-DEM5C-20200117.zip",
+    "zip_bytes": 1797040,
+    "zip_sha256": "2132f522beda1f8400d14fe0f2dfd0694012ce36aefabd631fd76e6ae2e11851"
+   },
+   {
+    "zip": "FG-GML-473024-DEM5A-20241213.zip",
+    "zip_bytes": 2283601,
+    "zip_sha256": "9bd8fbbf323e6e923e174e2975e8b67aa61f95967adcfee2e7e929b3509bc494"
+   },
+   {
+    "zip": "FG-GML-473024-DEM5B-20180226.zip",
+    "zip_bytes": 363992,
+    "zip_sha256": "4b027e528cf40b1a11a823641d102046fbcb11368b6352c80c83e64e4d90f3e3"
+   },
+   {
+    "zip": "FG-GML-473025-DEM5A-20241213.zip",
+    "zip_bytes": 5390170,
+    "zip_sha256": "ae8bef52a31990a466f6aa23208136226334981b2582586dc4726eff38023e4d"
+   },
+   {
+    "zip": "FG-GML-473025-DEM5B-20180226.zip",
+    "zip_bytes": 1459088,
+    "zip_sha256": "2d998aea57d0a61bb10e5e9858bd67508fb3ab72c2f9d95b78a56511fabb9860"
+   },
+   {
+    "zip": "FG-GML-473026-DEM5A-20241227.zip",
+    "zip_bytes": 9217314,
+    "zip_sha256": "1bbfa0b7baa9092e92fc14b52376c41552fa9509a354922c7e1260890fac1e4d"
+   },
+   {
+    "zip": "FG-GML-473027-DEM5A-20241227.zip",
+    "zip_bytes": 8258763,
+    "zip_sha256": "f9c87f7b5a1764da30f811fc431d8547584e19d4bd31455bfa282ac669bd29c1"
+   },
+   {
+    "zip": "FG-GML-473027-DEM5B-20161001.zip",
+    "zip_bytes": 461869,
+    "zip_sha256": "821919284fa2b4776e1cf77219ebc6d6a9e9d19a794a277e2321602ef36c9655"
+   },
+   {
+    "zip": "FG-GML-473032-DEM5A-20241213.zip",
+    "zip_bytes": 3462066,
+    "zip_sha256": "7e5fb2d19667c6a41110b2e790c713073f9b00e825385c8319e596ac6b0307bd"
+   },
+   {
+    "zip": "FG-GML-473032-DEM5C-20200117.zip",
+    "zip_bytes": 1524538,
+    "zip_sha256": "3eaa41a3458ea65c9f9687103469bbd34e27d06f81f49cf608d13400d1931e80"
+   },
+   {
+    "zip": "FG-GML-473033-DEM5A-20241213.zip",
+    "zip_bytes": 7806004,
+    "zip_sha256": "216e031dec50ced536b28e167bd927915dc54486b6674877df121b953b1f45e4"
+   },
+   {
+    "zip": "FG-GML-473033-DEM5B-20161001.zip",
+    "zip_bytes": 1870929,
+    "zip_sha256": "460420a6a0ff016cd833a251d24eb16f0178d6ad7b0824c7e7e96642b815405c"
+   },
+   {
+    "zip": "FG-GML-473033-DEM5C-20200117.zip",
+    "zip_bytes": 1308594,
+    "zip_sha256": "c2e2af9054cc5e5a9196c054ea8f68beb8297c6fa63f82eded6a483b7298c55f"
+   },
+   {
+    "zip": "FG-GML-473034-DEM5A-20241213.zip",
+    "zip_bytes": 5572783,
+    "zip_sha256": "3117934ce4442750de3f0bafa64bd7c5d8e5a6f37ec4fd73dd575dd376fe30dc"
+   },
+   {
+    "zip": "FG-GML-473034-DEM5B-20180226.zip",
+    "zip_bytes": 502834,
+    "zip_sha256": "8a9d9bd22417018e29330f3112d86d0fd7a230dfd0df0002f8197a680288fdc6"
+   },
+   {
+    "zip": "FG-GML-473035-DEM5A-20241213.zip",
+    "zip_bytes": 3215666,
+    "zip_sha256": "ac5b91600a1e0055dcbbbd419dbbe813c0891c998a1551d6a05e7906cc0fe822"
+   },
+   {
+    "zip": "FG-GML-473035-DEM5B-20180226.zip",
+    "zip_bytes": 1454686,
+    "zip_sha256": "9897d99ab1072d210fc52f949e051de5ecc109a74271e26e84046bb590d0bc24"
+   },
+   {
+    "zip": "FG-GML-473036-DEM5A-20241213.zip",
+    "zip_bytes": 5491418,
+    "zip_sha256": "387f1178846608bef3969f80ef969501a865138d0caecf61e787225db18d8b99"
+   },
+   {
+    "zip": "FG-GML-473037-DEM5A-20231113.zip",
+    "zip_bytes": 7629698,
+    "zip_sha256": "37ef97a4f2f55ba58012ae94c9b8af7e8a3b4f7103f830691f10a3fc9c792a08"
+   },
+   {
+    "zip": "FG-GML-473037-DEM5B-20161001.zip",
+    "zip_bytes": 718429,
+    "zip_sha256": "3589fa16cabad2c1b7c9de389a05d3cda241452c141d969fc2eb254192221e11"
+   },
+   {
+    "zip": "FG-GML-473041-DEM5A-20241213.zip",
+    "zip_bytes": 367062,
+    "zip_sha256": "6cd99856d7fb91f172d461efc4c7bb7aeda9831842805ddc6eee5e48df308a44"
+   },
+   {
+    "zip": "FG-GML-473041-DEM5C-20200117.zip",
+    "zip_bytes": 80133,
+    "zip_sha256": "ead80a9c1c1ce68100972364c20af49fb30d515cfcb86b9de673d81bfd910b6c"
+   },
+   {
+    "zip": "FG-GML-473042-DEM5A-20241213.zip",
+    "zip_bytes": 7481606,
+    "zip_sha256": "583eec34063ede4fffdaba9360c010535b2f6950ebc5ad899ac1b4b56f82a3b2"
+   },
+   {
+    "zip": "FG-GML-473042-DEM5C-20200117.zip",
+    "zip_bytes": 2934189,
+    "zip_sha256": "07a59f9f811006afec1d9cce57c3833886aee03ff07644cebc40c1f69b95e8f3"
+   },
+   {
+    "zip": "FG-GML-473043-DEM5A-20241220.zip",
+    "zip_bytes": 8976553,
+    "zip_sha256": "3093e3a387eba314d518cdb8335c32cc486708dc11a236fe2f7300db153ad928"
+   },
+   {
+    "zip": "FG-GML-473043-DEM5B-20161001.zip",
+    "zip_bytes": 245306,
+    "zip_sha256": "c8b7e173f6bd41ce4825c2b57aa95ad8b4211265e2119bd33bad2e8648acdf75"
+   },
+   {
+    "zip": "FG-GML-473043-DEM5C-20200117.zip",
+    "zip_bytes": 1166307,
+    "zip_sha256": "8c1545520fdf93a087693b508cd8c24c924447f677588522516de4d28b1d799e"
+   },
+   {
+    "zip": "FG-GML-473044-DEM5A-20241213.zip",
+    "zip_bytes": 6884743,
+    "zip_sha256": "a42c12fb84dfd45ed621d21ed3f826022b47d71e2ecf3a7ed7ccb88aa45175e1"
+   },
+   {
+    "zip": "FG-GML-473044-DEM5B-20161001.zip",
+    "zip_bytes": 396081,
+    "zip_sha256": "8e959af4342c6a0d88e7e6ddad110a8f1f5c3a66df2f6ed6cb32ce68926afc98"
+   },
+   {
+    "zip": "FG-GML-473044-DEM5C-20200117.zip",
+    "zip_bytes": 1011124,
+    "zip_sha256": "615c8f396155c49cafdaaef599a711d1c77a0415d6fc20ab3a3801b64e701c5f"
+   },
+   {
+    "zip": "FG-GML-473045-DEM5A-20231113.zip",
+    "zip_bytes": 1841977,
+    "zip_sha256": "fc6378de1f72703cb4a7622c73e8b181750794380c4c6608ab8287689154c0b2"
+   },
+   {
+    "zip": "FG-GML-473046-DEM5A-20241213.zip",
+    "zip_bytes": 6906121,
+    "zip_sha256": "549dad8c65a54b40a71d7656827f76a49f39b91223dcd61d0737d269ffdcb7fc"
+   },
+   {
+    "zip": "FG-GML-473047-DEM5A-20161001.zip",
+    "zip_bytes": 8875414,
+    "zip_sha256": "edfd6c32c54e68bdc02f09fde6b3c72148ac0866cfcf34fb002973c191379886"
+   },
+   {
+    "zip": "FG-GML-473047-DEM5B-20161001.zip",
+    "zip_bytes": 153429,
+    "zip_sha256": "eb5b8fb25cdeffbd87873dfaad8b62890322c0f0a502d128d802f65c533695d7"
+   },
+   {
+    "zip": "FG-GML-473051-DEM5A-20241213.zip",
+    "zip_bytes": 5363333,
+    "zip_sha256": "f9fd40b6111a718f31243cdd51c5b17d9e89dda9c6b82b2d8f6f827a045fdb09"
+   },
+   {
+    "zip": "FG-GML-473051-DEM5C-20200117.zip",
+    "zip_bytes": 1885134,
+    "zip_sha256": "8580bc40946001e0c1db0bae6ca7a1a9fc139a6794a6ca3f303d95099ce65e0c"
+   },
+   {
+    "zip": "FG-GML-473052-DEM5A-20241213.zip",
+    "zip_bytes": 8669460,
+    "zip_sha256": "55348e6c480b72390a7cd1a29c544fb5d94fa966a796b6be827877c7ed93d05d"
+   },
+   {
+    "zip": "FG-GML-473052-DEM5C-20200117.zip",
+    "zip_bytes": 1477951,
+    "zip_sha256": "a45a60fc3773d3365d33a459249d8be6b13650a6fe6a6cb914340d0a0839fbb4"
+   },
+   {
+    "zip": "FG-GML-473053-DEM5A-20241220.zip",
+    "zip_bytes": 9110820,
+    "zip_sha256": "d2081a0f770eaf1b2b03c958f0454f997471a40f7e7115bda66f57d2a7808bde"
+   },
+   {
+    "zip": "FG-GML-473053-DEM5C-20200117.zip",
+    "zip_bytes": 728180,
+    "zip_sha256": "ebfda8ca71fccaed1ab94764cb62642c860b89a885391991e0817dea465429b2"
+   },
+   {
+    "zip": "FG-GML-473054-DEM5A-20241220.zip",
+    "zip_bytes": 7416764,
+    "zip_sha256": "85e14778a1e88627690542ac4f355e201855b9bf3f921e0722548c5bd4cb3c0b"
+   },
+   {
+    "zip": "FG-GML-473054-DEM5C-20200117.zip",
+    "zip_bytes": 1473023,
+    "zip_sha256": "6c04b7b09f61dced3165ba8d2c95f852a9fd8d3f7dc226a1985bde53cb6582b3"
+   },
+   {
+    "zip": "FG-GML-473055-DEM5A-20241220.zip",
+    "zip_bytes": 8644244,
+    "zip_sha256": "8be7d1940d0c252e66bf5e6454c859bbb95608f567e507fa17c96d6ab44e9102"
+   },
+   {
+    "zip": "FG-GML-473055-DEM5C-20200117.zip",
+    "zip_bytes": 1498733,
+    "zip_sha256": "eb4baf44fc67fb9623154f37534e76e333cd91b03c4d53d19d67d53f55a3ffc6"
+   },
+   {
+    "zip": "FG-GML-473056-DEM5A-20231113.zip",
+    "zip_bytes": 8091988,
+    "zip_sha256": "b5073030275d10661817762fe43a4bd72ac3014e1a761d63b9feca7ecd9a1bb2"
+   },
+   {
+    "zip": "FG-GML-473057-DEM5A-20231113.zip",
+    "zip_bytes": 7159338,
+    "zip_sha256": "ab316d9207f586e9cb002700e928142ba40eca0ad0621146be5375262efcbd5c"
+   },
+   {
+    "zip": "FG-GML-473057-DEM5B-20161001.zip",
+    "zip_bytes": 161564,
+    "zip_sha256": "6e1369ebfb6158526814b2bd142f4240966e3affc5141625e6b155d86731f5f2"
+   },
+   {
+    "zip": "FG-GML-473060-DEM5C-20200117.zip",
+    "zip_bytes": 2884,
+    "zip_sha256": "c0379305479bfe31380c1aac265133a368ffb583eb2b4b14a2e988e909bc6deb"
+   },
+   {
+    "zip": "FG-GML-473061-DEM5A-20241220.zip",
+    "zip_bytes": 2841327,
+    "zip_sha256": "9fc3d764e2cc8ce851da4a04cac9e8fef2569cc85215adcb3ac529a99cb3c14a"
+   },
+   {
+    "zip": "FG-GML-473062-DEM5A-20241213.zip",
+    "zip_bytes": 8964744,
+    "zip_sha256": "15f43afe8535b3a2b404e1e06c2a09ff91997e7856fbd072c08045af00142034"
+   },
+   {
+    "zip": "FG-GML-473063-DEM5A-20241220.zip",
+    "zip_bytes": 8899609,
+    "zip_sha256": "23ee4fab02535b1adc89cb8b4e3d7b1ac9427f77ce20a84fad389f9a349f03d0"
+   },
+   {
+    "zip": "FG-GML-473063-DEM5B-20161001.zip",
+    "zip_bytes": 4120678,
+    "zip_sha256": "32eff1de69ab3765ff02d4f6be83f5813f9f99161c550e8be8c847e40856ddd2"
+   },
+   {
+    "zip": "FG-GML-473064-DEM5A-20241220.zip",
+    "zip_bytes": 9378181,
+    "zip_sha256": "ef0141a4888d7eabc90c634dea62385db659f23a1dc15892c6f789950fe50047"
+   },
+   {
+    "zip": "FG-GML-473064-DEM5B-20161001.zip",
+    "zip_bytes": 1117533,
+    "zip_sha256": "f72038dcbbcd1079a70c5936d0fae46b1a8f8c286d63302500634ed51059e2f9"
+   },
+   {
+    "zip": "FG-GML-473064-DEM5C-20200117.zip",
+    "zip_bytes": 3653468,
+    "zip_sha256": "6effcb59775f00d759993e16c03043e266b905bc4f532d2208c3318737e650ae"
+   },
+   {
+    "zip": "FG-GML-473065-DEM5A-20241220.zip",
+    "zip_bytes": 9157002,
+    "zip_sha256": "697b92271d589a747d490db7583de91060386c1551e985b36c76df67ce232d39"
+   },
+   {
+    "zip": "FG-GML-473065-DEM5C-20200117.zip",
+    "zip_bytes": 131066,
+    "zip_sha256": "a219400faee1bc5073e42128fd4ef84e833686c66d9bd688b21eab728c85d18f"
+   },
+   {
+    "zip": "FG-GML-473066-DEM5A-20241213.zip",
+    "zip_bytes": 9442414,
+    "zip_sha256": "6c4f1773661831da65b2200fec1203a9ba7596d1240c906b1848f1568104510a"
+   },
+   {
+    "zip": "FG-GML-473067-DEM5A-20241213.zip",
+    "zip_bytes": 9142241,
+    "zip_sha256": "744895c5ebaf49fee6bcb08ecb7a92f247cac7fdbe6af4e357a6d2cc4af5d058"
+   },
+   {
+    "zip": "FG-GML-473071-DEM5A-20241220.zip",
+    "zip_bytes": 3203835,
+    "zip_sha256": "02b503a69cb7f4960dcd63619805ad254170c131beba66c565069edc37192436"
+   },
+   {
+    "zip": "FG-GML-473071-DEM5C-20200117.zip",
+    "zip_bytes": 1959195,
+    "zip_sha256": "59b4b8426677dca8cebe1cf7ff3fea2c5744dd27a2b504d9cf5997e4910e6514"
+   },
+   {
+    "zip": "FG-GML-473072-DEM5A-20190701.zip",
+    "zip_bytes": 9206902,
+    "zip_sha256": "04ea3898491fbcca5055476475951123bca6d09152a270620f9798b52f914234"
+   },
+   {
+    "zip": "FG-GML-473073-DEM5A-20241220.zip",
+    "zip_bytes": 9069298,
+    "zip_sha256": "2667a85c4dd94392e5b8d1d7f6a21655617c81c1dc3564945dc51160cf8eca07"
+   },
+   {
+    "zip": "FG-GML-473073-DEM5B-20161001.zip",
+    "zip_bytes": 192986,
+    "zip_sha256": "ad223120bf9376ca45cfb89686edc56a2937f0f085d60755aa98d1cbc0b97589"
+   },
+   {
+    "zip": "FG-GML-473074-DEM5A-20241227.zip",
+    "zip_bytes": 9108588,
+    "zip_sha256": "d1418578c22af335cef60f33e1a2cc1eb8b2b08081294339cc1bb16da5b2cc00"
+   },
+   {
+    "zip": "FG-GML-473074-DEM5B-20161001.zip",
+    "zip_bytes": 110553,
+    "zip_sha256": "5de354f1a1fece8dca1932be2c938f8514c1fc22a85d82966cb9862dc001a6b0"
+   },
+   {
+    "zip": "FG-GML-473074-DEM5C-20210115.zip",
+    "zip_bytes": 2948787,
+    "zip_sha256": "c4e759dce78c60010120354ed730a2757125f805b7e62dafd106053ca47bd8c2"
+   },
+   {
+    "zip": "FG-GML-473075-DEM5A-20241227.zip",
+    "zip_bytes": 8808316,
+    "zip_sha256": "d0cdfb82ea4aa1231e347dced76713d34d004382c31b7679cdfac32590149811"
+   },
+   {
+    "zip": "FG-GML-473075-DEM5C-20210115.zip",
+    "zip_bytes": 7013516,
+    "zip_sha256": "1f9591191b7d894f17dbead29756686b0c17f9a6f410eae53443b0a2127aab5c"
+   },
+   {
+    "zip": "FG-GML-473076-DEM5A-20241220.zip",
+    "zip_bytes": 9675356,
+    "zip_sha256": "81a797a0be8047dfa8d4cead67323b185d6c862dda9ab7a533e087583da0af7e"
+   },
+   {
+    "zip": "FG-GML-473077-DEM5A-20241213.zip",
+    "zip_bytes": 7800350,
+    "zip_sha256": "7091355a32007f49372dc37a880ce241d04d69317ea668337ed8d23715dc43ac"
+   }
+  ]
+ },
+ {
+  "key": "base/dem5/5139.tif",
+  "bytes": 7872800,
+  "sha256": "39c305b9bc174e81678e80ac26868a6ee126dc9a7d67dc5f33aad1f776be5687",
+  "md5": "c89cf7493e61ffda748d85b1aaf573cd",
+  "served_bytes": 7872800,
+  "zips": [
+   {
+    "zip": "FG-GML-513903-DEM5A-20250214.zip",
+    "zip_bytes": 500946,
+    "zip_sha256": "150512a6b8e70f1f7f6bde83d7269f15396330268ce50b150480c79cd752cb5b"
+   },
+   {
+    "zip": "FG-GML-513904-DEM5A-20250214.zip",
+    "zip_bytes": 1308545,
+    "zip_sha256": "ef6c224dcd6d4c60b049932a785a429e96d93f099cbdd968928ef0c3c7517a68"
+   },
+   {
+    "zip": "FG-GML-513913-DEM5A-20250214.zip",
+    "zip_bytes": 318182,
+    "zip_sha256": "8e8523401f1e589ed15f403556f9e3eacfa85dd8b0430470be41b00f812c2cf1"
+   },
+   {
+    "zip": "FG-GML-513914-DEM5A-20250214.zip",
+    "zip_bytes": 1631939,
+    "zip_sha256": "9fe5a098a3d51c8113694624e1d1669185cc75376f94f55004e97f55dc298a70"
+   },
+   {
+    "zip": "FG-GML-513920-DEM5A-20250214.zip",
+    "zip_bytes": 64558,
+    "zip_sha256": "ee43c323e09c30f487a91f68afa4f207ba7d1738c25f0eadf51d713f5c41908a"
+   },
+   {
+    "zip": "FG-GML-513921-DEM5A-20250214.zip",
+    "zip_bytes": 1354150,
+    "zip_sha256": "17d2cd0a294a676b1e3ad4522d139823a9fbdca3ab92d6ce3cd6a82c3702ea0b"
+   },
+   {
+    "zip": "FG-GML-513931-DEM5A-20250214.zip",
+    "zip_bytes": 254564,
+    "zip_sha256": "32b0a89a43690db057b98bac84e7b74cfb1426081c7b4d832771042958d8f86c"
+   },
+   {
+    "zip": "FG-GML-513932-DEM5A-20250214.zip",
+    "zip_bytes": 30724,
+    "zip_sha256": "a30c2809691721085cbab3479c288e16ac5f0df688c77e7b98a8aebe32802d44"
+   },
+   {
+    "zip": "FG-GML-513941-DEM5A-20250214.zip",
+    "zip_bytes": 178842,
+    "zip_sha256": "1b8925abae6d657db937c99e577d58fe3b6cbab6420a70ff551198f0ac48bf5b"
+   },
+   {
+    "zip": "FG-GML-513942-DEM5A-20250214.zip",
+    "zip_bytes": 1365036,
+    "zip_sha256": "3d2f2d7d24acd53c7689289241a42277089e2b0a91465ee23de21d9600977ddd"
+   },
+   {
+    "zip": "FG-GML-513952-DEM5A-20250214.zip",
+    "zip_bytes": 158313,
+    "zip_sha256": "3e6a4b39546d6725222fe8fe2c7647f84e1e8d1a1ccf39745bfc6105020069d0"
+   },
+   {
+    "zip": "FG-GML-513962-DEM5A-20250214.zip",
+    "zip_bytes": 323715,
+    "zip_sha256": "804756a1c688865c655a9ca39137b4aad5121b1ca0c945abe0dc5b10e50c6f37"
+   }
+  ]
+ }
+]

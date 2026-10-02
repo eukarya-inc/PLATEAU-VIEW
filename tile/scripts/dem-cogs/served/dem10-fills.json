@@ -1,0 +1,1237 @@
+[
+ {
+  "key": "base/dem10/3623-fill.tif",
+  "bytes": 5712171,
+  "sha256": "765af06d3c0bd723b5539b744d1e2488f7beb1dd8a59b5cffec9f44173b2682e",
+  "md5": "59d242f5887ae5f5d85efd9c23d5ad8e",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2000.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "362306",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362306-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-06-dem10b-20161001.xml",
+    "valid_px": 91476,
+    "gsi_id": 537023,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 192520,
+    "zip_sha256": "47fb3e28faab70e951ba35dc669bede1ef0356643d5e247f3ba29dc2234ef927"
+   },
+   {
+    "mesh": "362324",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362324-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-24-dem10b-20161001.xml",
+    "valid_px": 1577,
+    "gsi_id": 537024,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 47328,
+    "zip_sha256": "b34427a5b9f9b538f392718902125fbc7683865c2e43b5af836c7ae46be67dcb"
+   },
+   {
+    "mesh": "362327",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362327-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-27-dem10b-20161001.xml",
+    "valid_px": 35186,
+    "gsi_id": 537025,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 94421,
+    "zip_sha256": "0f1d05d38d68fb5b90bbec121db50d342c9150569e8fff5c6c5ea3a3a1c03fc2"
+   },
+   {
+    "mesh": "362335",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362335-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-35-dem10b-20161001.xml",
+    "valid_px": 255066,
+    "gsi_id": 537026,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 666969,
+    "zip_sha256": "a1ad19b54c94697af551bebe665540ba43f74d1edc9603060b0af1c2dd82fff6"
+   },
+   {
+    "mesh": "362336",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362336-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-36-dem10b-20161001.xml",
+    "valid_px": 638401,
+    "gsi_id": 537027,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1444355,
+    "zip_sha256": "3668423e1bea1362195dc147e31ce21ce269ad4c919491db750a943342646df9"
+   },
+   {
+    "mesh": "362337",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362337-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-37-dem10b-20161001.xml",
+    "valid_px": 176390,
+    "gsi_id": 537028,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 429351,
+    "zip_sha256": "f1786b3a94cb4fef62f43dfe164b32359047d50443ff15e0156bbed3150897ce"
+   },
+   {
+    "mesh": "362345",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362345-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-45-dem10b-20161001.xml",
+    "valid_px": 49850,
+    "gsi_id": 537029,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 177442,
+    "zip_sha256": "12a010239aa823838cafa8e79d615eb2de518da5c25df0a703a392cb033b2e18"
+   },
+   {
+    "mesh": "362346",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362346-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-46-dem10b-20161001.xml",
+    "valid_px": 738587,
+    "gsi_id": 537030,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1661244,
+    "zip_sha256": "96f5e3f46b65896373c18c9055ffc523ab3353b7feef25af403f2380410cd45f"
+   },
+   {
+    "mesh": "362347",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362347-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-47-dem10b-20161001.xml",
+    "valid_px": 274137,
+    "gsi_id": 537031,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 681254,
+    "zip_sha256": "7b0add068395f7a6b023cc81e2f06f75528d628a63bfb424b8dddf4de29039a3"
+   },
+   {
+    "mesh": "362356",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-362356-DEM10B-20161001.zip",
+    "xml": "FG-GML-3623-56-dem10b-20161001.xml",
+    "valid_px": 45938,
+    "gsi_id": 537033,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 136335,
+    "zip_sha256": "9e86854d9aa2534e128625ad45c2b82199282c8b169759620045d13d8e227ea1"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/3926-fill.tif",
+  "bytes": 4577,
+  "sha256": "6cfc99731f5019fdca47aef55adad82961494ae029bb38738419d83db4d9e7c1",
+  "md5": "8b64dc53ba0c0058a958e1250bd83853",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "392676",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-392676-DEM10B-20161001.zip",
+    "xml": "FG-GML-3926-76-DEM10B-20161001.xml",
+    "valid_px": 297,
+    "gsi_id": 537082,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 4443,
+    "zip_sha256": "8af4f6d990a2f61f2127d44eef4a9f8acc4556c6bd2584672b4ab76058e314e5"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4042-fill.tif",
+  "bytes": 12283,
+  "sha256": "31c19f432f2e7a2edfbed7a31c1feb58972d49a2d46fcec5e78ca39887b85e0d",
+  "md5": "4525dd540bb531dbe8e46748122eebce",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "404200",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-404200-DEM10B-20161001.zip",
+    "xml": "FG-GML-4042-00-DEM10B-20161001.xml",
+    "valid_px": 1810,
+    "gsi_id": 537149,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 21941,
+    "zip_sha256": "a1ec9d69b2a9f87866568c1a7c8122a04acdb5d47433b61b2148404a674909ce"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4329-fill.tif",
+  "bytes": 191862,
+  "sha256": "78a29757b6bcfdf3794ef832ee4923dd7af44dea640bc0b7da879273a0104a67",
+  "md5": "508f290cdc093cd5fac6f6617b6bddcd",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2000.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "432910",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-432910-DEM10B-20161001.zip",
+    "xml": "FG-GML-4329-10-dem10b-20161001.xml",
+    "valid_px": 4052,
+    "gsi_id": 537197,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 56543,
+    "zip_sha256": "6313d3cff026697363295f0a99dee5490772471a6345dd9abc684e798772b59a"
+   },
+   {
+    "mesh": "432916",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-432916-DEM10B-20161001.zip",
+    "xml": "FG-GML-4329-16-dem10b-20161001.xml",
+    "valid_px": 4,
+    "gsi_id": 537198,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 42988,
+    "zip_sha256": "9221a09cc8294ead0066bb70ebfef1bf048cae75bb39807dfb80236c0eb113df"
+   },
+   {
+    "mesh": "432920",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-432920-DEM10B-20161001.zip",
+    "xml": "FG-GML-4329-20-dem10b-20161001.xml",
+    "valid_px": 691,
+    "gsi_id": 537199,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 45082,
+    "zip_sha256": "d3968765ed31a02da28f0672e90bf5ddaae0f2f7f74aec4cac1a5d3e57060fb3"
+   },
+   {
+    "mesh": "432951",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-432951-DEM10B-20161001.zip",
+    "xml": "FG-GML-4329-51-dem10b-20161001.xml",
+    "valid_px": 53169,
+    "gsi_id": 537200,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 164741,
+    "zip_sha256": "c12048143f79250b492d3bd9a3a7a71265dbf89692da47aad83d829214891b6a"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4429-fill.tif",
+  "bytes": 108333,
+  "sha256": "11f13b01c516b49b9e47fbdbebd8e8a2c1e4f9caa37389bf10ac5dd8235a9879",
+  "md5": "40f0f42627b8241982950a21cf55c328",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "442964",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-442964-DEM10B-20161001.zip",
+    "xml": "FG-GML-4429-64-DEM10B-20161001.xml",
+    "valid_px": 33554,
+    "gsi_id": 537208,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 127702,
+    "zip_sha256": "49651af65f7889ab685f82cf07df63a0682bbe7ee810583d363eabe6f49fce91"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4530-fill.tif",
+  "bytes": 5064,
+  "sha256": "3ae4966748c702a3b2e76fe99178c581e268df6c063c818586d9fb6acd72bacc",
+  "md5": "66a6e1ea50f5ce92f6db226a09ba335c",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "453000",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-453000-DEM10B-20161001.zip",
+    "xml": "FG-GML-4530-00-DEM10B-20161001.xml",
+    "valid_px": 145,
+    "gsi_id": 537214,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 13520,
+    "zip_sha256": "1e9bb3052cf0912f89f13017bd1542c0b9f790c381b39a05c4526540e61836e1"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4629-fill.tif",
+  "bytes": 46468,
+  "sha256": "d1c3b268660f7426f860fc3280a271b050f5ded0f1cc5217b235c346600dde9b",
+  "md5": "0adf649c196dbafe2439ac19c9a21134",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "462913",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-462913-DEM10B-20161001.zip",
+    "xml": "FG-GML-4629-13-DEM10B-20161001.xml",
+    "valid_px": 460,
+    "gsi_id": 537236,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 5998,
+    "zip_sha256": "836d582665484d63bd5f34929e3306472da8ce0195ac2cfbc63fe558fc121f28"
+   },
+   {
+    "mesh": "462923",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-462923-DEM10B-20161001.zip",
+    "xml": "FG-GML-4629-23-DEM10B-20161001.xml",
+    "valid_px": 4433,
+    "gsi_id": 537238,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 34433,
+    "zip_sha256": "ad59b72e401a0091ca592b2103d3777d90fd609d67e76bd24799b37741ae7288"
+   },
+   {
+    "mesh": "462975",
+    "product": "DEM10B",
+    "edition": "2020-04-09",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2020-04-09",
+    "zip": "FG-GML-462975-DEM10B-20200409.zip",
+    "xml": "FG-GML-4629-75-DEM10B-20200409.xml",
+    "valid_px": 53,
+    "gsi_id": 537242,
+    "gsi_file_update_date": "2020/04/09",
+    "zip_bytes": 38267,
+    "zip_sha256": "7dd97bf5d6c63f9867a7a2fa06b628a7c6de1dbc6e97a60427423aeb6ba62897"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4729-fill.tif",
+  "bytes": 4991,
+  "sha256": "2e49b049d3989e8c269427b7d07e925be824890847902d7c37e6f977f7b9c631",
+  "md5": "f1bc79bf5fad20c171fe02b1fbaf8738",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "472915",
+    "product": "DEM10B",
+    "edition": "2020-04-09",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2020-04-09",
+    "zip": "FG-GML-472915-DEM10B-20200409.zip",
+    "xml": "FG-GML-4729-15-DEM10B-20200409.xml",
+    "valid_px": 291,
+    "gsi_id": 537278,
+    "gsi_file_update_date": "2020/04/09",
+    "zip_bytes": 39083,
+    "zip_sha256": "f4dd16eb57861015b2023e73a08ddf41cfe8d476f00133ad4bdc3aac29cccf74"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4828-fill.tif",
+  "bytes": 126595,
+  "sha256": "b7dab67543ebfe5537edda894019632e85f2ac7af489327bd01ea0654f7b7d18",
+  "md5": "1889c7759a0629e49b3dcec63791cf13",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "482802",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-482802-DEM10B-20161001.zip",
+    "xml": "FG-GML-4828-02-DEM10B-20161001.xml",
+    "valid_px": 9409,
+    "gsi_id": 537376,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 49025,
+    "zip_sha256": "5301c934f5f55ca654564b3c02b56637d77d72a590ecafdc2c685414c95182f6"
+   },
+   {
+    "mesh": "482803",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-482803-DEM10B-20161001.zip",
+    "xml": "FG-GML-4828-03-DEM10B-20161001.xml",
+    "valid_px": 20411,
+    "gsi_id": 537377,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 79973,
+    "zip_sha256": "f7234527d61800603331d7ccd2d1df8eff8f551bb1b6ad1ffacd66045e36eecd"
+   },
+   {
+    "mesh": "482820",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-482820-DEM10B-20161001.zip",
+    "xml": "FG-GML-4828-20-DEM10B-20161001.xml",
+    "valid_px": 14,
+    "gsi_id": 537378,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 4475,
+    "zip_sha256": "21e95ab11abb688a6b0ab8b53dc2777e143d6cc06b691a9c6f5ecadca3073be3"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4928-fill.tif",
+  "bytes": 3451,
+  "sha256": "3008fa4783f87b5b2944b9e0701e15f2444aa93cb7259a9887c36f13b2c080b4",
+  "md5": "6dfee93630eaf534e0044d65b5a12ab5",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "492866",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-492866-DEM10B-20161001.zip",
+    "xml": "FG-GML-4928-66-DEM10B-20161001.xml",
+    "valid_px": 78,
+    "gsi_id": 537515,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 3011,
+    "zip_sha256": "8ac155414d8ef3f4cc6ee290096a5cdd4a96bba3e577d282acd449dfabac3e40"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/5030-fill.tif",
+  "bytes": 93755,
+  "sha256": "fec9842c551ec137571b16689c042cf2fb3b8bc6de81312d04546cc2128473d9",
+  "md5": "f4f1abef85ea72a871537c841b974fe6",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "503030",
+    "product": "DEM10B",
+    "edition": "2020-04-09",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2020-04-09",
+    "zip": "FG-GML-503030-DEM10B-20200409.zip",
+    "xml": "FG-GML-5030-30-DEM10B-20200409.xml",
+    "valid_px": 17126,
+    "gsi_id": 537809,
+    "gsi_file_update_date": "2020/04/09",
+    "zip_bytes": 69453,
+    "zip_sha256": "ce4cac2cc56b24a2685b4356590da4da53b3395137fc1d90c9c75248691a4aef"
+   },
+   {
+    "mesh": "503041",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-503041-DEM10B-20161001.zip",
+    "xml": "FG-GML-5030-41-DEM10B-20161001.xml",
+    "valid_px": 9743,
+    "gsi_id": 537817,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 51574,
+    "zip_sha256": "63acfddca00a1b4eb893f94f981c665ad6d88d69d22ec94609882acd2fbbe759"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/5032-fill.tif",
+  "bytes": 15569,
+  "sha256": "99250baa8cbb4e1656dc55fb0bbb0f89f11af691e0a1f2b1c4492faf5f8af1af",
+  "md5": "f1b81308ba2c20164bca0cef2c01d2f7",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "503243",
+    "product": "DEM10B",
+    "edition": "2018-11-14",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2018-11-14",
+    "zip": "FG-GML-503243-DEM10B-20181114.zip",
+    "xml": "FG-GML-5032-43-DEM10B-20181114.xml",
+    "valid_px": 3137,
+    "gsi_id": 537909,
+    "gsi_file_update_date": "2018/11/14",
+    "zip_bytes": 46909,
+    "zip_sha256": "cedcdf9e0a3c4c71cca34666c39b2456780557f3c64604891766d42a0b902936"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/5130-fill.tif",
+  "bytes": 32365,
+  "sha256": "c90f71d90846359d996a8891b5f3994a0d5c8000c84366905afc8c3aec7a9e94",
+  "md5": "aea874032b2111c067b2453699e16993",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "513020",
+    "product": "DEM10B",
+    "edition": "2017-08-04",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2017-08-04",
+    "zip": "FG-GML-513020-DEM10B-20170804.zip",
+    "xml": "FG-GML-5130-20-DEM10B-20170804.xml",
+    "valid_px": 7666,
+    "gsi_id": 538108,
+    "gsi_file_update_date": "2017/08/04",
+    "zip_bytes": 60638,
+    "zip_sha256": "62e880b6a87c4244b64e4ca0b8cdfc2e218f9ce25ecd358029e0d4bb35e47432"
+   },
+   {
+    "mesh": "513030",
+    "product": "DEM10B",
+    "edition": "2017-08-04",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2017-08-04",
+    "zip": "FG-GML-513030-DEM10B-20170804.zip",
+    "xml": "FG-GML-5130-30-DEM10B-20170804.xml",
+    "valid_px": 3,
+    "gsi_id": 538110,
+    "gsi_file_update_date": "2017/08/04",
+    "zip_bytes": 38068,
+    "zip_sha256": "4fea0594d34d8d0ac48fd064f77a245fd6271d83fcac5ac22dd49b54c182a058"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/5132-fill.tif",
+  "bytes": 279224,
+  "sha256": "5da0d1f00440644a84fab96332e1251b29920ceda36653758d4327f4bf509163",
+  "md5": "6a0861d916c508f194cd4beb871229b5",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "513203",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-513203-DEM10B-20161001.zip",
+    "xml": "FG-GML-5132-03-DEM10B-20161001.xml",
+    "valid_px": 42425,
+    "gsi_id": 538177,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 171661,
+    "zip_sha256": "36b26b0a7b5cb7643a8730bd5c42beea6fd77ba51278516e4701c6169190d2a9"
+   },
+   {
+    "mesh": "513204",
+    "product": "DEM10B",
+    "edition": "2020-04-09",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2020-04-09",
+    "zip": "FG-GML-513204-DEM10B-20200409.zip",
+    "xml": "FG-GML-5132-04-DEM10B-20200409.xml",
+    "valid_px": 33296,
+    "gsi_id": 538178,
+    "gsi_file_update_date": "2020/04/09",
+    "zip_bytes": 130312,
+    "zip_sha256": "07a54a406021c9119ae93f476fe4514f90a0cb7cab9bc26c50582f03198a2330"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/5133-fill.tif",
+  "bytes": 10032,
+  "sha256": "bd359821f99b192afedfb23ca230592da9babb404fad06fc80446deee17b2e41",
+  "md5": "1e382e70a16181a08b1011ff90b205bd",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "513313",
+    "product": "DEM10B",
+    "edition": "2020-04-09",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2020-04-09",
+    "zip": "FG-GML-513313-DEM10B-20200409.zip",
+    "xml": "FG-GML-5133-13-DEM10B-20200409.xml",
+    "valid_px": 1400,
+    "gsi_id": 538247,
+    "gsi_file_update_date": "2020/04/09",
+    "zip_bytes": 42438,
+    "zip_sha256": "0017d2ef4a8eee10fe48cea9fb103439259350c4851708f819c50fe9db0a6ac1"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/6039-fill.tif",
+  "bytes": 4047,
+  "sha256": "cd874a52ca43d57e4ca3a1acf01a3b142e5e676ac5112ba1cc0766ee6a43b1ef",
+  "md5": "af3cac6b0b815485512e710b8c9ec53b",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "603963",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-603963-DEM10B-20161001.zip",
+    "xml": "FG-GML-6039-63-DEM10B-20161001.xml",
+    "valid_px": 8,
+    "gsi_id": 540558,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1441,
+    "zip_sha256": "b5395fb043f34176973572910d231a378bd7d39c92ab94292d22a96ce23b2f53"
+   },
+   {
+    "mesh": "603964",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-603964-DEM10B-20161001.zip",
+    "xml": "FG-GML-6039-64-DEM10B-20161001.xml",
+    "valid_px": 1,
+    "gsi_id": 540559,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1139,
+    "zip_sha256": "c09d597447c4a11bb68e0a36f3a9078533a2edb7721e241b4e1de3cffab08d05"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/6440-fill.tif",
+  "bytes": 1552197,
+  "sha256": "fa4b9393b8ef5bf8df719c495c5cc9ad05aa00aff03b954d907b3a7d4051c3e2",
+  "md5": "0f622115a5efe1fa47ceb26b1a9f4f4f",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "644016",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-644016-DEM10B-20161001.zip",
+    "xml": "FG-GML-6440-16-DEM10B-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541006,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1859436,
+    "zip_sha256": "b888aeae2b270867a569cf62f82dedd0e143889298e248e469b4b7b003beaa91"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/6545-fill.tif",
+  "bytes": 16282355,
+  "sha256": "52917d938877ace2a3ed8d7bfc92c518ebcd960fa3bc36d79964bb2ea9148405",
+  "md5": "8fdf66abdd935b9a88a15c87d0d7717a",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2000.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "654500",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654500-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-00-dem10b-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541525,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1115365,
+    "zip_sha256": "8a1aada60cd5542b7b1321e9ee9b89f9789294b98c593cd4ddec48bce11ad7c8"
+   },
+   {
+    "mesh": "654501",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654501-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-01-dem10b-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541526,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 856216,
+    "zip_sha256": "fa9123b5f17d831761787621d948bcf71f9f240abd6ee46d1e0ce107683dee11"
+   },
+   {
+    "mesh": "654502",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654502-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-02-dem10b-20161001.xml",
+    "valid_px": 325030,
+    "gsi_id": 541527,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 152106,
+    "zip_sha256": "4489854c9943119ccde0cedfb638760a1d2c5e02790022a16230f8166810456b"
+   },
+   {
+    "mesh": "654504",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654504-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-04-dem10b-20161001.xml",
+    "valid_px": 78963,
+    "gsi_id": 541528,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 161725,
+    "zip_sha256": "19f48f984acea4f40da19d3b05e0d859e864742b09552e80e05a2e4dffa192c5"
+   },
+   {
+    "mesh": "654505",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654505-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-05-dem10b-20161001.xml",
+    "valid_px": 520372,
+    "gsi_id": 541529,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 664153,
+    "zip_sha256": "71eaf6cbe286110bcb7fb99987f7e544c520ef94d27162e1c3aa5f3765a55f5a"
+   },
+   {
+    "mesh": "654510",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654510-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-10-dem10b-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541532,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1157077,
+    "zip_sha256": "6ea8772f5696f5de3ecd4b4cdbeea67af0ed7d5510123aa7a7ca7c27c119a72c"
+   },
+   {
+    "mesh": "654511",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654511-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-11-dem10b-20161001.xml",
+    "valid_px": 842255,
+    "gsi_id": 541533,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 990942,
+    "zip_sha256": "57fb4dd3b00efbbf446de1236fbe2a0db81b341a431b6ce5f47537aa35af3cca"
+   },
+   {
+    "mesh": "654512",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654512-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-12-dem10b-20161001.xml",
+    "valid_px": 61342,
+    "gsi_id": 541534,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 116813,
+    "zip_sha256": "9d30ee585c0585f5a83ec92327237d8545d90c19e2f6b3a0ceceec44254722b1"
+   },
+   {
+    "mesh": "654520",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654520-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-20-dem10b-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541537,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1105628,
+    "zip_sha256": "6f6ad842d6fe52eb9f18da22eaf13c671146e2d5c4aeddb24dfc9b781bdfe3c4"
+   },
+   {
+    "mesh": "654521",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654521-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-21-dem10b-20161001.xml",
+    "valid_px": 732428,
+    "gsi_id": 541538,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 887609,
+    "zip_sha256": "5e5ef4d81b028064fe4022cea8ad7eaa5f67a2326afb2a93401df8a319d65846"
+   },
+   {
+    "mesh": "654522",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654522-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-22-dem10b-20161001.xml",
+    "valid_px": 62832,
+    "gsi_id": 541539,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 79713,
+    "zip_sha256": "640b06a71915edeb217ab1d2e844cbeb5c03674afaab237cb142a4d755dbdde3"
+   },
+   {
+    "mesh": "654530",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654530-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-30-dem10b-20161001.xml",
+    "valid_px": 843750,
+    "gsi_id": 541540,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 789554,
+    "zip_sha256": "ed94bba0805c653201cc4962e28f713400114f05606491dc565ca734035c12df"
+   },
+   {
+    "mesh": "654531",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654531-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-31-dem10b-20161001.xml",
+    "valid_px": 376587,
+    "gsi_id": 541541,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 427458,
+    "zip_sha256": "62f799e2d866f06724d433dacf39b1687c3b5ea7dc05b71b2a90abac1da92176"
+   },
+   {
+    "mesh": "654532",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654532-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-32-dem10b-20161001.xml",
+    "valid_px": 47174,
+    "gsi_id": 541542,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 78439,
+    "zip_sha256": "153ebe1830aa84e00ad95e8e7274efec12fdf2db7f39c1b0a309833031db020c"
+   },
+   {
+    "mesh": "654540",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654540-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-40-dem10b-20161001.xml",
+    "valid_px": 688922,
+    "gsi_id": 541544,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 716843,
+    "zip_sha256": "151e4d7405058d1708e3869985377d6c4c6e27916185c3af58fd7433b4ae249e"
+   },
+   {
+    "mesh": "654541",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654541-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-41-dem10b-20161001.xml",
+    "valid_px": 3208,
+    "gsi_id": 541545,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 48289,
+    "zip_sha256": "2b80ac487b61821fc87a794bb1035c85a56823f1e64c8127e09ea70dd9321651"
+   },
+   {
+    "mesh": "654550",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654550-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-50-dem10b-20161001.xml",
+    "valid_px": 458392,
+    "gsi_id": 541548,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 703019,
+    "zip_sha256": "e519480f533511ccf4674e5b17777a325620823f3187bc12d2be1195b01c38df"
+   },
+   {
+    "mesh": "654560",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654560-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-60-dem10b-20161001.xml",
+    "valid_px": 658506,
+    "gsi_id": 541551,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1421890,
+    "zip_sha256": "3108c83ff5f4e2a561df2f1bb7b2fe19a10fca1507a7276b1a5c634f02c3feab"
+   },
+   {
+    "mesh": "654570",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654570-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-70-dem10b-20161001.xml",
+    "valid_px": 833594,
+    "gsi_id": 541555,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1989369,
+    "zip_sha256": "40a9af8e1b8cd9b12d4e55ebdd2996e35a6d947444eda2a68de04ab9ae4ae316"
+   },
+   {
+    "mesh": "654571",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-654571-DEM10B-20161001.zip",
+    "xml": "FG-GML-6545-71-dem10b-20161001.xml",
+    "valid_px": 110067,
+    "gsi_id": 541556,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 319429,
+    "zip_sha256": "30e65ac972a1d92f24637293be999cde95f5d0e7f1a0e097039d92defeec3158"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/6645-fill.tif",
+  "bytes": 9427262,
+  "sha256": "a8c73c637b3c46565ca2f8c6a6e1a373f5586de69b0dfe068ee4491c821043d2",
+  "md5": "bf7f0a556d5748699e89c3a615ea2282",
+  "batch": "2026-10-01 batch 1 (19 COGs)",
+  "source": "GSI 基盤地図情報 download service (login), 2026-10-01",
+  "labels": [
+   "fguuid:jgd2000.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "664500",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664500-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-00-dem10b-20161001.xml",
+    "valid_px": 840916,
+    "gsi_id": 541710,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 2108534,
+    "zip_sha256": "54151c61a22eb5662b90b125bae600a6eba2a78ee0eb623ca679ae519ad843f8"
+   },
+   {
+    "mesh": "664501",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664501-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-01-dem10b-20161001.xml",
+    "valid_px": 629915,
+    "gsi_id": 541711,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1616412,
+    "zip_sha256": "0a4e8bab6a316f5a89a962dc7b5dbfd6917f0b1ba6e0066b600aebe0917e0d6b"
+   },
+   {
+    "mesh": "664510",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664510-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-10-dem10b-20161001.xml",
+    "valid_px": 407419,
+    "gsi_id": 541715,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1039957,
+    "zip_sha256": "e54406a64b8a81c16fd9af00d4a3978c9d8e263ad52484e59fa972ec32f5a7c1"
+   },
+   {
+    "mesh": "664511",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664511-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-11-dem10b-20161001.xml",
+    "valid_px": 829223,
+    "gsi_id": 541716,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 2169701,
+    "zip_sha256": "9f1efe99741ea65193cb851f411502095f8e6357e482e0981dff100f3529869b"
+   },
+   {
+    "mesh": "664512",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664512-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-12-dem10b-20161001.xml",
+    "valid_px": 94789,
+    "gsi_id": 541717,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 297543,
+    "zip_sha256": "97241cd8b03d8c79842119c31e84c4263cb1f094bfff143ae8fa6b3d64fa6214"
+   },
+   {
+    "mesh": "664521",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664521-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-21-dem10b-20161001.xml",
+    "valid_px": 376922,
+    "gsi_id": 541721,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1003098,
+    "zip_sha256": "67b3386beeab283b7c21a45670692442dcb4bead9d739be1ca256c9d2540fd99"
+   },
+   {
+    "mesh": "664522",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664522-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-22-dem10b-20161001.xml",
+    "valid_px": 564365,
+    "gsi_id": 541722,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1517413,
+    "zip_sha256": "04433684ddce1b4833745bd9f7f6af7b23355bfa55146d67a11b5c0ce5ad4280"
+   },
+   {
+    "mesh": "664531",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664531-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-31-dem10b-20161001.xml",
+    "valid_px": 14016,
+    "gsi_id": 541725,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 85885,
+    "zip_sha256": "a03ba7b7e2ea1989d26bb191b8cd28273cadd2a33f1f4cd14d0b1896b22fbe74"
+   },
+   {
+    "mesh": "664532",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664532-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-32-dem10b-20161001.xml",
+    "valid_px": 499234,
+    "gsi_id": 541726,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 1356561,
+    "zip_sha256": "95c7ed3c96ba1cc42c575647fd5991bfe3441cc8e04d09794dc0215721a84823"
+   },
+   {
+    "mesh": "664542",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2000.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-664542-DEM10B-20161001.zip",
+    "xml": "FG-GML-6645-42-dem10b-20161001.xml",
+    "valid_px": 17577,
+    "gsi_id": 541728,
+    "gsi_file_update_date": "2016/10/01",
+    "zip_bytes": 83199,
+    "zip_sha256": "52a575672871db404aefd832ee8ef962537dfaa51ad455a7578d103b889811f9"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4730-fill.tif",
+  "bytes": 1791365,
+  "sha256": "513a6c1166f581ccd1419618a49a3c913f9f4d7e06ab89654919cc01e72ab068",
+  "md5": "8883b1f7869a0f69a5a007438c91c5a0",
+  "batch": "2026-10-02 batch 2 (2 COGs)",
+  "source": "backup plateau-terrain-ortho-backup/.../downloads/dem10/FG-GML-kyushu_okinawa-DEM10-Z001/FG-GML-4730-67-DEM10B.zip",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "473067",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-4730-67-DEM10B.zip",
+    "xml": "FG-GML-4730-67-DEM10B-20161001.xml",
+    "valid_px": 843750,
+    "zip_bytes": 2022484,
+    "zip_sha256": "f6d45ee24920dec6e14f6c62d78f2b2657c7ae475f0a505bec3515cb5d6f0470"
+   }
+  ]
+ },
+ {
+  "key": "base/dem10/4931-fill.tif",
+  "bytes": 57825,
+  "sha256": "4162a4f54ce57a2f0895fad9f684b817d3f7a0e38c90269439475bd36375b017",
+  "md5": "b557458de1b913d3777e5a96d1c94d1f",
+  "batch": "2026-10-02 batch 2 (2 COGs)",
+  "source": "backup plateau-terrain-ortho-backup/.../downloads/dem10/FG-GML-kyushu_okinawa-DEM10-Z001/FG-GML-4931-07-DEM10B.zip",
+  "labels": [
+   "fguuid:jgd2011.bl"
+  ],
+  "grids": [
+   {
+    "mesh": "493107",
+    "product": "DEM10B",
+    "edition": "2016-10-01",
+    "srs_name": "fguuid:jgd2011.bl",
+    "dev_date": "2016-10-01",
+    "zip": "FG-GML-4931-07-DEM10B.zip",
+    "xml": "FG-GML-4931-07-DEM10B-20161001.xml",
+    "valid_px": 13293,
+    "zip_bytes": 62652,
+    "zip_sha256": "79c789c2ca99650872924d9d29b46e1d921f39edb3c968a507750e49fe15feaa"
+   }
+  ]
+ }
+]

@@ -1,0 +1,78 @@
+# DEM COG stacks served from r2:plateau-terrain (public https://tiles.plateau.city/terrain/).
+# Read by stacks.py; every [defaults] value can be overridden on the command line.
+
+[defaults]
+remote = "r2"
+rclone_config = "rclone.r2.conf"            # relative to the repo root
+bucket = "plateau-terrain"
+public_base = "https://tiles.plateau.city/terrain"
+# The Worker lists the bucket for this (cloudflare/tiles/src/r2.ts tileConfig, max-age 60 s) ...
+config_url = "https://tiles.plateau.city/terrain/config.json"
+# ... and the tile server re-reads it (CONFIG_TTL_SECS, default 60 s) into this source.
+sources_json_url = "https://tile.plateauview.mlit.go.jp/tiles/sources.json"
+tile_source = "plateau-terrain-experimental"
+# Per-grid GeoTIFFs (FME "s1" conversion of the 2025-01-29 基盤地図情報 download),
+# one sub-directory per product in lower case (dem10a/, dem10b/, dem5a/, ...).
+backup_src = "r2:plateau-terrain-ortho-backup/terrain/base_terrain/kibanchizu_dem_20250129/s1_geotiff_raw"
+# The original GSI zips of the same download (downloads/dem10/<region>-DEM10-Z001/*.zip, ...).
+backup_downloads = "r2:plateau-terrain-ortho-backup/terrain/base_terrain/kibanchizu_dem_20250129/downloads"
+patch_backup = "r2:plateau-terrain-ortho-backup/terrain/plateau-terrain_2024/dem_for_overwriting"
+
+# One [[stack]] per base resolution. `products` is the paint order inside one
+# primary-mesh COG, bottom -> top (later VRT sources win where both are valid).
+# `pixel` is the grid spacing in degrees as a fraction (both axes).
+[[stack]]
+id = "dem10"
+key_prefix = "base/dem10"
+products = ["DEM10B", "DEM10A"]     # DEM10A (volcano base maps) over DEM10B (1:25,000 contours)
+pixel = "1/9000"
+
+[[stack]]
+id = "dem5"
+key_prefix = "base/dem5"
+products = ["DEM5C", "DEM5B", "DEM5A"]   # airborne laser (5A) over photogrammetry (5B, then 5C)
+pixel = "1/18000"
+
+[[stack]]
+id = "dem1"
+key_prefix = "base/dem1"
+products = ["DEM1A"]
+pixel = "1/90000"
+
+# Local-government DEMs painted over the base stack (patch/<name>.tif). `src` is
+# relative to [defaults].patch_backup; the source CRS decides the output grid
+# (geographic -> kept, projected -> EPSG:3857 GoogleMapsCompatible).
+[[patch]]
+name = "noto/northen_noto"
+src = "04_noto_dem_from_aas/s1_geotiff_raw/full_resolution/01_northen_noto"
+[[patch]]
+name = "noto/central_noto"
+src = "04_noto_dem_from_aas/s1_geotiff_raw/full_resolution/02_central_noto"
+[[patch]]
+name = "noto/southern_noto"
+src = "04_noto_dem_from_aas/s1_geotiff_raw/full_resolution/03_southern_noto"
+[[patch]]
+name = "tokyo/23ku"
+src = "01_tokyo_dem_from_psc/s1_geotiff_raw/23ku"
+[[patch]]
+name = "tokyo/tama"
+src = "01_tokyo_dem_from_psc/s1_geotiff_raw/tama"
+[[patch]]
+# s2 = orthometric heights (s4 holds ellipsoidal heights and must not be used).
+# One patch per sub-directory: `name` and `src` get the directory name appended.
+name = "shizuoka/"
+src = "02_shizuoka_dem_from_g-center_20250304/s2_geotiff/full_resolution/"
+per_subdirectory = true
+[[patch]]
+name = "others/susami-cho"
+src = "03_plateau2024_other_cities/30406_susami-cho/source/30406_susami-cho_city_2024_citygml_1_dem_tif"
+[[patch]]
+name = "others/yonago-shi"
+src = "03_plateau2024_other_cities/31202_yonago-shi/source/yonago_all_dem1"
+[[patch]]
+name = "others/tamana-shi"
+src = "03_plateau2024_other_cities/43206_tamana-shi/s1_geotiff"
+[[patch]]
+# .asc + .prj (transverse Mercator WKT without an EPSG code); the .zip next to it is ignored.
+name = "others/kisarazu-shi"
+src = "03_plateau2024_other_cities/12206_kisarazu-shi/source_from_kkc"
