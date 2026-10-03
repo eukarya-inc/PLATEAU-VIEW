@@ -17,6 +17,9 @@ import (
 func TestFromURL(t *testing.T) {
 	ctx := context.Background()
 
+	// FromURL uses safeHTTPClient (its own Transport), so activate httpmock
+	// on that client in addition to DefaultTransport.
+	httpmock.ActivateNonDefault(safeHTTPClient)
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 
