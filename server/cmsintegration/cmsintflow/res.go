@@ -3,6 +3,7 @@ package cmsintflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -36,17 +37,19 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// handle error
 	if res.IsFailed() {
 		log.Infofc(ctx, "early return: flow result is failed: status=%s, logs=%v", res.Status, res.Logs)
-		_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s%s", cmsintegrationcommon.ReqType(id.Type).Title(), res.IDsMessage(), logurls)
+		failErr := s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "%sに失敗しました。%s%s", cmsintegrationcommon.ReqType(id.Type).Title(), res.IDsMessage(), logurls)
 		// Clear runId on failure
-		_ = s.ClearFlowRunID(ctx, id.ItemID)
+		if err := errors.Join(failErr, s.ClearFlowRunID(ctx, id.ItemID)); err != nil {
+			return fmt.Errorf("failed to record flow failure: %w", err)
+		}
 		return nil
 	}
 
 	// feature types
 	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
 	if err != nil {
-		log.Infofc(ctx, "early return: failed to get feature types: %v", err)
-		return nil
+		log.Errorfc(ctx, "failed to get feature types: %v", err)
+		return s.abortResult(ctx, id, res, fmt.Errorf("failed to get feature types: %w", err))
 	}
 
 	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
@@ -62,8 +65,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// plateau specs
 	specs, err := s.PCMS.PlateauSpecs(ctx)
 	if err != nil {
-		log.Infofc(ctx, "early return: failed to get plateau specs: %v", err)
-		return nil
+		log.Errorfc(ctx, "failed to get plateau specs: %v", err)
+		return s.abortResult(ctx, id, res, fmt.Errorf("failed to get plateau specs: %w", err))
 	}
 
 	// get mainItem
@@ -92,10 +95,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		for _, u := range urls {
 			aid, err := s.UploadAsset(ctx, id.ProjectID, u)
 			if err != nil {
-				log.Infofc(ctx, "early return: failed to upload asset: key=%s, url=%s, err=%v", key, u, err)
-				_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "変換結果のアセットのアップロードに失敗しました。%v%s", err, res.IDsMessage())
-				_ = s.ClearFlowRunID(ctx, id.ItemID)
-				return nil
+				log.Errorfc(ctx, "failed to upload asset: key=%s, url=%s, err=%v", key, u, err)
+				return s.abortResult(ctx, id, res, fmt.Errorf("failed to upload asset (%s): %w", u, err))
 			}
 			log.Infofc(ctx, "uploaded asset: key=%s, url=%s, assetID=%s", key, u, aid)
 			dataAssets = append(dataAssets, aid)
@@ -118,10 +119,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		log.Infofc(ctx, "read dic: %s", internal.Dic)
 		dic, err = readDic(ctx, internal.Dic)
 		if err != nil {
-			log.Infofc(ctx, "early return: failed to read dic: url=%s, err=%v", internal.Dic, err)
-			_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "辞書ファイルの読み込みに失敗しました。%v%s", err, res.IDsMessage())
-			_ = s.ClearFlowRunID(ctx, id.ItemID)
-			return nil
+			log.Errorfc(ctx, "failed to read dic: url=%s, err=%v", internal.Dic, err)
+			return s.abortResult(ctx, id, res, fmt.Errorf("failed to read dic: %w", err))
 		}
 		log.Infofc(ctx, "dic read success: len=%d", len(dic))
 	}
@@ -296,4 +295,17 @@ func convertedAssetNames(ctx context.Context, c cmsintegrationcommon.AssetGetter
 	}
 	maps.Copy(names, converted)
 	return names, nil
+}
+
+// abortResult marks the item as failed and clears its run ID when a result
+// can't be ingested, and returns cause so the callback answers 500. Returning
+// nil here used to ack the result while the item sat at "running" forever and,
+// for QC, the follow-up conversion never started.
+func (s *Services) abortResult(ctx context.Context, id ID, res FlowResult, cause error) error {
+	ty := cmsintegrationcommon.ReqType(id.Type)
+	failErr := s.Fail(ctx, id.ItemID, ty, "%sの結果の取り込みに失敗しました。再実行してください。%s\n%v", ty.Title(), res.IDsMessage(), cause)
+	if err := errors.Join(failErr, s.ClearFlowRunID(ctx, id.ItemID)); err != nil {
+		return errors.Join(cause, fmt.Errorf("failed to record failure: %w", err))
+	}
+	return cause
 }

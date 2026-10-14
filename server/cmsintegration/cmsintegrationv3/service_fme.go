@@ -3,6 +3,7 @@ package cmsintegrationv3
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -313,15 +314,19 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	// handle error
 	if f.Status == "error" {
 		log.Warnfc(ctx, "failed to convert: %v", f.LogURL)
-		_ = failToConvert(ctx, s, id.ItemID, fmeRequestType(id.Type), "%sに失敗しました。%s", fmeRequestType(id.Type).Title(), logmsg)
+		if err := failToConvert(ctx, s, id.ItemID, fmeRequestType(id.Type), "%sに失敗しました。%s", fmeRequestType(id.Type).Title(), logmsg); err != nil {
+			return fmt.Errorf("failed to record conversion failure: %w", err)
+		}
 		return nil
 	}
+
+	ty := fmeRequestType(id.Type)
 
 	// feature types
 	featureTypes, err := s.PCMS.PlateauFeatureTypes(ctx)
 	if err != nil {
 		log.Errorfc(ctx, "failed to get feature types: %v", err)
-		return nil
+		return abortResult(ctx, s, id.ItemID, ty, fmt.Errorf("failed to get feature types: %w", err))
 	}
 
 	// For derived feature types (e.g., bldg2), use the base feature type (bldg) from plateau-features
@@ -349,7 +354,6 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	assets := f.GetResultURLs(id.FeatureType)
 
 	// check if conversion results are empty (for conv or qc_conv type)
-	ty := fmeRequestType(id.Type)
 	if len(assets.Data) == 0 && (ty == fmeTypeConv || ty == fmeTypeQcConv) {
 		log.Warnfc(ctx, "no assets found in FME result: results=%v", f.Results)
 		resultsJSON, _ := json.Marshal(f.Results)
@@ -370,8 +374,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 				aid, err := s.UploadAsset(ctx, id.ProjectID, url)
 				if err != nil {
 					log.Errorfc(ctx, "failed to upload asset (%s): %v", url, err)
-					_ = failToConvert(ctx, s, id.ItemID, ty, "変換結果のアセットのアップロードに失敗しました。%v", err)
-					return nil
+					return abortResult(ctx, s, id.ItemID, ty, fmt.Errorf("failed to upload asset (%s): %w", url, err))
 				}
 				dataAssets = append(dataAssets, aid)
 				dataAssetMap[key] = append(dataAssetMap[key], aid)
@@ -389,8 +392,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		dic, err = readDic(ctx, assets.Dic)
 		if err != nil {
 			log.Errorfc(ctx, "failed to read dic: %v", err)
-			_ = failToConvert(ctx, s, id.ItemID, ty, "辞書ファイルの読み込みに失敗しました。%v", err)
-			return nil
+			return abortResult(ctx, s, id.ItemID, ty, fmt.Errorf("failed to read dic: %w", err))
 		}
 	}
 
@@ -516,6 +518,16 @@ func failToConvert(ctx context.Context, s *Services, itemID string, convType fme
 	}
 
 	return nil
+}
+
+// abortResult marks the item as failed when a result can't be ingested, and
+// returns cause so the callback answers 500. Returning nil here used to ack the
+// result while the item sat at "running" forever with no comment saying why.
+func abortResult(ctx context.Context, s *Services, itemID string, ty fmeRequestType, cause error) error {
+	if err := failToConvert(ctx, s, itemID, ty, "%sの結果の取り込みに失敗しました。再実行してください。\n%v", ty.Title(), cause); err != nil {
+		return errors.Join(cause, fmt.Errorf("failed to record failure: %w", err))
+	}
+	return cause
 }
 
 func readDic(ctx context.Context, u string) (string, error) {

@@ -83,6 +83,11 @@ impl CogTileSource {
 
     /// Initialize the COG reader if not already done.
     async fn ensure_reader(&self) -> Result<(), TileError> {
+        // Fast path: shared lock, so concurrent tiles of an open COG don't
+        // serialize on the write lock.
+        if self.reader.read().await.is_some() {
+            return Ok(());
+        }
         let mut reader_guard = self.reader.write().await;
         if reader_guard.is_some() {
             return Ok(());
@@ -210,9 +215,6 @@ impl TileSource for CogTileSource {
     }
 
     async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<RgbaImage>, TileError> {
-        // Ensure reader is initialized
-        self.ensure_reader().await?;
-
         // WGS84 bounds for the intersection short-circuit (cached bounds are WGS84).
         let wgs84_bounds = xyz_to_bounds(z, x, y);
 
@@ -230,6 +232,11 @@ impl TileSource for CogTileSource {
                 return Ok(None);
             }
         }
+
+        // Open the reader only once the tile is known to intersect (bounds
+        // come from `preload()`). Opening first meant every COG of a mosaic
+        // fetched its header and IFDs on every tile, near the tile or not.
+        self.ensure_reader().await?;
 
         tracing::debug!(
             url = %self.url,
