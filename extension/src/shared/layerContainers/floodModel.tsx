@@ -7,6 +7,7 @@ import {
   ScreenSpaceSelectionEntry,
   useScreenSpaceSelectionResponder,
 } from "../../prototypes/screen-space-selection";
+import { lightTheme } from "../../prototypes/ui-components";
 import { ViewLayerModel } from "../../prototypes/view-layers";
 import { useOptionalAtomValue } from "../hooks";
 import { PlateauTilesetProperties, TileFeatureIndex } from "../plateau";
@@ -151,7 +152,9 @@ export const FloodModelLayerContainer: FC<TilesetContainerProps> = ({
   const applyEmptySHC = useOptionalAtomValue(applyEmptySHCAtom);
   const theme = useTheme();
 
-  const primaryRGB = useMemo(() => hexToRGBArray(theme.palette.primary.main), [theme]);
+  // Flood model color should always use the default primary color,
+  // not the custom primary color configured in the widget property.
+  const primaryRGB = useMemo(() => hexToRGBArray(lightTheme.palette.primary.main), []);
 
   const opacity = useOptionalAtomValue(opacityAtom);
   const color = useEvaluateFeatureColor({
