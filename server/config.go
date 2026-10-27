@@ -66,6 +66,7 @@ type Config struct {
 	Sidebar_Token                      string   `pp:",omitempty"`
 	Share_Disable                      bool     `pp:",omitempty"`
 	CMSINT_TaskImage                   string   `pp:",omitempty"`
+	CMSINT_CitySetupJobName            string   `pp:",omitempty"`
 	Geospatialjp_Publication_Disable   bool     `pp:",omitempty"`
 	Geospatialjp_CatalocCheck_Disable  bool     `pp:",omitempty"`
 	Geospatialjp_BuildType             string   `pp:",omitempty"`
@@ -162,6 +163,7 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		TaskImage:                         c.Geospatialjp_CloudBuildImage, // TODO: change env var name
 		GCPProject:                        cloudBuildProject,
 		GCPRegion:                         cloudBuildRegion,
+		CitySetupJobName:                  c.CMSINT_CitySetupJobName,
 		FlowBaseURL:                       c.Flow_BaseURL,
 		FlowToken:                         c.Flow_Token,
 	}

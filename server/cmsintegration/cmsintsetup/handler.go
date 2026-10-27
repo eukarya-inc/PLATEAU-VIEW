@@ -17,6 +17,9 @@ type Config struct {
 	CMSURL           string
 	CMSToken         string
 	CMSSystemProject string
+	// CitySetupJobName is the full name of the Cloud Run Job that runs setup-city-items
+	// (projects/<project>/locations/<region>/jobs/<job>). City setup from the workspaces model is disabled when empty.
+	CitySetupJobName string
 }
 
 func Handler(conf Config, g *echo.Group) error {

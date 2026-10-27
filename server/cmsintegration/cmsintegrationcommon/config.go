@@ -32,6 +32,8 @@ type Config struct {
 	TaskImage  string
 	GCPProject string
 	GCPRegion  string
+	// city setup (Cloud Run Jobs)
+	CitySetupJobName string
 	// Flow
 	FlowBaseURL string
 	FlowToken   string

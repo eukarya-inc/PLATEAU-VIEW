@@ -16,6 +16,10 @@ type Services struct {
 	PCMS       plateaucms.FeatureTypeStore
 	PlateauCMS *PlateauCMS
 	HTTP       *http.Client
+	// SystemProject is the project that holds the workspaces model.
+	SystemProject string
+	// RunJob starts the Cloud Run Job that runs a tool command with the given args.
+	RunJob func(ctx context.Context, args []string) error
 }
 
 func NewServices(conf Config) (*Services, error) {
@@ -34,9 +38,11 @@ func NewServices(conf Config) (*Services, error) {
 	}
 
 	return &Services{
-		CMS:        cms,
-		PCMS:       pcms,
-		PlateauCMS: NewPlateauCMS(cms, ""),
+		CMS:           cms,
+		PCMS:          pcms,
+		PlateauCMS:    NewPlateauCMS(cms, ""),
+		SystemProject: pcms.SystemProject(),
+		RunJob:        cloudRunJobRunner(conf.CitySetupJobName),
 	}, nil
 }
 
