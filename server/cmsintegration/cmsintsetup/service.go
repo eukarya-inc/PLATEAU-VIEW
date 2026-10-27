@@ -42,7 +42,7 @@ func NewServices(conf Config) (*Services, error) {
 		PCMS:          pcms,
 		PlateauCMS:    NewPlateauCMS(cms, ""),
 		SystemProject: pcms.SystemProject(),
-		RunJob:        cloudRunJobRunner(conf.CitySetupJobName),
+		RunJob:        cloudRunJobRunner(conf.JobName),
 	}, nil
 }
 

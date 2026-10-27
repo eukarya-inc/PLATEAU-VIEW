@@ -221,6 +221,6 @@ func setupConfig(conf Config) cmsintsetup.Config {
 		CMSURL:           conf.CMSBaseURL,
 		CMSToken:         conf.CMSToken,
 		CMSSystemProject: conf.CMSSystemProject,
-		CitySetupJobName: conf.CitySetupJobName,
+		JobName:          conf.JobName,
 	}
 }

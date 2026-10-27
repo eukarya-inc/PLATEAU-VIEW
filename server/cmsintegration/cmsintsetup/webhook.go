@@ -41,7 +41,7 @@ type WorkspaceCitySetup struct {
 
 // WebhookHandler starts the city setup when a city CSV is attached to a workspaces item in the system project.
 func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
-	if conf.CitySetupJobName == "" {
+	if conf.JobName == "" {
 		return func(*http.Request, *cmswebhook.Payload) error { return nil }, nil
 	}
 

@@ -40,6 +40,7 @@ type Config struct {
 	Debug                              bool     `pp:",omitempty"`
 	Origin                             []string `pp:",omitempty"`
 	Secret                             string   `pp:",omitempty"`
+	Job                                string   `pp:",omitempty"`
 	CMS_Webhook_Secret                 string   `pp:",omitempty"`
 	CMS_BaseURL                        string   `pp:",omitempty"`
 	CMS_Token                          string   `pp:",omitempty"`
@@ -66,7 +67,6 @@ type Config struct {
 	Sidebar_Token                      string   `pp:",omitempty"`
 	Share_Disable                      bool     `pp:",omitempty"`
 	CMSINT_TaskImage                   string   `pp:",omitempty"`
-	CMSINT_CitySetupJobName            string   `pp:",omitempty"`
 	Geospatialjp_Publication_Disable   bool     `pp:",omitempty"`
 	Geospatialjp_CatalocCheck_Disable  bool     `pp:",omitempty"`
 	Geospatialjp_BuildType             string   `pp:",omitempty"`
@@ -163,7 +163,7 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		TaskImage:                         c.Geospatialjp_CloudBuildImage, // TODO: change env var name
 		GCPProject:                        cloudBuildProject,
 		GCPRegion:                         cloudBuildRegion,
-		CitySetupJobName:                  c.CMSINT_CitySetupJobName,
+		JobName:                           c.Job,
 		FlowBaseURL:                       c.Flow_BaseURL,
 		FlowToken:                         c.Flow_Token,
 	}

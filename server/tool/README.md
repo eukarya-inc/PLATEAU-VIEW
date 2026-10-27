@@ -133,7 +133,7 @@ go run . setup-city-items \
 
 サーバーには次の設定が必要です。
 
-- 環境変数`REEARTH_PLATEAUVIEW_CMSINT_CITYSETUPJOBNAME`に、実行するJobの名前（`projects/<project>/locations/<region>/jobs/<job>`）。空のときは自動実行しません。Jobは`plateauview-api`と同じイメージで、CMSのURLとトークンを環境変数に持つ必要があります。
+- 環境変数`REEARTH_PLATEAUVIEW_JOB`に、サーバーがツールのコマンドを実行するJobの名前（`projects/<project>/locations/<region>/jobs/<job>`）。空のときは自動実行しません。Jobは`plateauview-api`と同じイメージで、CMSのURLとトークンを環境変数に持つ必要があります。
 - サーバーのサービスアカウントに、そのJobを引数を上書きして実行する権限（`roles/run.jobsExecutorWithOverrides`）。
 - システムプロジェクトのあるワークスペースに、サーバーの`/webhook`へのwebhook（`item.create`と`item.update`）。
 
