@@ -49,6 +49,29 @@ func TestCityItemFrom(t *testing.T) {
 	assert.Equal(t, item, item2)
 }
 
+func TestCityItemFrom_ObjectListsFallback(t *testing.T) {
+	for _, key := range []string{"objectLists", "objectlists", "object_lists"} {
+		t.Run(key, func(t *testing.T) {
+			item := &cms.Item{
+				ID: "id",
+				Fields: []*cms.Field{
+					{
+						Key:   key,
+						Type:  "asset",
+						Value: map[string]any{"id": "asset", "url": "https://example.com/objectlists.xlsx"},
+					},
+				},
+			}
+
+			cityItem := CityItemFrom(item, nil)
+			if assert.NotNil(t, cityItem.ObjectLists) {
+				assert.Equal(t, "asset", cityItem.ObjectLists.ID)
+				assert.Equal(t, "https://example.com/objectlists.xlsx", cityItem.ObjectLists.URL)
+			}
+		})
+	}
+}
+
 func TestFeatureItemFrom(t *testing.T) {
 	item := &cms.Item{
 		ID: "id",
