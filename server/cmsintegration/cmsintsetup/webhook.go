@@ -18,7 +18,6 @@ const (
 	workspacesModel      = "workspaces"
 	citySetupCSVField    = "city_setup_csv"
 	citySetupStatusField = "city_setup_status"
-	citySetupLogField    = "city_setup_log"
 	// citySetupJobTimeout covers a full year of cities, which takes a few thousand CMS requests.
 	citySetupJobTimeout = 3 * time.Hour
 )
@@ -116,28 +115,27 @@ func handleCitySetupWebhook(ctx context.Context, s *Services, w *cmswebhook.Payl
 	return nil
 }
 
-// ReportCitySetup writes the result of setup-city-items to the workspaces item that started it.
+// ReportCitySetup writes the status of setup-city-items to the workspaces item that started it, and comments the result.
 func ReportCitySetup(ctx context.Context, c cms.Interface, itemID string, res *SetupCityItemsResult, setupErr error) error {
-	status, msg := CitySetupStatusDone, ""
+	status, msg := CitySetupStatusDone, "都市アイテムの作成が完了しました。"
+	if setupErr != nil {
+		status, msg = CitySetupStatusError, "都市アイテムの作成に失敗しました。"
+	}
 	if res != nil {
-		msg = res.String()
+		msg += "\n" + res.String()
 	}
 	if setupErr != nil {
-		status = CitySetupStatusError
-		if msg != "" {
-			msg += "\n"
-		}
-		msg += setupErr.Error()
+		msg += "\n" + setupErr.Error()
 	}
 
 	return updateCitySetup(ctx, c, itemID, "", status, msg)
 }
 
-// updateCitySetup updates the status and the log of a workspaces item, and the setup CSV when csvID is not empty.
+// updateCitySetup updates the status of a workspaces item, and the setup CSV when csvID is not empty.
+// msg is posted as a comment on the item, so the item keeps the history of every run.
 func updateCitySetup(ctx context.Context, c cms.Interface, itemID, csvID string, status CitySetupStatus, msg string) error {
 	fields := []*cms.Field{
 		{Key: citySetupStatusField, Type: "select", Value: string(status)},
-		{Key: citySetupLogField, Type: "textarea", Value: msg},
 	}
 	if csvID != "" {
 		fields = append(fields, &cms.Field{Key: citySetupCSVField, Type: "text", Value: csvID})
@@ -145,6 +143,12 @@ func updateCitySetup(ctx context.Context, c cms.Interface, itemID, csvID string,
 
 	if _, err := c.UpdateItem(ctx, itemID, fields, nil); err != nil {
 		return fmt.Errorf("failed to update workspaces item: %w", err)
+	}
+
+	if msg != "" {
+		if err := c.CommentToItem(ctx, itemID, msg); err != nil {
+			return fmt.Errorf("failed to comment to workspaces item: %w", err)
+		}
 	}
 	return nil
 }

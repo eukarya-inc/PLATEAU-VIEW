@@ -91,7 +91,7 @@ go run . setup-city-items \
 | `-project` | ✓ | CMSプロジェクトID | - |
 | `-system-project` | ✓ | CMSシステムプロジェクトID | 環境変数`CMS_SYSTEMPROJECT` |
 | `-file` | ✓ | CSVファイルのパス、または`http(s)://`のURL | - |
-| `-report-item` | | 結果を書き込む`workspaces`アイテムのID。`-dryrun`のときは書き込まない | - |
+| `-report-item` | | 状態を書き込み、結果をコメントする`workspaces`アイテムのID。`-dryrun`のときは書き込まない | - |
 | `-base` | | CMS Base URL | 環境変数`CMS_BASEURL` |
 | `-token` | | CMS認証トークン | 環境変数`CMS_TOKEN` |
 | `-offset` | | 先頭から読み飛ばすデータ行の数 | 0 |
@@ -124,11 +124,12 @@ go run . setup-city-items \
 | `city_csv` | アセット | 都市CSV。入れると都市アイテムの作成が始まる |
 | `city_setup_csv` | テキスト | 作成を始めたCSVのアセットID。サーバーが書き込む |
 | `city_setup_status` | セレクト（`実行中`・`完了`・`エラー`） | 作成の状態。サーバーが書き込む |
-| `city_setup_log` | テキストエリア | 各判定の件数、CSVの補正内容、エラー。サーバーが書き込む |
+
+開始と終了のたびに、サーバーがアイテムにコメントします。終了のコメントには、各判定の件数、CSVの補正内容、エラーが書かれます。
 
 - 作成は、`city_csv`のアセットIDが`city_setup_csv`と違うときだけ始まります。CSVを差し替えると、もう一度実行されます。
 - 同じCSVでやり直すときは、`city_setup_csv`を空にして保存してください。途中で止まった場合も、同じ操作で続きから埋まります。
-- CSVに誤りがあるときは、何も作らずに`エラー`になり、`city_setup_log`に該当の行が書かれます。
+- CSVに誤りがあるときは、何も作らずに`エラー`になり、該当の行がコメントに書かれます。
 
 サーバーには次の設定が必要です。
 

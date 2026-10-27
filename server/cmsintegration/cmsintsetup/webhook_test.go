@@ -22,7 +22,7 @@ func TestHandleCitySetupWebhook(t *testing.T) {
 		fields   []*cms.Field
 		jobErr   error
 		wantArgs []string
-		// status and log written to the workspaces item, in order
+		// status written to the workspaces item, in order
 		wantStatus []CitySetupStatus
 		wantCSV    string
 		wantErr    bool
@@ -110,6 +110,7 @@ func TestHandleCitySetupWebhook(t *testing.T) {
 			var gotArgs []string
 			var gotStatus []CitySetupStatus
 			var gotCSV string
+			var gotComments int
 
 			s := &Services{
 				SystemProject: "system",
@@ -131,6 +132,12 @@ func TestHandleCitySetupWebhook(t *testing.T) {
 							gotCSV = *f.GetValue().String()
 						}
 						return item, nil
+					},
+					MockCommentToItem: func(ctx context.Context, id, content string) error {
+						assert.Equal(t, "item", id)
+						assert.NotEmpty(t, content)
+						gotComments++
+						return nil
 					},
 				},
 				RunJob: func(ctx context.Context, args []string) error {
@@ -155,16 +162,24 @@ func TestHandleCitySetupWebhook(t *testing.T) {
 			assert.Equal(t, tt.wantArgs, gotArgs)
 			assert.Equal(t, tt.wantStatus, gotStatus)
 			assert.Equal(t, tt.wantCSV, gotCSV)
+			// every status change comes with a comment
+			assert.Equal(t, len(tt.wantStatus), gotComments)
 		})
 	}
 }
 
 func TestReportCitySetup(t *testing.T) {
 	var got *cms.Item
+	var comment string
 	c := &cmsintegrationcommon.CMSMock{
 		MockUpdateItem: func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			got = &cms.Item{ID: id, Fields: fields}
 			return got, nil
+		},
+		MockCommentToItem: func(ctx context.Context, id, content string) error {
+			assert.Equal(t, "item", id)
+			comment = content
+			return nil
 		},
 	}
 
@@ -173,11 +188,11 @@ func TestReportCitySetup(t *testing.T) {
 	require.NoError(t, ReportCitySetup(context.Background(), c, "item", res, nil))
 	assert.Equal(t, "item", got.ID)
 	assert.Equal(t, string(CitySetupStatusDone), *got.FieldByKey(citySetupStatusField).GetValue().String())
-	assert.Equal(t, res.String(), *got.FieldByKey(citySetupLogField).GetValue().String())
+	assert.Equal(t, "都市アイテムの作成が完了しました。\n"+res.String(), comment)
 	// the CSV is kept, so the update does not start the setup again
 	assert.Nil(t, got.FieldByKey(citySetupCSVField))
 
 	require.NoError(t, ReportCitySetup(context.Background(), c, "item", res, errors.New("boom")))
 	assert.Equal(t, string(CitySetupStatusError), *got.FieldByKey(citySetupStatusField).GetValue().String())
-	assert.Equal(t, res.String()+"\nboom", *got.FieldByKey(citySetupLogField).GetValue().String())
+	assert.Equal(t, "都市アイテムの作成に失敗しました。\n"+res.String()+"\nboom", comment)
 }
