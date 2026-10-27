@@ -18,6 +18,7 @@ type CMSMock struct {
 	MockUploadAssetDirectly func(ctx context.Context, projectID, name string, r io.Reader, opts ...cms.UploadAssetOption) (string, error)
 	MockCommentToItem       func(ctx context.Context, assetID, content string) error
 	MockGetModels           func(ctx context.Context, projectID string) (*cms.Models, error)
+	MockGetModelByKey       func(ctx context.Context, projectID, key string) (*cms.Model, error)
 }
 
 var _ cms.Interface = &CMSMock{}
@@ -67,4 +68,8 @@ func (c *CMSMock) CommentToItem(ctx context.Context, assetID, content string) er
 
 func (c *CMSMock) GetModels(ctx context.Context, projectID string) (*cms.Models, error) {
 	return c.MockGetModels(ctx, projectID)
+}
+
+func (c *CMSMock) GetModelByKey(ctx context.Context, projectID, key string) (*cms.Model, error) {
+	return c.MockGetModelByKey(ctx, projectID, key)
 }

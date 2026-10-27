@@ -67,13 +67,16 @@ CMS_SYSTEMPROJECT=your-system-project-id
 
 CSVファイルから都市アイテムをCMSに一括登録します。
 
+システムプロジェクトの`workspaces`アイテムに都市CSVを登録すれば、このコマンドがCloud Run Jobで自動的に実行されます（[workspacesから自動で実行する](#workspacesから自動で実行する)）。
+
 #### 使い方
 
 ```bash
 go run . setup-city-items \
   -project <PROJECT_ID> \
   -system-project <SYSTEM_PROJECT_ID> \
-  -file <CSV_FILE_PATH> \
+  -file <CSV_FILE_PATH_OR_URL> \
+  [-report-item <WORKSPACES_ITEM_ID>] \
   [-base <CMS_BASE_URL>] \
   [-token <CMS_TOKEN>] \
   [-offset <NUMBER>] \
@@ -87,7 +90,8 @@ go run . setup-city-items \
 |---------|------|------|-----------|
 | `-project` | ✓ | CMSプロジェクトID | - |
 | `-system-project` | ✓ | CMSシステムプロジェクトID | 環境変数`CMS_SYSTEMPROJECT` |
-| `-file` | ✓ | CSVファイルのパス | - |
+| `-file` | ✓ | CSVファイルのパス、または`http(s)://`のURL | - |
+| `-report-item` | | 状態を書き込み、結果をコメントする`workspaces`アイテムのID。`-dryrun`のときは書き込まない | - |
 | `-base` | | CMS Base URL | 環境変数`CMS_BASEURL` |
 | `-token` | | CMS認証トークン | 環境変数`CMS_TOKEN` |
 | `-offset` | | 先頭から読み飛ばすデータ行の数 | 0 |
@@ -108,6 +112,30 @@ go run . setup-city-items \
 処理が途中で止まっても、同じコマンドをもう一度実行すれば続きから埋まります。`city_code`が空の都市アイテム（テスト用など）は突き合わせの対象外です。
 
 実行の最後に、各判定の件数とCSVの補正内容が表示されます。本番の前に`-dryrun`で確認してください。
+
+#### workspacesから自動で実行する
+
+システムプロジェクトの`workspaces`アイテムに`project_id`と都市CSVを入れて保存すると、サーバーがCMSのwebhookを受けて、Cloud Run Jobでこのコマンドを実行します。
+
+`workspaces`モデルには、次のフィールドが必要です。
+
+| キー | 種類 | 内容 |
+|------|------|------|
+| `city_csv` | アセット | 都市CSV。入れると都市アイテムの作成が始まる |
+| `city_setup_csv` | テキスト | 作成を始めたCSVのアセットID。サーバーが書き込む |
+| `city_setup_status` | セレクト（`実行中`・`完了`・`エラー`） | 作成の状態。サーバーが書き込む |
+
+開始と終了のたびに、サーバーがアイテムにコメントします。終了のコメントには、各判定の件数、CSVの補正内容、エラーが書かれます。
+
+- 作成は、`city_csv`のアセットIDが`city_setup_csv`と違うときだけ始まります。CSVを差し替えると、もう一度実行されます。
+- 同じCSVでやり直すときは、`city_setup_csv`を空にして保存してください。途中で止まった場合も、同じ操作で続きから埋まります。
+- CSVに誤りがあるときは、何も作らずに`エラー`になり、該当の行がコメントに書かれます。
+
+サーバーには次の設定が必要です。
+
+- 環境変数`REEARTH_PLATEAUVIEW_JOB`に、サーバーがツールのコマンドを実行するJobの名前（`projects/<project>/locations/<region>/jobs/<job>`）。空のときは自動実行しません。Jobは`plateauview-api`と同じイメージで、CMSのURLとトークンを環境変数に持つ必要があります。
+- サーバーのサービスアカウントに、そのJobを引数を上書きして実行する権限（`roles/run.jobsExecutorWithOverrides`）。
+- システムプロジェクトのあるワークスペースに、サーバーの`/webhook`へのwebhook（`item.create`と`item.update`）。
 
 #### CSVフォーマット
 

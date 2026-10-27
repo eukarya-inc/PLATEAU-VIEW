@@ -32,6 +32,8 @@ type Config struct {
 	TaskImage  string
 	GCPProject string
 	GCPRegion  string
+	// Cloud Run Job that runs this server's image with tool commands
+	JobName string
 	// Flow
 	FlowBaseURL string
 	FlowToken   string
