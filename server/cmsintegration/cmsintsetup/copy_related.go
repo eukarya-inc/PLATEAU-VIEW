@@ -97,9 +97,7 @@ func CopyRelatedDatasetItems(ctx context.Context, s *Services, opts CopyRelatedI
 	}
 
 	// cut list by offset and limit
-	if opts.Offset > 0 || opts.Limit > 0 {
-		relatedsSrc = relatedsSrc[opts.Offset : opts.Limit+opts.Offset]
-	}
+	relatedsSrc = cutByOffsetAndLimit(relatedsSrc, opts.Offset, opts.Limit)
 
 	log.Infofc(ctx, "cmsintegrationv3: copy_related: copy %d related items", len(relatedsSrc))
 	skipped := 0
@@ -170,4 +168,14 @@ func CopyRelatedDatasetItems(ctx context.Context, s *Services, opts CopyRelatedI
 	}
 
 	return nil
+}
+
+func cutByOffsetAndLimit[T any](s []T, offset, limit int) []T {
+	if offset > 0 {
+		s = s[min(offset, len(s)):]
+	}
+	if limit > 0 {
+		s = s[:min(limit, len(s))]
+	}
+	return s
 }
