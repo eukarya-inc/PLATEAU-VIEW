@@ -154,7 +154,7 @@ test("Switch group should work", () => {
         {
           color: "#EDD86F",
           condition: {
-            key: "lfge9wi8fc231c5fbb1cb",
+            key: "lfge9wi8fc231c5fbb1cb", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"2"',
@@ -163,7 +163,7 @@ test("Switch group should work", () => {
         {
           color: "#C04C63",
           condition: {
-            key: "lfgebzo23bbb17b2136f6",
+            key: "lfgebzo23bbb17b2136f6", // betterleaks:allow
             operand: '${attributes["urf:areaType_code"]}',
             operator: "===",
             value: '"2"',
@@ -172,7 +172,7 @@ test("Switch group should work", () => {
         {
           color: "transparent",
           condition: {
-            key: "lfgee2at1286bdd0817a7",
+            key: "lfgee2at1286bdd0817a7", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"1"',
@@ -181,7 +181,7 @@ test("Switch group should work", () => {
         {
           color: "transparent",
           condition: {
-            key: "lfgepfvgdc035daf9a77a",
+            key: "lfgepfvgdc035daf9a77a", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"3"',
@@ -213,7 +213,7 @@ test("Switch group should work", () => {
         {
           color: "#FFB74C",
           condition: {
-            key: "lfgepsjiadb0f680169ec",
+            key: "lfgepsjiadb0f680169ec", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"3"',
@@ -222,7 +222,7 @@ test("Switch group should work", () => {
         {
           color: "#CA4C95",
           condition: {
-            key: "lfgeqdlq5e36cedbc28bb",
+            key: "lfgeqdlq5e36cedbc28bb", // betterleaks:allow
             operand: '${attributes["urf:areaType_code"]}',
             operator: "===",
             value: '"2"',
@@ -231,7 +231,7 @@ test("Switch group should work", () => {
         {
           color: "transparent",
           condition: {
-            key: "lfger50962e12b620e498",
+            key: "lfger50962e12b620e498", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"1"',
@@ -240,7 +240,7 @@ test("Switch group should work", () => {
         {
           color: "transparent",
           condition: {
-            key: "lfgere0e1aea1cd71b5a6",
+            key: "lfgere0e1aea1cd71b5a6", // betterleaks:allow
             operand: '${attributes["urf:disasterType_code"]}',
             operator: "===",
             value: '"2"',
