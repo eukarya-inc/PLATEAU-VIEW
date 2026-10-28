@@ -1,6 +1,7 @@
 package govpolygon
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -74,4 +75,36 @@ func TestHandlerUpdateFailure(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, get())
 	assert.Equal(t, int32(2), atomic.LoadInt32(&requests))
+}
+
+func TestHandlerUpdateLeaderCanceled(t *testing.T) {
+	release := make(chan struct{})
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"areas":[]}}`))
+	}))
+	defer s.Close()
+
+	h := New(s.URL, true)
+	e := echo.New()
+
+	// the leader request is canceled while the upstream query is in flight
+	ctx, cancel := context.WithCancel(context.Background())
+	r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- h.Update(e.NewContext(r, httptest.NewRecorder()))
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	close(release)
+
+	assert.NoError(t, <-done)
+
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	assert.True(t, h.failedAt.IsZero())
+	assert.NotNil(t, h.geojson)
 }

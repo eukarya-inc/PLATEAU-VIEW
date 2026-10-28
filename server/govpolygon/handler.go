@@ -34,6 +34,11 @@ var failureCacheDuration = 1 * time.Minute
 // recent attempt failed.
 var errUpdateRecentlyFailed = errors.New("update recently failed")
 
+// updateTimeout bounds the shared update inside singleflight. The update runs
+// detached from the leader request's context so that one client disconnecting
+// does not fail every waiting request and trigger the failure cache.
+var updateTimeout = 3 * time.Minute
+
 type Handler struct {
 	// e.g. "http://[::]:8080"
 	gqlEndpoint       string
@@ -97,7 +102,9 @@ func (h *Handler) Update(c echo.Context) error {
 	// Only one update runs at a time; concurrent requests share its result
 	// instead of each issuing the same expensive catalog query.
 	_, err, _ := h.group.Do("update", func() (any, error) {
-		return nil, h.update(ctx)
+		updateCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), updateTimeout)
+		defer cancel()
+		return nil, h.update(updateCtx)
 	})
 
 	return err
