@@ -37,7 +37,8 @@ func Handler(conf Config, g *echo.Group) error {
 		}
 	}
 
-	g.Use(auth)
+	// A subgroup keeps the auth off other routes registered later on the same group.
+	g = g.Group("", auth)
 
 	g.POST("/setup", func(c echo.Context) error {
 		ctx := c.Request().Context()
