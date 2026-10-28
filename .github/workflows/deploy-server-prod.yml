@@ -98,6 +98,20 @@ jobs:
             echo "plateauview-asset-index does not exist yet; skipping"
           fi
 
+  smoke_test:
+    runs-on: ubuntu-latest
+    needs: deploy_server
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Smoke test the deployed server
+        run: .github/scripts/smoke-test-server.sh https://api.plateauview.mlit.go.jp
+
   push_hub:
     runs-on: ubuntu-latest
     permissions:
