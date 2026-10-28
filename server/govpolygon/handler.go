@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/eukarya-inc/jpareacode"
@@ -48,6 +49,7 @@ type Handler struct {
 	geojson           []byte
 	qt                *Quadtree
 	updateIfNotExists bool
+	refreshing        atomic.Bool
 	updatedAt         time.Time
 	failedAt          time.Time
 }
@@ -75,13 +77,28 @@ func (h *Handler) updateIfNeed(c echo.Context) {
 
 	h.lock.RLock()
 	exists := h.geojson != nil
+	stale := exists && util.Now().Sub(h.updatedAt) >= cacheDuration
 	h.lock.RUnlock()
+
+	ctx := c.Request().Context()
+	if stale {
+		// keep serving the current data while refreshing it in the background
+		if h.refreshing.CompareAndSwap(false, true) {
+			go func() {
+				defer h.refreshing.Store(false)
+				if err := h.updateWithContext(context.WithoutCancel(ctx)); err != nil && !errors.Is(err, errUpdateRecentlyFailed) {
+					log.Errorfc(ctx, "govpolygon: fail to refresh: %v", err)
+				}
+			}()
+		}
+		return
+	}
 	if exists {
 		return
 	}
 
-	if err := h.Update(c); err != nil && !errors.Is(err, errUpdateRecentlyFailed) {
-		log.Errorfc(c.Request().Context(), "govpolygon: fail to init: %v", err)
+	if err := h.updateWithContext(ctx); err != nil && !errors.Is(err, errUpdateRecentlyFailed) {
+		log.Errorfc(ctx, "govpolygon: fail to init: %v", err)
 	}
 }
 
@@ -97,8 +114,10 @@ func (h *Handler) GetGeoJSON(c echo.Context) error {
 }
 
 func (h *Handler) Update(c echo.Context) error {
-	ctx := c.Request().Context()
+	return h.updateWithContext(c.Request().Context())
+}
 
+func (h *Handler) updateWithContext(ctx context.Context) error {
 	// Only one update runs at a time; concurrent requests share its result
 	// instead of each issuing the same expensive catalog query.
 	_, err, _ := h.group.Do("update", func() (any, error) {

@@ -127,3 +127,42 @@ func TestHandlerGetCityNamesErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestHandlerRefreshAfterCacheDuration(t *testing.T) {
+	var requests int32
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"areas":[{"name":"千代田区","code":"13101","prefecture":{"name":"東京都"}}]}}`))
+	}))
+	defer s.Close()
+
+	h := New(s.URL, true)
+	get := func() int {
+		e := echo.New()
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		assert.NoError(t, h.GetGeoJSON(e.NewContext(r, w)))
+		return w.Code
+	}
+
+	assert.Equal(t, http.StatusOK, get())
+	assert.Equal(t, int32(1), atomic.LoadInt32(&requests))
+
+	// fresh data is not refreshed
+	assert.Equal(t, http.StatusOK, get())
+	assert.Equal(t, int32(1), atomic.LoadInt32(&requests))
+
+	// stale data is still served and refreshed in the background
+	h.lock.Lock()
+	h.updatedAt = time.Now().Add(-2 * cacheDuration)
+	h.lock.Unlock()
+
+	assert.Equal(t, http.StatusOK, get())
+	assert.Eventually(t, func() bool {
+		h.lock.RLock()
+		defer h.lock.RUnlock()
+		return time.Since(h.updatedAt) < cacheDuration
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&requests))
+}
