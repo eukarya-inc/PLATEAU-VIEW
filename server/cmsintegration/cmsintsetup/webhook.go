@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	run "cloud.google.com/go/run/apiv2"
@@ -29,6 +30,11 @@ const (
 	CitySetupStatusDone    CitySetupStatus = "完了"
 	CitySetupStatusError   CitySetupStatus = "エラー"
 )
+
+// citySetupLock serializes reading a workspaces item and recording its CSV in
+// city_setup_csv, so that close webhooks for the same CSV in this process start
+// only one job.
+var citySetupLock sync.Mutex
 
 // WorkspaceCitySetup is the part of a workspaces item in the system project that drives the city setup.
 type WorkspaceCitySetup struct {
@@ -72,6 +78,9 @@ func handleCitySetupWebhook(ctx context.Context, s *Services, w *cmswebhook.Payl
 	if model.ID != w.ItemData.Model.ID {
 		return nil
 	}
+
+	citySetupLock.Lock()
+	defer citySetupLock.Unlock()
 
 	raw, err := s.CMS.GetItem(ctx, w.ItemData.Item.ID, true)
 	if err != nil {

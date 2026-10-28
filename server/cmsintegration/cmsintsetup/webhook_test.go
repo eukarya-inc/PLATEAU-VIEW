@@ -3,6 +3,7 @@ package cmsintsetup
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
@@ -166,6 +167,70 @@ func TestHandleCitySetupWebhook(t *testing.T) {
 			assert.Equal(t, len(tt.wantStatus), gotComments)
 		})
 	}
+}
+
+func TestHandleCitySetupWebhook_Concurrent(t *testing.T) {
+	csv := map[string]any{"id": "csv", "url": "https://example.com/cities.csv"}
+
+	var mu sync.Mutex
+	setupCSV := ""
+	jobs := 0
+
+	s := &Services{
+		SystemProject: "system",
+		CMS: &cmsintegrationcommon.CMSMock{
+			MockGetModelByKey: func(ctx context.Context, projectID, key string) (*cms.Model, error) {
+				return &cms.Model{ID: "workspaces", Key: workspacesModel}, nil
+			},
+			MockGetItem: func(ctx context.Context, id string, asset bool) (*cms.Item, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				return &cms.Item{ID: id, Fields: []*cms.Field{
+					{Key: "project_id", Type: "text", Value: "prj"},
+					{Key: "city_csv", Type: "asset", Value: csv},
+					{Key: citySetupCSVField, Type: "text", Value: setupCSV},
+				}}, nil
+			},
+			MockUpdateItem: func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				item := &cms.Item{Fields: fields}
+				if f := item.FieldByKey(citySetupCSVField); f != nil {
+					setupCSV = *f.GetValue().String()
+				}
+				return item, nil
+			},
+			MockCommentToItem: func(ctx context.Context, id, content string) error {
+				return nil
+			},
+		},
+		RunJob: func(ctx context.Context, args []string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			jobs++
+			return nil
+		},
+	}
+
+	payload := &cmswebhook.Payload{
+		Type: cmswebhook.EventItemUpdate,
+		ItemData: &cmswebhook.ItemData{
+			Item:  &cms.Item{ID: "item"},
+			Model: &cms.Model{ID: "workspaces", Key: workspacesModel},
+		},
+	}
+
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			assert.NoError(t, handleCitySetupWebhook(context.Background(), s, payload))
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, 1, jobs)
 }
 
 func TestReportCitySetup(t *testing.T) {
