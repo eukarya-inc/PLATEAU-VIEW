@@ -1,6 +1,7 @@
 package cmsintflow
 
 import (
+	"context"
 	"testing"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
@@ -279,4 +280,28 @@ func TestHasStatusChangeToNonRunning(t *testing.T) {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func TestHandleFlowCancellation_NoStoredRun(t *testing.T) {
+	ctx := context.Background()
+	items := map[string]*cms.Item{
+		"main1": {ID: "main1"},
+	}
+	s := &Services{CMS: initMockCMS(items, nil)}
+	w := &cmswebhook.Payload{
+		Type: cmswebhook.EventItemUpdate,
+		ItemData: &cmswebhook.ItemData{
+			Item: &cms.Item{
+				ID:             "metadata1",
+				OriginalItemID: strPtr("main1"),
+				Fields: []*cms.Field{
+					{ID: "field1", Key: "qc_status", Value: &cms.Tag{Name: string(cmsintegrationcommon.ConvertionStatusNotStarted)}},
+				},
+			},
+		},
+	}
+
+	cancelled, err := handleFlowCancellation(ctx, s, &Config{}, w)
+	assert.NoError(t, err)
+	assert.False(t, cancelled)
 }

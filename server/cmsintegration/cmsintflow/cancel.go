@@ -67,19 +67,22 @@ func hasStatusChangeToNonRunning(w *cmswebhook.Payload, fieldKey string) bool {
 }
 
 // handleFlowCancellation cancels the Flow job for the given item.
-func handleFlowCancellation(ctx context.Context, s *Services, conf *Config, w *cmswebhook.Payload) error {
+// It reports whether a stored Flow run was found and handled. When there is no
+// stored run, nothing is running, so the caller should treat the event as a
+// normal update (e.g. a status reset to 未実行 to re-run).
+func handleFlowCancellation(ctx context.Context, s *Services, conf *Config, w *cmswebhook.Payload) (bool, error) {
 	log.Infofc(ctx, "handling flow cancellation: itemID=%s", w.ItemData.Item.ID)
 
 	mainItem, err := s.GetMainItemWithMetadata(ctx, w.ItemData.Item)
 	if err != nil {
 		log.Errorfc(ctx, "failed to get main item with metadata: %v", err)
-		return err
+		return false, err
 	}
 
 	featureItem := cmsintegrationcommon.FeatureItemFrom(mainItem)
 	if featureItem == nil || featureItem.FlowRunID == "" || featureItem.FlowTriggerID == "" {
 		log.Infofc(ctx, "no flow run id or trigger id, skipping cancellation: itemID=%s", mainItem.ID)
-		return nil
+		return false, nil
 	}
 
 	log.Infofc(ctx, "cancelling flow job: itemID=%s, runID=%s, triggerID=%s", mainItem.ID, featureItem.FlowRunID, featureItem.FlowTriggerID)
@@ -116,5 +119,5 @@ func handleFlowCancellation(ctx context.Context, s *Services, conf *Config, w *c
 	// Add a comment to notify about the cancellation
 	_ = s.CMS.CommentToItem(ctx, mainItem.ID, "Flowジョブをキャンセルしました。")
 
-	return nil
+	return true, nil
 }

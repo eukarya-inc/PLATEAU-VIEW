@@ -41,10 +41,16 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		// Check for status change that should trigger cancellation
 		if shouldCancelFlow(w) {
 			log.Infofc(ctx, "status changed to non-running, attempting to cancel flow")
-			if err := handleFlowCancellation(ctx, s, &conf, w); err != nil {
+			cancelled, err := handleFlowCancellation(ctx, s, &conf, w)
+			if err != nil {
 				log.Warnfc(ctx, "flow cancellation failed: %v", err)
+				return nil
 			}
-			return nil
+			if cancelled {
+				return nil
+			}
+			// No Flow run was in progress: continue as a normal update so that
+			// resetting a status (e.g. to 未実行) can start a new run.
 		}
 
 		// if event type is "item.create" and payload is metadata, skip it
