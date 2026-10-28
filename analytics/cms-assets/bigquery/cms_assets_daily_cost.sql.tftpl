@@ -1,0 +1,64 @@
+-- Each daily_usage row with its client classification and estimated delivery cost (JPY):
+-- usage x estimated unit price. The classification lives here rather than in daily_usage so
+-- that a new rule applies to past days without re-aggregating them.
+SELECT
+  u.*,
+  -- Who sent the request. Reports of client use count "client" rows only.
+  CASE
+    -- The CDN's own revalidation of a client request; it carries the client's IP.
+    WHEN STARTS_WITH(IFNULL(u.user_agent, ""), "Cloud-CDN-Google") THEN "cdn"
+    -- The PLATEAU tile and API servers and workers run on Google Cloud and fetch assets with
+    -- these user agents. Third parties on Google Cloud with the same user agents land here too,
+    -- until our services send a user agent of their own.
+    WHEN u.asn IN (396982, 15169)
+      AND (u.user_agent IS NULL OR STARTS_WITH(u.user_agent, "Go-http-client/") OR STARTS_WITH(u.user_agent, "object_store/"))
+      THEN "operator"
+    ELSE "client"
+  END AS traffic_class,
+  CASE
+    WHEN u.user_agent IS NULL THEN "none"
+    WHEN REGEXP_CONTAINS(LOWER(u.user_agent), r"bot|crawler|spider|slurp") THEN "bot"
+    -- A browser driven by a program.
+    WHEN REGEXP_CONTAINS(u.user_agent, r"HeadlessChrome|Headless") THEN "headless-browser"
+    WHEN REGEXP_CONTAINS(u.user_agent, r"^(curl|Wget|wget)/") THEN "curl/wget"
+    WHEN REGEXP_CONTAINS(LOWER(u.user_agent), r"python|aiohttp|httpx|urllib") THEN "python"
+    WHEN STARTS_WITH(u.user_agent, "Go-http-client") THEN "go"
+    WHEN REGEXP_CONTAINS(u.user_agent, r"^(node|undici|Bun/|axios/|node-fetch|okhttp)|PowerShell") THEN "other-script"
+    WHEN REGEXP_CONTAINS(u.user_agent, r"QGIS") THEN "qgis"
+    -- libplateau (PLATEAU SDK for Unity/Unreal) sends the cpp-httplib default UA.
+    WHEN STARTS_WITH(u.user_agent, "cpp-httplib/") THEN "plateau-sdk"
+    WHEN REGEXP_CONTAINS(u.user_agent, r"Unity|UnrealEngine|Cesium") THEN "3d-engine"
+    WHEN STARTS_WITH(u.user_agent, "Mozilla/") THEN "browser"
+    ELSE "other"
+  END AS client_type,
+  -- Where the request came from. The SDK sends no referer, so it is told apart by its UA.
+  CASE
+    WHEN STARTS_WITH(u.user_agent, "cpp-httplib/") THEN "PLATEAU SDK"
+    WHEN u.referer_host IS NULL THEN "none"
+    WHEN u.referer_host = "plateauview.mlit.go.jp" THEN "PLATEAU VIEW"
+    WHEN u.referer_host = "geospatial.jp" OR ENDS_WITH(u.referer_host, ".geospatial.jp") THEN "G-Spatial Information Center"
+    -- Other PLATEAU services: CMS, docs, tiles, and viewers published with PLATEAU Editor.
+    WHEN ENDS_WITH(u.referer_host, ".plateauview.mlit.go.jp") OR u.referer_host = "plateau.reearth.io"
+      OR ENDS_WITH(u.referer_host, ".plateau.reearth.io") THEN "PLATEAU service"
+    WHEN u.referer_host = "mlit.go.jp" OR ENDS_WITH(u.referer_host, ".mlit.go.jp") THEN "MLIT site"
+    WHEN u.referer_host IN ("localhost", "127.0.0.1", "[::1]", "0.0.0.0") OR ENDS_WITH(u.referer_host, ".localhost")
+      OR REGEXP_CONTAINS(u.referer_host, r"^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)") THEN "local"
+    ELSE "other site"
+  END AS source,
+  a.org AS asn_org,
+  IF(u.cache_status != "uncached", u.bytes / POW(1024, 3) * IFNULL(pe.unit_price_jpy, pe_asia.unit_price_jpy), 0) AS cdn_egress_jpy,
+  IF(u.cache_status = "uncached", u.bytes / POW(1024, 3) * IFNULL(pi.unit_price_jpy, pi_apac.unit_price_jpy), 0) AS internet_egress_jpy,
+  u.fill_bytes / POW(1024, 3) * IFNULL(pf.unit_price_jpy, pf_asia.unit_price_jpy) AS cache_fill_jpy,
+  IF(u.cache_lookup, u.requests * pl.unit_price_jpy, 0) AS cache_lookup_jpy,
+  IF(u.cache_status != "hit", u.requests * po.unit_price_jpy, 0) AS gcs_ops_jpy
+FROM `${dataset}.daily_usage` u
+LEFT JOIN (SELECT asn, ANY_VALUE(org) AS org FROM `${dataset}.ipv4_asn` GROUP BY asn) a USING (asn)
+LEFT JOIN `${dataset}.country_region` r USING (country)
+LEFT JOIN `${dataset}.unit_price` pe ON pe.item = "cdn_egress" AND pe.region = r.cdn_region
+LEFT JOIN `${dataset}.unit_price` pe_asia ON pe_asia.item = "cdn_egress" AND pe_asia.region = "Asia"
+LEFT JOIN `${dataset}.unit_price` pi ON pi.item = "internet_egress" AND pi.region = r.egress_region
+LEFT JOIN `${dataset}.unit_price` pi_apac ON pi_apac.item = "internet_egress" AND pi_apac.region = "Apac"
+LEFT JOIN `${dataset}.unit_price` pf ON pf.item = "cache_fill" AND pf.region = r.cdn_region
+LEFT JOIN `${dataset}.unit_price` pf_asia ON pf_asia.item = "cache_fill" AND pf_asia.region = "Asia"
+LEFT JOIN `${dataset}.unit_price` pl ON pl.item = "cache_lookup"
+LEFT JOIN `${dataset}.unit_price` po ON po.item = "gcs_class_b"

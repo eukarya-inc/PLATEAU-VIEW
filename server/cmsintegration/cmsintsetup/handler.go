@@ -17,6 +17,9 @@ type Config struct {
 	CMSURL           string
 	CMSToken         string
 	CMSSystemProject string
+	// JobName is the full name of the Cloud Run Job that runs this server's image with tool commands
+	// (projects/<project>/locations/<region>/jobs/<job>). City setup from the workspaces model is disabled when empty.
+	JobName string
 }
 
 func Handler(conf Config, g *echo.Group) error {
@@ -66,12 +69,13 @@ func Handler(conf Config, g *echo.Group) error {
 
 		log.Infofc(ctx, "received: %#v", i)
 
-		if err := SetupCityItems(ctx, s, i, nil); err != nil {
+		res, err := SetupCityItems(ctx, s, i, nil)
+		if err != nil {
 			log.Errorfc(ctx, "error: %v", err)
 			return c.JSON(http.StatusBadGateway, err.Error())
 		}
 
-		return c.JSON(http.StatusOK, "ok")
+		return c.JSON(http.StatusOK, res)
 	})
 
 	g.POST("/copy_related", func(c echo.Context) error {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
 	"github.com/k0kubun/pp/v3"
@@ -15,7 +16,7 @@ import (
 func setupCityItems(conf *Config, args []string) error {
 	println("setup-city-items")
 
-	var base, token, file, systemProject string
+	var base, token, file, systemProject, reportItem string
 	inp := cmsintsetup.SetupCityItemsInput{}
 
 	flags := flag.NewFlagSet("setup-city-items", flag.ExitOnError)
@@ -23,9 +24,10 @@ func setupCityItems(conf *Config, args []string) error {
 	flags.StringVar(&token, "token", conf.CMS_Token, "CMS token")
 	flags.StringVar(&systemProject, "system-project", conf.CMS_SystemProject, "CMS system project ID")
 	flags.StringVar(&inp.ProjectID, "project", "", "project ID")
-	flags.StringVar(&file, "file", "", "file path")
-	flags.BoolVar(&inp.Force, "force", false, "force")
-	flags.IntVar(&inp.Offset, "offset", 0, "offset")
+	flags.StringVar(&file, "file", "", "CSV file path or http(s) URL")
+	flags.StringVar(&reportItem, "report-item", "", "workspaces item ID in the system project to write the result to")
+	flags.Bool("force", false, "deprecated: has no effect because existing cities are always skipped or resumed")
+	flags.IntVar(&inp.Offset, "offset", 0, "number of CSV rows to skip")
 	flags.IntVar(&inp.Limit, "limit", 0, "limit")
 	flags.BoolVar(&inp.DryRun, "dryrun", false, "dryrun")
 	if err := flags.Parse(args); err != nil {
@@ -53,14 +55,18 @@ func setupCityItems(conf *Config, args []string) error {
 
 	_, _ = pp.Printf("args: %v\n", inp)
 
-	f, err := os.Open(file)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+	if strings.HasPrefix(file, "http://") || strings.HasPrefix(file, "https://") {
+		inp.DataURL = file
+	} else {
+		f, err := os.Open(file)
+		if err != nil {
+			return fmt.Errorf("failed to open file: %w", err)
+		}
+
+		defer func() { _ = f.Close() }()
+
+		inp.DataBody = f
 	}
-
-	defer func() { _ = f.Close() }()
-
-	inp.DataBody = f
 
 	// Initialize services with NewServices to properly set up PCMS
 	services, err := cmsintsetup.NewServices(cmsintsetup.Config{
@@ -73,14 +79,25 @@ func setupCityItems(conf *Config, args []string) error {
 	}
 	services.HTTP = http.DefaultClient
 
-	err = cmsintsetup.SetupCityItems(
-		context.Background(),
+	ctx := context.Background()
+	res, err := cmsintsetup.SetupCityItems(
+		ctx,
 		services,
 		inp,
-		func(i, l int, item cmsintsetup.SetupCSVItem) {
-			fmt.Printf("processing %d/%d %s\n", i, l, item.Name)
+		func(i, l int, item cmsintsetup.SetupCSVItem, action cmsintsetup.SetupAction) {
+			fmt.Printf("processing %d/%d %s (%s)\n", i, l, item.Name, action)
 		},
 	)
+
+	if res != nil {
+		fmt.Println(res)
+	}
+
+	if reportItem != "" && !inp.DryRun {
+		if rerr := cmsintsetup.ReportCitySetup(ctx, services.CMS, reportItem, res, err); rerr != nil {
+			fmt.Printf("failed to report the result: %v\n", rerr)
+		}
+	}
 
 	if err != nil {
 		return fmt.Errorf("failed to setup city items: %w", err)

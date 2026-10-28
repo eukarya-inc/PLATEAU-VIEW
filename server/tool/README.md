@@ -67,16 +67,18 @@ CMS_SYSTEMPROJECT=your-system-project-id
 
 CSVファイルから都市アイテムをCMSに一括登録します。
 
+システムプロジェクトの`workspaces`アイテムに都市CSVを登録すれば、このコマンドがCloud Run Jobで自動的に実行されます（[workspacesから自動で実行する](#workspacesから自動で実行する)）。
+
 #### 使い方
 
 ```bash
 go run . setup-city-items \
   -project <PROJECT_ID> \
   -system-project <SYSTEM_PROJECT_ID> \
-  -file <CSV_FILE_PATH> \
+  -file <CSV_FILE_PATH_OR_URL> \
+  [-report-item <WORKSPACES_ITEM_ID>] \
   [-base <CMS_BASE_URL>] \
   [-token <CMS_TOKEN>] \
-  [-force] \
   [-offset <NUMBER>] \
   [-limit <NUMBER>] \
   [-dryrun]
@@ -88,13 +90,52 @@ go run . setup-city-items \
 |---------|------|------|-----------|
 | `-project` | ✓ | CMSプロジェクトID | - |
 | `-system-project` | ✓ | CMSシステムプロジェクトID | 環境変数`CMS_SYSTEMPROJECT` |
-| `-file` | ✓ | CSVファイルのパス | - |
+| `-file` | ✓ | CSVファイルのパス、または`http(s)://`のURL | - |
+| `-report-item` | | 状態を書き込み、結果をコメントする`workspaces`アイテムのID。`-dryrun`のときは書き込まない | - |
 | `-base` | | CMS Base URL | 環境変数`CMS_BASEURL` |
 | `-token` | | CMS認証トークン | 環境変数`CMS_TOKEN` |
-| `-force` | | 既存データがあっても強制実行 | false |
-| `-offset` | | 処理開始位置（行番号） | 0 |
+| `-offset` | | 先頭から読み飛ばすデータ行の数 | 0 |
 | `-limit` | | 処理する最大件数 | 0（無制限） |
 | `-dryrun` | | 実際には登録せずに動作確認のみ | false |
+| `-force` | | 廃止。指定しても何も変わりません | false |
+
+#### 再実行と途中再開
+
+同じCSVで何度実行しても、都市は重複しません。CSVの各行は、プロジェクトにある都市アイテムと`city_code`で突き合わせ、次のどれかになります。
+
+| 判定 | 条件 | 処理 |
+|------|------|------|
+| `create` | 同じ`city_code`の都市アイテムがない | 都市アイテムと、関連データ・G空間情報センター・各地物のアイテムを作る |
+| `resume` | 都市アイテムはあるが、参照が欠けている | 欠けている子アイテムを探し、なければ作って、都市アイテムの参照を埋める |
+| `skip` | 都市アイテムがあり、参照が全部そろっている | 何もしない |
+
+処理が途中で止まっても、同じコマンドをもう一度実行すれば続きから埋まります。`city_code`が空の都市アイテム（テスト用など）は突き合わせの対象外です。
+
+実行の最後に、各判定の件数とCSVの補正内容が表示されます。本番の前に`-dryrun`で確認してください。
+
+#### workspacesから自動で実行する
+
+システムプロジェクトの`workspaces`アイテムに`project_id`と都市CSVを入れて保存すると、サーバーがCMSのwebhookを受けて、Cloud Run Jobでこのコマンドを実行します。
+
+`workspaces`モデルには、次のフィールドが必要です。
+
+| キー | 種類 | 内容 |
+|------|------|------|
+| `city_csv` | アセット | 都市CSV。入れると都市アイテムの作成が始まる |
+| `city_setup_csv` | テキスト | 作成を始めたCSVのアセットID。サーバーが書き込む |
+| `city_setup_status` | セレクト（`実行中`・`完了`・`エラー`） | 作成の状態。サーバーが書き込む |
+
+開始と終了のたびに、サーバーがアイテムにコメントします。終了のコメントには、各判定の件数、CSVの補正内容、エラーが書かれます。
+
+- 作成は、`city_csv`のアセットIDが`city_setup_csv`と違うときだけ始まります。CSVを差し替えると、もう一度実行されます。
+- 同じCSVでやり直すときは、`city_setup_csv`を空にして保存してください。途中で止まった場合も、同じ操作で続きから埋まります。
+- CSVに誤りがあるときは、何も作らずに`エラー`になり、該当の行がコメントに書かれます。
+
+サーバーには次の設定が必要です。
+
+- 環境変数`REEARTH_PLATEAUVIEW_JOB`に、サーバーがツールのコマンドを実行するJobの名前（`projects/<project>/locations/<region>/jobs/<job>`）。空のときは自動実行しません。Jobは`plateauview-api`と同じイメージで、CMSのURLとトークンを環境変数に持つ必要があります。
+- サーバーのサービスアカウントに、そのJobを引数を上書きして実行する権限（`roles/run.jobsExecutorWithOverrides`）。
+- システムプロジェクトのあるワークスペースに、サーバーの`/webhook`へのwebhook（`item.create`と`item.update`）。
 
 #### CSVフォーマット
 
@@ -112,10 +153,15 @@ city_code,city,city_en,pref,bldg,tran,trk,squr,rwy,wwy,urf,luse,fld,tnm,htd,ifld
 
 ##### 必須カラム
 
-- `city_code`: 都市コード（5桁）。空の場合は自動生成されます
+- `city_code`: 都市コード（5桁）。空の場合は都道府県名と都市名から自動生成されます。指定した場合は、実在するコードか、都道府県名・都市名と一致するかを検査し、合わない行をまとめてエラーにします
 - `city`: 都市名（日本語）
 - `city_en`: 都市名（英語）
 - `pref`: 都道府県名
+
+##### 自動で補正される内容
+
+- 表計算ソフトで消えた先頭の0を補います（`2321` → `02321`）
+- ゼロ幅スペースなどの見えない文字と、前後の空白を取り除きます
 
 ##### 地物タイプカラム（5列目以降）
 
@@ -167,7 +213,7 @@ go run . setup-city-items \
   -project 01234567-89ab-cdef-0123-456789abcdef \
   -file /path/to/cities.csv
 
-# 100件目から10件だけ処理
+# 先頭100行を読み飛ばし、101行目から10件だけ処理
 go run . setup-city-items \
   -project 01234567-89ab-cdef-0123-456789abcdef \
   -system-project fedcba98-7654-3210-fedc-ba9876543210 \
@@ -371,15 +417,12 @@ echo "REEARTH_PLATEAUVIEW_CMS_SYSTEMPROJECT=your-system-project-id" >> server/.e
 go run . setup-city-items -system-project your-system-project-id ...
 ```
 
-### エラー: "city items already exist"
+### エラー: "invalid city codes"
 
-既に都市アイテムが存在しています。
+`city_code`が存在しないか、都道府県名・都市名と一致しない行があります。エラーには該当する行番号がすべて表示されます。
 
 **解決方法:**
-既存データを上書きする場合は`-force`オプションを追加してください：
-```bash
-go run . setup-city-items -force ...
-```
+CSVの該当行の`city_code`・`pref`・`city`を確認してください。
 
 ### エラー: "invalid header"
 

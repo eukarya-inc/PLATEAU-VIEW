@@ -1,0 +1,7 @@
+-- Estimated monthly storage cost (JPY) of each asset in each inventory snapshot.
+SELECT
+  s.*,
+  s.bytes / POW(1024, 3) * p.unit_price_jpy AS monthly_storage_jpy
+FROM `${dataset}.storage_by_asset` s
+CROSS JOIN `${dataset}.unit_price` p
+WHERE p.item = "storage"

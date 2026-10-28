@@ -17,6 +17,10 @@ func NewServerWithConfig(cfg *Config) *server.MCPServer {
 	s := server.NewMCPServer(
 		"plateau-mcp",
 		"1.0.0",
+		server.WithTitle("PLATEAU MCP Server"),
+		server.WithDescription("Access PLATEAU 3D city model data catalog (areas, datasets, CityGML) and the PLATEAU specification documents."),
+		server.WithWebsiteURL(datacatalogmcp.WebsiteURL),
+		server.WithIcons(datacatalogmcp.Icons...),
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, false),
 		server.WithLogging(),

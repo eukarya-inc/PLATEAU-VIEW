@@ -13,6 +13,15 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// WebsiteURL is the documentation page of the PLATEAU MCP server.
+const WebsiteURL = "https://docs.plateauview.mlit.go.jp/mcp/overview/"
+
+// Icons are the icons of the PLATEAU MCP server, served by the docs site.
+var Icons = []mcp.Icon{
+	{Src: "https://docs.plateauview.mlit.go.jp/favicon.svg", MIMEType: "image/svg+xml", Sizes: []string{"any"}},
+	{Src: "https://docs.plateauview.mlit.go.jp/apple-touch-icon.png", MIMEType: "image/png", Sizes: []string{"180x180"}},
+}
+
 //go:embed spatial_id.md
 var spatialIDExplanation string
 
@@ -30,6 +39,10 @@ func NewService(reposHandler ReposHandler, host string) *Service {
 	mcpServer := server.NewMCPServer(
 		"PLATEAU Data Catalog",
 		"1.0.0",
+		server.WithTitle("PLATEAU Data Catalog"),
+		server.WithDescription("Search PLATEAU 3D city model data catalog: areas, datasets, and CityGML files."),
+		server.WithWebsiteURL(WebsiteURL),
+		server.WithIcons(Icons...),
 		server.WithToolCapabilities(true),
 	)
 

@@ -1,0 +1,139 @@
+-- Scheduled daily: aggregates yesterday's (JST) CMS asset requests into daily_usage,
+-- daily_clients and daily_asset_clients, and keeps today's asset index as a snapshot.
+-- Days are Japan Standard Time because the reports are read in Japan. The run is scheduled
+-- after 00:00 JST, so @run_date (UTC) is also today in JST.
+-- Safe to re-run for the same day.
+-- All refreshes run in one transaction so a failure keeps the previous rows.
+DECLARE target_day DATE DEFAULT DATE_SUB(@run_date, INTERVAL 1 DAY);
+
+-- The day's requests, read from the logs once for all tables.
+CREATE TEMP TABLE req AS
+WITH raw AS (
+  SELECT
+    l.timestamp AS ts,
+    l.http_request.remote_ip AS ip,
+    l.http_request.request_method AS method,
+    -- The path without the query, so that the parts of one download share a key.
+    REGEXP_EXTRACT(l.http_request.request_url, r"^https?://[^/]+([^?#]*)") AS path,
+    REGEXP_EXTRACT(l.http_request.request_url, r"/assets/([0-9a-f]{2}/[0-9a-f-]{34})/") AS uuid,
+    REGEXP_EXTRACT(l.http_request.request_url, r"/assets/[0-9a-f]{2}/[0-9a-f-]{34}/([^/?#]+)") AS file,
+    REGEXP_EXTRACT(l.http_request.request_url, r"^https?://([^/]+)") AS host,
+    NET.HOST(l.http_request.referer) AS referer_host,
+    -- Kept as sent; the daily_cost view classifies it, so new rules need no re-aggregation.
+    NULLIF(l.http_request.user_agent, "") AS user_agent,
+    JSON_VALUE(l.json_payload, "$.cacheId") AS edge,
+    -- "partial": served from cache but part of the object was filled from the origin.
+    CASE
+      WHEN l.http_request.cache_hit AND l.http_request.cache_fill_bytes IS NOT NULL THEN "partial"
+      WHEN l.http_request.cache_hit THEN "hit"
+      WHEN l.http_request.cache_fill_bytes IS NOT NULL THEN "miss"
+      ELSE "uncached"
+    END AS cache_status,
+    IFNULL(l.http_request.cache_lookup, FALSE) AS cache_lookup,
+    l.http_request.status AS status,
+    IFNULL(CAST(l.http_request.response_size AS INT64), 0) AS bytes,
+    IFNULL(CAST(l.http_request.cache_fill_bytes AS INT64), 0) AS fill_bytes
+  FROM `${logs_dataset}._AllLogs` l
+  WHERE l.timestamp >= TIMESTAMP(target_day, "Asia/Tokyo")
+    AND l.timestamp < TIMESTAMP(DATE_ADD(target_day, INTERVAL 1 DAY), "Asia/Tokyo")
+),
+ipv4 AS (
+  SELECT DISTINCT ip, NET.IPV4_TO_INT64(NET.IP_FROM_STRING(ip)) AS n FROM raw WHERE STRPOS(ip, ":") = 0
+),
+geo AS (
+  -- IPs are only kept as countries and network operators (ASN).
+  SELECT i.ip, ANY_VALUE(c.country) AS country
+  FROM ipv4 i
+  JOIN `${dataset}.ipv4_country` c ON c.bucket = DIV(i.n, 65536) AND i.n BETWEEN c.ip_from AND c.ip_to
+  GROUP BY i.ip
+),
+asn AS (
+  SELECT i.ip, ANY_VALUE(a.asn) AS asn
+  FROM ipv4 i
+  JOIN `${dataset}.ipv4_asn` a ON a.bucket = DIV(i.n, 65536) AND i.n BETWEEN a.ip_from AND a.ip_to
+  GROUP BY i.ip
+),
+flagged AS (
+  SELECT
+    raw.*,
+    -- An access: a successful GET by a client. The CDN's own revalidation requests carry the
+    -- client's IP but are not client requests.
+    NOT STARTS_WITH(IFNULL(user_agent, ""), "Cloud-CDN-Google")
+      AND method = "GET" AND status IN (200, 206, 304) AS ok,
+    NOT STARTS_WITH(IFNULL(user_agent, ""), "Cloud-CDN-Google")
+      AND method = "GET" AND status IN (200, 206) AS fetched
+  FROM raw
+)
+SELECT
+  f.* EXCEPT (ts, method, path, fetched),
+  -- Each count is put on the first matching request, so the counts add up over any grouping.
+  -- One file fetched in many 206 parts counts as one access.
+  f.ok AND (f.status != 206
+    OR ROW_NUMBER() OVER (PARTITION BY f.ip, f.path, f.ok AND f.status = 206 ORDER BY f.ts) = 1) AS access,
+  f.fetched AND ROW_NUMBER() OVER (PARTITION BY f.ip, f.path, f.fetched ORDER BY f.ts) = 1 AS download,
+  IFNULL(geo.country, "ZZ") AS country,
+  asn.asn
+FROM flagged f
+LEFT JOIN geo USING (ip)
+LEFT JOIN asn USING (ip);
+
+BEGIN TRANSACTION;
+
+DELETE FROM `${dataset}.daily_usage` WHERE day = target_day;
+
+INSERT INTO `${dataset}.daily_usage` (
+  day, uuid, file, host, referer_host, user_agent, edge, country, asn, cache_status, cache_lookup,
+  requests, error_requests, bytes, fill_bytes, ips, accesses, downloads
+)
+SELECT
+  target_day AS day, uuid, file, host, referer_host, user_agent, edge, country, asn,
+  cache_status, cache_lookup,
+  COUNT(*) AS requests,
+  COUNTIF(status BETWEEN 400 AND 599) AS error_requests,
+  SUM(bytes) AS bytes,
+  SUM(fill_bytes) AS fill_bytes,
+  COUNT(DISTINCT ip) AS ips,
+  COUNTIF(access) AS accesses,
+  COUNTIF(download) AS downloads
+FROM req
+GROUP BY day, uuid, file, host, referer_host, user_agent, edge, country, asn, cache_status, cache_lookup;
+
+DELETE FROM `${dataset}.daily_clients` WHERE day = target_day;
+
+INSERT INTO `${dataset}.daily_clients` (
+  day, referer_host, user_agent, country, asn, requests, bytes, ips, accesses, downloads, ip_sketch
+)
+SELECT
+  target_day AS day, referer_host, user_agent, country, asn,
+  COUNT(*) AS requests,
+  SUM(bytes) AS bytes,
+  COUNT(DISTINCT ip) AS ips,
+  COUNTIF(access) AS accesses,
+  COUNTIF(download) AS downloads,
+  HLL_COUNT.INIT(IF(ok, ip, NULL)) AS ip_sketch
+FROM req
+GROUP BY day, referer_host, user_agent, country, asn;
+
+DELETE FROM `${dataset}.daily_asset_clients` WHERE day = target_day;
+
+INSERT INTO `${dataset}.daily_asset_clients` (
+  day, uuid, file, referer_host, user_agent, country, asn, requests, bytes, ips, accesses, downloads, ip_sketch
+)
+SELECT
+  target_day AS day, uuid, file, referer_host, user_agent, country, asn,
+  COUNT(*) AS requests,
+  SUM(bytes) AS bytes,
+  COUNT(DISTINCT ip) AS ips,
+  COUNTIF(access) AS accesses,
+  COUNTIF(download) AS downloads,
+  HLL_COUNT.INIT(IF(ok, ip, NULL)) AS ip_sketch
+FROM req
+GROUP BY day, uuid, file, referer_host, user_agent, country, asn;
+
+DELETE FROM `${dataset}.asset_index_daily` WHERE snapshot_date = @run_date;
+
+INSERT INTO `${dataset}.asset_index_daily`
+SELECT @run_date AS snapshot_date, uuid, url, refs
+FROM `${dataset}.asset_index`;
+
+COMMIT TRANSACTION;

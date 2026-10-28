@@ -89,6 +89,11 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		return nil, err
 	}
 
+	hsetup, err := cmsintsetup.WebhookHandler(setupConfig(conf))
+	if err != nil {
+		return nil, err
+	}
+
 	// compat
 	hv2, err := cmsintegrationv2.WebhookHandler(conf)
 	if err != nil {
@@ -108,7 +113,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 	}
 
 	return mergeHandlers([]cmswebhook.Handler{
-		hflow, hv3, hv3geo, hmaxlod, hrelated,
+		hflow, hv3, hv3geo, hmaxlod, hrelated, hsetup,
 		// compat
 		hv2, hv2geo, hv2dataconv,
 	}), nil
@@ -216,5 +221,6 @@ func setupConfig(conf Config) cmsintsetup.Config {
 		CMSURL:           conf.CMSBaseURL,
 		CMSToken:         conf.CMSToken,
 		CMSSystemProject: conf.CMSSystemProject,
+		JobName:          conf.JobName,
 	}
 }

@@ -1,0 +1,30 @@
+-- One row per asset UUID ever seen in the asset index, with the catalog entry that
+-- best describes it (an asset can be referenced by several entries) and the last
+-- snapshot it was seen in. Use it to label daily_usage / daily_cost by uuid.
+WITH latest AS (
+  SELECT * FROM `${dataset}.asset_index_daily`
+  WHERE TRUE
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY snapshot_date DESC) = 1
+)
+SELECT
+  l.uuid,
+  l.url,
+  l.snapshot_date AS last_seen,
+  ARRAY_LENGTH(l.refs) AS ref_count,
+  (
+    SELECT AS STRUCT r.*
+    FROM UNNEST(l.refs) r WITH OFFSET o
+    ORDER BY CASE r.kind
+      WHEN "citygml" THEN 1
+      WHEN "plateau_dataset" THEN 2
+      WHEN "related_dataset" THEN 3
+      WHEN "generic_dataset" THEN 4
+      WHEN "citygml_feature" THEN 5
+      WHEN "citygml_maxlod" THEN 6
+      WHEN "citygml_metadata" THEN 7
+      WHEN "related_dataset_original" THEN 8
+      ELSE 9
+    END, o
+    LIMIT 1
+  ) AS ref
+FROM latest l

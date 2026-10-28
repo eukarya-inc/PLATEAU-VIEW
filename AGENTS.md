@@ -31,6 +31,7 @@ This is a monorepo containing multiple interconnected services:
 /worker         # Background worker applications for PLATEAU API server
 /terraform      # Infrastructure as Code (AWS/GCP)
 /tools          # CLI tools for data migration
+/analytics      # BigQuery / Looker Studio queries for access analytics
 /.github        # GitHub Actions workflows and scripts
 ```
 

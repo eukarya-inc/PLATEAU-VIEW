@@ -2172,6 +2172,7 @@ go run . --export-asset-index plateau-2025 --stdout > assets.ndjson
 - CMS アセット以外の URL（外部タイルなど）はスキップし、件数を標準エラー出力のサマリに出す
 - `gspatialjp_*` は G空間情報センターのデータセットページに掲載されているファイル（キャッシュの `gspatialjpFiles`）。`gspatialjp_citygml` は、G空間情報センターの CityGML zip がデータカタログの CityGML（`citygml`）と異なる場合、つまり G空間情報センターがまだ別の（通常は古い）ビルドを配布している場合のみ出す
 - データカタログのスキーマが v2 のプロジェクトと、G空間情報センターのデータ目録・索引図は含まない
+- アクセスログと結合した集計とレポートは [analytics/cms-assets](../../analytics/cms-assets/README.md) を参照
 
 ### 10.1 よくある問題
 

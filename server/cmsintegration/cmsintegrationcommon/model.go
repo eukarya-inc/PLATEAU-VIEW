@@ -76,6 +76,14 @@ func CityItemFrom(item *cms.Item, featureTypes []string) (i *CityItem) {
 	i = &CityItem{}
 	item.Unmarshal(i)
 
+	// fallback for other field keys (objectlists, object_lists -> objectLists)
+	for _, key := range []string{"objectlists", "object_lists"} {
+		if i.ObjectLists != nil {
+			break
+		}
+		i.ObjectLists = item.FieldByKey(key).GetValue().Asset()
+	}
+
 	references := map[string]string{}
 	public := map[string]bool{}
 	for _, ft := range featureTypes {

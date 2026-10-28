@@ -25,26 +25,63 @@ func TestParseSetupCSV(t *testing.T) {
 		{
 			name: "valid csv",
 			csvData: `city_code,city,city_en,pref,Feature1,Feature2,Feature3
-99999,八王子市,hachioji-shi,東京都,Yes,,Yes
-99998,東村山市,higashimurayama-shi,東京都,Yes,Yes,`,
+13201,八王子市,hachioji-shi,東京都,Yes,,Yes
+13213,東村山市,higashimurayama-shi,東京都,Yes,Yes,`,
 			expected: []SetupCSVItem{
 				{
 					Name:       "八王子市",
 					NameEn:     "hachioji-shi",
-					Code:       "99999",
+					Code:       "13201",
 					Prefecture: "東京都",
 					Features:   []string{"Feature1", "Feature3"},
 				},
 				{
 					Name:       "東村山市",
 					NameEn:     "higashimurayama-shi",
-					Code:       "99998",
+					Code:       "13213",
 					Prefecture: "東京都",
 					Features:   []string{"Feature1", "Feature2"},
 				},
 			},
 			expectedFeatures: []string{"Feature1", "Feature2", "Feature3"},
 			err:              nil,
+		},
+		{
+			name: "normalized csv",
+			csvData: "\ufeffcity_code,city,city_en,pref,Feature1\n" +
+				"2321,鰺ヶ沢町,ajigasawa-machi,青森県,LOD2\n" +
+				"39201,高知市\u200b, kochi-shi ,高知県,\n",
+			expected: []SetupCSVItem{
+				{
+					Name:       "鰺ヶ沢町",
+					NameEn:     "ajigasawa-machi",
+					Code:       "02321",
+					Prefecture: "青森県",
+					Features:   []string{"Feature1"},
+					Fixes:      []string{"city_code: 2321 -> 02321"},
+				},
+				{
+					Name:       "高知市",
+					NameEn:     "kochi-shi",
+					Code:       "39201",
+					Prefecture: "高知県",
+					Features:   []string{},
+					Fixes:      []string{"city: removed invisible characters"},
+				},
+			},
+			expectedFeatures: []string{"Feature1"},
+		},
+		{
+			name: "mismatched city codes",
+			csvData: `city_code,city,city_en,pref,Feature1
+13201,東村山市,higashimurayama-shi,東京都,
+13213,東村山市,higashimurayama-shi,東京都,
+99999,八王子市,hachioji-shi,東京都,
+13201,八王子市,hachioji-shi,神奈川県,`,
+			err: fmt.Errorf("invalid city codes:\n" +
+				"line 2: 東京都 東村山市: city code 13201 is 八王子市\n" +
+				"line 4: 東京都 八王子市: unknown city code 99999\n" +
+				"line 5: 神奈川県 八王子市: city code 13201 is 八王子市"),
 		},
 		{
 			name:             "empty csv",
@@ -170,13 +207,14 @@ func TestSetupCityItems(t *testing.T) {
 		DataURL:   "https://example.com/data.csv",
 	}
 
-	onprogress := func(i, l int, c SetupCSVItem) {}
+	onprogress := func(i, l int, c SetupCSVItem, action SetupAction) {}
 
 	t.Run("success", func(t *testing.T) {
 		createdItems = nil
 		updateditems = nil
-		err := SetupCityItems(ctx, s, inp, onprogress)
+		res, err := SetupCityItems(ctx, s, inp, onprogress)
 		assert.NoError(t, err)
+		assert.Equal(t, []string{"八王子市", "東村山市"}, res.Created)
 
 		assert.Equal(t, 14, len(createdItems))
 		assertCityItem(t, &cmsintegrationcommon.CityItem{
@@ -229,6 +267,151 @@ func TestSetupCityItems(t *testing.T) {
 			GeospatialjpIndex: "item9",
 			GeospatialjpData:  "item10",
 		}, updateditems[1])
+	})
+}
+
+func TestSetupCityItems_SkipAndResume(t *testing.T) {
+	ctx := context.Background()
+
+	csvData := `city_code,city,city_en,pref,bldg,tran
+13201,八王子市,hachioji-shi,東京都,LOD2,
+13213,東村山市,higashimurayama-shi,東京都,LOD2,LOD1
+13219,狛江市,komae-shi,東京都,LOD2,`
+
+	ref := func(key, value string) *cms.Field {
+		return &cms.Field{Key: key, Type: "reference", Value: value}
+	}
+	cityCode := func(code string) *cms.Field {
+		return &cms.Field{Key: "city_code", Type: "text", Value: code}
+	}
+
+	existing := map[string][]cms.Item{
+		"city": {
+			// complete
+			{ID: "hachioji", Fields: []*cms.Field{
+				cityCode("13201"),
+				ref("related", "r-hachioji"),
+				ref("geospatialjp-index", "gi-hachioji"),
+				ref("geospatialjp-data", "gd-hachioji"),
+				ref("bldg", "b-hachioji"),
+				ref("tran", "t-hachioji"),
+			}},
+			// stopped in the middle: the related item exists but the city item does not reference it yet
+			{ID: "higashimurayama", Fields: []*cms.Field{
+				cityCode("13213"),
+			}},
+			// test item without a city code
+			{ID: "test", Fields: []*cms.Field{}},
+		},
+		"related": {
+			{ID: "r-higashimurayama", Fields: []*cms.Field{ref("city", "higashimurayama")}},
+		},
+	}
+
+	var createdItems []*cms.Item
+	var updatedItems []*cms.Item
+
+	s := &Services{
+		CMS: &cmsintegrationcommon.CMSMock{
+			MockGetModels: func(ctx context.Context, projectID string) (*cms.Models, error) {
+				return &cms.Models{
+					Models: []cms.Model{
+						{ID: "city", Key: "plateau-city"},
+						{ID: "bldg", Key: "plateau-bldg"},
+						{ID: "tran", Key: "plateau-tran"},
+						{ID: "related", Key: "plateau-related"},
+						{ID: "geospatialjp-index", Key: "plateau-geospatialjp-index"},
+						{ID: "geospatialjp-data", Key: "plateau-geospatialjp-data"},
+					},
+				}, nil
+			},
+			MockGetItemsPartially: func(ctx context.Context, modelID string, page, perPage int, asset bool) (*cms.Items, error) {
+				items := existing[modelID]
+				if page > 1 {
+					items = nil
+				}
+				return &cms.Items{Items: items, TotalCount: len(existing[modelID])}, nil
+			},
+			MockCreateItem: func(ctx context.Context, modelID string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+				item := &cms.Item{
+					ID:             fmt.Sprintf("item%d", len(createdItems)),
+					ModelID:        modelID,
+					Fields:         fields,
+					MetadataFields: metadataFields,
+				}
+				createdItems = append(createdItems, item)
+				return item, nil
+			},
+			MockUpdateItem: func(ctx context.Context, itemID string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+				item := &cms.Item{ID: itemID, Fields: fields}
+				updatedItems = append(updatedItems, item)
+				return item, nil
+			},
+		},
+		PCMS: &plateauCMSMock{},
+	}
+
+	t.Run("dry run", func(t *testing.T) {
+		createdItems, updatedItems = nil, nil
+		var actions []SetupAction
+		res, err := SetupCityItems(ctx, s, SetupCityItemsInput{
+			ProjectID: "project",
+			DataBody:  strings.NewReader(csvData),
+			DryRun:    true,
+		}, func(i, l int, c SetupCSVItem, action SetupAction) {
+			actions = append(actions, action)
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []SetupAction{SetupActionSkip, SetupActionResume, SetupActionCreate}, actions)
+		assert.Equal(t, []string{"狛江市"}, res.Created)
+		assert.Equal(t, []string{"東村山市"}, res.Resumed)
+		assert.Equal(t, []string{"八王子市"}, res.Skipped)
+		assert.Empty(t, createdItems)
+		assert.Empty(t, updatedItems)
+	})
+
+	t.Run("run", func(t *testing.T) {
+		createdItems, updatedItems = nil, nil
+		_, err := SetupCityItems(ctx, s, SetupCityItemsInput{
+			ProjectID: "project",
+			DataBody:  strings.NewReader(csvData),
+			Limit:     2,
+		}, nil)
+		assert.NoError(t, err)
+
+		// the related item of 東村山市 is reused, the other children are created
+		assert.Equal(t, 4, len(createdItems))
+		assertFeatureItem(t, "geospatialjp-index", "higashimurayama", "", createdItems[0])
+		assertFeatureItem(t, "geospatialjp-data", "higashimurayama", "", createdItems[1])
+		assertFeatureItem(t, "bldg", "higashimurayama", "", createdItems[2])
+		assertFeatureItem(t, "tran", "higashimurayama", "", createdItems[3])
+
+		assert.Equal(t, 1, len(updatedItems))
+		assertUpdatedCityItem(t, &cmsintegrationcommon.CityItem{
+			ID: "higashimurayama",
+			References: map[string]string{
+				"bldg": "item2",
+				"tran": "item3",
+			},
+			RelatedDataset:    "r-higashimurayama",
+			GeospatialjpIndex: "item0",
+			GeospatialjpData:  "item1",
+		}, updatedItems[0])
+	})
+
+	t.Run("offset", func(t *testing.T) {
+		createdItems, updatedItems = nil, nil
+		var names []string
+		_, err := SetupCityItems(ctx, s, SetupCityItemsInput{
+			ProjectID: "project",
+			DataBody:  strings.NewReader(csvData),
+			Offset:    2,
+			DryRun:    true,
+		}, func(i, l int, c SetupCSVItem, action SetupAction) {
+			names = append(names, c.Name)
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"狛江市"}, names)
 	})
 }
 

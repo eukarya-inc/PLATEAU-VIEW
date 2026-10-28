@@ -1,0 +1,19 @@
+-- Scheduled weekly: sums the latest GCS inventory of the CMS assets bucket by asset.
+-- Objects outside assets/<uuid>/ are summed into the row with a NULL uuid.
+DECLARE latest DATE DEFAULT (SELECT MAX(dt) FROM `${dataset}.storage_inventory`);
+
+BEGIN TRANSACTION;
+
+DELETE FROM `${dataset}.storage_by_asset` WHERE snapshot_date = latest;
+
+INSERT INTO `${dataset}.storage_by_asset`
+SELECT
+  latest AS snapshot_date,
+  REGEXP_EXTRACT(name, r"^assets/([0-9a-f]{2}/[0-9a-f-]{34})/") AS uuid,
+  SUM(size) AS bytes,
+  COUNT(*) AS objects
+FROM `${dataset}.storage_inventory`
+WHERE dt = latest
+GROUP BY uuid;
+
+COMMIT TRANSACTION;
