@@ -125,22 +125,34 @@ func bounds(g *geojson.Geometry) (b quadtree.Bounds, _ bool) {
 }
 
 func isPointInPolygonFeature(lng, lat float64, f *geojson.Feature) bool {
-	if !f.Geometry.IsMultiPolygon() && !f.Geometry.IsPolygon() {
+	if f.Geometry == nil {
 		return false
 	}
 
-	if f.Geometry.IsPolygon() {
-		f.Geometry = &geojson.Geometry{
-			Type:         "MultiPolygon",
-			MultiPolygon: [][][][]float64{f.Geometry.Polygon},
-		}
+	// the feature is shared by concurrent lookups, so it must not be modified here
+	var polygons [][][][]float64
+	switch {
+	case f.Geometry.IsPolygon():
+		polygons = [][][][]float64{f.Geometry.Polygon}
+	case f.Geometry.IsMultiPolygon():
+		polygons = f.Geometry.MultiPolygon
+	default:
+		return false
 	}
 
-	for _, polygon := range f.Geometry.MultiPolygon {
-		if len(polygon) == 0 {
+	for _, polygon := range polygons {
+		if len(polygon) == 0 || !isPointInPolygon(lng, lat, polygon[0]) {
 			continue
 		}
-		if isPointInPolygon(lng, lat, polygon[0]) {
+		// the remaining rings are holes (e.g. an enclave of another city)
+		inHole := false
+		for _, hole := range polygon[1:] {
+			if isPointInPolygon(lng, lat, hole) {
+				inHole = true
+				break
+			}
+		}
+		if !inHole {
 			return true
 		}
 	}
