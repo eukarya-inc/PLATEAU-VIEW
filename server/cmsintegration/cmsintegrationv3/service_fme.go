@@ -370,6 +370,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 				aid, err := s.UploadAsset(ctx, id.ProjectID, url)
 				if err != nil {
 					log.Errorfc(ctx, "failed to upload asset (%s): %v", url, err)
+					_ = failToConvert(ctx, s, id.ItemID, ty, "変換結果のアセットのアップロードに失敗しました。%v", err)
 					return nil
 				}
 				dataAssets = append(dataAssets, aid)
@@ -388,6 +389,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 		dic, err = readDic(ctx, assets.Dic)
 		if err != nil {
 			log.Errorfc(ctx, "failed to read dic: %v", err)
+			_ = failToConvert(ctx, s, id.ItemID, ty, "辞書ファイルの読み込みに失敗しました。%v", err)
 			return nil
 		}
 	}
@@ -533,7 +535,7 @@ func readDic(ctx context.Context, u string) (string, error) {
 		_ = res.Body.Close()
 	}()
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status code is %d", err)
+		return "", fmt.Errorf("status code is %d", res.StatusCode)
 	}
 	s, err := io.ReadAll(bom.NewReader(res.Body))
 	if err != nil {

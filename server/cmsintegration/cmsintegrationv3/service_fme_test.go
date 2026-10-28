@@ -901,61 +901,45 @@ func TestReceiveResultFromFME(t *testing.T) {
 
 	t.Run("failed to upload asset", func(t *testing.T) {
 		c.Reset()
-		uploaded := []string{}
 		c.MockGetItem = func(ctx context.Context, id string, asset bool) (*cms.Item, error) {
 			assert.Equal(t, id, "itemID")
 			return &cms.Item{
 				ID: "itemID",
 			}, nil
 		}
-		c.MockUploadAsset = func(ctx context.Context, projectID, url string) (string, error) {
-			assert.Equal(t, projectID, "projectID")
-			uploaded = append(uploaded, url)
-			return url, nil
-		}
+		var updatedMetadata []*cms.Field
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, id, "itemID")
-			assert.Equal(t, []*cms.Field{
-				{
-					Key:   "data",
-					Type:  "asset",
-					Value: []string{"bldg"},
-				},
-				{
-					Key:   "qc_result",
-					Type:  "asset",
-					Value: "qc_result",
-				},
-				{
-					Key:   "dic",
-					Type:  "textarea",
-					Value: "dic!!",
-				},
-				{
-					Key:   "maxlod",
-					Type:  "asset",
-					Value: "maxlod",
-				},
-			}, fields)
-			assert.Equal(t, []*cms.Field{
-				{
-					Key:   "conv_status",
-					Type:  "tag",
-					Value: string(cmsintegrationcommon.ConvertionStatusSuccess),
-				},
-				{
-					Key:   "qc_status",
-					Type:  "tag",
-					Value: string(cmsintegrationcommon.ConvertionStatusSuccess),
-				},
-			}, metadataFields)
+			assert.Nil(t, fields)
+			updatedMetadata = metadataFields
 			return nil, nil
+		}
+		var comment string
+		c.MockCommentToItem = func(ctx context.Context, id, content string) error {
+			assert.Equal(t, "itemID", id)
+			comment = content
+			return nil
 		}
 		c.MockUploadAsset = func(ctx context.Context, projectID, url string) (string, error) {
 			return "", fmt.Errorf("ERR!")
 		}
 		err := receiveResultFromFME(ctx, s, conf, *res)
 		assert.NoError(t, err)
+
+		// the item must not be left running
+		assert.Equal(t, []*cms.Field{
+			{
+				Key:   "conv_status",
+				Type:  "tag",
+				Value: string(cmsintegrationcommon.ConvertionStatusError),
+			},
+			{
+				Key:   "qc_status",
+				Type:  "tag",
+				Value: string(cmsintegrationcommon.ConvertionStatusError),
+			},
+		}, updatedMetadata)
+		assert.Contains(t, comment, "ERR!")
 	})
 }
 

@@ -93,6 +93,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 			aid, err := s.UploadAsset(ctx, id.ProjectID, u)
 			if err != nil {
 				log.Infofc(ctx, "early return: failed to upload asset: key=%s, url=%s, err=%v", key, u, err)
+				_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "変換結果のアセットのアップロードに失敗しました。%v%s", err, res.IDsMessage())
+				_ = s.ClearFlowRunID(ctx, id.ItemID)
 				return nil
 			}
 			log.Infofc(ctx, "uploaded asset: key=%s, url=%s, assetID=%s", key, u, aid)
@@ -117,6 +119,8 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		dic, err = readDic(ctx, internal.Dic)
 		if err != nil {
 			log.Infofc(ctx, "early return: failed to read dic: url=%s, err=%v", internal.Dic, err)
+			_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "辞書ファイルの読み込みに失敗しました。%v%s", err, res.IDsMessage())
+			_ = s.ClearFlowRunID(ctx, id.ItemID)
 			return nil
 		}
 		log.Infofc(ctx, "dic read success: len=%d", len(dic))
