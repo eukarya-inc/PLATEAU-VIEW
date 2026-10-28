@@ -88,7 +88,8 @@ func (g *Gspatialjp) Packages(ctx context.Context) (*GspatialjpPackages, error) 
 		return g.pkgs, g.err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, gspatialjpTimeout)
+	// the result is shared with every caller, so the first caller's cancellation must not become everyone's error
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), gspatialjpTimeout)
 	defer cancel()
 
 	t := time.Now()

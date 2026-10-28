@@ -32,6 +32,12 @@ func toCityGMLs(all *AllData, regYear int) (map[plateauapi.ID]*plateauapi.CityGM
 			u := all.Gspatialjp.DatasetURL(pkg)
 			gspatialjpURL = &u
 			gspatialjpFileList = gspatialjpFiles(pkg, specMajorVersion(city.Spec), data.assetSizes())
+		} else if all.Gspatialjp == nil {
+			// G空間情報センター could not be listed: keep the conventional dataset URL
+			// rather than blanking it for every city in the catalog
+			if u := geospatialjpURL(city.CityCode, city.CityName, city.YearInt()); u != "" {
+				gspatialjpURL = &u
+			}
 		}
 		var fileSize *int
 		if data.CityGMLSize > 0 {

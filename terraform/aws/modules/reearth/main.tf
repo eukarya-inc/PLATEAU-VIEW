@@ -159,9 +159,13 @@ resource "aws_iam_role_policy" "reearth_server_instance" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "ssm:GetParameters"
         ]
-        Resource = "*"
+        Resource = ["${aws_s3_bucket.reearth_static.arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters"]
+        Resource = [for p in aws_ssm_parameter.reearth_secret : p.arn]
       },
     ]
   })

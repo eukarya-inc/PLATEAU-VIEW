@@ -214,6 +214,7 @@ func SetupCityItems(ctx context.Context, s *Services, inp SetupCityItemsInput, o
 			if err != nil {
 				return res, fmt.Errorf("failed to create city item (%d/%d): %w", i, len(setupItems), err)
 			}
+			existingCityByCode[item.Code] = cityItem
 			missing = children.keys()
 		}
 
@@ -438,6 +439,7 @@ func parseSetupCSV(r io.Reader) ([]SetupCSVItem, []string, error) {
 
 	var items []SetupCSVItem
 	var errs []error
+	codeLines := map[string]int{}
 	for line := 2; ; line++ {
 		row, err := cr.Read()
 		if err == io.EOF {
@@ -490,6 +492,13 @@ func parseSetupCSV(r io.Reader) ([]SetupCSVItem, []string, error) {
 			if err := validateCityCode(code, row[prefectureIndex], row[nameIndex]); err != nil {
 				errs = append(errs, fmt.Errorf("line %d: %w", line, err))
 			}
+		}
+
+		// a repeated code would create a second city item tree for the same city
+		if first, ok := codeLines[code]; ok {
+			errs = append(errs, fmt.Errorf("line %d: duplicate city code %s (first at line %d)", line, code, first))
+		} else {
+			codeLines[code] = line
 		}
 
 		itemFeatures := make([]string, 0, len(row)-3)

@@ -128,7 +128,7 @@ func TestToCityGMLs(t *testing.T) {
 func TestToCityGMLs_NoGspatialjpPackage(t *testing.T) {
 	newAll := func(g *GspatialjpPackages) *AllData {
 		return &AllData{
-			City: []*CityItem{{ID: "city1", CityCode: "13120", CityNameEn: "nerima-ku", Spec: "第5.0版", Year: "2025"}},
+			City: []*CityItem{{ID: "city1", CityCode: "13120", CityName: "nerima-ku", CityNameEn: "nerima-ku", Spec: "第5.0版", Year: "2025"}},
 			GeospatialjpDataItems: []*GeospatialjpDataItem{
 				{City: "city1", CityGML: "https://example.com/city1.zip", MaxLOD: "https://example.com/maxlod.csv"},
 			},
@@ -143,8 +143,8 @@ func TestToCityGMLs_NoGspatialjpPackage(t *testing.T) {
 	assert.Nil(t, res["cg_13120"].GspatialjpDatasetURL)
 	assert.Nil(t, res["cg_13120"].GspatialjpFiles)
 
-	// G空間情報センター could not be fetched
+	// G空間情報センター could not be fetched: fall back to the conventional dataset URL
 	res, _ = toCityGMLs(newAll(nil), 2025)
-	assert.Nil(t, res["cg_13120"].GspatialjpDatasetURL)
+	assert.Equal(t, lo.ToPtr("https://www.geospatial.jp/ckan/dataset/plateau-13120-nerima-ku-2025"), res["cg_13120"].GspatialjpDatasetURL)
 	assert.Nil(t, res["cg_13120"].GspatialjpFiles)
 }

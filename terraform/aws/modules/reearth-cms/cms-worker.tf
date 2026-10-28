@@ -133,10 +133,18 @@ resource "aws_iam_role_policy" "reearth_cms_worker_instance" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "sns:Publish",
-          "ssm:GetParameters"
         ]
-        Resource = "*"
+        Resource = ["${aws_s3_bucket.reearth_cms_assets.arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = [aws_sns_topic.reearth_cms_notify.arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters"]
+        Resource = [for p in aws_ssm_parameter.reearth_cms_worker_secret : p.arn]
       },
     ]
   })

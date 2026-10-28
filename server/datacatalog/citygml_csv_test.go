@@ -315,6 +315,23 @@ func TestCsvToCityGMLFilesResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "match with gml urls picks the first .gml url",
+			data: [][]string{
+				{"https://example.com", "53394547", "bldg", "2", "", "1024", "100", "10", "20", "30", "0", "0"},
+			},
+			gmlURLs: []*url.URL{
+				mustParseURL("https://storage.example.com/53394547_bldg_op.zip"),
+				mustParseURL("https://storage.example.com/53394547_bldgx_op.gml"),
+				mustParseURL("https://storage.example.com/53394547_bldg_6697_op.gml"),
+				mustParseURL("https://storage.example.com/53394547_bldg_op.gml"),
+			},
+			want: CityGMLFiles{
+				"bldg": {
+					{MeshCode: "53394547", MaxLOD: 2, URL: "https://storage.example.com/53394547_bldg_6697_op.gml", FileSize: int64Ptr(1024), Features: intPtr(100), LOD0: intPtr(10), LOD1: intPtr(20), LOD2: intPtr(30), LOD3: intPtr(0), LOD4: intPtr(0)},
+				},
+			},
+		},
+		{
 			name: "sorted by mesh code",
 			data: [][]string{
 				{"https://example.com", "53394549", "bldg", "2", "path/to/file3.gml", "512", "50", "50", "0", "0", "0", "0"},

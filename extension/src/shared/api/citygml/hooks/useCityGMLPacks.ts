@@ -5,7 +5,14 @@ import { isNotNullish } from "../../../../prototypes/type-helpers";
 import { CityGMLGetFilesData, CityGMLPackItem } from "../types";
 
 const POLLING_INTERVAL = 2000;
-const MAX_POLLING_COUNT = Infinity;
+const MAX_POLLING_INTERVAL = 30000;
+// ~4 hours with the backoff below. A pack whose job died without writing a
+// final status would otherwise be polled forever by an open tab.
+const MAX_POLLING_COUNT = 600;
+
+// Doubles the interval every 30 polls, up to MAX_POLLING_INTERVAL.
+export const pollingInterval = (pollingCount: number) =>
+  Math.min(POLLING_INTERVAL * 2 ** Math.floor(pollingCount / 30), MAX_POLLING_INTERVAL);
 
 export type UseCityGMLPacksProps = {
   data: CityGMLGetFilesData | null;
@@ -98,7 +105,7 @@ export default ({ data }: UseCityGMLPacksProps) => {
             }
             console.error(`Error checking status for task ${pack.packId}`);
           }
-        }, POLLING_INTERVAL);
+        }, pollingInterval(pack.pollingCount));
       }
     });
 
