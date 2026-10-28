@@ -3,6 +3,7 @@ package datacatalogv3
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -507,12 +508,25 @@ func (c *CMS) GetFeatureTypes(ctx context.Context) (FeatureTypes, error) {
 	return getFeatureTypes(ctx, c.pcms)
 }
 
-func getItemsAndConv[T any](cms cms.Interface, ctx context.Context, project, model string, addWarning func(string), conv func(cms.Item) *T) ([]*T, error) {
-	items, err := cms.GetItemsByKeyInParallel(ctx, project, model, true, 100)
-	if err != nil && model != modelPrefix+sampleModel { // sample is optional
+func getItemsAndConv[T any](c cms.Interface, ctx context.Context, project, model string, addWarning func(string), conv func(cms.Item) *T) ([]*T, error) {
+	items, err := c.GetItemsByKeyInParallel(ctx, project, model, true, 100)
+	if err != nil {
+		if model == modelPrefix+sampleModel { // sample is optional
+			return nil, nil
+		}
+
+		// The items API does not tell a missing model from other failures. A model
+		// that does not exist in the project (e.g. a feature type introduced in a
+		// later year) only leaves a warning; any other failure is returned so that
+		// a partial catalog does not replace a good one.
+		if _, merr := c.GetModelByKey(ctx, project, model); !errors.Is(merr, cms.ErrNotFound) {
+			return nil, fmt.Errorf("failed to get items (%s/%s): %w", project, model, err)
+		}
+
 		if addWarning != nil {
 			addWarning(fmt.Sprintf("failed to get items (%s/%s): %v", project, model, err))
 		}
+		return nil, nil
 	}
 	if items == nil {
 		return nil, nil
