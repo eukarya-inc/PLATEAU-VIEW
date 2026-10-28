@@ -1,7 +1,6 @@
 name: Labeler
 on:
-  # pull_request_target is needed to label PRs from forks. Never check out or run PR code here.
-  pull_request_target: # git-cascade:allow
+  pull_request:
     types:
       - opened
       - synchronize
@@ -11,6 +10,7 @@ permissions:
   pull-requests: write
 jobs:
   label:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
