@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	cms "github.com/reearth/reearth-cms-api/go"
@@ -22,8 +23,10 @@ type ReposUpdateResult struct {
 }
 
 type Repos struct {
-	updater   ReposUpdater
-	locks     util.LockMap[string]
+	updater ReposUpdater
+	locks   util.LockMap[string]
+	// mu guards the maps below, which are shared by all projects.
+	mu        sync.RWMutex
 	repos     map[string]*RepoWrapper
 	warnings  map[string][]string
 	updatedAt map[string]time.Time
@@ -46,11 +49,15 @@ func (r *Repos) Prepare(ctx context.Context, project string, year int, cms cms.I
 }
 
 func (r *Repos) Repo(project string) *RepoWrapper {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.repos[project]
 }
 
 func (r *Repos) Projects() []string {
+	r.mu.RLock()
 	keys := lo.Keys(r.repos)
+	r.mu.RUnlock()
 	sort.Strings(keys)
 	return keys
 }
@@ -83,6 +90,9 @@ func (r *Repos) Update(ctx context.Context, project string) (bool, error) {
 		return false, fmt.Errorf("failed to update project %s: %w", project, err)
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	u := false
 	if ur != nil {
 		if ur.Repo != nil {
@@ -108,13 +118,18 @@ func (r *Repos) Update(ctx context.Context, project string) (bool, error) {
 }
 
 func (r *Repos) Warnings(project string) []string {
-	if r.UpdatedAt(project).IsZero() {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.updatedAt[project].IsZero() {
 		return []string{"project is not initialized"}
 	}
 	return slices.Clone(r.warnings[project])
 }
 
 func (r *Repos) UpdatedAt(project string) time.Time {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.updatedAt[project]
 }
 
@@ -130,6 +145,9 @@ func (r *Repos) getNow() time.Time {
 func (r *Repos) SetRepo(project string, repo Repo, warnings []string) {
 	r.locks.Lock(project)
 	defer r.locks.Unlock(project)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	repoWrapper := r.repos[project]
 	if repoWrapper == nil {
