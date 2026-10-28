@@ -437,7 +437,7 @@ func convertPlateauRaw(
 		pdt, ok := dt.(*plateauapi.PlateauDatasetType)
 		if !ok {
 			warning = append(warning, fmt.Sprintf("plateau %s: invalid dataset type: %s", dt.GetCode(), dt.GetName()))
-			return
+			continue
 		}
 
 		layerNames := ic.layerNamesForType[pdt.Code]
