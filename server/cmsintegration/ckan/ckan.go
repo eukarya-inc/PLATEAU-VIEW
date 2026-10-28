@@ -433,8 +433,10 @@ func (c *Ckan) send(
 			return nil
 		}
 
-		// only retry on server errors (5xx)
-		if statusCode < 500 {
+		// only retry on server errors (5xx), and never retry a create action:
+		// the server may have committed it before failing, and resending it
+		// would create a duplicate.
+		if statusCode < 500 || isCreateAction(path) {
 			return lastErr
 		}
 
@@ -442,6 +444,12 @@ func (c *Ckan) send(
 	}
 
 	return lastErr
+}
+
+// isCreateAction reports whether the request path is a CKAN *_create action,
+// which is not idempotent.
+func isCreateAction(path []string) bool {
+	return len(path) > 0 && strings.HasSuffix(path[len(path)-1], "_create")
 }
 
 func (c *Ckan) sendOnce(

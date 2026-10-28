@@ -263,6 +263,36 @@ func mockCkan(t *testing.T) {
 	})
 }
 
+func TestCkan_Retry(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	ctx := context.Background()
+	ckan, err := New("https://www.geospatial.jp/ckan", "TOKEN")
+	assert.NoError(t, err)
+
+	// a create action is not retried on 5xx
+	httpmock.RegisterResponder("POST", "https://www.geospatial.jp/ckan/api/3/action/resource_create",
+		httpmock.NewJsonResponderOrPanic(http.StatusBadGateway, Response[any]{Error: &Error{Message: "bad gateway"}}))
+	_, err = ckan.CreateResource(ctx, Resource{PackageID: "xxx", Name: "name"})
+	assert.Error(t, err)
+	assert.Equal(t, 1, httpmock.GetCallCountInfo()["POST https://www.geospatial.jp/ckan/api/3/action/resource_create"])
+
+	// an idempotent action is retried on 5xx
+	calls := 0
+	httpmock.RegisterResponder("POST", "https://www.geospatial.jp/ckan/api/3/action/resource_patch", func(req *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			return httpmock.NewJsonResponse(http.StatusBadGateway, Response[any]{Error: &Error{Message: "bad gateway"}})
+		}
+		return httpmock.NewJsonResponse(http.StatusOK, Response[Resource]{Result: Resource{ID: "a"}})
+	})
+	r, err := ckan.PatchResource(ctx, Resource{ID: "a"})
+	assert.NoError(t, err)
+	assert.Equal(t, "a", r.ID)
+	assert.Equal(t, 2, calls)
+}
+
 func TestCkan2(t *testing.T) {
 	url := ""
 	token := ""
