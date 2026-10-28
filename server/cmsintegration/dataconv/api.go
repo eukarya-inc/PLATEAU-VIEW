@@ -17,7 +17,7 @@ func Handler(conf Config) (http.Handler, error) {
 func handler(s *Service, token string) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// authorization
-		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != token {
+		if token == "" || strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != token {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

@@ -30,7 +30,7 @@ func Handler(conf Config, g *echo.Group) error {
 
 	auth := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			if c.Request().Header.Get("Authorization") != "Bearer "+conf.Token {
+			if conf.Token == "" || c.Request().Header.Get("Authorization") != "Bearer "+conf.Token {
 				return c.JSON(http.StatusUnauthorized, "invalid token")
 			}
 			return next(c)
