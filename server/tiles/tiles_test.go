@@ -1,11 +1,43 @@
 package tiles
 
 import (
+	"context"
+	"net/http"
 	"testing"
 
+	"github.com/jarcoal/httpmock"
+	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestGetTiles_Errors(t *testing.T) {
+	ctx := context.Background()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	c := lo.Must(cms.New("https://example.com", "token"))
+
+	// the project has no tiles model
+	httpmock.RegisterResponder("GET", "https://example.com/api/projects/none/models/tiles/items",
+		httpmock.NewStringResponder(http.StatusNotFound, "not found"))
+	httpmock.RegisterResponder("GET", "https://example.com/api/projects/none/models/tiles",
+		httpmock.NewStringResponder(http.StatusNotFound, "not found"))
+
+	res, err := getTiles(ctx, c, "none")
+	assert.NoError(t, err)
+	assert.Nil(t, res)
+
+	// the tiles model exists but the CMS fails
+	httpmock.RegisterResponder("GET", "https://example.com/api/projects/prj/models/tiles/items",
+		httpmock.NewStringResponder(http.StatusInternalServerError, "error"))
+	httpmock.RegisterResponder("GET", "https://example.com/api/projects/prj/models/tiles",
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Model{ID: "tiles"}))
+
+	res, err = getTiles(ctx, c, "prj")
+	assert.Error(t, err)
+	assert.Nil(t, res)
+}
 
 func TestTiles_Find(t *testing.T) {
 	tiles := Tiles{

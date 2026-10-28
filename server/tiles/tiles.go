@@ -2,6 +2,7 @@ package tiles
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -14,7 +15,16 @@ import (
 
 func getTiles(ctx context.Context, c cms.Interface, prj string) (Tiles, error) {
 	items, err := c.GetItemsByKeyInParallel(ctx, prj, modelKey, true, 0)
-	if err != nil || items == nil {
+	if err != nil {
+		// The items API does not tell a missing model from other failures. Most
+		// projects have no tiles model, which is not an error; any other failure
+		// is returned so that the stale cache and the failure backoff apply.
+		if _, merr := c.GetModelByKey(ctx, prj, modelKey); errors.Is(merr, cms.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get tiles items: %w", err)
+	}
+	if items == nil {
 		return nil, nil
 	}
 
