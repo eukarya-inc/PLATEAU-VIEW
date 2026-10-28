@@ -389,6 +389,16 @@ CityGMLのzip形式のファイルのURL。
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top"><strong id="citygmldataset.filesize">fileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+CityGML zip（url の指す実体）のファイルサイズ（バイト単位）。
+CMS のアセットメタデータが取得できる場合にのみ提供されます。
+
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top"><strong id="citygmldataset.compositeurl">compositeUrl</strong></td>
 <td valign="top"><a href="#string">String</a></td>
 <td>
@@ -729,6 +739,16 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 <td>
 
 データセットのアイテムのURL。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="genericdatasetitem.filesize">fileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+CMS のアセットメタデータが取得できる場合にのみ提供されます。
 
 </td>
 </tr>
@@ -1139,6 +1159,39 @@ PLATEAU都市モデルの通常のデータセット。例えば、地物型が�
 <td>
 
 データセットのアイテム。
+フォーマット・LOD・テクスチャの有無・屋内モデル・浸水規模が異なるアイテムは、利用者が選ぶ選択肢なので、全て返します（PLATEAU VIEW では、これらをデータセットのメニューに並べて選べるようにしています）。
+一方、3D Tiles には、同じ選択肢について測地系（crs）と属性の種類（attributeSet）の異なる版が存在することがあります。これらは選択肢ではないため、選択肢ごとに1つの版だけを返します。
+引数を指定しない場合は、既定の測地系（現在は JGD2011）の版のみを返し、属性の種類は既定の版（DEFAULT）を優先して、存在しない場合に FULL の版を返します。
+指定した測地系の版が存在しない場合、別の測地系の版で代用することはありません。
+MVT など測地系によって内容が変わらないアイテムは、測地系の指定にかかわらず返されます。
+全ての版を取得するには allItems を使用してください。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" align="right" valign="top">crs</td>
+<td valign="top"><a href="#crs">Crs</a></td>
+<td>
+
+返すアイテムの測地系。未指定の場合は既定の測地系です。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" align="right" valign="top">attributeSet</td>
+<td valign="top"><a href="#attributeset">AttributeSet</a></td>
+<td>
+
+返すアイテムの属性の種類。未指定の場合は DEFAULT を優先し、存在しない場合に FULL を返します。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="plateaudataset.allitems">allItems</strong></td>
+<td valign="top">[<a href="#plateaudatasetitem">PlateauDatasetItem</a>!]!</td>
+<td>
+
+データセットの全てのアイテム。items と異なり、測地系や属性の種類が異なる全ての版を含みます。
 
 </td>
 </tr>
@@ -1248,6 +1301,16 @@ MVT など 3D Tiles 以外のフォーマットでは null になります。
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.filesize">fileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+CMS のアセットメタデータが取得できる場合にのみ提供されます。
+
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top"><strong id="plateaudatasetitem.layers">layers</strong></td>
 <td valign="top">[<a href="#string">String</a>!]</td>
 <td>
@@ -1321,6 +1384,24 @@ compositeUrl と同じ書式で、整備年度を `latest` に置き換えた UR
 <td>
 
 データセットのアイテムのテクスチャの種類。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.crs">crs</strong></td>
+<td valign="top"><a href="#crs">Crs</a></td>
+<td>
+
+データセットのアイテムの高さの測地系。3D Tiles の場合に存在します。MVT など測地系によって内容が変わらないアイテムでは null になります。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="plateaudatasetitem.attributeset">attributeSet</strong></td>
+<td valign="top"><a href="#attributeset">AttributeSet</a></td>
+<td>
+
+データセットのアイテムに含まれる属性の種類。3D Tiles の場合に存在します。
 
 </td>
 </tr>
@@ -1959,6 +2040,16 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top"><strong id="relateddatasetitem.filesize">fileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+CMS のアセットメタデータが取得できる場合にのみ提供されます。
+
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top"><strong id="relateddatasetitem.originalformat">originalFormat</strong></td>
 <td valign="top"><a href="#datasetformat">DatasetFormat</a></td>
 <td>
@@ -1975,6 +2066,16 @@ originalUrlフィールドが存在する場合のみ存在します。
 
 データセットのアイテムの変換前データのURL。
 鉄道駅情報・ランドマーク情報はurlフィールドではCZML形式で提供されていますが、元となったGeoJSONデータが存在します。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="relateddatasetitem.originalfilesize">originalFileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+データセットのアイテムの変換前データのファイルサイズ（バイト単位）。
+originalUrl と同様に、利用可能な場合にのみ提供されます。
 
 </td>
 </tr>
@@ -2595,6 +2696,68 @@ trueの場合はARで閲覧可能なデータセットのみ、falseの場合は
 </tbody>
 </table>
 
+#### AttributeSet
+
+データセットのアイテムに含まれる属性の種類。
+
+<table>
+<thead>
+<tr>
+<th align="left">Value</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top"><strong>DEFAULT</strong></td>
+<td>
+
+既定の属性。描画に必要な属性を中心とした版です。変換した時期によっては全ての属性を含むことがあります。
+
+</td>
+</tr>
+<tr>
+<td valign="top"><strong>FULL</strong></td>
+<td>
+
+全ての属性を含む版。
+
+</td>
+</tr>
+</tbody>
+</table>
+
+#### Crs
+
+高さの測地系。
+
+<table>
+<thead>
+<tr>
+<th align="left">Value</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top"><strong>JGD2011</strong></td>
+<td>
+
+測地成果2011（JGD2011）
+
+</td>
+</tr>
+<tr>
+<td valign="top"><strong>JGD2024</strong></td>
+<td>
+
+測地成果2024（JGD2024）
+
+</td>
+</tr>
+</tbody>
+</table>
+
 #### DatasetFormat
 
 データセットのフォーマット。
@@ -3203,6 +3366,16 @@ PLATEAU ARで閲覧可能なデータセットかどうか。
 <td>
 
 データセットのアイテムのURL。
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><strong id="datasetitem.filesize">fileSize</strong></td>
+<td valign="top"><a href="#int">Int</a></td>
+<td>
+
+データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+CMS のアセットメタデータが取得できる場合にのみ提供されます。
 
 </td>
 </tr>

@@ -29,6 +29,21 @@ func TestParseSpec(t *testing.T) {
 			want: Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, Texture: TextureOnly, Year: 2025},
 		},
 		{
+			name: "full attributes and jgd2024",
+			in:   "all-bldg-lod2-notexture-full-jgd2024-2025",
+			want: Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, Texture: TextureNone, Attributes: AttributesFull, Crs: "JGD2024", Year: 2025},
+		},
+		{
+			name: "jgd2011",
+			in:   "all-bldg-lod2-jgd2011-latest",
+			want: Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, Crs: "JGD2011", YearMode: YearLatest},
+		},
+		{
+			name:    "crs before full",
+			in:      "all-bldg-lod2-jgd2024-full-2025",
+			wantErr: true,
+		},
+		{
 			name: "prefecture",
 			in:   "13-bldg-lod2-2025",
 			want: Spec{Area: Area{Kind: AreaPref, Code: "13"}, Type: "bldg", LOD: 2, Year: 2025},

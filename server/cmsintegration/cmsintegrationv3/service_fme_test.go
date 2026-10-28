@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
@@ -685,6 +687,9 @@ func TestReceiveResultFromFME(t *testing.T) {
 			"fld/ccc": []string{"CCC", "DDD"},
 		}
 		c.Reset()
+		c.MockAsset = func(ctx context.Context, id string) (*cms.Asset, error) {
+			return &cms.Asset{ID: id, Name: id + ".zip"}, nil
+		}
 		uploaded := []string{}
 		c.MockGetItem = func(ctx context.Context, id string, asset bool) (*cms.Item, error) {
 			assert.Equal(t, id, "itemID")
@@ -780,6 +785,47 @@ func TestReceiveResultFromFME(t *testing.T) {
 		err := receiveResultFromFME(ctx, s, conf, r)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"AAA", "BBB", "CCC", "DDD"}, uploaded)
+	})
+
+	t.Run("keeps the assets of the other CRS", func(t *testing.T) {
+		r := *res
+		r.Results = map[string]any{
+			"bldg": []string{
+				"https://example.com/11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2_jgd2024.zip",
+				"https://example.com/11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2_full_jgd2024.zip",
+			},
+		}
+		c.Reset()
+		c.MockGetItem = func(ctx context.Context, id string, asset bool) (*cms.Item, error) {
+			return (&cmsintegrationcommon.FeatureItem{
+				ID:   "itemID",
+				Data: []string{"old2011", "old2024"},
+			}).CMSItem(), nil
+		}
+		c.MockAsset = func(ctx context.Context, id string) (*cms.Asset, error) {
+			names := map[string]string{
+				"old2011": "11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2.zip",
+				"old2024": "11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2_jgd2024.zip",
+			}
+			return &cms.Asset{ID: id, Name: names[id]}, nil
+		}
+		c.MockUploadAsset = func(ctx context.Context, projectID, url string) (string, error) {
+			return "new_" + strings.TrimSuffix(path.Base(url), ".zip"), nil
+		}
+		var data any
+		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
+			data = (&cms.Item{Fields: fields}).FieldByKey("data").GetValue().Interface()
+			return nil, nil
+		}
+		c.MockCommentToItem = func(ctx context.Context, assetID, content string) error { return nil }
+
+		err := receiveResultFromFME(ctx, s, conf, r)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{
+			"new_11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2_full_jgd2024",
+			"new_11111_bar-shi_city_2025_citygml_1_op_bldg_3dtiles_lod2_jgd2024",
+			"old2011",
+		}, data)
 	})
 
 	t.Run("invalid id", func(t *testing.T) {

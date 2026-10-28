@@ -137,6 +137,7 @@ type GspatialjpDataItem struct {
 	ID                 string   `json:"id,omitempty" cms:"id"`
 	CityGML            string   `json:"citygml,omitempty" cms:"citygml,asset"`
 	Plateau            string   `json:"plateau,omitempty" cms:"plateau,asset"`
+	PlateauJGD2024     string   `json:"plateau_jgd2024,omitempty" cms:"plateau_jgd2024,asset"`
 	Related            string   `json:"related,omitempty" cms:"related,asset"`
 	MaxLOD             string   `json:"maxlod,omitempty" cms:"maxlod,asset"`
 	Index              string   `json:"desc_index,omitempty" cms:"desc_index,markdown"`

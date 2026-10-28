@@ -16,9 +16,14 @@ type Input struct {
 	LOD           *string
 	Interior      *bool // nil/false = non-interior; true = interior (CityGML 3.0)
 	Texture       *bool
-	PrefCode      string
-	CityCode      *string
-	WardCode      *string
+	// Crs is the CRS of the heights ("JGD2011" / "JGD2024"); nil when the data is
+	// the same in every CRS.
+	Crs *string
+	// AttributeSet is "DEFAULT" or "FULL"; nil is treated as "DEFAULT".
+	AttributeSet *string
+	PrefCode     string
+	CityCode     *string
+	WardCode     *string
 }
 
 type Candidate struct {
@@ -39,12 +44,17 @@ type Candidate struct {
 //     unspecified.
 //   - TextureOnly: only datasets marked textured are kept.
 //   - TextureNone: only datasets marked non-textured are kept.
+//
+// Datasets of a CRS other than spec.Crs are never used, even when the area has no
+// dataset of spec.Crs. AttributesAuto prefers the default attribute set over the full
+// one; AttributesFull keeps only the full one.
 func Select(datasets []Input, spec Spec) []Candidate {
 	type entry struct {
 		url           string
 		year          int
 		lod           int
 		texture       int // 2: textured, 1: non-textured, 0: unspecified
+		attributes    int // 1: default, 0: full
 		formatVersion *string
 	}
 
@@ -55,6 +65,16 @@ func Select(datasets []Input, spec Spec) []Candidate {
 			continue
 		}
 		if d.TypeCode != spec.Type {
+			continue
+		}
+		if d.Crs != nil && *d.Crs != spec.Crs {
+			continue
+		}
+		attrRank := 1
+		if d.AttributeSet != nil && *d.AttributeSet == AttributeSetFull {
+			attrRank = 0
+		}
+		if spec.Attributes == AttributesFull && attrRank != 0 {
 			continue
 		}
 		if spec.YearMode == YearExact && d.Year != spec.Year {
@@ -124,7 +144,7 @@ func Select(datasets []Input, spec Spec) []Candidate {
 			}
 		}
 
-		next := entry{url: d.URL, year: d.Year, lod: lod, texture: texRank, formatVersion: d.FormatVersion}
+		next := entry{url: d.URL, year: d.Year, lod: lod, texture: texRank, attributes: attrRank, formatVersion: d.FormatVersion}
 		cur, ok := picked[areaCode]
 		if !ok || better(next, cur) {
 			picked[areaCode] = next
@@ -139,12 +159,14 @@ func Select(datasets []Input, spec Spec) []Candidate {
 }
 
 // better reports whether a should replace b. Year wins first (for YearLatest;
-// no-op when years are equal as in YearExact), then LOD, then texture rank.
+// no-op when years are equal as in YearExact), then LOD, then texture rank,
+// then attribute set rank.
 func better(a, b struct {
 	url           string
 	year          int
 	lod           int
 	texture       int
+	attributes    int
 	formatVersion *string
 }) bool {
 	if a.year != b.year {
@@ -153,7 +175,10 @@ func better(a, b struct {
 	if a.lod != b.lod {
 		return a.lod > b.lod
 	}
-	return a.texture > b.texture
+	if a.texture != b.texture {
+		return a.texture > b.texture
+	}
+	return a.attributes > b.attributes
 }
 
 func areaMatches(a Area, prefCode string, cityCode, wardCode *string) bool {

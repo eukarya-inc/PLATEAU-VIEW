@@ -104,6 +104,8 @@ func TestRepos(t *testing.T) {
 							FormatVersion: lo.ToPtr("1.0"),
 							URL:           "https://example.com/00000_hoge_city_2023_citygml_1_op_bldg_3dtiles_lod1/tileset.json",
 							Name:          "LOD1",
+							Crs:           lo.ToPtr(plateauapi.CrsJgd2011),
+							AttributeSet:  lo.ToPtr(plateauapi.AttributeSetDefault),
 							ParentID:      plateauapi.ID("d_" + cityCode + "_bldg"),
 							Lod:           lo.ToPtr(1),
 							LodEx:         nil,

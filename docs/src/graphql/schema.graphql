@@ -331,6 +331,12 @@ interface DatasetItem implements Node {
   url: String!
 
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+
+  """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
   """
@@ -475,8 +481,25 @@ type PlateauDataset implements Dataset & Node {
   """データセットの種類。"""
   type: PlateauDatasetType!
 
-  """データセットのアイテム。"""
-  items: [PlateauDatasetItem!]!
+  """
+  データセットのアイテム。
+  フォーマット・LOD・テクスチャの有無・屋内モデル・浸水規模が異なるアイテムは、利用者が選ぶ選択肢なので、全て返します（PLATEAU VIEW では、これらをデータセットのメニューに並べて選べるようにしています）。
+  一方、3D Tiles には、同じ選択肢について測地系（crs）と属性の種類（attributeSet）の異なる版が存在することがあります。これらは選択肢ではないため、選択肢ごとに1つの版だけを返します。
+  引数を指定しない場合は、既定の測地系（現在は JGD2011）の版のみを返し、属性の種類は既定の版（DEFAULT）を優先して、存在しない場合に FULL の版を返します。
+  指定した測地系の版が存在しない場合、別の測地系の版で代用することはありません。
+  MVT など測地系によって内容が変わらないアイテムは、測地系の指定にかかわらず返されます。
+  全ての版を取得するには allItems を使用してください。
+  """
+  items(
+    """返すアイテムの測地系。未指定の場合は既定の測地系です。"""
+    crs: Crs
+
+    """返すアイテムの属性の種類。未指定の場合は DEFAULT を優先し、存在しない場合に FULL を返します。"""
+    attributeSet: AttributeSet
+  ): [PlateauDatasetItem!]!
+
+  """データセットの全てのアイテム。items と異なり、測地系や属性の種類が異なる全ての版を含みます。"""
+  allItems: [PlateauDatasetItem!]!
 
   """PLATEAU ARで閲覧可能なデータセットかどうか。"""
   ar: Boolean!
@@ -515,6 +538,12 @@ type PlateauDatasetItem implements DatasetItem & Node {
   url: String!
 
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+
+  """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
   """
@@ -551,11 +580,37 @@ type PlateauDatasetItem implements DatasetItem & Node {
   """データセットのアイテムのテクスチャの種類。"""
   texture: Texture
 
+  """
+  データセットのアイテムの高さの測地系。3D Tiles の場合に存在します。MVT など測地系によって内容が変わらないアイテムでは null になります。
+  """
+  crs: Crs
+
+  """データセットのアイテムに含まれる属性の種類。3D Tiles の場合に存在します。"""
+  attributeSet: AttributeSet
+
   """浸水規模。地物型が災害リスク（浸水）モデルの場合のみ存在することがあります。"""
   floodingScale: FloodingScale
 
   """浸水規模の枝番。地物型が災害リスク（浸水）モデルの場合のみ存在することがあります。"""
   floodingScaleSuffix: String
+}
+
+"""高さの測地系。"""
+enum Crs {
+  """測地成果2011（JGD2011）"""
+  JGD2011
+
+  """測地成果2024（JGD2024）"""
+  JGD2024
+}
+
+"""データセットのアイテムに含まれる属性の種類。"""
+enum AttributeSet {
+  """既定の属性。描画に必要な属性を中心とした版です。変換した時期によっては全ての属性を含むことがあります。"""
+  DEFAULT
+
+  """全ての属性を含む版。"""
+  FULL
 }
 
 """建築物モデルのテクスチャの種類。"""
@@ -711,6 +766,12 @@ type RelatedDatasetItem implements DatasetItem & Node {
   url: String!
 
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+
+  """
   データセットのアイテムの変換前データのフォーマット。
   originalUrlフィールドが存在する場合のみ存在します。
   """
@@ -721,6 +782,12 @@ type RelatedDatasetItem implements DatasetItem & Node {
   鉄道駅情報・ランドマーク情報はurlフィールドではCZML形式で提供されていますが、元となったGeoJSONデータが存在します。
   """
   originalUrl: String
+
+  """
+  データセットのアイテムの変換前データのファイルサイズ（バイト単位）。
+  originalUrl と同様に、利用可能な場合にのみ提供されます。
+  """
+  originalFileSize: Int
 
   """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
@@ -837,6 +904,12 @@ type GenericDatasetItem implements DatasetItem & Node {
   url: String!
 
   """
+  データセットのアイテム（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
+
+  """
   データセットのアイテムのレイヤー名。MVTやWMSなどのフォーマットの場合のみ存在。
   レイヤー名が複数存在する場合は、同時に複数のレイヤーを表示可能であることを意味します。
   """
@@ -896,6 +969,12 @@ type CityGMLDataset implements Node {
 
   """CityGMLのzip形式のファイルのURL。"""
   url: String!
+
+  """
+  CityGML zip（url の指す実体）のファイルサイズ（バイト単位）。
+  CMS のアセットメタデータが取得できる場合にのみ提供されます。
+  """
+  fileSize: Int
 
   """
   自治体・整備年度を指定して zip にリダイレクトする安定 URL

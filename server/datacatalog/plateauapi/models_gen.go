@@ -686,7 +686,15 @@ type PlateauDataset struct {
 	// データセットの種類。
 	Type *PlateauDatasetType `json:"type"`
 	// データセットのアイテム。
+	// フォーマット・LOD・テクスチャの有無・屋内モデル・浸水規模が異なるアイテムは、利用者が選ぶ選択肢なので、全て返します（PLATEAU VIEW では、これらをデータセットのメニューに並べて選べるようにしています）。
+	// 一方、3D Tiles には、同じ選択肢について測地系（crs）と属性の種類（attributeSet）の異なる版が存在することがあります。これらは選択肢ではないため、選択肢ごとに1つの版だけを返します。
+	// 引数を指定しない場合は、既定の測地系（現在は JGD2011）の版のみを返し、属性の種類は既定の版（DEFAULT）を優先して、存在しない場合に FULL の版を返します。
+	// 指定した測地系の版が存在しない場合、別の測地系の版で代用することはありません。
+	// MVT など測地系によって内容が変わらないアイテムは、測地系の指定にかかわらず返されます。
+	// 全ての版を取得するには allItems を使用してください。
 	Items []*PlateauDatasetItem `json:"items"`
+	// データセットの全てのアイテム。items と異なり、測地系や属性の種類が異なる全ての版を含みます。
+	AllItems []*PlateauDatasetItem `json:"allItems"`
 	// PLATEAU ARで閲覧可能なデータセットかどうか。
 	Ar bool `json:"ar"`
 	// 管理者用
@@ -824,6 +832,10 @@ type PlateauDatasetItem struct {
 	LodEx *int `json:"lodEx,omitempty"`
 	// データセットのアイテムのテクスチャの種類。
 	Texture *Texture `json:"texture,omitempty"`
+	// データセットのアイテムの高さの測地系。3D Tiles の場合に存在します。MVT など測地系によって内容が変わらないアイテムでは null になります。
+	Crs *Crs `json:"crs,omitempty"`
+	// データセットのアイテムに含まれる属性の種類。3D Tiles の場合に存在します。
+	AttributeSet *AttributeSet `json:"attributeSet,omitempty"`
 	// 浸水規模。地物型が災害リスク（浸水）モデルの場合のみ存在することがあります。
 	FloodingScale *FloodingScale `json:"floodingScale,omitempty"`
 	// 浸水規模の枝番。地物型が災害リスク（浸水）モデルの場合のみ存在することがあります。
@@ -1434,6 +1446,122 @@ func (e *AreaType) UnmarshalJSON(b []byte) error {
 }
 
 func (e AreaType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// データセットのアイテムに含まれる属性の種類。
+type AttributeSet string
+
+const (
+	// 既定の属性。描画に必要な属性を中心とした版です。変換した時期によっては全ての属性を含むことがあります。
+	AttributeSetDefault AttributeSet = "DEFAULT"
+	// 全ての属性を含む版。
+	AttributeSetFull AttributeSet = "FULL"
+)
+
+var AllAttributeSet = []AttributeSet{
+	AttributeSetDefault,
+	AttributeSetFull,
+}
+
+func (e AttributeSet) IsValid() bool {
+	switch e {
+	case AttributeSetDefault, AttributeSetFull:
+		return true
+	}
+	return false
+}
+
+func (e AttributeSet) String() string {
+	return string(e)
+}
+
+func (e *AttributeSet) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AttributeSet(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AttributeSet", str)
+	}
+	return nil
+}
+
+func (e AttributeSet) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AttributeSet) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AttributeSet) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// 高さの測地系。
+type Crs string
+
+const (
+	// 測地成果2011（JGD2011）
+	CrsJgd2011 Crs = "JGD2011"
+	// 測地成果2024（JGD2024）
+	CrsJgd2024 Crs = "JGD2024"
+)
+
+var AllCrs = []Crs{
+	CrsJgd2011,
+	CrsJgd2024,
+}
+
+func (e Crs) IsValid() bool {
+	switch e {
+	case CrsJgd2011, CrsJgd2024:
+		return true
+	}
+	return false
+}
+
+func (e Crs) String() string {
+	return string(e)
+}
+
+func (e *Crs) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Crs(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Crs", str)
+	}
+	return nil
+}
+
+func (e Crs) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Crs) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Crs) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

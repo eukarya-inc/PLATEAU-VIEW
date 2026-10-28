@@ -12,7 +12,7 @@ func isInteriorDataset(d *PlateauDataset) bool {
 }
 
 // BuildPlateauItemDynamicURL returns the dynamic API URL that resolves to
-// this PlateauDatasetItem (or the latest variant when latest is true).
+// this PlateauDatasetItem (or the one following the latest year when latest is true).
 // Returns empty when host is empty or required metadata is missing.
 func BuildPlateauItemDynamicURL(host string, item *PlateauDatasetItem, parent *PlateauDataset, latest bool) string {
 	if host == "" || item == nil || parent == nil {
@@ -91,7 +91,7 @@ func buildSpecMVT(area, typeCode string, lod *string, interior bool, year string
 }
 
 // buildCityGMLDynamicURL returns the citygml redirect URL for the given dataset
-// (or the latest variant when latest is true).
+// (or the one following the latest year when latest is true).
 func buildCityGMLDynamicURL(host string, d *CityGMLDataset, latest bool) string {
 	if host == "" || d == nil {
 		return ""

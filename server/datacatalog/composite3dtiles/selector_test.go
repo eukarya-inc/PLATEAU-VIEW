@@ -166,3 +166,35 @@ func TestSelectMaxLOD(t *testing.T) {
 		assert.Equal(t, []Candidate{{URL: "c2", AreaCode: "13103"}}, got)
 	})
 }
+
+func TestSelectVariants(t *testing.T) {
+	lod2 := "2"
+	j2011, j2024 := lo.ToPtr("JGD2011"), lo.ToPtr("JGD2024")
+	full := lo.ToPtr(AttributeSetFull)
+	cityA, cityB := lo.ToPtr("13101"), lo.ToPtr("13102")
+
+	datasets := []Input{
+		{URL: "a2011", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Crs: j2011, PrefCode: "13", CityCode: cityA},
+		{URL: "a2011full", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Crs: j2011, AttributeSet: full, PrefCode: "13", CityCode: cityA},
+		{URL: "a2024", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Crs: j2024, PrefCode: "13", CityCode: cityA},
+		// area B has only the full JGD2011 version
+		{URL: "b2011full", Format: "3D Tiles", TypeCode: "bldg", Year: 2025, LOD: &lod2, Crs: j2011, AttributeSet: full, PrefCode: "13", CityCode: cityB},
+	}
+	urls := func(spec Spec) []string {
+		res := lo.Map(Select(datasets, spec), func(c Candidate, _ int) string { return c.URL })
+		sort.Strings(res)
+		return res
+	}
+	spec := Spec{Area: Area{Kind: AreaAll}, Type: "bldg", LOD: 2, Year: 2025}
+
+	spec.Crs = "JGD2011"
+	assert.Equal(t, []string{"a2011", "b2011full"}, urls(spec))
+
+	spec.Attributes = AttributesFull
+	assert.Equal(t, []string{"a2011full", "b2011full"}, urls(spec))
+
+	// area B has no JGD2024 version, and its JGD2011 version is not used instead
+	spec.Attributes = AttributesAuto
+	spec.Crs = "JGD2024"
+	assert.Equal(t, []string{"a2024"}, urls(spec))
+}

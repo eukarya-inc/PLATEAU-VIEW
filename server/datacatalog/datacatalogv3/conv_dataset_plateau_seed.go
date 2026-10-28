@@ -383,6 +383,10 @@ type plateauDatasetItemSeed struct {
 	HideTexture         bool
 	HideLOD             bool
 	DefaultName         string
+	// JGD2024 is true when the item was converted with JGD2024 heights.
+	JGD2024 bool
+	// FullAttributes is true when the item has every attribute.
+	FullAttributes bool
 }
 
 func (i plateauDatasetItemSeed) GetID(parentID string) string {
@@ -404,9 +408,19 @@ func (i plateauDatasetItemSeed) GetID(parentID string) string {
 		ids = append(ids, "no_texture")
 	}
 
-	return strings.Join(lo.Filter(ids, func(s string, _ int) bool {
+	if i.JGD2024 {
+		ids = append(ids, "jgd2024")
+	}
+
+	id := strings.Join(lo.Filter(ids, func(s string, _ int) bool {
 		return s != ""
 	}), "_")
+
+	// keep the full suffix last so that the item can be paired with its default item
+	if i.FullAttributes {
+		id += plateauapi.FullAttributeSetIDSuffix
+	}
+	return id
 }
 
 func (i plateauDatasetItemSeed) GetName() string {
@@ -421,13 +435,17 @@ func (i plateauDatasetItemSeed) GetName() string {
 		lod = fmt.Sprintf("LOD%d%s", *i.LOD, lodex)
 	}
 
+	var notes []string
 	if !i.HideTexture && i.NoTexture != nil && *i.NoTexture {
+		notes = append(notes, "テクスチャなし")
+	}
+	if i.FullAttributes {
+		notes = append(notes, "全属性")
+	}
+	if len(notes) > 0 {
+		tex = strings.Join(notes, "・")
 		if name != "" || lod != "" {
-			tex += "（"
-		}
-		tex += "テクスチャなし"
-		if name != "" || lod != "" {
-			tex += "）"
+			tex = "（" + tex + "）"
 		}
 	}
 
@@ -464,12 +482,15 @@ func plateauDatasetItemSeedFrom(seed plateauDatasetSeed) (items []plateauDataset
 			item, w = plateauDatasetItemSeedFromFld(url, assetName.Ex.Fld, seed.Dic, cityCode, seed.HideTexture)
 		default:
 			warning = append(warning, fmt.Sprintf("plateau %s %s[%d]: invalid asset name ex: %s", cityCode, seed.DatasetType.Code, i, name))
-			return
+			continue
 		}
 
 		if item == nil {
 			continue
 		}
+
+		item.JGD2024 = assetName.Ex.JGD2024
+		item.FullAttributes = assetName.Ex.FullAttributes
 
 		if size, ok := seed.AssetSizes[url]; ok && size > 0 {
 			item.FileSize = lo.ToPtr(size)

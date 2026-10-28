@@ -24,7 +24,7 @@ const (
 //   - lod<N>:   optional. When present, matches datasets whose LOD equals N.
 //     When omitted, matches datasets without LOD only.
 //   - interior: optional. When present, matches the CityGML 3.0 interior
-//     variant; when omitted, only non-interior datasets match.
+//     datasets; when omitted, only non-interior datasets match.
 //   - year:     4-digit year, or the literal "latest"
 //
 // Examples:

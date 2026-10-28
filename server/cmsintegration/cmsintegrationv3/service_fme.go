@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -359,6 +361,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	log.Infofc(ctx, "upload assets: %v", assets.Data)
 	var dataAssets []string
 	dataAssetMap := map[string][]string{}
+	dataAssetURLs := map[string]string{}
 	if len(assets.DataMap) > 0 {
 		dataAssets = make([]string, 0, len(assets.DataMap))
 		for _, key := range assets.Keys {
@@ -371,6 +374,7 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 				}
 				dataAssets = append(dataAssets, aid)
 				dataAssetMap[key] = append(dataAssetMap[key], aid)
+				dataAssetURLs[aid] = url
 			}
 		}
 	}
@@ -443,32 +447,28 @@ func receiveResultFromFME(ctx context.Context, s *Services, conf *Config, f fmeR
 	}
 
 	// items
+	// The converted assets replace only the existing assets of the same CRS, so that the
+	// JGD2011 and JGD2024 versions can be kept side by side.
 	var data []string
 	var items []cmsintegrationcommon.FeatureItemDatum
-	if featureType.UseGroups {
-		log.Debugfc(ctx, "use groups")
-
-		for _, k := range assets.Keys {
-			assets := dataAssetMap[k]
-			i, ok := lo.Find(baseFeatureItem.Items, func(i cmsintegrationcommon.FeatureItemDatum) bool {
-				return i.Key == k
-			})
-
-			var id string
-			if ok {
-				id = i.ID
-			} else {
-				id = generateID()
-			}
-
-			items = append(items, cmsintegrationcommon.FeatureItemDatum{
-				ID:   id,
-				Data: assets,
-				Key:  k,
-			})
+	if len(dataAssets) > 0 {
+		names, err := convertedAssetNames(ctx, s, baseFeatureItem, dataAssetURLs)
+		if err != nil {
+			log.Errorfc(ctx, "failed to get asset names: %v", err)
+			return fmt.Errorf("failed to get asset names: %w", err)
 		}
-	} else {
-		data = dataAssets
+
+		if featureType.UseGroups {
+			log.Debugfc(ctx, "use groups")
+			items, err = cmsintegrationcommon.MergeConvertedItems(baseFeatureItem.Items, dataAssetMap, assets.Keys, names, generateID)
+		} else {
+			data, err = cmsintegrationcommon.MergeConvertedAssets(baseFeatureItem.Data, dataAssets, names)
+		}
+		if err != nil {
+			log.Errorfc(ctx, "failed to merge converted assets: %v", err)
+			_ = failToConvert(ctx, s, id.ItemID, ty, "変換結果をアイテムに反映できませんでした。%v", err)
+			return nil
+		}
 	}
 
 	newitem := (&cmsintegrationcommon.FeatureItem{
@@ -540,4 +540,19 @@ func readDic(ctx context.Context, u string) (string, error) {
 		return "", err
 	}
 	return string(s), nil
+}
+
+// convertedAssetNames returns the names of the existing data assets of the item and the
+// URLs of the converted assets, keyed by asset ID.
+func convertedAssetNames(ctx context.Context, s *Services, item *cmsintegrationcommon.FeatureItem, converted map[string]string) (map[string]string, error) {
+	ids := slices.Clone(item.Data)
+	for _, d := range item.Items {
+		ids = append(ids, d.Data...)
+	}
+	names, err := cmsintegrationcommon.AssetNames(ctx, s.CMS, ids)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(names, converted)
+	return names, nil
 }
