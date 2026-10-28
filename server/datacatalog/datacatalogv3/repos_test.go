@@ -263,6 +263,27 @@ func mockCMS(t *testing.T) {
 	)
 }
 
+func TestRepos_PrepareRetriesAfterFailure(t *testing.T) {
+	ctx := plateauCMSContext(context.Background())
+
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder(
+		"GET", "https://example.com/api/projects/prj/models",
+		httpmock.NewStringResponder(http.StatusInternalServerError, "error"),
+	)
+
+	repos, cms := newTestRepos(t, ctx)
+	assert.Error(t, repos.Prepare(ctx, "prj", 2023, true, cms))
+	assert.Nil(t, repos.Repo("prj"))
+
+	httpmock.Reset()
+	mockCMS(t)
+
+	assert.NoError(t, repos.Prepare(ctx, "prj", 2023, true, cms))
+	assert.NotNil(t, repos.Repo("prj"))
+}
+
 func j(j string) any {
 	var v any
 	lo.Must0(json.Unmarshal([]byte(j), &v))

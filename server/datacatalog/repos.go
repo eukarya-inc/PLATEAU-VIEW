@@ -475,11 +475,16 @@ func (h *ReposHandler) getRepo(ctx context.Context, md plateaucms.Metadata) (rep
 		return
 	}
 
+	// a nil *RepoWrapper must not become a non-nil Repo
+	var w *plateauapi.RepoWrapper
 	if isV2(md) {
 		// v2: fetch lazily if not cached
-		repo = h.reposv2.GetOrFetch(ctx, md.DataCatalogProjectAlias)
+		w = h.reposv2.GetOrFetch(ctx, md.DataCatalogProjectAlias)
 	} else if isV3(md) {
-		repo = h.reposv3.Repo(md.DataCatalogProjectAlias)
+		w = h.reposv3.Repo(md.DataCatalogProjectAlias)
+	}
+	if w != nil {
+		repo = w
 	}
 	return
 }

@@ -87,8 +87,12 @@ func (r *Repos) Prepare(ctx context.Context, project string, year int, plateau b
 	}
 
 	r.setCMS(project, year, plateau, cms)
-	_, err := r.Update(ctx, project)
-	return err
+	if _, err := r.Update(ctx, project); err != nil {
+		// forget the cms so that the next Prepare retries the first load
+		r.cms.Delete(project)
+		return err
+	}
+	return nil
 }
 
 func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUpdateResult, error) {
