@@ -564,6 +564,29 @@ func TestInMemoryRepo_Node(t *testing.T) {
 	}
 }
 
+func TestInMemoryRepo_Node_DatasetItemStage(t *testing.T) {
+	item := &GenericDatasetItem{ID: NewID("i1", TypeDatasetItem), ParentID: NewID("d1", TypeDataset)}
+	a := NewInMemoryRepo(&InMemoryRepoContext{
+		Datasets: Datasets{
+			DatasetTypeCategoryGeneric: []Dataset{
+				&GenericDataset{
+					ID:    NewID("d1", TypeDataset),
+					Admin: &Admin{Stage: "beta"},
+					Items: []*GenericDatasetItem{item},
+				},
+			},
+		},
+	})
+
+	got, err := a.Node(context.Background(), item.ID)
+	assert.NoError(t, err)
+	assert.Nil(t, got)
+
+	got, err = a.Node(AllowAdminStages(context.Background(), []string{"beta"}), item.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, item, got)
+}
+
 func TestInMemoryRepo_Nodes(t *testing.T) {
 	a := NewInMemoryRepo(&InMemoryRepoContext{
 		Areas: Areas{

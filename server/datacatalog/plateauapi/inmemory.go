@@ -112,8 +112,15 @@ func (c *InMemoryRepo) Node(ctx context.Context, id ID) (Node, error) {
 			}
 		}
 	case TypeDatasetItem:
-		if i := c.ctx.Datasets.Item(id); i != nil {
-			return i, nil
+		// An item is visible only when its parent dataset is.
+		stages := allowAdminStages(ctx)
+		for _, d := range c.ctx.Datasets.All() {
+			if i := FindItem(d, id); i != nil {
+				if filterDataset(d, DatasetsInput{}, stages) {
+					return i, nil
+				}
+				return nil, nil
+			}
 		}
 	case TypePlateauSpec:
 		if p, ok := lo.Find(c.ctx.PlateauSpecs, func(p PlateauSpec) bool {
