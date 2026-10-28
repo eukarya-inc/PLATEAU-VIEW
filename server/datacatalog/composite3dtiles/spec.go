@@ -59,7 +59,7 @@ const (
 	InteriorOnly
 )
 
-// TextureMode controls how the texture variant is selected.
+// TextureMode controls how textured and non-textured datasets are selected.
 type TextureMode int
 
 const (
@@ -89,7 +89,7 @@ type Spec struct {
 	LODMode  LODMode
 	Interior InteriorMode
 	Texture  TextureMode
-	// Attributes selects the attribute set variant.
+	// Attributes selects the attribute set variant (see plateauapi.FilterPlateauDatasetItems).
 	Attributes AttributesMode
 	// Crs is "JGD2011" or "JGD2024". Empty means the caller's default CRS,
 	// which the caller fills in before calling Select.

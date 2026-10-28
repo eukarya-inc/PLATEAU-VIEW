@@ -39,10 +39,10 @@ func (h *ReposHandler) CompositeTilesetAPI() echo.HandlerFunc {
 			spec.Crs = plateauapi.DefaultCrs.String()
 		}
 
-		// VariantDatasets also has the JGD2024 and full attribute rows that the
+		// AllDatasets also has the JGD2024 and full attribute rows that the
 		// default listing leaves out
-		inputs := make([]composite3dtiles.Input, 0, len(simple.VariantDatasets))
-		for _, d := range simple.VariantDatasets {
+		inputs := make([]composite3dtiles.Input, 0, len(simple.AllDatasets))
+		for _, d := range simple.AllDatasets {
 			if d == nil {
 				continue
 			}

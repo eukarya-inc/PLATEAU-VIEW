@@ -1,6 +1,7 @@
 package plateauapi
 
 import (
+	"context"
 	"testing"
 
 	"github.com/samber/lo"
@@ -37,4 +38,21 @@ func TestFilterPlateauDatasetItems(t *testing.T) {
 
 	// JGD2011 items are never returned in place of missing JGD2024 ones
 	assert.Equal(t, []string{"mvt"}, ids(FilterPlateauDatasetItems([]*PlateauDatasetItem{item("lod2", j2011, def), item("mvt", nil, nil)}, j2024, nil)))
+}
+
+func TestPlateauDatasetResolver_Items(t *testing.T) {
+	r := &plateauDatasetResolver{}
+	d := &PlateauDataset{Items: []*PlateauDatasetItem{
+		{ID: "lod2", Crs: lo.ToPtr(CrsJgd2011), AttributeSet: lo.ToPtr(AttributeSetDefault)},
+		{ID: "lod2_full", Crs: lo.ToPtr(CrsJgd2011), AttributeSet: lo.ToPtr(AttributeSetFull)},
+		{ID: "lod2_jgd2024", Crs: lo.ToPtr(CrsJgd2024), AttributeSet: lo.ToPtr(AttributeSetDefault)},
+	}}
+
+	items, err := r.Items(context.Background(), d, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []*PlateauDatasetItem{d.Items[0]}, items)
+
+	all, err := r.AllItems(context.Background(), d)
+	assert.NoError(t, err)
+	assert.Equal(t, d.Items, all)
 }

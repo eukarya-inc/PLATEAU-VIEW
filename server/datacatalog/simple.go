@@ -18,9 +18,10 @@ type SimpleDatasetsResponse struct {
 	CompositeTilesets []*SimpleCompositeTileset        `json:"composite_tilesets"`
 	CityGML           []*SimpleCityGMLDataset          `json:"citygml"`
 	LatestCityGML     []*SimpleLatestCityGMLDataset    `json:"latest_citygml"`
-	// VariantDatasets has every row including the CRS and attribute set variants that
-	// Datasets leaves out. It is used to resolve composite tilesets for those variants.
-	VariantDatasets []*SimpleDatasetsResponseDataset `json:"-"`
+	// AllDatasets has every row, including the CRS and attribute set variants that
+	// Datasets leaves out (see plateauapi.FilterPlateauDatasetItems). It is used to
+	// resolve composite tilesets for those variants.
+	AllDatasets []*SimpleDatasetsResponseDataset `json:"-"`
 }
 
 // SimpleLatestDataset is a per-city 3D Tiles or MVT entry whose URL resolves
@@ -303,7 +304,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 				c.CompositeURL = lo.ToPtr(u)
 			}
 
-			res.VariantDatasets = append(res.VariantDatasets, &c)
+			res.AllDatasets = append(res.AllDatasets, &c)
 			if _, ok := defaults[di.ID]; ok {
 				res.Datasets = append(res.Datasets, &c)
 			}
@@ -311,7 +312,7 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 	}
 
 	sort.Slice(res.Datasets, func(i, j int) bool { return res.Datasets[i].ID < res.Datasets[j].ID })
-	sort.Slice(res.VariantDatasets, func(i, j int) bool { return res.VariantDatasets[i].ID < res.VariantDatasets[j].ID })
+	sort.Slice(res.AllDatasets, func(i, j int) bool { return res.AllDatasets[i].ID < res.AllDatasets[j].ID })
 
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
 	res.LatestDatasets = buildLatestDatasets(host, res.Datasets)
@@ -341,7 +342,7 @@ func buildLatestDatasets(host string, datasets []*SimpleDatasetsResponseDataset)
 		lod      string // "" when LOD is absent
 		format   string
 		interior bool
-		// Texture variants are kept separate so non-textured rows do not
+		// Textured and non-textured rows are kept separate so non-textured rows do not
 		// shadow textured rows of the same year.
 		texture string // "true"/"false"/""
 	}
@@ -689,9 +690,9 @@ func buildVariantSpec(area, typeCode, lod string, interior bool, texture *bool, 
 // 3D Tiles datasets that exist. The "all" form covers Japan; "pref" is per
 // prefecture. For each (area, type, lod) bucket, both year-specific entries
 // and a "latest" entry (which resolves to the newest year per municipality)
-// are emitted. Texture-specific variants are emitted only when both textured
+// are emitted. Texture-specific entries are emitted only when both textured
 // and non-textured data coexist within that bucket; otherwise the auto
-// variant is the only useful URL.
+// entry is the only useful URL.
 func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDataset) []*SimpleCompositeTileset {
 	if host == "" {
 		return nil
@@ -710,7 +711,7 @@ func buildCompositeTilesets(host string, datasets []*SimpleDatasetsResponseDatas
 	type groupAgg struct {
 		hasTextured    bool
 		hasNonTextured bool
-		// Wrapper version per texture-variant: the auto variant sees every
+		// Wrapper version per texture entry: the auto entry sees every
 		// child, while -texture / -notexture filter to one texture rank, so
 		// each may resolve to a different max format version.
 		maxVersionAny         string

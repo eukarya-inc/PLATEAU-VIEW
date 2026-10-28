@@ -203,6 +203,12 @@ func (r *plateauDatasetResolver) Items(ctx context.Context, obj *PlateauDataset,
 	return FilterPlateauDatasetItems(obj.Items, crs, attributeSet), nil
 }
 
+// AllItems is the resolver for the allItems field.
+func (r *plateauDatasetResolver) AllItems(ctx context.Context, obj *PlateauDataset) ([]*PlateauDatasetItem, error) {
+	// AllItems of the model is not filled in; every item is kept in Items
+	return obj.Items, nil
+}
+
 // PlateauSpecMinor is the resolver for the plateauSpecMinor field.
 func (r *plateauDatasetResolver) PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error) {
 	return to[*PlateauSpecMinor](r.Repo.Node(ctx, obj.PlateauSpecMinorID))

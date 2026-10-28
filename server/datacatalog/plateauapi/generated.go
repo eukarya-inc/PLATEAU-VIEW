@@ -159,6 +159,7 @@ type ComplexityRoot struct {
 
 	PlateauDataset struct {
 		Admin              func(childComplexity int) int
+		AllItems           func(childComplexity int) int
 		Ar                 func(childComplexity int) int
 		City               func(childComplexity int) int
 		CityCode           func(childComplexity int) int
@@ -378,6 +379,7 @@ type PlateauDatasetResolver interface {
 	Ward(ctx context.Context, obj *PlateauDataset) (*Ward, error)
 	Type(ctx context.Context, obj *PlateauDataset) (*PlateauDatasetType, error)
 	Items(ctx context.Context, obj *PlateauDataset, crs *Crs, attributeSet *AttributeSet) ([]*PlateauDatasetItem, error)
+	AllItems(ctx context.Context, obj *PlateauDataset) ([]*PlateauDatasetItem, error)
 
 	PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error)
 }
@@ -1024,6 +1026,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PlateauDataset.Admin(childComplexity), true
+
+	case "PlateauDataset.allItems":
+		if e.complexity.PlateauDataset.AllItems == nil {
+			break
+		}
+
+		return e.complexity.PlateauDataset.AllItems(childComplexity), true
 
 	case "PlateauDataset.ar":
 		if e.complexity.PlateauDataset.Ar == nil {
@@ -7696,6 +7705,88 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(ctx context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _PlateauDataset_allItems(ctx context.Context, field graphql.CollectedField, obj *PlateauDataset) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDataset_allItems(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.PlateauDataset().AllItems(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*PlateauDatasetItem)
+	fc.Result = res
+	return ec.marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDataset_allItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDataset",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PlateauDatasetItem_id(ctx, field)
+			case "format":
+				return ec.fieldContext_PlateauDatasetItem_format(ctx, field)
+			case "formatVersion":
+				return ec.fieldContext_PlateauDatasetItem_formatVersion(ctx, field)
+			case "name":
+				return ec.fieldContext_PlateauDatasetItem_name(ctx, field)
+			case "url":
+				return ec.fieldContext_PlateauDatasetItem_url(ctx, field)
+			case "fileSize":
+				return ec.fieldContext_PlateauDatasetItem_fileSize(ctx, field)
+			case "layers":
+				return ec.fieldContext_PlateauDatasetItem_layers(ctx, field)
+			case "compositeUrl":
+				return ec.fieldContext_PlateauDatasetItem_compositeUrl(ctx, field)
+			case "latestUrl":
+				return ec.fieldContext_PlateauDatasetItem_latestUrl(ctx, field)
+			case "parentId":
+				return ec.fieldContext_PlateauDatasetItem_parentId(ctx, field)
+			case "parent":
+				return ec.fieldContext_PlateauDatasetItem_parent(ctx, field)
+			case "lod":
+				return ec.fieldContext_PlateauDatasetItem_lod(ctx, field)
+			case "lodEx":
+				return ec.fieldContext_PlateauDatasetItem_lodEx(ctx, field)
+			case "texture":
+				return ec.fieldContext_PlateauDatasetItem_texture(ctx, field)
+			case "crs":
+				return ec.fieldContext_PlateauDatasetItem_crs(ctx, field)
+			case "attributeSet":
+				return ec.fieldContext_PlateauDatasetItem_attributeSet(ctx, field)
+			case "floodingScale":
+				return ec.fieldContext_PlateauDatasetItem_floodingScale(ctx, field)
+			case "floodingScaleSuffix":
+				return ec.fieldContext_PlateauDatasetItem_floodingScaleSuffix(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PlateauDatasetItem", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PlateauDataset_ar(ctx context.Context, field graphql.CollectedField, obj *PlateauDataset) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlateauDataset_ar(ctx, field)
 	if err != nil {
@@ -8441,6 +8532,8 @@ func (ec *executionContext) fieldContext_PlateauDatasetItem_parent(_ context.Con
 				return ec.fieldContext_PlateauDataset_type(ctx, field)
 			case "items":
 				return ec.fieldContext_PlateauDataset_items(ctx, field)
+			case "allItems":
+				return ec.fieldContext_PlateauDataset_allItems(ctx, field)
 			case "ar":
 				return ec.fieldContext_PlateauDataset_ar(ctx, field)
 			case "admin":
@@ -9235,6 +9328,8 @@ func (ec *executionContext) fieldContext_PlateauDatasetType_datasets(ctx context
 				return ec.fieldContext_PlateauDataset_type(ctx, field)
 			case "items":
 				return ec.fieldContext_PlateauDataset_items(ctx, field)
+			case "allItems":
+				return ec.fieldContext_PlateauDataset_allItems(ctx, field)
 			case "ar":
 				return ec.fieldContext_PlateauDataset_ar(ctx, field)
 			case "admin":
@@ -17468,6 +17563,42 @@ func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.Selecti
 					}
 				}()
 				res = ec._PlateauDataset_items(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "allItems":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PlateauDataset_allItems(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
