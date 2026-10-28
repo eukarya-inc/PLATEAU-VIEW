@@ -306,6 +306,7 @@ func TestHandler_updateDataHandler(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	mockCMS(t)
+	mockItemModel(t, itemID, dataModelKey)
 
 	expected := `{"hoge":"hoge"}` + "\n"
 	responder := func(req *http.Request) (*http.Response, error) {
@@ -348,6 +349,7 @@ func TestHandler_deleteDataHandler(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	mockCMS(t)
+	mockItemModel(t, itemID, dataModelKey)
 
 	httpmock.RegisterResponder("DELETE", lo.Must(url.JoinPath(testCMSHost, "/api/items/", itemID)), httpmock.NewBytesResponder(http.StatusNoContent, nil))
 
@@ -369,6 +371,45 @@ func TestHandler_deleteDataHandler(t *testing.T) {
 
 	assert.NoError(t, handler(ctx))
 	assert.Equal(t, http.StatusNoContent, rec.Result().StatusCode)
+}
+
+func TestHandler_deleteDataHandler_otherModel(t *testing.T) {
+	itemID := "aaa"
+	httpmock.Activate()
+	defer httpmock.Deactivate()
+	mockCMS(t)
+	mockItemModel(t, itemID, templateModelKey)
+
+	httpmock.RegisterResponder(
+		"GET",
+		lo.Must(url.JoinPath(testCMSHost, "api", "projects", testCMSProject, "models", dataModelKey)),
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Model{ID: "model-" + dataModelKey}),
+	)
+
+	deleteCalled := false
+	httpmock.RegisterResponder("DELETE", lo.Must(url.JoinPath(testCMSHost, "/api/items/", itemID)), func(*http.Request) (*http.Response, error) {
+		deleteCalled = true
+		return httpmock.NewBytesResponse(http.StatusNoContent, nil), nil
+	})
+
+	p := path.Join("/", testCMSProject, "data/", itemID)
+	req := httptest.NewRequest(http.MethodDelete, p, nil)
+	req.Header.Set("Authorization", "Bearer "+testSidebarAccessToken)
+	rec := httptest.NewRecorder()
+
+	h := newHandler()
+	handler := h.cms.AuthMiddleware(plateaucms.AuthMiddlewareConfig{
+		Key:         "pid",
+		AuthMethods: authMethods,
+	})(h.deleteDataHandler())
+
+	ctx := echo.New().NewContext(req, rec)
+	ctx.SetParamNames("pid", "iid")
+	ctx.SetParamValues(testCMSProject, itemID)
+
+	assert.NoError(t, handler(ctx))
+	assert.Equal(t, http.StatusNotFound, rec.Result().StatusCode)
+	assert.False(t, deleteCalled)
 }
 
 func TestHandler_fetchTemplatesHandler(t *testing.T) {
@@ -499,6 +540,7 @@ func TestHandler_updateTemplateHandler(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	mockCMS(t)
+	mockItemModel(t, itemID, templateModelKey)
 
 	responder := func(req *http.Request) (*http.Response, error) {
 		i := cms.Item{}
@@ -539,6 +581,7 @@ func TestHandler_deleteTemplateHandler(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.Deactivate()
 	mockCMS(t)
+	mockItemModel(t, itemID, templateModelKey)
 
 	httpmock.RegisterResponder("DELETE", lo.Must(url.JoinPath(testCMSHost, "api", "items", itemID)), httpmock.NewBytesResponder(http.StatusNoContent, nil))
 
@@ -569,6 +612,23 @@ func newHandler() *Handler {
 			CMSSystemProject: tokenProject,
 		},
 	}))
+}
+
+// mockItemModel makes the item belong to the model with the given key in the test project.
+func mockItemModel(t *testing.T, itemID, modelKey string) {
+	t.Helper()
+
+	modelID := "model-" + modelKey
+	httpmock.RegisterResponder(
+		"GET",
+		lo.Must(url.JoinPath(testCMSHost, "api", "items", itemID)),
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Item{ID: itemID, ModelID: modelID}),
+	)
+	httpmock.RegisterResponder(
+		"GET",
+		lo.Must(url.JoinPath(testCMSHost, "api", "projects", testCMSProject, "models", modelKey)),
+		httpmock.NewJsonResponderOrPanic(http.StatusOK, cms.Model{ID: modelID}),
+	)
 }
 
 func mockCMS(t *testing.T) {

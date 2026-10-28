@@ -1,6 +1,7 @@
 package sidebar
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -272,6 +273,13 @@ func (h *Handler) updateDataHandler() func(c echo.Context) error {
 			Value: string(b),
 		}}
 
+		if err := checkItemModel(ctx, cmsh, md.ProjectAlias, dataModelKey, itemID); err != nil {
+			if errors.Is(err, cms.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, "not found")
+			}
+			return err
+		}
+
 		item, err := cmsh.UpdateItem(ctx, itemID, fields, nil)
 		if err != nil {
 			if errors.Is(err, cms.ErrNotFound) {
@@ -303,6 +311,13 @@ func (h *Handler) deleteDataHandler() func(c echo.Context) error {
 		}
 
 		itemID := c.Param("iid")
+
+		if err := checkItemModel(ctx, cmsh, md.ProjectAlias, dataModelKey, itemID); err != nil {
+			if errors.Is(err, cms.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, "not found")
+			}
+			return err
+		}
 
 		if err := cmsh.DeleteItem(ctx, itemID); err != nil {
 			if errors.Is(err, cms.ErrNotFound) {
@@ -454,6 +469,13 @@ func (h *Handler) updateTemplateHandler() func(c echo.Context) error {
 			Value: string(b),
 		}}
 
+		if err := checkItemModel(ctx, cmsh, md.ProjectAlias, templateModelKey, templateID); err != nil {
+			if errors.Is(err, cms.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, "not found")
+			}
+			return err
+		}
+
 		template, err := cmsh.UpdateItem(ctx, templateID, fields, nil)
 		if err != nil {
 			if errors.Is(err, cms.ErrNotFound) {
@@ -486,6 +508,13 @@ func (h *Handler) deleteTemplateHandler() func(c echo.Context) error {
 
 		templateID := c.Param("tid")
 
+		if err := checkItemModel(ctx, cmsh, md.ProjectAlias, templateModelKey, templateID); err != nil {
+			if errors.Is(err, cms.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, "not found")
+			}
+			return err
+		}
+
 		if err := cmsh.DeleteItem(ctx, templateID); err != nil {
 			if errors.Is(err, cms.ErrNotFound) {
 				return c.JSON(http.StatusNotFound, "not found")
@@ -495,6 +524,28 @@ func (h *Handler) deleteTemplateHandler() func(c echo.Context) error {
 
 		return c.NoContent(http.StatusNoContent)
 	}
+}
+
+// checkItemModel returns cms.ErrNotFound unless the item belongs to the model of the project.
+func checkItemModel(ctx context.Context, cmsh cms.Interface, projectAlias, modelKey, itemID string) error {
+	if itemID == "" {
+		return cms.ErrNotFound
+	}
+
+	item, err := cmsh.GetItem(ctx, itemID, false)
+	if err != nil {
+		return err
+	}
+
+	model, err := cmsh.GetModelByKey(ctx, projectAlias, modelKey)
+	if err != nil {
+		return err
+	}
+
+	if item == nil || model == nil || item.ModelID == "" || item.ModelID != model.ID {
+		return cms.ErrNotFound
+	}
+	return nil
 }
 
 func itemsToJSONs(items []cms.Item) []any {
