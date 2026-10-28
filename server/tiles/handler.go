@@ -3,6 +3,7 @@ package tiles
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,7 +19,13 @@ import (
 const (
 	modelKey = "tiles"
 	tilesTTL = 3 * time.Minute
+	// tilesFailureBackoff is how long a failed refresh is remembered, so that
+	// during a CMS outage requests serve the stale cache instead of each
+	// querying the CMS again.
+	tilesFailureBackoff = 30 * time.Second
 )
+
+var errRefreshRecentlyFailed = errors.New("refresh recently failed")
 
 //go:embed darkStyle.json
 var darkStyle []byte
@@ -44,8 +51,10 @@ type Handler struct {
 	tileURL     *url.URL
 	tiles       Tiles
 	fetchedAt   time.Time
+	failedAt    time.Time
 	refreshLock sync.Mutex
-	now         func() time.Time // overridable for tests
+	now         func() time.Time                         // overridable for tests
+	fetch       func(ctx context.Context) (Tiles, error) // overridable for tests
 }
 
 func New(ctx context.Context, conf Config) (*Handler, error) {
@@ -75,6 +84,9 @@ func New(ctx context.Context, conf Config) (*Handler, error) {
 		host:    host,
 		tileURL: tileURL,
 		now:     time.Now,
+		fetch: func(ctx context.Context) (Tiles, error) {
+			return initTiles(ctx, pcms)
+		},
 	}, nil
 }
 
@@ -98,7 +110,9 @@ func (h *Handler) getTiles(ctx context.Context) Tiles {
 
 	tiles, err := h.refresh(ctx)
 	if err != nil {
-		log.Errorfc(ctx, "tiles: failed to refresh tiles: %v", err)
+		if !errors.Is(err, errRefreshRecentlyFailed) {
+			log.Errorfc(ctx, "tiles: failed to refresh tiles: %v", err)
+		}
 		return cached
 	}
 	return tiles
@@ -106,27 +120,35 @@ func (h *Handler) getTiles(ctx context.Context) Tiles {
 
 // refresh fetches tiles from the CMS, deduplicating concurrent callers via
 // refreshLock so a stampede of /tiles/config.json requests after the TTL
-// expires only fans out to the CMS once.
+// expires only fans out to the CMS once. After a failure it does not query
+// the CMS again until tilesFailureBackoff has passed.
 func (h *Handler) refresh(ctx context.Context) (Tiles, error) {
 	h.refreshLock.Lock()
 	defer h.refreshLock.Unlock()
 
 	h.lock.RLock()
-	fetchedAt := h.fetchedAt
+	fetchedAt, failedAt := h.fetchedAt, h.failedAt
 	cached := h.tiles
 	h.lock.RUnlock()
 	if !fetchedAt.IsZero() && h.now().Sub(fetchedAt) < tilesTTL {
 		return cached, nil
 	}
+	if !failedAt.IsZero() && h.now().Sub(failedAt) < tilesFailureBackoff {
+		return nil, errRefreshRecentlyFailed
+	}
 
-	tiles, err := initTiles(ctx, h.pcms)
+	tiles, err := h.fetch(ctx)
 	if err != nil {
+		h.lock.Lock()
+		h.failedAt = h.now()
+		h.lock.Unlock()
 		return nil, err
 	}
 
 	h.lock.Lock()
 	h.tiles = tiles
 	h.fetchedAt = h.now()
+	h.failedAt = time.Time{}
 	h.lock.Unlock()
 
 	if len(tiles) == 0 {
