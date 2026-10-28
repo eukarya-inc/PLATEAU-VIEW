@@ -2,12 +2,14 @@ package geospatialjpv3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/ckan"
 	"github.com/k0kubun/pp/v3"
 	"github.com/reearth/reearthx/log"
+	"github.com/reearth/reearthx/rerror"
 	"github.com/samber/lo"
 )
 
@@ -45,8 +47,13 @@ func (s *handler) createOrUpdatePackage(ctx context.Context, seed PackageSeed) (
 
 func (s *handler) findPackage(ctx context.Context, pkgname PackageName) (_ *ckan.Package, n string, err error) {
 	// pattern1 -shi
+	// Only "not found" means that the package does not exist. Other errors must
+	// not be taken for it, or a duplicate package would be created.
 	name := pkgname.String()
-	p, _ := s.ckan.ShowPackage(ctx, name)
+	p, err := s.ckan.ShowPackage(ctx, name)
+	if err != nil && !errors.Is(err, rerror.ErrNotFound) {
+		return nil, name, err
+	}
 	if p.Name != "" {
 		return &p, p.Name, nil
 	}
@@ -54,7 +61,10 @@ func (s *handler) findPackage(ctx context.Context, pkgname PackageName) (_ *ckan
 	// pattern2 -city
 	name2 := strings.Replace(name, "-shi", "-city", 1)
 	if name != name2 {
-		p, _ = s.ckan.ShowPackage(ctx, name2)
+		p, err = s.ckan.ShowPackage(ctx, name2)
+		if err != nil && !errors.Is(err, rerror.ErrNotFound) {
+			return nil, name2, err
+		}
 		if p.Name != "" {
 			return &p, p.Name, nil
 		}

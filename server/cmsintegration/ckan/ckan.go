@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/reearth/reearthx/log"
+	"github.com/reearth/reearthx/rerror"
 )
 
 type Interface interface {
@@ -511,6 +512,9 @@ func (c *Ckan) sendOnce(
 		}
 
 		log.Infofc(ctx, "ckan: result (%d): %s", res.StatusCode, msg)
+		if res.StatusCode == http.StatusNotFound {
+			return res.StatusCode, fmt.Errorf("status code %d: %s: %w", res.StatusCode, msg, rerror.ErrNotFound)
+		}
 		return res.StatusCode, fmt.Errorf("status code %d: %s", res.StatusCode, msg)
 	}
 

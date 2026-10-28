@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jarcoal/httpmock"
+	"github.com/reearth/reearthx/rerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/vincent-petithory/dataurl"
 )
@@ -304,6 +305,25 @@ func TestCkan_ErrorWithoutErrorObject(t *testing.T) {
 		httpmock.NewStringResponder(http.StatusForbidden, `{"success":false}`))
 	_, err = ckan.CreateResource(context.Background(), Resource{PackageID: "xxx", Name: "name"})
 	assert.ErrorContains(t, err, "status code 403")
+}
+
+func TestCkan_ShowPackageNotFound(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	ckan, err := New("https://www.geospatial.jp/ckan", "TOKEN")
+	assert.NoError(t, err)
+
+	httpmock.RegisterResponder("GET", "https://www.geospatial.jp/ckan/api/3/action/package_show",
+		httpmock.NewJsonResponderOrPanic(http.StatusNotFound, Response[any]{Error: &Error{Message: "Not found"}}))
+	_, err = ckan.ShowPackage(context.Background(), "xxx")
+	assert.ErrorIs(t, err, rerror.ErrNotFound)
+
+	httpmock.RegisterResponder("GET", "https://www.geospatial.jp/ckan/api/3/action/package_show",
+		httpmock.NewJsonResponderOrPanic(http.StatusForbidden, Response[any]{Error: &Error{Message: "Authorization Error"}}))
+	_, err = ckan.ShowPackage(context.Background(), "xxx")
+	assert.Error(t, err)
+	assert.NotErrorIs(t, err, rerror.ErrNotFound)
 }
 
 func TestCkan2(t *testing.T) {
