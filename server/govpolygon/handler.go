@@ -238,10 +238,22 @@ func (h *Handler) getCityNames(ctx context.Context) ([]string, error) {
 				} `json:"city"`
 			} `json:"areas"`
 		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
 	}
 
 	if err := json.Unmarshal(body, &responseData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+
+	if len(responseData.Errors) > 0 {
+		return nil, fmt.Errorf("graphql error: %s", responseData.Errors[0].Message)
+	}
+
+	// no names would mean all cities in Japan
+	if len(responseData.Data.Areas) == 0 {
+		return nil, errors.New("no areas found")
 	}
 
 	names := make([]string, len(responseData.Data.Areas))

@@ -82,7 +82,7 @@ func TestHandlerUpdateLeaderCanceled(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-release
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"areas":[]}}`))
+		_, _ = w.Write([]byte(`{"data":{"areas":[{"name":"千代田区","code":"13101","prefecture":{"name":"東京都"}}]}}`))
 	}))
 	defer s.Close()
 
@@ -107,4 +107,23 @@ func TestHandlerUpdateLeaderCanceled(t *testing.T) {
 	defer h.lock.RUnlock()
 	assert.True(t, h.failedAt.IsZero())
 	assert.NotNil(t, h.geojson)
+}
+
+func TestHandlerGetCityNamesErrors(t *testing.T) {
+	for name, body := range map[string]string{
+		"graphql error": `{"errors":[{"message":"boom"}],"data":null}`,
+		"no areas":      `{"data":{"areas":[]}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			}))
+			defer s.Close()
+
+			names, err := New(s.URL, true).getCityNames(context.Background())
+			assert.Error(t, err)
+			assert.Nil(t, names)
+		})
+	}
 }
