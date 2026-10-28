@@ -522,7 +522,11 @@ func (r *fetchCodeResolver) Resolve(codeSpace, code string) (string, error) {
 		return "", err
 	}
 	if m, ok := r.cache[codeSpace]; ok {
-		return m[code], nil
+		resolved, ok := m[code]
+		if !ok {
+			return "", fmt.Errorf("code %q not found in codeSpace %q", code, codeSpace)
+		}
+		return resolved, nil
 	}
 	resp, err := r.client.Get(u)
 	if err != nil {
