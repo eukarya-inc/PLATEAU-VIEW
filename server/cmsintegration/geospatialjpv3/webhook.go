@@ -155,6 +155,10 @@ func (h *handler) Webhook(conf Config) (cmswebhook.Handler, error) {
 		if b := getChangedBool(w, prepareFieldKey); b != nil && *b {
 			if err := Prepare(ctx, cityItem.ID, w.ProjectID(), conf, featureTypeCodes, featureTypeNames); err != nil {
 				log.Errorfc(ctx, "failed to prepare: %v", err)
+				comment := fmt.Sprintf("G空間情報センター公開の準備処理を開始できませんでした: %v", err)
+				if err2 := h.cms.CommentToItem(ctx, cityItem.ID, comment); err2 != nil {
+					log.Errorfc(ctx, "failed to comment to city item: %v", err2)
+				}
 			}
 		} else {
 			log.Debugfc(ctx, "prepare field not changed or not true")

@@ -2,6 +2,7 @@ package geospatialjpv3
 
 import (
 	"context"
+	"errors"
 
 	run "cloud.google.com/go/run/apiv2"
 	runpb "cloud.google.com/go/run/apiv2/runpb"
@@ -12,8 +13,7 @@ import (
 
 func prepareWithCloudRunJobs(ctx context.Context, itemID, projectID, jobName string, featureTypes []string, featureTypeNames map[string]string) error {
 	if jobName == "" {
-		log.Debugfc(ctx, "geospatialjp webhook: no job name")
-		return nil
+		return errors.New("cloud run jobs job name is not configured")
 	}
 
 	log.Debugfc(ctx, "geospatialjp webhook: prepare (cloud run jobs): %s", jobName)
