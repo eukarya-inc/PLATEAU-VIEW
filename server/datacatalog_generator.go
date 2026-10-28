@@ -72,15 +72,12 @@ func (g *DatacatalogGenerator) Generate(projectName string) (skipped bool, err e
 	}
 	allMetadata, err := g.pcms.AllMetadata(ctx, true)
 	if err != nil {
-		if !g.outputToStdout {
-			log.Warnf("Failed to fetch metadata: %v", err)
-		}
-		// Continue anyway - some projects may work without metadata
-	} else {
-		ctx = plateaucms.SetAllCMSMetadataFromContext(ctx, allMetadata)
-		if !g.outputToStdout {
-			log.Infof("Found %d metadata entries", len(allMetadata))
-		}
+		// the catalog cannot be built without metadata
+		return false, fmt.Errorf("failed to fetch metadata: %w", err)
+	}
+	ctx = plateaucms.SetAllCMSMetadataFromContext(ctx, allMetadata)
+	if !g.outputToStdout {
+		log.Infof("Found %d metadata entries", len(allMetadata))
 	}
 
 	// Reposの初期化と設定
@@ -177,6 +174,9 @@ func (g *DatacatalogGenerator) Generate(projectName string) (skipped bool, err e
 
 	// GCS出力モードの場合はローカルファイルの確認をスキップ
 	if gcsStorage != nil {
+		if repos.Repo(projectName) == nil {
+			return false, fmt.Errorf("no datacatalog data generated for %s", projectName)
+		}
 		log.Infof("Cache written to GCS: %s", g.outputURL)
 		g.outputStatistics(repos, projectName)
 		return false, nil

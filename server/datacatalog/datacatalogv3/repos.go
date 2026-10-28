@@ -122,10 +122,15 @@ func (r *Repos) update(ctx context.Context, project string) (*plateauapi.ReposUp
 	c, warning := data.Into()
 	sort.Strings(warning)
 
-	var repo *plateauapi.InMemoryRepo
-	if c != nil {
-		repo = plateauapi.NewInMemoryRepo(c)
+	if c == nil {
+		// no data (e.g. metadata not found): keep Repo an untyped nil so that no
+		// empty repo is registered and nothing is dumped
+		return &plateauapi.ReposUpdateResult{
+			Warnings: warning,
+		}, nil
 	}
+
+	repo := plateauapi.NewInMemoryRepo(c)
 
 	log.Debugfc(ctx, "datacatalogv3: updated repo %s: %.2fs", project, time.Since(t).Seconds())
 

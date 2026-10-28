@@ -284,6 +284,15 @@ func TestRepos_PrepareRetriesAfterFailure(t *testing.T) {
 	assert.NotNil(t, repos.Repo("prj"))
 }
 
+func TestRepos_UpdateWithoutMetadata(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	repos, cms := newTestRepos(t, context.Background())
+	assert.NoError(t, repos.Prepare(context.Background(), "prj", 2023, true, cms))
+	assert.Nil(t, repos.Repo("prj"))
+}
+
 func j(j string) any {
 	var v any
 	lo.Must0(json.Unmarshal([]byte(j), &v))
