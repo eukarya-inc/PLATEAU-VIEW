@@ -198,6 +198,11 @@ func (r *plateauDatasetResolver) Type(ctx context.Context, obj *PlateauDataset) 
 	return to[*PlateauDatasetType](r.Repo.Node(ctx, obj.TypeID))
 }
 
+// Items is the resolver for the items field.
+func (r *plateauDatasetResolver) Items(ctx context.Context, obj *PlateauDataset, crs *Crs, attributeSet *AttributeSet) ([]*PlateauDatasetItem, error) {
+	return FilterPlateauDatasetItems(obj.Items, crs, attributeSet), nil
+}
+
 // PlateauSpecMinor is the resolver for the plateauSpecMinor field.
 func (r *plateauDatasetResolver) PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error) {
 	return to[*PlateauSpecMinor](r.Repo.Node(ctx, obj.PlateauSpecMinorID))

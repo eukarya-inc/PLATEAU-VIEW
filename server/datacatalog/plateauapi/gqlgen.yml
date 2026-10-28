@@ -106,6 +106,8 @@ models:
         resolver: true
       plateauSpecMinor:
         resolver: true
+      items:
+        resolver: true
   PlateauDatasetItem:
     fields:
       parent:

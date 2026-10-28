@@ -80,6 +80,8 @@ const (
 //   - "all-bldg-lod2-notexture-2025"   (non-textured only)
 //   - "all-bldg-lod2-latest"           (newest year per area)
 //   - "all-bldg-lod3-interior-2025"    (CityGML 3.0 屋内モデルのみ)
+//   - "all-bldg-lod2-full-2025"        (全属性の版のみ)
+//   - "all-bldg-lod2-jgd2024-2025"     (JGD2024 の版のみ)
 type Spec struct {
 	Area     Area
 	Type     string // dataset type code (e.g. "bldg")
@@ -87,8 +89,36 @@ type Spec struct {
 	LODMode  LODMode
 	Interior InteriorMode
 	Texture  TextureMode
+	// Attributes selects the attribute set variant.
+	Attributes AttributesMode
+	// Crs is "JGD2011" or "JGD2024". Empty means the caller's default CRS,
+	// which the caller fills in before calling Select.
+	Crs      string
 	Year     int // 4-digit year; ignored when YearMode is YearLatest
 	YearMode YearMode
+}
+
+// AttributesMode controls how the attribute set variant is selected.
+type AttributesMode int
+
+const (
+	// AttributesAuto prefers the default attribute set but falls back to the full one.
+	AttributesAuto AttributesMode = iota
+	// AttributesFull keeps only datasets with every attribute.
+	AttributesFull
+)
+
+const (
+	// SegmentFull is the spec segment that selects the full attribute set.
+	SegmentFull = "full"
+	// AttributeSetFull is the Input.AttributeSet value of a dataset with every attribute.
+	AttributeSetFull = "FULL"
+)
+
+// crsSegments maps the spec segments that select a CRS to the CRS names.
+var crsSegments = map[string]string{
+	"jgd2011": "JGD2011",
+	"jgd2024": "JGD2024",
 }
 
 func parseArea(s string) (Area, error) {
@@ -141,7 +171,8 @@ func ParseSpec(s string) (Spec, error) {
 		return Spec{}, fmt.Errorf("invalid spec %q: invalid lod value", s)
 	}
 
-	// Optional segments between lod and year, in order: [interior] [texture|notexture].
+	// Optional segments between lod and year, in order:
+	// [interior] [texture|notexture] [full] [jgd2011|jgd2024].
 	interior := InteriorExclude
 	texture := TextureAuto
 	idx := 3
@@ -156,6 +187,18 @@ func ParseSpec(s string) (Spec, error) {
 			idx++
 		case "notexture":
 			texture = TextureNone
+			idx++
+		}
+	}
+	attributes := AttributesAuto
+	if idx < len(parts)-1 && parts[idx] == SegmentFull {
+		attributes = AttributesFull
+		idx++
+	}
+	crs := ""
+	if idx < len(parts)-1 {
+		if c, ok := crsSegments[parts[idx]]; ok {
+			crs = c
 			idx++
 		}
 	}
@@ -179,13 +222,15 @@ func ParseSpec(s string) (Spec, error) {
 	}
 
 	return Spec{
-		Area:     area,
-		Type:     typeCode,
-		LOD:      lod,
-		LODMode:  lodMode,
-		Interior: interior,
-		Texture:  texture,
-		Year:     year,
-		YearMode: yearMode,
+		Area:       area,
+		Type:       typeCode,
+		LOD:        lod,
+		LODMode:    lodMode,
+		Interior:   interior,
+		Texture:    texture,
+		Attributes: attributes,
+		Crs:        crs,
+		Year:       year,
+		YearMode:   yearMode,
 	}, nil
 }

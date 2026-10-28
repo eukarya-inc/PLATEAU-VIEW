@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/composite3dtiles"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/samber/lo"
 )
@@ -17,6 +18,9 @@ type SimpleDatasetsResponse struct {
 	CompositeTilesets []*SimpleCompositeTileset        `json:"composite_tilesets"`
 	CityGML           []*SimpleCityGMLDataset          `json:"citygml"`
 	LatestCityGML     []*SimpleLatestCityGMLDataset    `json:"latest_citygml"`
+	// VariantDatasets has every row including the CRS and attribute set variants that
+	// Datasets leaves out. It is used to resolve composite tilesets for those variants.
+	VariantDatasets []*SimpleDatasetsResponseDataset `json:"-"`
 }
 
 // SimpleLatestDataset is a per-city 3D Tiles or MVT entry whose URL resolves
@@ -129,6 +133,10 @@ type SimpleDatasetsResponseDataset struct {
 	// interior 専用データセットを指し、`false` は明示的な非 interior、
 	// `null` は interior 区分がそもそも存在しないデータ（LOD1 や MVT 等）。
 	Interior *bool `json:"interior,omitempty"`
+	// Crs は 3D Tiles の高さの測地系（"JGD2011" / "JGD2024"）。MVT 等では null。
+	Crs *string `json:"crs,omitempty"`
+	// AttributeSet は 3D Tiles に含まれる属性の種類（"DEFAULT" / "FULL"）。MVT 等では null。
+	AttributeSet *string `json:"attribute_set,omitempty"`
 }
 
 // SimpleCompositeTileset describes a virtual tileset.json that aggregates
@@ -262,6 +270,11 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			Spec:             spec,
 		}
 
+		defaults := map[plateauapi.ID]struct{}{}
+		for _, di := range plateauapi.FilterPlateauDatasetItems(d.Items, nil, nil) {
+			defaults[di.ID] = struct{}{}
+		}
+
 		for _, di := range d.Items {
 			f := simpleFormatName(di.GetFormat())
 			if f == "" {
@@ -279,16 +292,26 @@ func FetchSimplePlateauDatasets(ctx context.Context, r plateauapi.Repo, host str
 			if di.Lod != nil {
 				c.LOD = lo.ToPtr(fmt.Sprintf("%d", *di.Lod))
 			}
+			if di.Crs != nil {
+				c.Crs = lo.ToPtr(di.Crs.String())
+			}
+			if di.AttributeSet != nil {
+				c.AttributeSet = lo.ToPtr(di.AttributeSet.String())
+			}
 
 			if u := buildDatasetCompositeURL(host, &c); u != "" {
 				c.CompositeURL = lo.ToPtr(u)
 			}
 
-			res.Datasets = append(res.Datasets, &c)
+			res.VariantDatasets = append(res.VariantDatasets, &c)
+			if _, ok := defaults[di.ID]; ok {
+				res.Datasets = append(res.Datasets, &c)
+			}
 		}
 	}
 
 	sort.Slice(res.Datasets, func(i, j int) bool { return res.Datasets[i].ID < res.Datasets[j].ID })
+	sort.Slice(res.VariantDatasets, func(i, j int) bool { return res.VariantDatasets[i].ID < res.VariantDatasets[j].ID })
 
 	res.CompositeTilesets = buildCompositeTilesets(host, res.Datasets)
 	res.LatestDatasets = buildLatestDatasets(host, res.Datasets)
@@ -577,7 +600,7 @@ func buildDatasetCompositeURL(host string, d *SimpleDatasetsResponseDataset) str
 		if d.LOD == nil || *d.LOD == "" {
 			return ""
 		}
-		return host + "/datacatalog/3dtiles/" + buildSpec(areaCode, d.TypeCode, *d.LOD, isTrue(d.Interior), d.Texture, strconv.Itoa(d.Year)) + "/tileset.json"
+		return host + "/datacatalog/3dtiles/" + buildVariantSpec(areaCode, d.TypeCode, *d.LOD, isTrue(d.Interior), d.Texture, d.AttributeSet, d.Crs, strconv.Itoa(d.Year)) + "/tileset.json"
 	case "MVT":
 		return host + "/datacatalog/mvt/" + buildMVTSpec(areaCode, d.TypeCode, d.LOD, isTrue(d.Interior), strconv.Itoa(d.Year)) + "/tilejson.json"
 	}
@@ -642,6 +665,24 @@ func buildSpec(area, typeCode, lod string, interior bool, texture *bool, year st
 	}
 	parts = append(parts, year)
 	return strings.Join(parts, "-")
+}
+
+// buildVariantSpec is buildSpec with the attribute set and CRS segments of a variant row.
+// Segments are added only for a variant that the default selection does not pick.
+func buildVariantSpec(area, typeCode, lod string, interior bool, texture *bool, attributeSet, crs *string, year string) string {
+	spec := buildSpec(area, typeCode, lod, interior, texture, year)
+	var variants []string
+	if attributeSet != nil && *attributeSet == plateauapi.AttributeSetFull.String() {
+		variants = append(variants, composite3dtiles.SegmentFull)
+	}
+	if crs != nil && *crs != plateauapi.DefaultCrs.String() {
+		variants = append(variants, strings.ToLower(*crs))
+	}
+	if len(variants) == 0 {
+		return spec
+	}
+	i := strings.LastIndex(spec, "-")
+	return spec[:i] + "-" + strings.Join(variants, "-") + spec[i:]
 }
 
 // buildCompositeTilesets enumerates virtual tileset entries derived from the

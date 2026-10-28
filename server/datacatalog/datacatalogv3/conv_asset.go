@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 	"github.com/samber/lo"
 )
 
@@ -36,6 +37,10 @@ type AssetNameEx struct {
 	Normal *AssetNameExNormal
 	Fld    *AssetNameExFld
 	Ex     string
+	// JGD2024 is true when the asset was converted with JGD2024 heights (`_jgd2024`).
+	JGD2024 bool
+	// FullAttributes is true when the asset has every attribute (`_full`).
+	FullAttributes bool
 }
 
 func (ex AssetNameEx) String() string {
@@ -197,6 +202,7 @@ func parseOptionAndExtension(suffix string) (option, ex string) {
 
 func ParseAssetNameEx(name string) (ex AssetNameEx) {
 	ex.Ex = name
+	name, ex.JGD2024, ex.FullAttributes = cmsintegrationcommon.TrimAssetVariants(name)
 
 	ex.Fld = ParseAssetNameExFld(name)
 	if ex.Fld != nil {

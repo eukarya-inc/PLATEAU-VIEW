@@ -188,6 +188,8 @@ func seedToDatasetItem(i plateauDatasetItemSeed, parentID string, isFlow bool) *
 		Lod:                 i.LOD,
 		LodEx:               i.LODEx,
 		Texture:             textureFrom(i.NoTexture),
+		Crs:                 i.crs(),
+		AttributeSet:        i.attributeSet(),
 		ParentID:            plateauapi.NewID(parentID, plateauapi.TypeDataset),
 		FloodingScale:       i.FloodingScale,
 		FloodingScaleSuffix: i.FloodingScaleSuffix,
@@ -217,4 +219,26 @@ func formatVersionFor(f plateauapi.DatasetFormat, isFlow bool) *string {
 		return lo.ToPtr("1.1")
 	}
 	return lo.ToPtr("1.0")
+}
+
+// crs returns the CRS of a 3D Tiles item. Other formats such as MVT have no heights,
+// so they are the same in every CRS and get nil.
+func (i plateauDatasetItemSeed) crs() *plateauapi.Crs {
+	switch {
+	case i.JGD2024:
+		return lo.ToPtr(plateauapi.CrsJgd2024)
+	case i.Format == plateauapi.DatasetFormatCesium3dtiles:
+		return lo.ToPtr(plateauapi.CrsJgd2011)
+	}
+	return nil
+}
+
+func (i plateauDatasetItemSeed) attributeSet() *plateauapi.AttributeSet {
+	switch {
+	case i.FullAttributes:
+		return lo.ToPtr(plateauapi.AttributeSetFull)
+	case i.Format == plateauapi.DatasetFormatCesium3dtiles:
+		return lo.ToPtr(plateauapi.AttributeSetDefault)
+	}
+	return nil
 }

@@ -278,7 +278,7 @@ func transformDatasetInfo(dataset plateauapi.Dataset) DatasetInfo {
 		Year:             dataset.GetYear(),
 		RegistrationYear: dataset.GetRegisterationYear(),
 		PlateauSpec:      plateauSpec,
-		ItemCount:        len(dataset.GetItems()),
+		ItemCount:        len(plateauapi.DefaultDatasetItems(dataset)),
 	}
 }
 
@@ -347,7 +347,7 @@ func TransformGetDataset(dataset plateauapi.Dataset, host string) *GetDatasetRes
 		openDataURL = &url
 	}
 
-	items := lo.Map(dataset.GetItems(), func(item plateauapi.DatasetItem, _ int) DatasetItemInfo {
+	items := lo.Map(plateauapi.DefaultDatasetItems(dataset), func(item plateauapi.DatasetItem, _ int) DatasetItemInfo {
 		return transformDatasetItem(item, dataset, host)
 	})
 

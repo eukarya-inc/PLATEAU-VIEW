@@ -165,3 +165,13 @@ func TestBuildCompositeTilesets_NoHost(t *testing.T) {
 	})
 	assert.Nil(t, out)
 }
+
+func TestBuildVariantSpec(t *testing.T) {
+	full, def := lo.ToPtr("FULL"), lo.ToPtr("DEFAULT")
+	j2011, j2024 := lo.ToPtr("JGD2011"), lo.ToPtr("JGD2024")
+
+	assert.Equal(t, "13101-bldg-lod2-2025", buildVariantSpec("13101", "bldg", "2", false, nil, def, j2011, "2025"))
+	assert.Equal(t, "13101-bldg-lod2-notexture-full-2025", buildVariantSpec("13101", "bldg", "2", false, lo.ToPtr(false), full, j2011, "2025"))
+	assert.Equal(t, "13101-bldg-lod2-full-jgd2024-latest", buildVariantSpec("13101", "bldg", "2", false, nil, full, j2024, "latest"))
+	assert.Equal(t, "13101-bldg-lod2-jgd2024-2025", buildVariantSpec("13101", "bldg", "2", false, nil, nil, j2024, "2025"))
+}

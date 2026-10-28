@@ -189,6 +189,21 @@ paths:
                             CityGML 3.0 の屋内モデル区分。`true` のデータセットは
                             屋内モデル専用で、屋外モデルとは別行として現れます。
                             interior 概念がそもそも適用されないデータでは省略されます。
+                        crs:
+                          type: string
+                          nullable: true
+                          enum: ["JGD2011", "JGD2024"]
+                          description: |
+                            3D Tiles の高さの測地系。MVT など測地系によって内容が変わらないデータでは省略されます。
+                            この一覧には既定の測地系（現在は JGD2011）のデータのみが含まれます。
+                        attribute_set:
+                          type: string
+                          nullable: true
+                          enum: ["DEFAULT", "FULL"]
+                          description: |
+                            3D Tiles に含まれる属性の種類。`DEFAULT` は既定の版、`FULL` は全ての属性を含む版です。
+                            この一覧には既定の版のみが含まれ、既定の版が無いデータに限り `FULL` の版が含まれます。
+                            MVT など 3D Tiles 以外のフォーマットでは省略されます。
                         composite_url:
                           type: string
                           format: uri
@@ -533,7 +548,7 @@ paths:
         パスパラメータ `spec` の書式は次の通りです：
 
         ```
-        <area>-<type>-<lod>[-interior][-<texture>]-<year>
+        <area>-<type>-<lod>[-interior][-<texture>][-full][-<crs>]-<year>
         ```
 
         - `area`:
@@ -551,6 +566,12 @@ paths:
           - 省略時: テクスチャありを優先、無ければテクスチャなしを採用
           - `texture`: テクスチャありのデータのみ
           - `notexture`: テクスチャなしのデータのみ
+        - `full` (省略可):
+          - 省略時: 既定の属性の版を優先、無ければ全属性の版を採用
+          - `full`: 全属性の版のみ
+        - `crs` (省略可):
+          - 省略時: 既定の測地系（現在は JGD2011）の版のみ
+          - `jgd2011` / `jgd2024`: 指定した測地系の版のみ。指定した測地系の版が無いエリアは含まれず、別の測地系の版で代用することはありません
         - `year`:
           - 西暦4桁: その整備年度のデータのみを採用
           - `latest`: 整備年度のフィルタを行わず、各自治体について利用可能な最新整備年度のデータを採用
@@ -563,6 +584,7 @@ paths:
         - `/datacatalog/3dtiles/13101-bldg-lod2-notexture-2025/tileset.json`
         - `/datacatalog/3dtiles/all-bldg-lod2-latest/tileset.json`
         - `/datacatalog/3dtiles/13101-bldg-lod3-interior-2025/tileset.json`
+        - `/datacatalog/3dtiles/13101-bldg-lod2-full-jgd2024-2025/tileset.json`
       parameters:
         - in: path
           name: spec

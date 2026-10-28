@@ -318,8 +318,9 @@ func PlateauDatasetToGenericDataset(p *PlateauDataset, typeID ID, typeCode strin
 		newID = ID(string(p.ID) + "_" + idSuffix)
 	}
 
-	items := make([]*GenericDatasetItem, 0, len(p.Items))
-	for _, item := range p.Items {
+	plateauItems := FilterPlateauDatasetItems(p.Items, nil, nil)
+	items := make([]*GenericDatasetItem, 0, len(plateauItems))
+	for _, item := range plateauItems {
 		itemID := item.ID.String()
 		if idSuffix != "" {
 			if ids := strings.Split(itemID, rawID); len(ids) == 2 {

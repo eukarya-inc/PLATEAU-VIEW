@@ -166,7 +166,7 @@ type ComplexityRoot struct {
 		Description        func(childComplexity int) int
 		Groups             func(childComplexity int) int
 		ID                 func(childComplexity int) int
-		Items              func(childComplexity int) int
+		Items              func(childComplexity int, crs *Crs, attributeSet *AttributeSet) int
 		Name               func(childComplexity int) int
 		OpenDataURL        func(childComplexity int) int
 		PlateauSpecMinor   func(childComplexity int) int
@@ -189,7 +189,9 @@ type ComplexityRoot struct {
 	}
 
 	PlateauDatasetItem struct {
+		AttributeSet        func(childComplexity int) int
 		CompositeURL        func(childComplexity int) int
+		Crs                 func(childComplexity int) int
 		FileSize            func(childComplexity int) int
 		FloodingScale       func(childComplexity int) int
 		FloodingScaleSuffix func(childComplexity int) int
@@ -375,6 +377,7 @@ type PlateauDatasetResolver interface {
 	City(ctx context.Context, obj *PlateauDataset) (*City, error)
 	Ward(ctx context.Context, obj *PlateauDataset) (*Ward, error)
 	Type(ctx context.Context, obj *PlateauDataset) (*PlateauDatasetType, error)
+	Items(ctx context.Context, obj *PlateauDataset, crs *Crs, attributeSet *AttributeSet) ([]*PlateauDatasetItem, error)
 
 	PlateauSpecMinor(ctx context.Context, obj *PlateauDataset) (*PlateauSpecMinor, error)
 }
@@ -1076,7 +1079,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.complexity.PlateauDataset.Items(childComplexity), true
+		args, err := ec.field_PlateauDataset_items_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.PlateauDataset.Items(childComplexity, args["crs"].(*Crs), args["attributeSet"].(*AttributeSet)), true
 
 	case "PlateauDataset.name":
 		if e.complexity.PlateauDataset.Name == nil {
@@ -1211,12 +1219,26 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.PlateauDataset.Year(childComplexity), true
 
+	case "PlateauDatasetItem.attributeSet":
+		if e.complexity.PlateauDatasetItem.AttributeSet == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.AttributeSet(childComplexity), true
+
 	case "PlateauDatasetItem.compositeUrl":
 		if e.complexity.PlateauDatasetItem.CompositeURL == nil {
 			break
 		}
 
 		return e.complexity.PlateauDatasetItem.CompositeURL(childComplexity), true
+
+	case "PlateauDatasetItem.crs":
+		if e.complexity.PlateauDatasetItem.Crs == nil {
+			break
+		}
+
+		return e.complexity.PlateauDatasetItem.Crs(childComplexity), true
 
 	case "PlateauDatasetItem.fileSize":
 		if e.complexity.PlateauDatasetItem.FileSize == nil {
@@ -2277,6 +2299,57 @@ func (ec *executionContext) field_PlateauDatasetType_datasets_argsInput(
 	}
 
 	var zeroVal *DatasetsInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_PlateauDataset_items_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_PlateauDataset_items_argsCrs(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["crs"] = arg0
+	arg1, err := ec.field_PlateauDataset_items_argsAttributeSet(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["attributeSet"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_PlateauDataset_items_argsCrs(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*Crs, error) {
+	if _, ok := rawArgs["crs"]; !ok {
+		var zeroVal *Crs
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("crs"))
+	if tmp, ok := rawArgs["crs"]; ok {
+		return ec.unmarshalOCrs2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCrs(ctx, tmp)
+	}
+
+	var zeroVal *Crs
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_PlateauDataset_items_argsAttributeSet(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*AttributeSet, error) {
+	if _, ok := rawArgs["attributeSet"]; !ok {
+		var zeroVal *AttributeSet
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("attributeSet"))
+	if tmp, ok := rawArgs["attributeSet"]; ok {
+		return ec.unmarshalOAttributeSet2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAttributeSet(ctx, tmp)
+	}
+
+	var zeroVal *AttributeSet
 	return zeroVal, nil
 }
 
@@ -7544,7 +7617,7 @@ func (ec *executionContext) _PlateauDataset_items(ctx context.Context, field gra
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Items, nil
+		return ec.resolvers.PlateauDataset().Items(rctx, obj, fc.Args["crs"].(*Crs), fc.Args["attributeSet"].(*AttributeSet))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -7561,12 +7634,12 @@ func (ec *executionContext) _PlateauDataset_items(ctx context.Context, field gra
 	return ec.marshalNPlateauDatasetItem2ᚕᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐPlateauDatasetItemᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlateauDataset_items(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlateauDataset",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -7597,6 +7670,10 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context,
 				return ec.fieldContext_PlateauDatasetItem_lodEx(ctx, field)
 			case "texture":
 				return ec.fieldContext_PlateauDatasetItem_texture(ctx, field)
+			case "crs":
+				return ec.fieldContext_PlateauDatasetItem_crs(ctx, field)
+			case "attributeSet":
+				return ec.fieldContext_PlateauDatasetItem_attributeSet(ctx, field)
 			case "floodingScale":
 				return ec.fieldContext_PlateauDatasetItem_floodingScale(ctx, field)
 			case "floodingScaleSuffix":
@@ -7604,6 +7681,17 @@ func (ec *executionContext) fieldContext_PlateauDataset_items(_ context.Context,
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PlateauDatasetItem", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_PlateauDataset_items_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -8488,6 +8576,88 @@ func (ec *executionContext) fieldContext_PlateauDatasetItem_texture(_ context.Co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Texture does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_crs(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_crs(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Crs, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*Crs)
+	fc.Result = res
+	return ec.marshalOCrs2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCrs(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_crs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Crs does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlateauDatasetItem_attributeSet(ctx context.Context, field graphql.CollectedField, obj *PlateauDatasetItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_PlateauDatasetItem_attributeSet(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AttributeSet, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*AttributeSet)
+	fc.Result = res
+	return ec.marshalOAttributeSet2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAttributeSet(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_PlateauDatasetItem_attributeSet(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlateauDatasetItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AttributeSet does not have child fields")
 		},
 	}
 	return fc, nil
@@ -17289,10 +17459,41 @@ func (ec *executionContext) _PlateauDataset(ctx context.Context, sel ast.Selecti
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "items":
-			out.Values[i] = ec._PlateauDataset_items(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PlateauDataset_items(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "ar":
 			out.Values[i] = ec._PlateauDataset_ar(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -17513,6 +17714,10 @@ func (ec *executionContext) _PlateauDatasetItem(ctx context.Context, sel ast.Sel
 			out.Values[i] = ec._PlateauDatasetItem_lodEx(ctx, field, obj)
 		case "texture":
 			out.Values[i] = ec._PlateauDatasetItem_texture(ctx, field, obj)
+		case "crs":
+			out.Values[i] = ec._PlateauDatasetItem_crs(ctx, field, obj)
+		case "attributeSet":
+			out.Values[i] = ec._PlateauDatasetItem_attributeSet(ctx, field, obj)
 		case "floodingScale":
 			out.Values[i] = ec._PlateauDatasetItem_floodingScale(ctx, field, obj)
 		case "floodingScaleSuffix":
@@ -20927,6 +21132,22 @@ func (ec *executionContext) unmarshalOAreasInput2ᚖgithubᚗcomᚋeukaryaᚑinc
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalOAttributeSet2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAttributeSet(ctx context.Context, v any) (*AttributeSet, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(AttributeSet)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAttributeSet2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐAttributeSet(ctx context.Context, sel ast.SelectionSet, v *AttributeSet) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -20977,6 +21198,22 @@ func (ec *executionContext) unmarshalOCityGMLDatasetsInput2ᚖgithubᚗcomᚋeuk
 	}
 	res, err := ec.unmarshalInputCityGMLDatasetsInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOCrs2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCrs(ctx context.Context, v any) (*Crs, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(Crs)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOCrs2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐCrs(ctx context.Context, sel ast.SelectionSet, v *Crs) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalODatasetFormat2ᚖgithubᚗcomᚋeukaryaᚑincᚋPLATEAUᚑVIEWᚋserverᚋdatacatalogᚋplateauapiᚐDatasetFormat(ctx context.Context, v any) (*DatasetFormat, error) {
