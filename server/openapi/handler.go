@@ -21,7 +21,11 @@ const docsHTML = `<!doctype html>
 </head>
 <body>
   <script id="api-reference" data-url="/openapi.yml"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js"
+    integrity="sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH"
+    crossorigin="anonymous"
+  ></script>
 </body>
 </html>`
 
