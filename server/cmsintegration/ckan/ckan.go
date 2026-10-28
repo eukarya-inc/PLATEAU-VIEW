@@ -506,7 +506,7 @@ func (c *Ckan) sendOnce(
 	if res.StatusCode != 200 {
 		var msg any = b
 		var eres Response[any]
-		if err := json.Unmarshal(b, &eres); err == nil && eres.Error.Message != "" {
+		if err := json.Unmarshal(b, &eres); err == nil && eres.Error != nil && eres.Error.Message != "" {
 			msg = eres.Error.Message
 		}
 

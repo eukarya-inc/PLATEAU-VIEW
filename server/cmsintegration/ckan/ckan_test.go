@@ -293,6 +293,19 @@ func TestCkan_Retry(t *testing.T) {
 	assert.Equal(t, 2, calls)
 }
 
+func TestCkan_ErrorWithoutErrorObject(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	ckan, err := New("https://www.geospatial.jp/ckan", "TOKEN")
+	assert.NoError(t, err)
+
+	httpmock.RegisterResponder("POST", "https://www.geospatial.jp/ckan/api/3/action/resource_create",
+		httpmock.NewStringResponder(http.StatusForbidden, `{"success":false}`))
+	_, err = ckan.CreateResource(context.Background(), Resource{PackageID: "xxx", Name: "name"})
+	assert.ErrorContains(t, err, "status code 403")
+}
+
 func TestCkan2(t *testing.T) {
 	url := ""
 	token := ""
