@@ -262,14 +262,29 @@ struct TerrainCacheKey<'a> {
     size: Option<u32>,
 }
 
+/// Longest `{dem_slug}/{dem_version}` kept verbatim in a cache key.
+///
+/// A composite's slug and version list every overlay, so a source with
+/// hundreds of COGs yields a key of tens of KB. R2 (like S3) rejects object
+/// keys over 1024 bytes with `InvalidObjectName`, which silently disabled the
+/// persistent cache for such sources. Past this length the pair is replaced
+/// by its digest. Shorter pairs stay verbatim so existing keys don't move.
+/// The store percent-encodes the key's special characters (up to 3× longer),
+/// so this leaves room for the rest of the key under the 1024-byte limit.
+const MAX_VERBATIM_DEM_KEY_LEN: usize = 256;
+
 impl TerrainCacheKey<'_> {
     fn to_key(&self) -> String {
         let size_str = self.size.map_or_else(String::new, |s| format!("{s}/"));
+        let dem = format!("{}/{}", self.dem_slug, self.dem_version);
+        let dem = if dem.len() > MAX_VERBATIM_DEM_KEY_LEN {
+            format!("dem-digest/{}", digest(&dem))
+        } else {
+            dem
+        };
         format!(
-            "{prefix}/{dem_slug}/{dem_version}/{dem_etag_digest}/{g}/{h}/{size}{z}/{x}/{y}.{ext}",
+            "{prefix}/{dem}/{dem_etag_digest}/{g}/{h}/{size}{z}/{x}/{y}.{ext}",
             prefix = self.prefix,
-            dem_slug = self.dem_slug,
-            dem_version = self.dem_version,
             dem_etag_digest = self.dem_etag_digest,
             g = self.geoid.slug(),
             h = self.heights.slug(),
@@ -1560,6 +1575,49 @@ mod tests {
             size: None,
         }
         .to_key()
+    }
+
+    #[test]
+    fn long_dem_slug_is_digested_to_fit_object_key_limits() {
+        // A composite slug listing hundreds of overlays, like the 380-COG
+        // JGD2024 source whose keys R2 rejected as `InvalidObjectName`.
+        let layers: Vec<String> = (0..380).map(|i| format!("src-dem{i}")).collect();
+        let slug = format!("composite[base:sealevel|{}]", layers.join("|"));
+        let version = layers
+            .iter()
+            .map(|l| format!("{l}:20260508-2230"))
+            .collect::<Vec<_>>()
+            .join("|");
+        let key = |slug: &str, version: &str| {
+            TerrainCacheKey {
+                prefix: "terrain/v6",
+                dem_slug: slug,
+                dem_version: version,
+                dem_etag_digest: "abc",
+                geoid: GeoidModel::Jpgeo2024Hrefconv,
+                heights: HeightMode::Ellipsoidal,
+                z: 17,
+                x: 231571,
+                y: 90858,
+                ext: "terrain",
+                size: None,
+            }
+            .to_key()
+        };
+
+        let long = key(&slug, &version);
+        // Worst case every byte is percent-encoded by the object store.
+        assert!(long.len() * 3 <= 1024, "{} bytes: {long}", long.len());
+        assert!(long.contains("/dem-digest/"), "{long}");
+        // Any change to the slug or version still moves the key.
+        assert_ne!(long, key(&slug, &format!("{version}|x")));
+        assert_ne!(long, key(&format!("{slug}x"), &version));
+
+        // Short slugs keep their existing, readable keys.
+        assert_eq!(
+            key("dem", "v1"),
+            "terrain/v6/dem/v1/abc/jpgeo2024-hrefconv/ellipsoidal/17/231571/90858.terrain"
+        );
     }
 
     /// The three modes must never be able to serve each other's tiles, in the
