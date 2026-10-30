@@ -78,6 +78,9 @@ func initEcho(ctx context.Context, cfg *ServerConfig) *echo.Echo {
 
 	e.Use(echo.WrapMiddleware(wrapHandler))
 	e.Use(attachOpMiddleware(cfg))
+	// Access audit runs after auth/op resolution so it can attribute each
+	// request to a specific user (sub / email / user id) for reporting.
+	e.Use(accessAuditMiddleware(cfg.Config.AccessAudit))
 
 	// enable pprof
 	if e.Debug {
