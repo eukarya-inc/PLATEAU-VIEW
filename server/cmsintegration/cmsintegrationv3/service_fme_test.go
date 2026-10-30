@@ -901,33 +901,30 @@ func TestReceiveResultFromFME(t *testing.T) {
 
 	t.Run("failed to upload asset", func(t *testing.T) {
 		c.Reset()
+		var statuses [][]*cms.Field
+		var comments []string
 		c.MockGetItem = func(ctx context.Context, id string, asset bool) (*cms.Item, error) {
 			assert.Equal(t, id, "itemID")
 			return &cms.Item{
 				ID: "itemID",
 			}, nil
 		}
-		var updatedMetadata []*cms.Field
 		c.MockUpdateItem = func(ctx context.Context, id string, fields []*cms.Field, metadataFields []*cms.Field) (*cms.Item, error) {
 			assert.Equal(t, id, "itemID")
 			assert.Nil(t, fields)
-			updatedMetadata = metadataFields
+			statuses = append(statuses, metadataFields)
 			return nil, nil
 		}
-		var comment string
-		c.MockCommentToItem = func(ctx context.Context, id, content string) error {
-			assert.Equal(t, "itemID", id)
-			comment = content
+		c.MockCommentToItem = func(ctx context.Context, id string, comment string) error {
+			comments = append(comments, comment)
 			return nil
 		}
 		c.MockUploadAsset = func(ctx context.Context, projectID, url string) (string, error) {
 			return "", fmt.Errorf("ERR!")
 		}
 		err := receiveResultFromFME(ctx, s, conf, *res)
-		assert.NoError(t, err)
-
-		// the item must not be left running
-		assert.Equal(t, []*cms.Field{
+		assert.ErrorContains(t, err, "ERR!")
+		assert.Equal(t, [][]*cms.Field{{
 			{
 				Key:   "conv_status",
 				Type:  "tag",
@@ -938,8 +935,9 @@ func TestReceiveResultFromFME(t *testing.T) {
 				Type:  "tag",
 				Value: string(cmsintegrationcommon.ConvertionStatusError),
 			},
-		}, updatedMetadata)
-		assert.Contains(t, comment, "ERR!")
+		}}, statuses)
+		assert.Len(t, comments, 1)
+		assert.Contains(t, comments[0], "ERR!")
 	})
 }
 

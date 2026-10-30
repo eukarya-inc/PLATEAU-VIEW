@@ -81,7 +81,16 @@ func TestParseSetupCSV(t *testing.T) {
 			err: fmt.Errorf("invalid city codes:\n" +
 				"line 2: 東京都 東村山市: city code 13201 is 八王子市\n" +
 				"line 4: 東京都 八王子市: unknown city code 99999\n" +
-				"line 5: 神奈川県 八王子市: city code 13201 is 八王子市"),
+				"line 5: 神奈川県 八王子市: city code 13201 is 八王子市\n" +
+				"line 5: duplicate city code 13201 (first at line 2)"),
+		},
+		{
+			name: "duplicate city codes",
+			csvData: `city_code,city,city_en,pref,Feature1
+02321,鰺ヶ沢町,ajigasawa-machi,青森県,
+2321,鰺ヶ沢町,ajigasawa-machi,青森県,`,
+			err: fmt.Errorf("invalid city codes:\n" +
+				"line 3: duplicate city code 02321 (first at line 2)"),
 		},
 		{
 			name:             "empty csv",

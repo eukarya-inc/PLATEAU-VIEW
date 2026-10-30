@@ -11,20 +11,38 @@
 //! an HTTP round-trip. Overlays without bounds (XYZ DEMs without explicit
 //! `bounds` config) are always queried.
 //!
-//! On per-overlay fetch error, the overlay is skipped and a `failed:{slug}`
-//! marker is appended to the etag fragment so the served bytes remain
-//! consistent with their advertised cache key (and a recovered overlay
-//! flips the cache key back to its happy path automatically).
+//! An overlay with no coverage for a tile (`NotFound`/`OutOfRange`) is
+//! skipped and a `nodata:{slug}` marker is appended to the etag fragment so
+//! the served bytes remain consistent with their advertised cache key. Any
+//! other overlay fetch error fails the tile rather than serving the base.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use rstar::{AABB, RTree, RTreeObject};
 
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions, Upsampled};
 use super::vertical::{DhMemo, SourceCorrection};
 use super::{DEM_RESAMPLE_VERSION, upsample_subregion};
+
+/// How many overlays may be fetched at once for a single tile.
+///
+/// Overlay stacks are generated from R2 and are allowed to hold tens of
+/// thousands of COGs, all of which intersect a low-zoom tile. Fetching them
+/// with an unbounded `join_all` meant one request could hold thousands of
+/// simultaneous range reads and an equal number of `tile_size²` f64 grids —
+/// hundreds of MB, past the container limit. Results are consumed in order as
+/// they arrive, so at most this many grids are ever live.
+const MAX_CONCURRENT_OVERLAY_FETCHES: usize = 16;
+
+/// Hard ceiling on overlays fetched for one tile, after sub-pixel culling.
+///
+/// Culling keeps normal stacks far below this; exceeding it means the config
+/// describes something no single tile request can serve, and failing is
+/// better than spending minutes of upstream reads on it.
+const MAX_OVERLAYS_PER_TILE: usize = 512;
 
 /// One bbox entry in the R*-tree.
 #[derive(Debug, Clone)]
@@ -151,11 +169,24 @@ impl CompositeDemProvider {
 
     /// Pick overlay indices whose bbox intersects the tile bbox, plus all
     /// unbounded overlays. Returns indices in original config order.
-    fn select_overlays(&self, tile: &GeoBounds) -> Vec<usize> {
+    ///
+    /// Overlays whose whole footprint is smaller than one pixel of the
+    /// requested tile are dropped: they could not contribute a visible sample,
+    /// and at low zoom the R*-tree prunes nothing, so without this a world-scale
+    /// tile selects every COG in the stack.
+    fn select_overlays(&self, tile: &GeoBounds, tile_size: u32) -> Vec<usize> {
         let env = AABB::from_corners([tile.west, tile.south], [tile.east, tile.north]);
+        let px_w = (tile.east - tile.west).abs() / tile_size as f64;
+        let px_h = (tile.north - tile.south).abs() / tile_size as f64;
+
         let mut hits: Vec<usize> = self
             .index
             .locate_in_envelope_intersecting(&env)
+            .filter(|e| {
+                let [w, s] = e.bbox.lower();
+                let [n_e, n] = e.bbox.upper();
+                (n_e - w).abs() >= px_w || (n - s).abs() >= px_h
+            })
             .map(|e| e.overlay_idx)
             .chain(self.unbounded.iter().copied())
             .collect();
@@ -197,13 +228,26 @@ impl DemProvider for CompositeDemProvider {
         // 2. Compute the geographic bbox of this Web-Mercator tile for R-tree
         // pruning. (We re-derive the formula here to avoid a circular dep.)
         let tile_bbox = mercator_tile_bbox(z, x, y);
-        let candidates = self.select_overlays(&tile_bbox);
+        let candidates = self.select_overlays(&tile_bbox, tile_size);
         if candidates.is_empty() {
             return Ok(base_tile);
         }
+        if candidates.len() > MAX_OVERLAYS_PER_TILE {
+            tracing::error!(
+                selected = candidates.len(),
+                limit = MAX_OVERLAYS_PER_TILE,
+                z,
+                x,
+                y,
+                "too many overlays intersect this tile"
+            );
+            return Err(DemError::OutOfRange);
+        }
 
-        // 3. Parallel fetch.
-        let futures = candidates.iter().map(|&idx| {
+        // 3. Bounded-concurrency fetch. `buffered` yields in input order, so the
+        //    config paint order is preserved while only a handful of overlay
+        //    grids exist at a time.
+        let mut fetches = stream::iter(candidates.into_iter().map(|idx| {
             let provider = self.overlays[idx].clone();
             async move {
                 // Above the overlay's own max zoom, read the ancestor tile at
@@ -217,8 +261,8 @@ impl DemProvider for CompositeDemProvider {
                     .map(|parent| upsample_from_ancestor(parent, factor, x, y, tile_size));
                 (idx, z - fetch_z, result)
             }
-        });
-        let results = join_all(futures).await;
+        }))
+        .buffered(MAX_CONCURRENT_OVERLAY_FETCHES);
 
         // 4. Paint over in original config order, aggregate etags.
         let mut etag_parts: Vec<String> = Vec::new();
@@ -227,7 +271,7 @@ impl DemProvider for CompositeDemProvider {
         } else {
             etag_parts.push(format!("base:{}:{}", self.base.slug(), self.base.version()));
         }
-        for (idx, zoom_diff, result) in results {
+        while let Some((idx, zoom_diff, result)) = fetches.next().await {
             let provider = &self.overlays[idx];
             match result {
                 Ok(mut overlay) => {
@@ -251,13 +295,23 @@ impl DemProvider for CompositeDemProvider {
                     }
                     etag_parts.push(format!("{}:{}", provider.slug(), etag));
                 }
+                // No coverage here is normal: the layer below stays visible.
+                Err(DemError::NotFound | DemError::OutOfRange) => {
+                    etag_parts.push(format!("nodata:{}", provider.slug()));
+                }
+                // A real fetch failure must not be papered over. Painting only
+                // the surviving overlays would publish the bare base — with the
+                // sea-level base that is flat 0 m ground — as a cacheable 200,
+                // so the wrong terrain would be served for the whole cache TTL
+                // with nothing but a warn log to show for it.
                 Err(e) => {
-                    tracing::warn!(
+                    tracing::error!(
                         slug = provider.slug(),
                         error = %e,
-                        "overlay fetch failed; skipping"
+                        z, x, y,
+                        "overlay fetch failed; failing the tile"
                     );
-                    etag_parts.push(format!("failed:{}", provider.slug()));
+                    return Err(e);
                 }
             }
         }
@@ -427,11 +481,21 @@ mod tests {
         bounds: Option<GeoBounds>,
         elevations: Vec<f64>,
     ) -> Arc<dyn DemProvider> {
+        provider_with_max_zoom(slug, bounds, elevations, 18)
+    }
+
+    fn provider_with_max_zoom(
+        slug: &str,
+        bounds: Option<GeoBounds>,
+        elevations: Vec<f64>,
+        max_zoom: u8,
+    ) -> Arc<dyn DemProvider> {
         Arc::new(StubProvider {
             slug: slug.to_string(),
             bounds,
             elevations,
-            fail: false,
+            fail: None,
+            max_zoom,
         })
     }
 
@@ -440,7 +504,18 @@ mod tests {
             slug: slug.to_string(),
             bounds,
             elevations: vec![],
-            fail: true,
+            fail: Some(DemError::Http("stub failure".to_string())),
+            max_zoom: 18,
+        })
+    }
+
+    fn missing(slug: &str, bounds: Option<GeoBounds>) -> Arc<dyn DemProvider> {
+        Arc::new(StubProvider {
+            slug: slug.to_string(),
+            bounds,
+            elevations: vec![],
+            fail: Some(DemError::NotFound),
+            max_zoom: 18,
         })
     }
 
@@ -448,20 +523,30 @@ mod tests {
         slug: String,
         bounds: Option<GeoBounds>,
         elevations: Vec<f64>,
-        fail: bool,
+        fail: Option<DemError>,
+        max_zoom: u8,
     }
 
     #[async_trait]
     impl DemProvider for StubProvider {
         async fn get_tile_elevations(
             &self,
-            _z: u8,
-            _x: u32,
-            _y: u32,
+            z: u8,
+            x: u32,
+            y: u32,
             tile_size: u32,
         ) -> Result<DemTile, DemError> {
-            if self.fail {
-                return Err(DemError::Http("stub failure".to_string()));
+            match &self.fail {
+                Some(DemError::NotFound) => return Err(DemError::NotFound),
+                Some(DemError::Http(m)) => return Err(DemError::Http(m.clone())),
+                Some(_) => return Err(DemError::OutOfRange),
+                None => {}
+            }
+            // Real sources 404 on coordinates that do not exist at the zoom they
+            // are asked for, which is how a mismatched x/y shows up.
+            let span = 1u32 << z;
+            if x >= span || y >= span {
+                return Err(DemError::NotFound);
             }
             let n = (tile_size * tile_size) as usize;
             let mut e = self.elevations.clone();
@@ -476,7 +561,7 @@ mod tests {
             256
         }
         fn max_zoom(&self) -> u8 {
-            18
+            self.max_zoom
         }
         fn version(&self) -> &str {
             "v1"
@@ -765,13 +850,64 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_overlay_marked_in_etag() {
+    async fn overlay_fetch_error_fails_the_tile() {
+        // Falling back to the base would serve flat sea-level ground as a
+        // cacheable 200.
         let base = provider("base", None, vec![0.0; 4]);
         let bad = failing("bad", None);
         let comp = build(base, vec![bad]).await;
+        assert!(comp.get_tile_elevations(0, 0, 0, 2).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn overlay_without_coverage_is_skipped() {
+        let base = provider("base", None, vec![0.0; 4]);
+        let gap = missing("gap", None);
+        let comp = build(base, vec![gap]).await;
         let tile = comp.get_tile_elevations(0, 0, 0, 2).await.unwrap();
-        assert!(tile.etag.unwrap().contains("failed:bad"));
-        // Base still rendered.
+        assert!(tile.etag.unwrap().contains("nodata:gap"));
+        assert_eq!(tile.elevations, vec![0.0; 4]);
+    }
+
+    #[tokio::test]
+    async fn overlay_above_its_max_zoom_is_upsampled_not_dropped() {
+        // z=18 tile over Tokyo against an overlay that tops out at z=17. Asking
+        // the overlay for (17, x@18, y@18) addresses a tile that cannot exist,
+        // so before the fix the overlay was dropped and the base showed through.
+        let base = provider("base", None, vec![0.0; 256]);
+        let shallow = provider_with_max_zoom("shallow", None, vec![100.0; 256], 17);
+        let comp = build(base, vec![shallow]).await;
+        let tile = comp
+            .get_tile_elevations(18, 232833, 103201, 16)
+            .await
+            .unwrap();
+
+        // Bilinear upsampling leaves NaN on the far edge, so check the bulk.
+        let painted = tile
+            .elevations
+            .iter()
+            .filter(|h| (**h - 100.0).abs() < 1e-9)
+            .count();
+        assert!(
+            painted >= tile.elevations.len() / 2,
+            "overlay should still paint above its max zoom, painted {painted}/{}",
+            tile.elevations.len()
+        );
+        assert!(!tile.etag.unwrap().contains("nodata:shallow"));
+    }
+
+    #[tokio::test]
+    async fn subpixel_overlays_are_culled_at_low_zoom() {
+        let base = provider("base", None, vec![0.0; 4]);
+        // ~0.001° footprint against a z=0 tile whose pixels span 180°.
+        let speck = provider(
+            "speck",
+            Some(GeoBounds::new(139.000, 35.000, 139.001, 35.001)),
+            vec![100.0; 4],
+        );
+        let comp = build(base, vec![speck]).await;
+        let tile = comp.get_tile_elevations(0, 0, 0, 2).await.unwrap();
+        assert!(!tile.etag.unwrap().contains("speck"));
         assert_eq!(tile.elevations, vec![0.0; 4]);
     }
 

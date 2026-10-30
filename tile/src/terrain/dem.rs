@@ -114,7 +114,7 @@ pub struct PixelPositions {
     pub x: AxisPositions,
     pub y: AxisPositions,
     /// Set when the tile was bilinear-upsampled from an ancestor (see
-    /// `CompositeDemProvider::fetch_base_upsampled`): the axes above then
+    /// `composite::fetch_upsampled`): the axes above then
     /// describe the *ancestor's* grid and this records how index `i` of the
     /// served tile maps onto it.
     pub upsampled: Option<Upsampled>,

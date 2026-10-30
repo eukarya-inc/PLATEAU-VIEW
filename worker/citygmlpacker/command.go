@@ -95,8 +95,11 @@ func Run(conf Config) (err error) {
 			Update(bgctx, storage.ObjectAttrsToUpdate{Metadata: metadata})
 
 		if err != nil {
+			// Losing the precondition race means another worker already claimed
+			// this object, so bail out without marking it failed. Any other
+			// error is a real failure and must be reported.
 			var gErr *googleapi.Error
-			if !errors.As(err, &gErr) || gErr.Code != http.StatusPreconditionFailed {
+			if errors.As(err, &gErr) && gErr.Code == http.StatusPreconditionFailed {
 				log.Printf("SKIPPED: someone else is processing")
 				return nil
 			}

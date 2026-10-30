@@ -137,14 +137,16 @@ resource "aws_iam_role_policy" "plateauview_api_instance" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Only the service's own secrets: a wildcard let one compromised service
+        # read every other service's DB URI and tokens. The API uses no S3 or SNS.
         Effect = "Allow"
         Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "sns:Publish",
           "ssm:GetParameters"
         ]
-        Resource = "*"
+        Resource = concat(
+          [for p in aws_ssm_parameter.plateauview_env_secret_random : p.arn],
+          [for p in aws_ssm_parameter.plateauview_env_secret_empty : p.arn],
+        )
       },
     ]
   })

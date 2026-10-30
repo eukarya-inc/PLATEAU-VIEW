@@ -116,6 +116,24 @@ func fetchCSV(ctx context.Context, url, prefix string) (records [][]string, _ er
 func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles {
 	res := make(CityGMLFiles)
 
+	// Index every "<...>_" prefix of each .gml basename once, so matching a row is a
+	// map lookup instead of a scan over all URLs. The first URL wins, as with lo.Find.
+	gmlByPrefix := map[string]*url.URL{}
+	for _, u := range gmlURLs {
+		base := path.Base(u.Path)
+		if path.Ext(base) != ".gml" {
+			continue
+		}
+		for i, r := range base {
+			if r != '_' {
+				continue
+			}
+			if _, ok := gmlByPrefix[base[:i+1]]; !ok {
+				gmlByPrefix[base[:i+1]] = u
+			}
+		}
+	}
+
 	for _, record := range data {
 		if len(record) < 3 || record[0] == "" || record[1] == "" {
 			continue
@@ -165,10 +183,7 @@ func csvToCityGMLFilesResponse(data [][]string, gmlURLs []*url.URL) CityGMLFiles
 			// compat for datacatalogv2
 			prefix := fmt.Sprintf("%s_%s_", meshCode, featureType)
 
-			u, ok := lo.Find(gmlURLs, func(u *url.URL) bool {
-				return strings.HasPrefix(path.Base(u.Path), prefix) && path.Ext(u.Path) == ".gml"
-			})
-			if ok {
+			if u, ok := gmlByPrefix[prefix]; ok {
 				citygmlURL = u.String()
 			}
 			// warning = append(warning, fmt.Sprintf("unmatched:type=%s,code=%s,path=%s", ty, code, f))

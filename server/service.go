@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
@@ -218,6 +219,12 @@ func Embed(conf *Config) (*Service, error) {
 }
 
 func CityGML(conf *Config) (*Service, error) {
+	// validateCityGMLURL rejects every URL when the domain is empty, so fail the
+	// boot instead of serving 503s from every CityGML endpoint.
+	if conf.CityGML_Domain == "" {
+		return nil, errors.New("REEARTH_PLATEAUVIEW_CITYGML_DOMAIN is required")
+	}
+
 	return &Service{
 		Name: "citygml",
 		Echo: func(g *echo.Group) error {
