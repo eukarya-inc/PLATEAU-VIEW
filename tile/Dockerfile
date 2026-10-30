@@ -35,14 +35,21 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --default-toolchain 1.92.0
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Cache-friendly: deps first.
+# Cache-friendly: deps first. `tile/` is a Cargo workspace (the server plus
+# `crates/terrain-core`), so every member manifest must be present for the
+# dependency build; stub sources stand in for the real ones.
 COPY Cargo.toml Cargo.lock* ./
+COPY crates/terrain-core/Cargo.toml ./crates/terrain-core/Cargo.toml
 RUN mkdir src && echo "fn main() {}" > src/main.rs \
-    && cargo build --release --features maplibre \
-    && rm -rf src
+    && mkdir -p crates/terrain-core/src crates/terrain-core/examples \
+    && touch crates/terrain-core/src/lib.rs crates/terrain-core/examples/wasm_size.rs \
+    && cargo build --release -p tile --features maplibre \
+    && rm -rf src crates
 
+COPY crates ./crates
 COPY src ./src
-RUN touch src/main.rs && cargo build --release --features maplibre
+RUN touch src/main.rs crates/terrain-core/src/lib.rs \
+    && cargo build --release -p tile --features maplibre
 
 # =============================================================================
 # Runtime — Mesa lavapipe for headless software Vulkan
