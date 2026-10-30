@@ -106,30 +106,35 @@ func CityItemFrom(item *cms.Item, featureTypes []string) (i *CityItem) {
 }
 
 type CMSDataItem struct {
-	ID        string           `json:"id,omitempty" cms:"id"`
-	CityGML   *cms.PublicAsset `json:"citygml,omitempty" cms:"citygml,asset"`
-	Plateau   *cms.PublicAsset `json:"plateau,omitempty" cms:"plateau,asset"`
-	Related   *cms.PublicAsset `json:"related,omitempty" cms:"related,asset"`
-	DescIndex string           `json:"desc_index,omitempty" cms:"desc_index,markdown"`
+	ID      string           `json:"id,omitempty" cms:"id"`
+	CityGML *cms.PublicAsset `json:"citygml,omitempty" cms:"citygml,asset"`
+	Plateau *cms.PublicAsset `json:"plateau,omitempty" cms:"plateau,asset"`
+	// PlateauJGD2024 is the 3D Tiles and MVT zip with the heights in JGD2024. It is made
+	// only when the 3D Tiles have been converted into JGD2024.
+	PlateauJGD2024 *cms.PublicAsset `json:"plateau_jgd2024,omitempty" cms:"plateau_jgd2024,asset"`
+	Related        *cms.PublicAsset `json:"related,omitempty" cms:"related,asset"`
+	DescIndex      string           `json:"desc_index,omitempty" cms:"desc_index,markdown"`
 }
 
 type CMSIndexItem struct {
-	ID              string           `json:"id,omitempty" cms:"id"`
-	Thumbnail       *cms.PublicAsset `json:"thumbnail,omitempty" cms:"thumbnail,asset"`
-	IndexData       *cms.PublicAsset `json:"index_data,omitempty" cms:"index_data,asset"`
-	Desc            string           `json:"desc,omitempty" cms:"desc,markdown"`
-	DescIndex       string           `json:"desc_index,omitempty" cms:"desc_index,markdown"`
-	DescCityGML     string           `json:"desc_citygml,omitempty" cms:"desc_citygml,markdown"`
-	DescPlateau     string           `json:"desc_plateau,omitempty" cms:"desc_plateau,markdown"`
-	DescRelated     string           `json:"desc_related,omitempty" cms:"desc_related,markdown"`
-	Generics        []CMSGenericItem `json:"items,omitempty" cms:"generic,group"`
-	Region          string           `json:"region,omitempty" cms:"region,text"`
-	Author          string           `json:"author,omitempty" cms:"author,text"`
-	AuthorEmail     string           `json:"author_email,omitempty" cms:"author_email,text"`
-	Maintainer      string           `json:"maintainer,omitempty" cms:"maintainer,text"`
-	MaintainerEmail string           `json:"maintainer_email,omitempty" cms:"maintainer_email,text"`
-	Quality         string           `json:"quality,omitempty" cms:"quality,text"`
-	IndexMap        *cms.PublicAsset `json:"index_map,omitempty" cms:"index_map,asset"`
+	ID          string           `json:"id,omitempty" cms:"id"`
+	Thumbnail   *cms.PublicAsset `json:"thumbnail,omitempty" cms:"thumbnail,asset"`
+	IndexData   *cms.PublicAsset `json:"index_data,omitempty" cms:"index_data,asset"`
+	Desc        string           `json:"desc,omitempty" cms:"desc,markdown"`
+	DescIndex   string           `json:"desc_index,omitempty" cms:"desc_index,markdown"`
+	DescCityGML string           `json:"desc_citygml,omitempty" cms:"desc_citygml,markdown"`
+	DescPlateau string           `json:"desc_plateau,omitempty" cms:"desc_plateau,markdown"`
+	// DescPlateauJGD2024 is the description of the JGD2024 zip. DescPlateau is used when it is empty.
+	DescPlateauJGD2024 string           `json:"desc_plateau_jgd2024,omitempty" cms:"desc_plateau_jgd2024,markdown"`
+	DescRelated        string           `json:"desc_related,omitempty" cms:"desc_related,markdown"`
+	Generics           []CMSGenericItem `json:"items,omitempty" cms:"generic,group"`
+	Region             string           `json:"region,omitempty" cms:"region,text"`
+	Author             string           `json:"author,omitempty" cms:"author,text"`
+	AuthorEmail        string           `json:"author_email,omitempty" cms:"author_email,text"`
+	Maintainer         string           `json:"maintainer,omitempty" cms:"maintainer,text"`
+	MaintainerEmail    string           `json:"maintainer_email,omitempty" cms:"maintainer_email,text"`
+	Quality            string           `json:"quality,omitempty" cms:"quality,text"`
+	IndexMap           *cms.PublicAsset `json:"index_map,omitempty" cms:"index_map,asset"`
 }
 
 type CMSGenericItem struct {

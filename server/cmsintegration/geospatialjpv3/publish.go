@@ -115,6 +115,21 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 		}
 	}
 
+	if seed.PlateauJGD2024 != "" {
+		log.Debugfc(ctx, "geospatialjpv3: plateau (JGD2024): %s", seed.PlateauJGD2024)
+		r, err := h.createOrUpdateResource(ctx, pkg, ResourceInfo{
+			Name:        plateauJGD2024ResourceName(seed.V),
+			URL:         seed.PlateauJGD2024,
+			Description: seed.PlateauJGD2024Description,
+		})
+		if err != nil {
+			log.Errorfc(ctx, "geospatialjpv3: %s: %v", errMsgResourceCreate3DTilesJGD2024Failed, err)
+			resourceErrors = append(resourceErrors, fmt.Sprintf("3D Tiles, MVT（JGD2024）: %v", err))
+		} else {
+			resources = append(resources, r)
+		}
+	}
+
 	if seed.Related != "" {
 		log.Debugfc(ctx, "geospatialjpv3: related: %s", seed.Related)
 		r, err := h.createOrUpdateResource(ctx, pkg, ResourceInfo{
@@ -197,6 +212,12 @@ func (h *handler) Publish(ctx context.Context, cityItem *CityItem) (err error) {
 	}
 
 	return nil
+}
+
+// plateauJGD2024ResourceName returns the name of the resource of the JGD2024 zip. It ends with
+// the version like the other resources.
+func plateauJGD2024ResourceName(v int) string {
+	return fmt.Sprintf("3D Tiles, MVT（JGD2024）（v%d）", v)
 }
 
 func (h *handler) packageURL(pkg *ckan.Package) string {

@@ -10,40 +10,45 @@ import (
 	"github.com/k0kubun/pp/v3"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
+	"github.com/samber/lo"
 	"github.com/vincent-petithory/dataurl"
 )
 
 type Seed struct {
-	CityGML              string
-	Plateau              string
-	Related              string
-	CityGMLSize          uint64
-	PlateauSize          uint64
-	RelatedSize          uint64
-	Desc                 string
-	Index                string
-	IndexURL             string
-	CityGMLDescription   string
-	PlateauDescription   string
-	RelatedDescription   string
-	Area                 string
-	ThumbnailURL         string `pp:"-"`
-	IndexMapURL          string
-	Author               string
-	AuthorEmail          string
-	Maintainer           string
-	MaintainerEmail      string
-	Quality              string
-	SpecVersion          string
-	V                    int
-	Year                 int
-	Generics             []CMSGenericItem
-	GspatialjpDataItemID string
-	Org                  string
+	CityGML            string
+	Plateau            string
+	PlateauJGD2024     string
+	Related            string
+	CityGMLSize        uint64
+	PlateauSize        uint64
+	PlateauJGD2024Size uint64
+	RelatedSize        uint64
+	Desc               string
+	Index              string
+	IndexURL           string
+	CityGMLDescription string
+	PlateauDescription string
+	// PlateauJGD2024Description is the description of the JGD2024 zip
+	PlateauJGD2024Description string
+	RelatedDescription        string
+	Area                      string
+	ThumbnailURL              string `pp:"-"`
+	IndexMapURL               string
+	Author                    string
+	AuthorEmail               string
+	Maintainer                string
+	MaintainerEmail           string
+	Quality                   string
+	SpecVersion               string
+	V                         int
+	Year                      int
+	Generics                  []CMSGenericItem
+	GspatialjpDataItemID      string
+	Org                       string
 }
 
 func (s Seed) Valid() bool {
-	return s.CityGML != "" || s.Plateau != "" || s.Related != ""
+	return s.CityGML != "" || s.Plateau != "" || s.PlateauJGD2024 != "" || s.Related != ""
 }
 
 func getSeed(ctx context.Context, c cms.Interface, cityItem *CityItem, org string) (seed Seed, err error) {
@@ -86,6 +91,10 @@ func getSeed(ctx context.Context, c cms.Interface, cityItem *CityItem, org strin
 		seed.Plateau = dataItem.Plateau.URL
 		seed.PlateauSize = dataItem.Plateau.TotalSize
 	}
+	if dataItem.PlateauJGD2024 != nil {
+		seed.PlateauJGD2024 = dataItem.PlateauJGD2024.URL
+		seed.PlateauJGD2024Size = dataItem.PlateauJGD2024.TotalSize
+	}
 	if dataItem.Related != nil {
 		seed.Related = dataItem.Related.URL
 		seed.RelatedSize = dataItem.Related.TotalSize
@@ -110,6 +119,7 @@ func getSeed(ctx context.Context, c cms.Interface, cityItem *CityItem, org strin
 
 	seed.CityGMLDescription = replaceSize(indexItem.DescCityGML, seed.CityGMLSize)
 	seed.PlateauDescription = replaceSize(indexItem.DescPlateau, seed.PlateauSize)
+	seed.PlateauJGD2024Description = replaceSize(lo.CoalesceOrEmpty(indexItem.DescPlateauJGD2024, indexItem.DescPlateau), seed.PlateauJGD2024Size)
 	seed.RelatedDescription = replaceSize(indexItem.DescRelated, seed.RelatedSize)
 	seed.Area = indexItem.Region
 	if seed.Area == "" && cityItem != nil && cityItem.Prefecture != "" && cityItem.CityName != "" {
