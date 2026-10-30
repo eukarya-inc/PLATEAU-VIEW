@@ -73,7 +73,8 @@ ENV REEARTH_TITLE=
 ENV REEARTH_UNSAFE_PLUGIN_URLS=[]
 
 RUN --mount=type=cache,target=/var/cache/apk \
-    apk add --no-cache jq
+    apk upgrade --no-cache \
+    && apk add --no-cache jq
 
 COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html
 COPY --chown=nginx:nginx web/docker/nginx.conf.template /etc/nginx/templates/nginx.conf.template
