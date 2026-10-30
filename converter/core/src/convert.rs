@@ -15,6 +15,8 @@ use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules};
 use crate::report::{FileReport, Report, Warnings};
+use crate::schema::ChildOrder;
+use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
@@ -31,7 +33,7 @@ pub struct Options {
     pub feature_types: Vec<String>,
     /// Mint `gml:id` for geometries that lack one, which GML 3.2 requires.
     pub generate_gml_ids: bool,
-    /// Sort children into the order the 3.0 content models declare.
+    /// Sort children into the order the target schemas declare.
     pub reorder: bool,
     pub indent: Indent,
     /// Copy `codelists/`, `schemas/` and friends alongside the converted `udx/`.
@@ -41,6 +43,8 @@ pub struct Options {
     /// Where LOD4 goes when the data does not say. `None` takes the profile's
     /// `[lod4] fallback`.
     pub lod4_fallback: Option<Lod4Fallback>,
+    /// Extrude transportation LOD1 spaces into solids. `None` writes no solid.
+    pub clearance: Option<Clearance>,
 }
 
 impl Default for Options {
@@ -53,6 +57,7 @@ impl Default for Options {
             copy_support_files: true,
             parallel: true,
             lod4_fallback: None,
+            clearance: None,
         }
     }
 }
@@ -64,7 +69,9 @@ pub struct Converter {
     app: AppearanceRewrite,
     lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
+    tran: TranRewrite,
     iur: IurRewrite,
+    order: ChildOrder,
     gml_ns: String,
     options: Options,
 }
@@ -76,7 +83,13 @@ impl Converter {
         let app = AppearanceRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
+        let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules)?;
+        let order = if options.reorder {
+            ChildOrder::target()?
+        } else {
+            ChildOrder::default()
+        };
         let gml_ns = rules.output_ns("gml")?.to_owned();
         Ok(Converter {
             rules,
@@ -85,7 +98,9 @@ impl Converter {
             app,
             lod4,
             bldg,
+            tran,
             iur,
+            order,
             gml_ns,
             options,
         })
@@ -132,6 +147,7 @@ impl Converter {
         for result in results {
             report.absorb(&result?);
         }
+        self.tran.report_unused_clearance(&mut report.warnings);
 
         for feature_type in &requested {
             for input in dataset.companion_files(feature_type)? {
@@ -273,9 +289,9 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
-    /// `app`, `lod4`, `bldg`, `iur`. Generated `gml:id` values are seeded from
-    /// the member's own `gml:id`, so they are unique across a dataset and
-    /// stable across runs.
+    /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are
+    /// seeded from the member's own `gml:id`, so they are unique across a
+    /// dataset and stable across runs.
     fn convert_member(&self, element: Element, report: &mut FileReport) -> Option<Element> {
         let mut element = transform::rename(&self.rules, element)?;
 
@@ -283,18 +299,21 @@ impl Converter {
             .unwrap_or_else(|| format!("{}_{}", element.name.local, report.features + 1));
         let mut ids = IdGen::new(&seed);
 
+        self.tran.raise_envelope(&mut element, &mut report.warnings);
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
         self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
+        self.tran
+            .apply(&mut element, &mut ids, &mut report.warnings);
         self.iur.apply(&mut element, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
         }
         if self.options.reorder {
-            transform::reorder(&self.rules, &mut element);
+            transform::reorder(&self.order, &mut element);
         }
 
         if !element.name.in_ns(&self.gml_ns) {

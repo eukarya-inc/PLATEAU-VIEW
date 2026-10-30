@@ -1,13 +1,13 @@
 //! The declarative half of the mapping, loaded from a TOML profile.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use indexmap::IndexMap;
 use serde::Deserialize;
 use toml::{Table, Value};
 
 use crate::error::{Error, Result};
+use crate::tran::Clearance;
 use crate::xml::{Name, PrefixMap};
 
 /// A conversion profile exactly as it appears on disk.
@@ -41,8 +41,6 @@ pub struct Profile {
     pub namespace_map: IndexMap<String, String>,
     #[serde(default)]
     pub element: Vec<ElementRule>,
-    #[serde(default)]
-    pub order_group: Vec<OrderGroup>,
     /// i-UR class to the CityGML property that carries it. See
     /// [`Rules::ade_hook`].
     #[serde(default)]
@@ -59,6 +57,9 @@ pub struct Profile {
     /// The child a data quality attribute must carry. See [`QualityPolicy`].
     #[serde(default)]
     pub quality: QualityPolicy,
+    /// The values the transportation rewrite supplies. See [`TranPolicy`].
+    #[serde(default)]
+    pub tran: TranPolicy,
 }
 
 impl Profile {
@@ -196,11 +197,10 @@ fn merge(
 }
 
 /// What an array-of-tables row rules on, so that a row two files both write can
-/// be named. An `[[order_group]]` claims every type it orders.
+/// be named.
 fn row_subjects(path: &str, row: &Value) -> Vec<String> {
     let field = match path {
         "element" => "from",
-        "order_group" => "types",
         _ => return Vec::new(),
     };
     match row.get(field) {
@@ -282,13 +282,6 @@ pub struct ElementRule {
     /// Remove the element, and its subtree, instead of renaming it.
     #[serde(default)]
     pub drop: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OrderGroup {
-    pub types: Vec<String>,
-    pub children: Vec<String>,
 }
 
 /// The parts of a `con:Height` that CityGML 2.0 does not record, which the
@@ -405,6 +398,10 @@ pub struct CodelistsPolicy {
     /// Codes the published lists no longer define, per file. The values are
     /// kept and reported rather than mapped.
     pub kept_codes: IndexMap<String, Vec<String>>,
+    /// [`retarget`](Self::retarget) rows that apply only under one feature
+    /// type, keyed by the type's `prefix:local` name. Checked before the
+    /// global rows.
+    pub retarget_by_type: IndexMap<String, IndexMap<String, String>>,
 }
 
 impl CodelistsPolicy {
@@ -455,6 +452,49 @@ pub struct QualityRules {
     pub after: Vec<Name>,
 }
 
+/// The values the transportation rewrite has to supply, per feature type.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct TranPolicy {
+    /// The code list the minted full-width function cites.
+    pub function_code_space: Option<String>,
+    /// The `tran:function` code of the minted full-width area.
+    pub full_width_function: IndexMap<String, String>,
+    /// The area function that makes its traffic space a `lane`.
+    pub lane_function: Option<String>,
+    /// The `lodType` codes that make every traffic space a `lane`, per code
+    /// list.
+    pub lane_lod_types: IndexMap<String, Vec<String>>,
+    /// The `lodType` values to rewrite, per code list. A value with no entry
+    /// is dropped.
+    pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+    /// The height in metres LOD1 spaces are extruded by when the run names
+    /// none itself.
+    pub clearance: IndexMap<String, f64>,
+    pub clearance_lod_type: IndexMap<String, ClearanceLodType>,
+}
+
+/// The `lodType` codes an extruded feature gains, `traffic` when only traffic
+/// spaces were extruded and `auxiliary` when auxiliary spaces were too.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClearanceLodType {
+    pub traffic: String,
+    pub auxiliary: String,
+}
+
+/// [`TranPolicy`] with its feature types resolved.
+#[derive(Debug, Clone, Default)]
+pub struct TranRules {
+    pub function_code_space: Option<String>,
+    pub full_width_function: HashMap<Name, String>,
+    pub lane_function: Option<String>,
+    pub lane_lod_types: IndexMap<String, Vec<String>>,
+    pub lod_type_map: IndexMap<String, IndexMap<String, String>>,
+    pub clearance: HashMap<Name, f64>,
+    pub clearance_lod_type: HashMap<Name, ClearanceLodType>,
+}
+
 /// A profile with every `prefix:local` resolved to an expanded name, ready to
 /// apply.
 #[derive(Debug, Clone)]
@@ -465,7 +505,6 @@ pub struct Rules {
     namespace_map: HashMap<String, String>,
     /// `None` means "drop this element".
     renames: HashMap<Name, Option<Name>>,
-    order: HashMap<Name, Arc<Vec<Name>>>,
     output_namespaces: IndexMap<String, String>,
     prefixes: PrefixMap,
     schema_location: Option<String>,
@@ -474,6 +513,8 @@ pub struct Rules {
     codelists: CodelistsPolicy,
     ade_hooks: HashMap<Name, Name>,
     quality: QualityRules,
+    retarget_by_type: HashMap<Name, IndexMap<String, String>>,
+    tran: TranRules,
 }
 
 impl Rules {
@@ -516,19 +557,6 @@ impl Rules {
             }
         }
 
-        let mut order = HashMap::new();
-        for group in &profile.order_group {
-            let children: Vec<Name> = group
-                .children
-                .iter()
-                .map(|c| parse_name(c, output))
-                .collect::<Result<_>>()?;
-            let children = Arc::new(children);
-            for ty in &group.types {
-                order.insert(parse_name(ty, output)?, Arc::clone(&children));
-            }
-        }
-
         let quality = QualityRules {
             classes: profile
                 .quality
@@ -561,6 +589,39 @@ impl Rules {
         for (class, hook) in &profile.ade_hooks {
             ade_hooks.insert(parse_name(class, output)?, parse_name(hook, output)?);
         }
+
+        let mut retarget_by_type = HashMap::new();
+        for (ty, rows) in &codelists.retarget_by_type {
+            retarget_by_type.insert(parse_name(ty, output)?, rows.clone());
+        }
+
+        let mut full_width_function = HashMap::new();
+        for (ty, code) in &profile.tran.full_width_function {
+            full_width_function.insert(parse_name(ty, output)?, code.clone());
+        }
+        let mut clearance = HashMap::new();
+        for (ty, height) in &profile.tran.clearance {
+            if !Clearance::valid_height(*height) {
+                return Err(Error::Profile(format!(
+                    "[tran.clearance] gives `{ty}` a height of {height}, which is not \
+                     finite and positive"
+                )));
+            }
+            clearance.insert(parse_name(ty, output)?, *height);
+        }
+        let mut clearance_lod_type = HashMap::new();
+        for (ty, codes) in &profile.tran.clearance_lod_type {
+            clearance_lod_type.insert(parse_name(ty, output)?, codes.clone());
+        }
+        let tran = TranRules {
+            function_code_space: profile.tran.function_code_space.clone(),
+            full_width_function,
+            lane_function: profile.tran.lane_function.clone(),
+            lane_lod_types: profile.tran.lane_lod_types.clone(),
+            lod_type_map: profile.tran.lod_type_map.clone(),
+            clearance,
+            clearance_lod_type,
+        };
 
         let lod4 = Lod4Rules {
             attribute: policy
@@ -618,7 +679,6 @@ impl Rules {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             renames,
-            order,
             output_namespaces,
             prefixes,
             schema_location,
@@ -627,6 +687,8 @@ impl Rules {
             codelists,
             ade_hooks,
             quality,
+            retarget_by_type,
+            tran,
         })
     }
 
@@ -665,11 +727,6 @@ impl Rules {
         }
     }
 
-    /// The required child order for an output type, if the profile declares one.
-    pub fn child_order(&self, name: &Name) -> Option<&[Name]> {
-        self.order.get(name).map(|v| v.as_slice())
-    }
-
     pub fn prefixes(&self) -> &PrefixMap {
         &self.prefixes
     }
@@ -700,6 +757,21 @@ impl Rules {
     /// The child a data quality attribute must carry. See [`QualityPolicy`].
     pub fn quality(&self) -> &QualityRules {
         &self.quality
+    }
+
+    /// The published name for code list `file` when cited under `host`, the
+    /// nearest enclosing feature type. A row for the type wins over a global
+    /// row.
+    pub fn retarget(&self, host: Option<&Name>, file: &str) -> Option<&str> {
+        host.and_then(|h| self.retarget_by_type.get(h))
+            .and_then(|rows| rows.get(file))
+            .or_else(|| self.codelists.retarget.get(file))
+            .map(String::as_str)
+    }
+
+    /// The values the transportation rewrite supplies. See [`TranPolicy`].
+    pub fn tran(&self) -> &TranRules {
+        &self.tran
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.

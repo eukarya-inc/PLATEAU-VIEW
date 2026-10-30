@@ -21,3 +21,12 @@ depend on a server, and the published files are updated in place.
 All five declare `version="4.0.0"`. Replacing them means re-downloading all
 five together, because they import one another by exact namespace, so a partial
 update pairs versions that were never meant to meet.
+
+# Vendored OGC schemas
+
+`ogc/` holds the OGC CityGML 3.0 schemas and the two GML 3.2.1 documents that
+declare the base types every feature extends (`gmlBase.xsd`, `feature.xsd`).
+They are copied unchanged from `http://schemas.opengis.net/`, keeping its
+layout, and compiled into the binary. The converter reads the child order of
+every CityGML 3.0 element from them and from the i-UR 4.0 schemas above. They
+are not written into a converted package, which references them remotely.

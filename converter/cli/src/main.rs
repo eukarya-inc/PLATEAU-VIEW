@@ -8,6 +8,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use plateau_converter_core::convert::{Converter, Options};
 use plateau_converter_core::dataset::{Dataset, Staging};
 use plateau_converter_core::profile::{Lod4Fallback, Rules};
+use plateau_converter_core::tran::Clearance;
 use plateau_converter_core::xml::{self, Indent};
 use plateau_converter_core::{PROFILES, detect, report::Report};
 
@@ -93,6 +94,22 @@ struct ConvertArgs {
     /// reported.
     #[arg(long, value_enum, value_name = "MODE")]
     lod4_fallback: Option<Lod4FallbackArg>,
+
+    /// Extrude every transportation LOD1 space into a solid by the clearance
+    /// gauge (建築限界) height, using the profile's default per feature type.
+    #[arg(long)]
+    clearance: bool,
+
+    /// Clearance height in metres for every feature type, ahead of the
+    /// profile's defaults. Implies --clearance.
+    #[arg(long, value_name = "METRES")]
+    clearance_height: Option<f64>,
+
+    /// CSV of `gml_id,height` rows giving the clearance height of one area
+    /// or of every space of one feature, ahead of --clearance-height. Implies
+    /// --clearance.
+    #[arg(long, value_name = "FILE")]
+    clearance_csv: Option<PathBuf>,
 
     /// Worker threads. 0 uses one per core.
     #[arg(short = 'j', long, default_value_t = 0)]
@@ -214,6 +231,7 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         copy_support_files: !args.no_support_files,
         parallel: true,
         lod4_fallback: args.lod4_fallback.map(Into::into),
+        clearance: clearance(args)?,
     };
 
     let dataset = Dataset::open_with(&args.inputs, &staging(args.staging.as_deref()))
@@ -246,6 +264,30 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         eprintln!("staging kept at: {}", dataset.keep().display());
     }
     Ok(())
+}
+
+/// The clearance extrusion the flags ask for, if any.
+fn clearance(args: &ConvertArgs) -> Result<Option<Clearance>> {
+    if !args.clearance && args.clearance_height.is_none() && args.clearance_csv.is_none() {
+        return Ok(None);
+    }
+    if let Some(height) = args.clearance_height {
+        if !Clearance::valid_height(height) {
+            bail!("--clearance-height must be finite and positive, got {height}");
+        }
+    }
+    let overrides = match &args.clearance_csv {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("reading {}", path.display()))?;
+            Clearance::parse_csv(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?
+        }
+        None => Default::default(),
+    };
+    Ok(Some(Clearance {
+        height: args.clearance_height,
+        overrides,
+    }))
 }
 
 fn inspect(args: &InspectArgs) -> Result<()> {
