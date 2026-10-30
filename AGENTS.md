@@ -66,7 +66,7 @@ yarn dev               # Development mode (port 5001)
 yarn build             # Production build
 yarn test              # Run tests
 yarn lint              # Lint code
-yarn gql               # Generate GraphQL types (geo + plateau)
+yarn gql               # Generate GraphQL types (plateau)
 ```
 
 ### Converter (Rust) - /converter

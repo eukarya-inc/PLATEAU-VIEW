@@ -4,6 +4,7 @@ resource "google_project_iam_member" "plateauview_api" {
   for_each = toset([
     "roles/cloudprofiler.agent",
     "roles/cloudbuild.builds.builder",
+    "roles/datastore.viewer",
     "roles/iam.serviceAccountTokenCreator",
     "roles/run.developer",
     "roles/pubsub.publisher",

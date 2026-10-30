@@ -100,6 +100,7 @@ type Config struct {
 	Flow_Token                         string   `pp:",omitempty"`
 	Tile_URL                           string   `pp:",omitempty"` // If set, redirects /tiles/* to this URL (except config.json and styles)
 	Proxy_ODPT_ConsumerKey             string   `pp:",omitempty"` // ODPT API consumerKey injected by /odpt-proxy/*. Empty disables the endpoint.
+	Estat_FirestoreProject             string   `pp:",omitempty"` // GCP project of the Firestore holding e-Stat areas. Defaults to GOOGLE_CLOUD_PROJECT; empty disables /estat.
 }
 
 func NewConfig() (*Config, error) {
@@ -300,4 +301,11 @@ func (c *Config) Geocoding() *geocoding.HandlerConfig {
 	return &geocoding.HandlerConfig{
 		GSIURL: "", // Use default GSI URL
 	}
+}
+
+func (c *Config) EstatFirestoreProject() string {
+	if c.Estat_FirestoreProject != "" {
+		return c.Estat_FirestoreProject
+	}
+	return c.GOOGLE_CLOUD_PROJECT
 }

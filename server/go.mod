@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	cloud.google.com/go/batch v1.12.2
+	cloud.google.com/go/firestore v1.18.0
 	cloud.google.com/go/storage v1.54.0
 	dario.cat/mergo v1.0.2
 	github.com/99designs/gqlgen v0.17.73
@@ -42,6 +43,7 @@ require (
 	golang.org/x/net v0.47.0
 	golang.org/x/sync v0.19.0
 	google.golang.org/api v0.233.0
+	google.golang.org/grpc v1.72.0
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -169,7 +171,6 @@ require (
 	google.golang.org/genproto v0.0.0-20250512202823-5a2f75b736a9 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250512202823-5a2f75b736a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250512202823-5a2f75b736a9 // indirect
-	google.golang.org/grpc v1.72.0 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	modernc.org/knuth v0.5.5 // indirect
 	modernc.org/token v1.1.0 // indirect

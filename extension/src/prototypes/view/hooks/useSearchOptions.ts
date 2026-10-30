@@ -3,7 +3,8 @@ import { debounce } from "lodash-es";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import invariant from "tiny-invariant";
 
-import { useDatasets, useEstatAreasLazy } from "../../../shared/graphql";
+import { useEstatAreasLazy } from "../../../shared/api/estat";
+import { useDatasets } from "../../../shared/graphql";
 import { Dataset, DatasetsQuery } from "../../../shared/graphql/types/catalog";
 import { TileFeatureIndex } from "../../../shared/plateau/layers";
 import { flyToBBox, inEditor, lookAtTileFeature } from "../../../shared/reearth/utils";
@@ -190,10 +191,10 @@ function useAreaSearchOptions({
     [fetch],
   );
 
-  const [areas, setAreas] = useState(query.data?.estatAreas);
+  const [areas, setAreas] = useState(query.data);
   useEffect(() => {
     if (!query.loading) {
-      setAreas(query.data?.estatAreas);
+      setAreas(query.data);
     }
   }, [query]);
 
@@ -210,11 +211,7 @@ function useAreaSearchOptions({
         .map(area => area.name);
     }
     if (searchTokens.length > 0) {
-      debouncedFetch({
-        variables: {
-          searchTokens,
-        },
-      })?.catch(error => {
+      debouncedFetch(searchTokens)?.catch(error => {
         console.error(error);
       });
     } else {

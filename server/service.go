@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cloud.google.com/go/firestore"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/estat"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/geocoding"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/govpolygon"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/lodstat"
@@ -45,6 +47,7 @@ var services = [](func(*Config) (*Service, error)){
 	DataCatalog,
 	GovPolygon,
 	Geocoding,
+	Estat,
 	Tiles,
 	Embed,
 	CityGML,
@@ -328,6 +331,30 @@ func Geocoding(conf *Config) (*Service, error) {
 		Name: "geocoding",
 		Echo: func(g *echo.Group) error {
 			return geocoding.Echo(g.Group("/geocoding"), conf.Geocoding())
+		},
+	}, nil
+}
+
+func Estat(conf *Config) (*Service, error) {
+	project := conf.EstatFirestoreProject()
+	if project == "" {
+		return nil, nil
+	}
+
+	// Firestore credentials are often unavailable in local development, so a
+	// failure here disables /estat instead of stopping the server.
+	client, err := firestore.NewClient(context.Background(), project)
+	if err != nil {
+		log.Warnf("estat: disabled because Firestore client could not be created: %v", err)
+		return nil, nil
+	}
+
+	f := estat.NewFinder(estat.NewFirestoreStore(client))
+	return &Service{
+		Name: "estat",
+		Echo: func(g *echo.Group) error {
+			estat.Echo(g.Group("/estat"), f)
+			return nil
 		},
 	}, nil
 }

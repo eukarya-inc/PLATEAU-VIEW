@@ -4,7 +4,7 @@ import { type MultiPolygon, type Polygon } from "geojson";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, type FC, useState, useMemo } from "react";
 
-import { useEstatAreaGeometry } from "../../../shared/graphql";
+import { useEstatAreaGeometry } from "../../../shared/api/estat";
 import { HighlightPolygonAppearances, HighlightPolygonLayer } from "../../../shared/reearth/layers";
 
 export interface HighlightAreaOptions {
@@ -68,7 +68,7 @@ const HighlightedArea: FC<{
 
   const theme = useTheme();
 
-  const geometry: Polygon | MultiPolygon = data?.estatAreaGeometry?.geometry;
+  const geometry: Polygon | MultiPolygon | undefined = data?.geometry;
 
   const appearances: HighlightPolygonAppearances = useMemo(
     () => ({

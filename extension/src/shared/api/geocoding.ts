@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { Area } from "../states/address";
 import { usePlateauApiUrl } from "../states/environmentVariables";
@@ -47,4 +47,20 @@ export function useGeocodingLazy(): [
   );
 
   return [fetchAreas, { data, loading }];
+}
+
+export function useGeocoding({
+  longitude,
+  latitude,
+  includeRadii,
+}: {
+  longitude: number;
+  latitude: number;
+  includeRadii?: boolean;
+}): { data: GeocodingResponse | null; loading: boolean } {
+  const [fetchAreas, result] = useGeocodingLazy();
+  useEffect(() => {
+    void fetchAreas({ longitude, latitude, includeRadii });
+  }, [fetchAreas, longitude, latitude, includeRadii]);
+  return result;
 }

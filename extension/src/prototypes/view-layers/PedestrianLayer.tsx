@@ -9,7 +9,7 @@ import {
 import { useCallback, useEffect, type FC } from "react";
 import invariant from "tiny-invariant";
 
-import { useCameraAreas } from "../../shared/graphql";
+import { useGeocoding } from "../../shared/api/geocoding";
 import { XYZ } from "../../shared/reearth/types";
 import { isReEarthAPIv2 } from "../../shared/reearth/utils/reearth";
 import { makeComponentAtomWrapper } from "../../shared/view-layers/component";
@@ -175,7 +175,7 @@ export const PedestrianLayer: FC<LayerProps<typeof PEDESTRIAN_LAYER>> = ({
 
   const setTitle = useSetAtom(titleAtom);
   const setAddress = useSetAtom(addressAtom);
-  const { data: address } = useCameraAreas({
+  const { data: address } = useGeocoding({
     longitude: location.longitude,
     latitude: location.latitude,
   });
@@ -185,10 +185,10 @@ export const PedestrianLayer: FC<LayerProps<typeof PEDESTRIAN_LAYER>> = ({
       invariant(primary != null);
       return {
         primary,
-        secondary: address?.areas?.address,
+        secondary: address?.address,
       };
     });
-    setAddress(address?.areas?.address ?? null);
+    setAddress(address?.address ?? null);
   }, [setTitle, setAddress, address]);
 
   const hidden = useAtomValue(hiddenAtom);

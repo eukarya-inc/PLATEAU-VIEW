@@ -16,7 +16,6 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "gql": "run-p gql:*",
-    "gql:geo": "graphql-codegen --config ./codegen_geo.ts && yarn lint",
     "gql:plateau": "graphql-codegen --config ./codegen_catalog.ts && yarn lint",
     "decode-estat": "node --loader ts-node/esm ./scripts/decode-shift-jis.ts"
   },

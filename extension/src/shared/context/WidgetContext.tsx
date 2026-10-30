@@ -12,7 +12,7 @@ import {
   createTemplateClient,
   templateClient,
 } from "../api/clients";
-import { geoClient, createGeoClient, catalogClient, createCatalogClient } from "../graphql/clients";
+import { catalogClient, createCatalogClient } from "../graphql/clients";
 import { CameraPosition } from "../reearth/types";
 import {
   useCityCode,
@@ -256,12 +256,6 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
 
   // create clients
   useEffect(() => {
-    if (!geoClient && geoUrl) {
-      createGeoClient(geoUrl);
-    }
-  }, [geoUrl]);
-
-  useEffect(() => {
     if (!cityGMLClient && cityGMLUrl) {
       createCityGMLClient(cityGMLUrl);
     }
@@ -345,17 +339,15 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
     }
   }, [finishTime, finishTimeState, setFinishTimeState]);
 
-  if (!plateauApiUrlState || !geoClient || !catalogClient || !geoApiUrlState || !gsiTileURLState) {
+  if (!plateauApiUrlState || !catalogClient || !geoApiUrlState || !gsiTileURLState) {
     return null;
   }
 
   return (
     <ApolloProvider client={catalogClient}>
-      <ApolloProvider client={geoClient}>
-        <ThemeProvider theme={customTheme ?? lightTheme}>
-          <SnackbarProvider maxSnack={1}>{children}</SnackbarProvider>
-        </ThemeProvider>
-      </ApolloProvider>
+      <ThemeProvider theme={customTheme ?? lightTheme}>
+        <SnackbarProvider maxSnack={1}>{children}</SnackbarProvider>
+      </ThemeProvider>
     </ApolloProvider>
   );
 };
