@@ -16,6 +16,26 @@ use terrain_codec::terrain::{TerrainOptions, encode_terrain_from_fn};
 /// 65x65 matches Cesium's heightmap format for consistency.
 pub const MESH_GRID_SIZE: u32 = 65;
 
+/// Cesium's level-0 maximum geometric error for this tiling, in meters —
+/// `TerrainProvider.getEstimatedLevelZeroGeometricErrorForAHeightmap` with
+/// the WGS84 maximum radius, `heightmapTerrainQuality` 0.25, a 65-sample
+/// heightmap and the two level-0 tiles of the geographic scheme. Cesium
+/// halves it per level.
+const LEVEL_ZERO_GEOMETRIC_ERROR: f64 =
+    6_378_137.0 * 2.0 * std::f64::consts::PI * 0.25 / (MESH_GRID_SIZE as f64 * 2.0);
+
+/// Martini error for a tile at zoom `z`: `configured`, capped at the
+/// geometric error Cesium assumes for that level.
+///
+/// Neighbouring tiles are simplified independently, so a shared edge can
+/// step by up to about twice the error. Cesium hides those steps with
+/// skirts that are 5× the level's geometric error deep. A fixed error
+/// outgrows the skirts at high zooms (5 m vs a ~5.9 m skirt at z16 and
+/// ~2.9 m at z17), and the steps show as black cracks between tiles.
+pub fn max_error_for_zoom(configured: f64, z: u8) -> f64 {
+    configured.min(LEVEL_ZERO_GEOMETRIC_ERROR / 2f64.powi(z as i32))
+}
+
 /// Options for generating quantized mesh tiles.
 #[derive(Debug, Clone, Default)]
 pub struct QuantizedMeshOptions {
@@ -215,5 +235,22 @@ mod tests {
         let mesh = DecodedMesh::decode(&gunzip(&data)).expect("decode");
         assert!(mesh.vertices.len() >= 4);
         assert!(mesh.indices.len() >= 6);
+    }
+
+    #[test]
+    fn test_max_error_for_zoom() {
+        // Low zooms keep the configured error.
+        assert_eq!(max_error_for_zoom(5.0, 0), 5.0);
+        assert_eq!(max_error_for_zoom(5.0, 13), 5.0);
+        // From z14 the level's geometric error (Cesium: ~77 km / 2^z) wins.
+        assert!((max_error_for_zoom(5.0, 15) - 2.352).abs() < 0.01);
+        assert!((max_error_for_zoom(5.0, 17) - 0.588).abs() < 0.01);
+        // A seam step of up to 2x the error stays inside the 5x skirt.
+        for z in 0..=18 {
+            let skirt = LEVEL_ZERO_GEOMETRIC_ERROR / 2f64.powi(z) * 5.0;
+            assert!(2.0 * max_error_for_zoom(5.0, z as u8) < skirt, "z{z}");
+        }
+        // A smaller configured error is never raised.
+        assert_eq!(max_error_for_zoom(0.5, 16), 0.5);
     }
 }

@@ -91,7 +91,7 @@ The geoid **model** is a property of the DEM source, not of the request: a model
 Configured via env vars (the config JSON only describes `/tiles/...` overlay sources):
 - `DEM_URL` — base DEM URL. `*.pmtiles` selects the PMTiles backend; supports `https://`, `gs://`, `s3://`, `r2://`, `file://`. Anything else is read as a Mapterhorn-style `{z}/{x}/{y}` template.
 - `DEM_VERSION`, `DEM_MAX_ZOOM`, `DEM_NATIVE_TILE_SIZE`
-- `TERRAIN_TILE_SIZE` (default 256), `TERRAIN_DEFAULT_GEOID` (fallback model for DEM sources that don't declare one; not request-overridable), `TERRAIN_MAX_ZOOM` (default 18; raster endpoints upsample beyond `DEM_MAX_ZOOM`), `TERRAIN_MAX_ERROR`
+- `TERRAIN_TILE_SIZE` (default 256), `TERRAIN_DEFAULT_GEOID` (fallback model for DEM sources that don't declare one; not request-overridable), `TERRAIN_MAX_ZOOM` (default 18; raster endpoints upsample beyond `DEM_MAX_ZOOM`), `TERRAIN_MAX_ERROR` (capped per zoom at Cesium's level geometric error by `mesh_gen::max_error_for_zoom` — a fixed error outgrows the skirts from z16 and shows as cracks)
 - `DEM_ATTRIBUTION` — credit (HTML) for the shared `DEM_URL` base; default Mapterhorn, none for `DEM_URL=sealevel`. See **Attribution** below.
 - `DEM_VERTICAL_DATUM` (`jgd2011` | `jgd2024`) — datum of the shared `DEM_URL` base; unset = unknown. Ignored for `DEM_URL=sealevel`, which is datum-agnostic and never height-corrected. Not needed by sources with `"base": "sealevel"`.
 

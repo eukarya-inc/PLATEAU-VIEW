@@ -56,7 +56,10 @@ use crate::terrain::{
     },
     extract_and_upsample,
     geodetic::{GeodeticBounds, fetch_geodetic_tile_elevations_with_halo, geodetic_tms_bounds},
-    mesh_gen::{NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile, sanitize_height},
+    mesh_gen::{
+        NormalMode, QuantizedMeshOptions, generate_quantized_mesh_tile, max_error_for_zoom,
+        sanitize_height,
+    },
     webmercator::xyz_tile_bounds,
 };
 
@@ -755,7 +758,10 @@ async fn terrain_tile_impl(
     // `DEM_RESAMPLE_VERSION`, carried in the ETag of each DEM tile that was
     // resampled (the mesh path fetches the base at its native size, so only
     // overlays of another size are).
-    const TERRAIN_MESH_ALGO_VERSION: &str = "v5-upsample-edge-clamp";
+    // v6: the martini error is capped at Cesium's per-level geometric error
+    // (`max_error_for_zoom`). A fixed 5 m let edge steps between tiles grow
+    // past the skirts from z16 up, showing as black cracks.
+    const TERRAIN_MESH_ALGO_VERSION: &str = "v6-zoom-max-error";
     let upstream_etag_digest = digest(&fetch.source_etags.join("|"));
     let [geoid_key, heights_key] = vertical_etag_keys(geoid_model, height_mode);
     let etag_keys: Vec<String> = vec![
@@ -798,7 +804,7 @@ async fn terrain_tile_impl(
         etag: Some(etag.clone()),
     };
 
-    let max_error = terrain.max_error;
+    let max_error = max_error_for_zoom(terrain.max_error, z);
     let mut elevations = fetch.elevations;
     let mut elevations_with_halo = fetch.elevations_with_halo;
     let halo_cells = fetch.halo_cells;
