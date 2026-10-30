@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -205,12 +206,26 @@ func spatialIDAttributesHandler(dc *dataCatalogAPI) echo.HandlerFunc {
 			})
 		}
 
+		// Cap the fan-out so a broad, low-zoom spatial ID can't enqueue
+		// thousands of full-file GETs into a single request.
+		if len(urls) > spatialIDMaxURLs {
+			log.Warnfc(ctx, "citygml: capping %d urls to %d", len(urls), spatialIDMaxURLs)
+			urls = urls[:spatialIDMaxURLs]
+		}
+
 		log.Debugfc(ctx, "citygml: fetch %d citygml files", len(urls))
 
 		rs := make([]Reader, 0, len(urls))
 		etagCache := make(map[string]string)
+		var etagMu sync.Mutex
 		for _, u := range urls {
-			rs = append(rs, &urlReader{URL: u, client: httpClient, etagCache: etagCache, skipCodeListFetch: skipCodeListFetch})
+			rs = append(rs, &urlReader{
+				URL:               u,
+				client:            httpClient,
+				etagCache:         etagCache,
+				etagCacheMu:       &etagMu,
+				skipCodeListFetch: skipCodeListFetch,
+			})
 		}
 
 		// Stream the JSON array to avoid buffering every matched feature in memory.

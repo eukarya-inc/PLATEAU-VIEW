@@ -128,13 +128,13 @@ func getGeoJSON(ctx context.Context, u string) (*geojson.FeatureCollection, erro
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		log.Errorfc(ctx, "dataconv: failed to create a request: %v", err)
-		return nil, nil
+		return nil, fmt.Errorf("dataconv: failed to create request: %w", err)
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Errorfc(ctx, "dataconv: failed to get asset: %v", err)
-		return nil, nil
+		return nil, fmt.Errorf("dataconv: failed to fetch asset: %w", err)
 	}
 
 	defer func() {
@@ -143,12 +143,18 @@ func getGeoJSON(ctx context.Context, u string) (*geojson.FeatureCollection, erro
 
 	if res.StatusCode != http.StatusOK {
 		log.Errorfc(ctx, "dataconv: failed to get asset: status code is %d", res.StatusCode)
-		return nil, nil
+		return nil, fmt.Errorf("dataconv: fetch asset returned status %d", res.StatusCode)
 	}
 
 	f := geojson.FeatureCollection{}
 	if err := json.NewDecoder(bom.NewReader(res.Body)).Decode(&f); err != nil {
+		// Do not swallow the decode error: a truncated body (connection reset
+		// mid-read) previously returned a partial FeatureCollection with a nil
+		// error, which the caller happily converted and used to overwrite the
+		// item's existing good data. Surfacing the error keeps the original
+		// data intact and lets the pipeline retry.
 		log.Errorfc(ctx, "dataconv: invalid geojson: %v", err)
+		return nil, fmt.Errorf("dataconv: invalid geojson: %w", err)
 	}
 
 	return &f, nil
