@@ -14,11 +14,12 @@ use crate::dataset::Dataset;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
-use crate::profile::{Lod4Fallback, Rules};
+use crate::profile::{Lod4Fallback, Rules, UnfDm};
 use crate::report::{FileReport, Report, Warnings};
 use crate::schema::ChildOrder;
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
+use crate::unf::UnfRewrite;
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
 
@@ -46,6 +47,9 @@ pub struct Options {
     pub lod4_fallback: Option<Lod4Fallback>,
     /// Extrude transportation LOD1 spaces into solids. `None` writes no solid.
     pub clearance: Option<Clearance>,
+    /// What happens to an underground utility's Dm attributes. `None` takes
+    /// the profile's `[unf] dm`.
+    pub unf_dm: Option<UnfDm>,
 }
 
 impl Default for Options {
@@ -59,6 +63,7 @@ impl Default for Options {
             parallel: true,
             lod4_fallback: None,
             clearance: None,
+            unf_dm: None,
         }
     }
 }
@@ -68,12 +73,14 @@ pub struct Converter {
     common: CommonRewrite,
     xal: XalRewrite,
     app: AppearanceRewrite,
+    unf: UnfRewrite,
     lod4: Lod4Rewrite,
     bldg: BuildingRewrite,
     tran: TranRewrite,
     iur: IurRewrite,
     order: ChildOrder,
     gml_ns: String,
+    core_ns: String,
     options: Options,
 }
 
@@ -82,6 +89,8 @@ pub struct Converter {
 struct FileState {
     /// The `gml:id`s under geometry a pass removed.
     dropped: HashSet<String>,
+    /// A member holding an appearance has been converted.
+    appearance_seen: bool,
 }
 
 impl Converter {
@@ -89,10 +98,11 @@ impl Converter {
         let common = CommonRewrite::new(&rules)?;
         let xal = XalRewrite::new(&rules)?;
         let app = AppearanceRewrite::new(&rules)?;
+        let schema = ChildOrder::target()?;
+        let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
-        let schema = ChildOrder::target()?;
         let iur = IurRewrite::new(&rules, &schema)?;
         let order = if options.reorder {
             schema
@@ -100,17 +110,20 @@ impl Converter {
             ChildOrder::default()
         };
         let gml_ns = rules.output_ns("gml")?.to_owned();
+        let core_ns = rules.output_ns("core")?.to_owned();
         Ok(Converter {
             rules,
             common,
             xal,
             app,
+            unf,
             lod4,
             bldg,
             tran,
             iur,
             order,
             gml_ns,
+            core_ns,
             options,
         })
     }
@@ -299,8 +312,8 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
-    /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are
-    /// seeded from the member's own `gml:id`, so they are unique across a
+    /// `app`, `unf`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values
+    /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry an earlier
     /// member of the same document dropped are removed, and a member left
     /// with no content is `None`.
@@ -320,12 +333,25 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
+        if self
+            .unf
+            .apply(&mut element, &mut state.dropped, &mut report.warnings)
+            && state.appearance_seen
+        {
+            report.warnings.add(
+                "geometry was dropped after an appearance earlier in the document was \
+                 written, so that appearance may still link to it",
+            );
+        }
         if !state.dropped.is_empty()
             && self
                 .app
                 .prune(&mut element, &state.dropped, &mut report.warnings)
         {
             return None;
+        }
+        if element.is(&self.core_ns, "appearanceMember") {
+            state.appearance_seen = true;
         }
         self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
@@ -466,7 +492,7 @@ fn write_codelists(
 /// The codes a code list defines, meaning every `<gml:name>` inside a
 /// `<gml:Definition>`. The dictionary's own `<gml:name>`, which is the list
 /// title, sits outside any Definition and is excluded.
-fn definition_codes(text: &str) -> std::collections::BTreeSet<String> {
+pub(crate) fn definition_codes(text: &str) -> std::collections::BTreeSet<String> {
     let mut codes = std::collections::BTreeSet::new();
     let mut rest = text;
     while let Some(start) = rest.find("<gml:Definition") {
