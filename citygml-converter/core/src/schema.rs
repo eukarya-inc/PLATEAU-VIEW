@@ -72,6 +72,12 @@ impl ChildOrder {
     pub fn of(&self, element: &Name) -> Option<&HashMap<Name, usize>> {
         self.by_element.get(element).map(|ranks| ranks.as_ref())
     }
+
+    /// True when the schemas declare `child` in the content of `parent`.
+    pub fn declares(&self, parent: &Name, child: &Name) -> bool {
+        self.of(parent)
+            .is_some_and(|ranks| ranks.contains_key(child))
+    }
 }
 
 /// One particle of a content model, in document order.

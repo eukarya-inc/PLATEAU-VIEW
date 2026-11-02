@@ -84,9 +84,10 @@ impl Converter {
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
-        let iur = IurRewrite::new(&rules)?;
+        let schema = ChildOrder::target()?;
+        let iur = IurRewrite::new(&rules, &schema)?;
         let order = if options.reorder {
-            ChildOrder::target()?
+            schema
         } else {
             ChildOrder::default()
         };
