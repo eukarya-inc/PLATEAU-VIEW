@@ -1,11 +1,12 @@
-//! The profile-driven passes, namely: rename and drop, child reordering, and
-//! GML 3.2 `gml:id` assignment.
+//! The generic passes, namely: rename and drop, child reordering, and GML 3.2
+//! `gml:id` assignment.
 //!
 //! [`rename`] runs first, so every later pass sees 3.0 names only. [`reorder`]
 //! runs last, once the structural rewrites have finished adding and removing
 //! children.
 
 use crate::profile::Rules;
+use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
 
 /// Applies the profile's element rules and namespace bump to a subtree.
@@ -27,14 +28,14 @@ pub fn rename(rules: &Rules, mut el: Element) -> Option<Element> {
     Some(el)
 }
 
-/// Sorts children into the order the profile declares for their parent's type.
+/// Sorts children into the order the target schemas declare for their parent.
 ///
-/// Children the profile does not mention keep their relative order and follow
-/// the ones it does. An element mixing character data with child elements is
+/// Children the schema does not declare on the parent keep their relative
+/// order and follow the ones it does. An element mixing character data with child elements is
 /// left alone. A comment does not block the sort and travels with the element
 /// that follows it.
-pub fn reorder(rules: &Rules, el: &mut Element) {
-    if let Some(order) = rules.child_order(&el.name) {
+pub fn reorder(order: &ChildOrder, el: &mut Element) {
+    if let Some(ranks) = order.of(&el.name) {
         let mixed = el
             .children
             .iter()
@@ -45,10 +46,7 @@ pub fn reorder(rules: &Rules, el: &mut Element) {
             for child in std::mem::take(&mut el.children) {
                 match child {
                     Node::Element(e) => {
-                        let key = order
-                            .iter()
-                            .position(|o| *o == e.name)
-                            .unwrap_or(usize::MAX);
+                        let key = ranks.get(&e.name).copied().unwrap_or(usize::MAX);
                         pending.push(Node::Element(e));
                         groups.push((key, std::mem::take(&mut pending)));
                     }
@@ -61,7 +59,7 @@ pub fn reorder(rules: &Rules, el: &mut Element) {
         }
     }
     for child in el.elements_mut() {
-        reorder(rules, child);
+        reorder(order, child);
     }
 }
 
@@ -160,6 +158,10 @@ mod tests {
         Rules::from_toml(DEFAULT_PROFILE).unwrap()
     }
 
+    fn order() -> ChildOrder {
+        ChildOrder::target().unwrap()
+    }
+
     #[test]
     fn renames_recursively_and_bumps_attribute_namespaces() {
         let mut solid = Element::new(Name::qualified(ns::GML_31, "Solid"));
@@ -188,7 +190,7 @@ mod tests {
         b.push(Element::new(Name::qualified(ns::CITYGML_3, "creationDate")));
         b.children.push(Node::Comment(" trailing ".into()));
 
-        reorder(&rules(), &mut b);
+        reorder(&order(), &mut b);
 
         let names: Vec<&str> = b.elements().map(|e| e.name.local.as_str()).collect();
         assert_eq!(names, ["creationDate", "height"], "the sort still ran");
@@ -212,7 +214,7 @@ mod tests {
         b.children.push(Node::Text("value".into()));
         b.push(Element::new(Name::qualified(ns::CITYGML_3, "creationDate")));
 
-        reorder(&rules(), &mut b);
+        reorder(&order(), &mut b);
 
         let names: Vec<&str> = b.elements().map(|e| e.name.local.as_str()).collect();
         assert_eq!(names, ["height", "creationDate"]);
@@ -231,7 +233,7 @@ mod tests {
         b.push(Element::new(Name::qualified(ns::CITYGML_3, "creationDate")));
         b.push(Element::new(Name::qualified(ns::CITYGML_3, "lod1Solid")));
 
-        reorder(&rules(), &mut b);
+        reorder(&order(), &mut b);
 
         let names: Vec<&str> = b.elements().map(|e| e.name.local.as_str()).collect();
         assert_eq!(
