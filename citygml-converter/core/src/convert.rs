@@ -1,5 +1,6 @@
 //! The top-level driver, taking a dataset in and writing a converted tree out.
 
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -74,6 +75,13 @@ pub struct Converter {
     order: ChildOrder,
     gml_ns: String,
     options: Options,
+}
+
+/// What one document's conversion carries from member to member.
+#[derive(Debug, Default)]
+struct FileState {
+    /// The `gml:id`s under geometry a pass removed.
+    dropped: HashSet<String>,
 }
 
 impl Converter {
@@ -228,6 +236,7 @@ impl Converter {
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
         let mut closed = false;
+        let mut state = FileState::default();
 
         writer.write_declaration(None)?;
 
@@ -247,7 +256,7 @@ impl Converter {
                     if root.is_none() {
                         return Err(Error::malformed(label, "content before the root element"));
                     }
-                    if let Some(element) = self.convert_member(element, &mut report) {
+                    if let Some(element) = self.convert_member(element, &mut report, &mut state) {
                         writer.write_element(&element, 1)?;
                     }
                 }
@@ -292,8 +301,15 @@ impl Converter {
     /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
     /// `app`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values are
     /// seeded from the member's own `gml:id`, so they are unique across a
-    /// dataset and stable across runs.
-    fn convert_member(&self, element: Element, report: &mut FileReport) -> Option<Element> {
+    /// dataset and stable across runs. Appearance links to geometry an earlier
+    /// member of the same document dropped are removed, and a member left
+    /// with no content is `None`.
+    fn convert_member(
+        &self,
+        element: Element,
+        report: &mut FileReport,
+        state: &mut FileState,
+    ) -> Option<Element> {
         let mut element = transform::rename(&self.rules, element)?;
 
         let seed = first_gml_id(&element, &self.gml_ns)
@@ -304,6 +320,13 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
+        if !state.dropped.is_empty()
+            && self
+                .app
+                .prune(&mut element, &state.dropped, &mut report.warnings)
+        {
+            return None;
+        }
         self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);

@@ -29,6 +29,11 @@
 //!
 //! `GeoreferencedTexture` and `X3DMaterial` already wrote `target` as a plain
 //! URI element in 2.0 and still do in 3.0, so they pass through untouched.
+//!
+//! [`AppearanceRewrite::prune`] removes the links to geometry another pass
+//! dropped.
+
+use std::collections::HashSet;
 
 use crate::error::Result;
 use crate::profile::Rules;
@@ -62,6 +67,112 @@ impl AppearanceRewrite {
         for child in el.elements_mut() {
             self.apply(child, ids, warnings);
         }
+    }
+
+    /// Removes every 3.0 texture association and `app:target` under `el` that
+    /// names a `gml:id` in `dropped`, then every texture, `app:surfaceData`,
+    /// `app:Appearance` and appearance property this leaves without content.
+    /// Returns true when `el` is itself left without content and should be
+    /// removed.
+    pub fn prune(
+        &self,
+        el: &mut Element,
+        dropped: &HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> bool {
+        if el.name.in_ns(&self.gml) {
+            return false;
+        }
+        if el.name.in_ns(&self.app)
+            && matches!(
+                el.name.local.as_str(),
+                "ParameterizedTexture" | "GeoreferencedTexture" | "X3DMaterial"
+            )
+        {
+            return self.prune_targets(el, dropped, warnings);
+        }
+
+        let mut removed = false;
+        let children = std::mem::take(&mut el.children);
+        let mut out = Vec::with_capacity(children.len());
+        for child in children {
+            match child {
+                Node::Element(mut child) => {
+                    if self.prune(&mut child, dropped, warnings) {
+                        removed = true;
+                    } else {
+                        out.push(Node::Element(child));
+                    }
+                }
+                other => out.push(other),
+            }
+        }
+        el.children = out;
+        if !removed {
+            return false;
+        }
+        if el.is(&self.app, "Appearance") {
+            return !el.elements().any(|e| e.is(&self.app, "surfaceData"));
+        }
+        let empty = !el.has_element_children();
+        if empty && el.is(&self.app, "surfaceData") {
+            warnings.add("an app:surfaceData whose every target was dropped geometry was removed");
+        }
+        empty
+    }
+
+    /// Removes the targets of one texture or material that name a dropped
+    /// `gml:id`. Returns true when it had targets and none remain.
+    fn prune_targets(
+        &self,
+        el: &mut Element,
+        dropped: &HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> bool {
+        let mut had = false;
+        let children = std::mem::take(&mut el.children);
+        let mut out = Vec::with_capacity(children.len());
+        for child in children {
+            let Node::Element(child) = child else {
+                out.push(child);
+                continue;
+            };
+            let target = if child.is(&self.app, "target") {
+                Some(child.text())
+            } else if child.is(&self.app, "textureParameterization") {
+                child
+                    .elements()
+                    .find(|e| e.is(&self.app, "TextureAssociation"))
+                    .and_then(|a| a.child(&self.app, "target"))
+                    .map(Element::text)
+            } else {
+                None
+            };
+            let Some(target) = target else {
+                out.push(Node::Element(child));
+                continue;
+            };
+            had = true;
+            let id = target.trim();
+            let id = id.rsplit_once('#').map_or(id, |(_, fragment)| fragment);
+            if dropped.contains(id) {
+                warnings.add(format!(
+                    "a link from {} to dropped geometry was removed",
+                    if child.is(&self.app, "target") {
+                        "an app:target"
+                    } else {
+                        "an app:TextureAssociation"
+                    }
+                ));
+            } else {
+                out.push(Node::Element(child));
+            }
+        }
+        el.children = out;
+        let linked = el
+            .elements()
+            .any(|e| e.is(&self.app, "target") || e.is(&self.app, "textureParameterization"));
+        had && !linked
     }
 
     /// Rewrites `app:target[@uri]` on a `ParameterizedTexture` into an
