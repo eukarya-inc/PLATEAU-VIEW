@@ -76,7 +76,7 @@ impl Dataset {
 
         let (root, temp) = match staging {
             Staging::Temporary => {
-                let dir = TempDir::with_prefix("plateau-convert-")?;
+                let dir = TempDir::with_prefix("citygml-convert-")?;
                 (dir.path().to_owned(), Some(dir))
             }
             Staging::At(path) => {

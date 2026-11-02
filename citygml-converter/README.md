@@ -11,12 +11,12 @@ CityGML 3.0. It targets Windows, macOS and Linux.
 cargo build --release
 
 # A package directory, a zip of one, or several per-part zips, all the same call.
-plateau-convert convert /data/22100_shizuoka-shi_city_2023_citygml_1_op -o ./out
-plateau-convert convert 22100_..._op.zip -o ./out
-plateau-convert convert udx.zip codelists.zip schemas.zip -o ./out
+citygml-convert convert /data/22100_shizuoka-shi_city_2023_citygml_1_op -o ./out
+citygml-convert convert 22100_..._op.zip -o ./out
+citygml-convert convert udx.zip codelists.zip schemas.zip -o ./out
 
 # See how the inputs were understood without converting anything.
-plateau-convert inspect udx.zip codelists.zip
+citygml-convert inspect udx.zip codelists.zip
 ```
 
 Useful flags:

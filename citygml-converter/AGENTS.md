@@ -1,22 +1,22 @@
-# AGENTS.md for /converter
+# AGENTS.md for /citygml-converter
 
-Guidance for AI coding agents working in `/converter`. Read this before touching
-anything here.
+Guidance for AI coding agents working in `/citygml-converter`. Read this before
+touching anything here.
 
 > `CLAUDE.md` in this directory is a symlink to this file. Edit `AGENTS.md`.
 
 ## What this is
 
 A standalone CityGML 2.0 → 3.0 converter for PLATEAU city models, made of a
-Rust core, a `plateau-convert` CLI, and (later) a Tauri desktop UI. Read
+Rust core, a `citygml-convert` CLI, and (later) a Tauri desktop UI. Read
 `README.md` first, since it covers the layout and the conversion pipeline.
 
 ## It is independent of the monorepo
 
-`/converter` shares no code, no toolchain and no build with the rest of
-PLATEAU-VIEW. Its own Cargo workspace, its own `rust-toolchain.toml`. Do not add
-a dependency on `/server`, `/tile` or any JS workspace, and do not add
-`converter/ui` to the root `package.json` workspaces.
+`/citygml-converter` shares no code, no toolchain and no build with the rest
+of PLATEAU-VIEW. Its own Cargo workspace, its own `rust-toolchain.toml`. Do not
+add a dependency on `/server`, `/tile` or any JS workspace, and do not add
+`citygml-converter/ui` to the root `package.json` workspaces.
 
 It must work on Windows, macOS and Linux. No `std::os::unix`, no shelling out to
 platform tools, no path separator assumptions. Normalise to `/` when comparing
