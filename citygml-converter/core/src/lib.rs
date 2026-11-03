@@ -11,9 +11,10 @@
 //!   element renames, supplied values) loaded from a TOML profile.
 //! * [`schema`] reads the child order each output element requires off the
 //!   vendored CityGML 3.0 and i-UR 4.0 schemas.
-//! * [`transform`], [`common`], [`xal`], [`app`], [`lod4`], [`bldg`], [`tran`]
-//!   and [`iur`] apply the profile and the structural rewrites a rename table
-//!   cannot express. [`extrude`] builds the solids [`tran`] can add.
+//! * [`transform`], [`storey`], [`common`], [`xal`], [`app`], [`unf`],
+//!   [`lod4`], [`bldg`], [`tran`] and [`iur`] apply the profile and the
+//!   structural rewrites a rename table cannot express. [`extrude`] builds the
+//!   solids [`tran`] can add.
 //!
 //! [`convert`] ties them together and [`report`] carries the diagnostics back out.
 
@@ -30,6 +31,7 @@ pub mod lod4;
 pub mod profile;
 pub mod report;
 pub mod schema;
+pub mod storey;
 pub mod tran;
 pub mod transform;
 pub mod unf;

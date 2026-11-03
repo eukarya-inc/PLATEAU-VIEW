@@ -54,6 +54,9 @@ pub struct Lod4Rewrite {
     urc: Option<String>,
     /// The i-UR namespaces a quality descriptor may still sit in after rename.
     iur: IurModules,
+    /// `uro:UndergroundBuilding`, whose `lodType` codes come from a list of
+    /// their own.
+    underground: Option<Name>,
     rules: Lod4Rules,
     display: Rules,
 }
@@ -71,6 +74,10 @@ impl Lod4Rewrite {
             con: rules.output_ns("con")?.to_owned(),
             urc: rules.output_ns("urc").ok().map(str::to_owned),
             iur: IurModules::new(rules),
+            underground: rules
+                .output_ns("uro")
+                .ok()
+                .map(|uro| Name::qualified(uro, "UndergroundBuilding")),
             rules: lod4,
             display: rules.clone(),
         })
@@ -81,7 +88,7 @@ impl Lod4Rewrite {
     /// One decision is taken from the code `member` carries and applied to
     /// every LOD4 element under it.
     pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) {
-        self.suffix_lod_types(member, false, warnings);
+        self.suffix_lod_types(member, None, warnings);
         let target = if has_lod4_geometry(member, &self.bldg) {
             self.decide(member, warnings)
         } else if has_lod4_quality(member, &self.iur) {
@@ -96,40 +103,52 @@ impl Lod4Rewrite {
     }
 
     /// Rewrites plain 2.0-era `lodType` codes under `el` to their i-UR 4.0
-    /// `_exterior` form.
+    /// `_exterior` form, and points an underground building's `lodType` at
+    /// its own code list.
     ///
-    /// `in_building` says whether `el` already sits inside a building feature.
-    /// A `4.x` value is left for [`Self::fold_lod_type`].
-    fn suffix_lod_types(&self, el: &mut Element, in_building: bool, warnings: &mut Warnings) {
-        let in_building = in_building || el.name.in_ns(&self.bldg);
+    /// `host` is the code list of the building feature `el` already sits in,
+    /// if any. A `4.x` value is left for [`Self::fold_lod_type`].
+    fn suffix_lod_types(&self, el: &mut Element, host: Option<LodTypes>, warnings: &mut Warnings) {
+        let host = host.or_else(|| self.lod_types_of(&el.name));
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
                 Node::Element(mut child) => {
-                    if in_building && self.is_plain_lod_type(&child) {
+                    if host == Some(LodTypes::Underground) && self.is_lod_type(&child) {
+                        retarget_lod_type(&mut child, warnings);
+                    }
+                    if let Some(host) = host.filter(|_| self.is_plain_lod_type(&child)) {
                         let old = child.text().trim().to_owned();
-                        if EXTERIOR_LOD_TYPES.contains(&old.as_str()) {
+                        let list = host.list();
+                        if host.exterior().contains(&old.as_str()) {
                             child.children = vec![Node::Text(format!("{old}_exterior"))];
                             warnings.add(format!(
                                 "lodType {old} became {old}_exterior: the i-UR 4.0 \
-                                 Building_lodType codes classify the exterior and \
-                                 interior models separately"
+                                 {list} codes classify the exterior and interior \
+                                 models separately"
                             ));
+                        } else if EXTERIOR_LOD_TYPES.contains(&old.as_str()) {
+                            warnings.add(format!(
+                                "lodType {old} was dropped: the i-UR 4.0 {list} code \
+                                 list defines no exterior LOD2 code, so {old}_exterior \
+                                 does not exist"
+                            ));
+                            continue;
                         } else if old == "8" {
-                            warnings.add(
-                                "lodType 8 (不明) has no entry in the i-UR 4.0 \
-                                 Building_lodType code list and was dropped",
-                            );
+                            warnings.add(format!(
+                                "lodType 8 (不明) has no entry in the i-UR 4.0 {list} \
+                                 code list and was dropped"
+                            ));
                             continue;
                         } else {
                             warnings.add(format!(
-                                "lodType {old} has no entry in the i-UR 4.0 \
-                                 Building_lodType code list; the value was kept"
+                                "lodType {old} has no entry in the i-UR 4.0 {list} \
+                                 code list; the value was kept"
                             ));
                         }
                     }
-                    self.suffix_lod_types(&mut child, in_building, warnings);
+                    self.suffix_lod_types(&mut child, host, warnings);
                     out.push(Node::Element(child));
                 }
                 other => out.push(other),
@@ -138,12 +157,27 @@ impl Lod4Rewrite {
         el.children = out;
     }
 
+    /// The `lodType` code list a building feature named `name` cites, or
+    /// `None` when `name` is not a building feature.
+    fn lod_types_of(&self, name: &Name) -> Option<LodTypes> {
+        if self.underground.as_ref() == Some(name) {
+            Some(LodTypes::Underground)
+        } else if name.in_ns(&self.bldg) {
+            Some(LodTypes::Building)
+        } else {
+            None
+        }
+    }
+
+    /// An i-UR `lodType`, whatever code it holds.
+    fn is_lod_type(&self, el: &Element) -> bool {
+        el.name.local == "lodType" && self.iur.contains(&el.name)
+    }
+
     /// A `lodType` holding a pre-3.0 plain code, meaning anything but the
     /// `4.x` values the LOD4 fold owns.
     fn is_plain_lod_type(&self, el: &Element) -> bool {
-        el.name.local == "lodType"
-            && self.iur.contains(&el.name)
-            && !el.text().trim().starts_with('4')
+        self.is_lod_type(el) && !el.text().trim().starts_with('4')
     }
 
     /// Reports an interior model that carries no `bldg:Storey`, which
@@ -156,8 +190,9 @@ impl Lod4Rewrite {
         }
         warnings.add(format!(
             "{}'s interior model has no bldg:Storey, which CityGML 3.0 requires \
-             in every interior LOD; CityGML 2.0 records nothing to derive \
-             storeys from, so none were created",
+             in every interior LOD; the input has no floor (a grp:CityObjectGroup \
+             whose grp:parent is the building) to make one from, so none were \
+             created",
             self.feature_name(member)
         ));
     }
@@ -473,6 +508,56 @@ impl Lod4Rewrite {
 const EXTERIOR_LOD_TYPES: &[&str] = &[
     "0.0", "0.1", "1.0", "1.1", "2.0", "2.1", "2.2", "2.3", "3.0", "3.1",
 ];
+
+/// Underground building `lodType` codes the i-UR 4.0 list defines for the
+/// exterior model. Its exterior LOD2 has no code at all.
+const UNDERGROUND_EXTERIOR_LOD_TYPES: &[&str] = &["0.0", "0.1", "1.0", "1.1", "3.0", "3.1"];
+
+/// The code list 2.0 data cites for every building's `lodType`, and the one
+/// i-UR 4.0 publishes for underground buildings.
+const BUILDING_LOD_TYPE: &str = "Building_lodType.xml";
+const UNDERGROUND_LOD_TYPE: &str = "UndergroundBuilding_lodType.xml";
+
+/// Which published `lodType` list a building feature's codes belong to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LodTypes {
+    Building,
+    Underground,
+}
+
+impl LodTypes {
+    fn list(self) -> &'static str {
+        match self {
+            LodTypes::Building => "Building_lodType",
+            LodTypes::Underground => "UndergroundBuilding_lodType",
+        }
+    }
+
+    fn exterior(self) -> &'static [&'static str] {
+        match self {
+            LodTypes::Building => EXTERIOR_LOD_TYPES,
+            LodTypes::Underground => UNDERGROUND_EXTERIOR_LOD_TYPES,
+        }
+    }
+}
+
+/// Points an underground building's `lodType` at the published underground
+/// list. 2.0 data cites the building list for every building type.
+fn retarget_lod_type(el: &mut Element, warnings: &mut Warnings) {
+    let Some(value) = el.attr(None, "codeSpace") else {
+        return;
+    };
+    let path = match value.rsplit_once('/') {
+        Some((dir, BUILDING_LOD_TYPE)) => format!("{dir}/{UNDERGROUND_LOD_TYPE}"),
+        None if value == BUILDING_LOD_TYPE => UNDERGROUND_LOD_TYPE.to_owned(),
+        _ => return,
+    };
+    el.set_attr(Name::unqualified("codeSpace"), path);
+    warnings.add(format!(
+        "codeSpace {BUILDING_LOD_TYPE} became {UNDERGROUND_LOD_TYPE} on an underground \
+         building: i-UR 4.0 publishes its lodType codes as a list of their own"
+    ));
+}
 
 fn target_from(fallback: Lod4Fallback) -> Target {
     match fallback {
@@ -816,6 +901,45 @@ mod tests {
                 .any(|(m, _)| m.contains("lodType 3.2 has no entry"))
         );
         assert!(w.iter().any(|(m, _)| m.contains("lodType 8 (不明)")));
+    }
+
+    /// An underground building cites its own list, which has no exterior
+    /// LOD2 codes, so those are dropped while the rest gain the suffix.
+    #[test]
+    fn an_underground_building_uses_its_own_lod_type_list() {
+        let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
+        for value in ["1.0", "2.1", "3.0", "4.1"] {
+            let mut lod_type = Element::with_text(Name::qualified(URC, "lodType"), value);
+            lod_type.set_attr(
+                Name::unqualified("codeSpace"),
+                "../../codelists/Building_lodType.xml",
+            );
+            class.push(lod_type);
+        }
+        let mut b = Element::new(Name::qualified(URO, "UndergroundBuilding"));
+        b.push(class);
+        b.push(room(vec![geometry("lod4Solid", "Solid")]));
+
+        let mut w = Warnings::new();
+        rewrite(None).apply(&mut b, &mut w);
+
+        let class = b.elements().next().unwrap();
+        let lod_types: Vec<_> = class
+            .elements()
+            .filter(|e| e.name.local == "lodType")
+            .collect();
+        assert_eq!(
+            lod_types.iter().map(|e| e.text()).collect::<Vec<_>>(),
+            ["1.0_exterior", "3.0_exterior", "3.1_interior"],
+            "2.1 has no exterior code in the underground list, 4.1 folds"
+        );
+        for lod_type in lod_types {
+            assert_eq!(
+                lod_type.attr(None, "codeSpace"),
+                Some("../../codelists/UndergroundBuilding_lodType.xml")
+            );
+        }
+        assert!(w.iter().any(|(m, _)| m.contains("lodType 2.1 was dropped")));
     }
 
     /// srcScaleLodN admits one value, and an existing one wins.

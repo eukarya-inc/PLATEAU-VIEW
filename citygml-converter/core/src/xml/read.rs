@@ -185,6 +185,53 @@ impl<'i> Reader<'i> {
         }
     }
 
+    /// Reads the whole document once without building it, for facts one
+    /// member's conversion needs from elsewhere in the same file.
+    ///
+    /// `visit` sees every start tag, childless, in document order. A feature
+    /// directly inside a root member (`core:cityObjectMember` > feature) for
+    /// which `take` returns true is materialised whole and returned, and its
+    /// own descendants are not visited. Everything else is streamed past, so
+    /// peak memory is what `take` keeps.
+    pub fn scan(
+        mut self,
+        mut visit: impl FnMut(&Element),
+        take: impl Fn(&Element) -> bool,
+    ) -> Result<Vec<Element>> {
+        let mut taken = Vec::new();
+        // The root element is depth 1, a member 2, the feature in it 3.
+        let mut depth = 0usize;
+        loop {
+            let event = self
+                .inner
+                .read_event()
+                .map_err(|e| Error::xml(&self.path, e))?;
+            match event {
+                Event::Start(start) => {
+                    depth += 1;
+                    let el = self.element(&start)?;
+                    if depth == 3 && take(&el) {
+                        taken.push(self.read_subtree(&start)?);
+                        depth -= 1;
+                        continue;
+                    }
+                    visit(&el);
+                }
+                Event::Empty(start) => {
+                    let el = self.element(&start)?;
+                    if depth == 2 && take(&el) {
+                        taken.push(el);
+                        continue;
+                    }
+                    visit(&el);
+                }
+                Event::End(_) => depth = depth.saturating_sub(1),
+                Event::Eof => return Ok(taken),
+                _ => {}
+            }
+        }
+    }
+
     /// Materialises the subtree opened by `start`, whose `Start` event has already
     /// been consumed.
     fn read_subtree(&mut self, start: &BytesStart<'i>) -> Result<Element> {
