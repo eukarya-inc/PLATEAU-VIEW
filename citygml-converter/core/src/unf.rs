@@ -40,18 +40,11 @@
 use std::collections::HashSet;
 
 use crate::error::Result;
+use crate::iur::IurModules;
 use crate::profile::{Rules, UnfDm};
 use crate::report::Warnings;
 use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
-
-/// The per-LOD data quality descriptors, by stem.
-const QUALITY_STEMS: &[&str] = &[
-    "geometrySrcDesc",
-    "appearanceSrcDesc",
-    "publicSurveySrcDesc",
-    "srcScale",
-];
 
 const SOLIDS: &[&str] = &["Solid", "CompositeSolid"];
 const SURFACES: &[&str] = &[
@@ -76,7 +69,7 @@ pub struct UnfRewrite {
     frn: String,
     gml: String,
     /// The i-UR namespaces an element may sit in after rename.
-    iur: Vec<String>,
+    iur: IurModules,
     /// `frn:adeOfCityFurniture`, which every underground utility declares.
     furniture_hook: Name,
     schema: ChildOrder,
@@ -90,12 +83,6 @@ impl UnfRewrite {
     /// `schema` holds the target schemas' content models. `dm` overrides the
     /// profile's `[unf] dm` when given.
     pub fn new(rules: &Rules, schema: &ChildOrder, dm: Option<UnfDm>) -> Result<Self> {
-        let mut iur = Vec::new();
-        for prefix in ["uro", "urc", "urf", "urg", "urt"] {
-            if let Ok(uri) = rules.output_ns(prefix) {
-                iur.push(uri.to_owned());
-            }
-        }
         let frn = rules.output_ns("frn")?.to_owned();
         let dm_codes = crate::CODELISTS_4_0
             .iter()
@@ -107,7 +94,7 @@ impl UnfRewrite {
             gml: rules.output_ns("gml")?.to_owned(),
             furniture_hook: Name::qualified(&frn, "adeOfCityFurniture"),
             frn,
-            iur,
+            iur: IurModules::new(rules),
             schema: schema.clone(),
             dm: dm.unwrap_or(rules.unf().dm),
             dm_codes,
@@ -116,9 +103,9 @@ impl UnfRewrite {
     }
 
     /// Rewrites one top-level member in place, looking through a property
-    /// that wraps the feature. The `gml:id` of every element removed with an
-    /// LOD4 property is added to `dropped`. Returns true when anything was
-    /// added.
+    /// that wraps the feature. The `gml:id` of every element removed with a
+    /// geometry or Dm property is added to `dropped`. Returns true when
+    /// anything was added.
     pub fn apply(
         &self,
         member: &mut Element,
@@ -169,8 +156,9 @@ impl UnfRewrite {
                     ));
                     continue;
                 }
-                if let Some(property) = self.retag(child, family, lod, &label, warnings) {
+                if let Some(property) = self.retag(child, family, lod, &label, dropped, warnings) {
                     if geometry.iter().any(|g| g.name == property.name) {
+                        collect_ids(&property, &self.gml, dropped);
                         warnings.add(format!(
                             "a second {} on the {label} was dropped. The property holds one \
                              geometry",
@@ -205,6 +193,7 @@ impl UnfRewrite {
         match self.dm {
             UnfDm::Drop => {
                 for property in &dm {
+                    collect_ids(property, &self.gml, dropped);
                     warnings.add(format!(
                         "{} on the {label} was dropped, as [unf] dm = drop says",
                         self.display.display_name(&property.name)
@@ -241,13 +230,15 @@ impl UnfRewrite {
     }
 
     /// The `core` property `property` becomes, or `None` when its content
-    /// has no property at that LOD.
+    /// has no property at that LOD. The `gml:id`s under a property that is
+    /// not retagged are added to `dropped`.
     fn retag(
         &self,
         mut property: Element,
         family: Family,
         lod: char,
         label: &str,
+        dropped: &mut HashSet<String>,
         warnings: &mut Warnings,
     ) -> Option<Element> {
         let from = self.display.display_name(&property.name);
@@ -273,6 +264,7 @@ impl UnfRewrite {
                     multi_of(&kind)
                 };
                 let Some(target) = target else {
+                    collect_ids(&property, &self.gml, dropped);
                     warnings.add(format!(
                         "{from} on the {label} held a gml:{kind}, for which CityGML 3.0 has \
                          no LOD{to_lod} property, and was dropped"
@@ -503,7 +495,7 @@ impl UnfRewrite {
                 out.push(child);
                 continue;
             };
-            let Some((stem, lod)) = self.quality_descriptor(&child) else {
+            let Some((stem, lod)) = self.iur.quality_descriptor(&child.name) else {
                 if !child.name.in_ns(&self.gml) {
                     self.renumber_quality(&mut child, label, warnings);
                 }
@@ -542,24 +534,8 @@ impl UnfRewrite {
         el.children = out;
     }
 
-    /// The stem and LOD digit of an i-UR quality descriptor, such as
-    /// `("geometrySrcDesc", '3')` for `urc:geometrySrcDescLod3`.
-    fn quality_descriptor(&self, el: &Element) -> Option<(&'static str, char)> {
-        if !self.is_iur(&el.name) {
-            return None;
-        }
-        let stem = QUALITY_STEMS
-            .iter()
-            .copied()
-            .find(|stem| el.name.local.starts_with(stem))?;
-        let rest = el.name.local[stem.len()..].strip_prefix("Lod")?;
-        let mut chars = rest.chars();
-        let digit = chars.next().filter(char::is_ascii_digit)?;
-        chars.as_str().is_empty().then_some((stem, digit))
-    }
-
     fn is_iur(&self, name: &Name) -> bool {
-        self.iur.iter().any(|ns| name.in_ns(ns))
+        self.iur.contains(name)
     }
 }
 

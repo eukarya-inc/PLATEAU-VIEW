@@ -44,6 +44,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::Result;
 use crate::extrude::extrude;
+use crate::iur::IurModules;
 use crate::profile::{Rules, TranRules};
 use crate::report::Warnings;
 use crate::transform::{IdGen, id_seed};
@@ -59,14 +60,6 @@ const AREA_PROPERTIES: &[(&str, &str, &str)] = &[
         "auxiliaryTrafficSpace",
         "AuxiliaryTrafficSpace",
     ),
-];
-
-/// The per-LOD data quality descriptors, by stem.
-const QUALITY_STEMS: &[&str] = &[
-    "geometrySrcDesc",
-    "appearanceSrcDesc",
-    "publicSurveySrcDesc",
-    "srcScale",
 ];
 
 /// The clearance heights one run extrudes LOD1 spaces by, in metres.
@@ -150,7 +143,7 @@ pub struct TranRewrite {
     tran: String,
     gml: String,
     /// The i-UR namespaces a quality descriptor may sit in after rename.
-    iur: Vec<String>,
+    iur: IurModules,
     rules: TranRules,
     display: Rules,
     clearance: Option<Clearance>,
@@ -175,17 +168,11 @@ struct Shape {
 impl TranRewrite {
     /// `clearance` enables the LOD1 extrusion.
     pub fn new(rules: &Rules, clearance: Option<Clearance>) -> Result<Self> {
-        let mut iur = Vec::new();
-        for prefix in ["uro", "urc", "urf", "urg", "urt"] {
-            if let Ok(uri) = rules.output_ns(prefix) {
-                iur.push(uri.to_owned());
-            }
-        }
         Ok(TranRewrite {
             core: rules.output_ns("core")?.to_owned(),
             tran: rules.output_ns("tran")?.to_owned(),
             gml: rules.output_ns("gml")?.to_owned(),
-            iur,
+            iur: IurModules::new(rules),
             rules: rules.tran().clone(),
             display: rules.clone(),
             clearance,
@@ -798,7 +785,7 @@ impl TranRewrite {
                 out.push(child);
                 continue;
             };
-            let Some((stem, lod)) = self.quality_descriptor(&child) else {
+            let Some((stem, lod)) = self.iur.quality_descriptor(&child.name) else {
                 if !self.is_space_property(&child) {
                     self.renumber_quality(&mut child, label, divided, warnings);
                 }
@@ -933,7 +920,7 @@ impl TranRewrite {
             if self.is_space_property(child) {
                 continue;
             }
-            if self.quality_descriptor(child).is_some() {
+            if self.iur.quality_descriptor(&child.name).is_some() {
                 f(child);
             } else {
                 self.for_each_descriptor(child, f);
@@ -954,24 +941,8 @@ impl TranRewrite {
         }
     }
 
-    /// The stem and LOD digit of an i-UR quality descriptor, such as
-    /// `("geometrySrcDesc", '2')` for `urc:geometrySrcDescLod2`.
-    fn quality_descriptor(&self, el: &Element) -> Option<(&'static str, char)> {
-        if !self.iur.iter().any(|uri| el.name.in_ns(uri)) {
-            return None;
-        }
-        let stem = QUALITY_STEMS
-            .iter()
-            .copied()
-            .find(|stem| el.name.local.starts_with(stem))?;
-        let rest = el.name.local[stem.len()..].strip_prefix("Lod")?;
-        let mut chars = rest.chars();
-        let digit = chars.next().filter(char::is_ascii_digit)?;
-        chars.as_str().is_empty().then_some((stem, digit))
-    }
-
     fn is_lod_type(&self, el: &Element) -> bool {
-        el.name.local == "lodType" && self.iur.iter().any(|uri| el.name.in_ns(uri))
+        el.name.local == "lodType" && self.iur.contains(&el.name)
     }
 
     /// The properties that hold spaces, before and after this pass.
