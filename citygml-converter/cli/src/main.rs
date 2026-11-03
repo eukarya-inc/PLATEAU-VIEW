@@ -120,10 +120,6 @@ struct ConvertArgs {
     /// Worker threads. 0 uses one per core.
     #[arg(short = 'j', long, default_value_t = 0)]
     jobs: usize,
-
-    /// Overwrite an existing output directory.
-    #[arg(long)]
-    force: bool,
 }
 
 #[derive(Args, Debug)]
@@ -218,7 +214,7 @@ fn init_tracing(verbose: u8) {
 }
 
 fn convert(args: &ConvertArgs) -> Result<()> {
-    if args.output.exists() && !args.force {
+    if args.output.exists() {
         let empty = args
             .output
             .read_dir()
@@ -226,7 +222,8 @@ fn convert(args: &ConvertArgs) -> Result<()> {
             .unwrap_or(false);
         if !empty {
             bail!(
-                "{} already exists and is not empty; pass --force to write into it",
+                "{} already exists and is not empty. Remove it or choose another \
+                 output directory",
                 args.output.display()
             );
         }
