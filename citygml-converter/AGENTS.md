@@ -53,6 +53,12 @@ The single most common mistake here is putting a mapping in the wrong layer.
   halves are disjoint on purpose, so a key declared on both sides is refused at
   load instead of resolved by precedence. There is no reading of "the fragment
   and the profile disagree" that is not a mistake in one of them.
+
+  A rename that holds only under one parent takes `parent`, the parent's
+  input name, and wins over a rule for the same `from` without one. It is for
+  a name that means different things in different places, such as `uro:class`
+  on `uro:OtherConstruction` and on `uro:FacilityTypeAttribute`. Write `parent`
+  on the line after `to`, which is where the generator looks for it.
 * **A mapping you cannot settle** → settle it, or turn it into a choice. An
   element either gets a rule, or becomes a policy table with a documented
   default the way `[lod4]` did, which is what to do when the answer turns on the

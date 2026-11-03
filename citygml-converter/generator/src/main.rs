@@ -138,7 +138,8 @@ fn read_targets(root: &Path, minor: &str) -> Result<BTreeMap<String, Schema>> {
 }
 
 /// The `from` names of `[[element]]` rules written by hand, meaning outside
-/// the generated block. The generator skips any name in this set.
+/// the generated block, other than rules limited to a parent. The generator
+/// skips any name in this set.
 fn hand_written_rules(profile: &Path) -> Result<BTreeMap<String, String>> {
     let Ok(text) = std::fs::read_to_string(profile) else {
         return Ok(BTreeMap::new());
@@ -148,10 +149,16 @@ fn hand_written_rules(profile: &Path) -> Result<BTreeMap<String, String>> {
         _ => text,
     };
     // `from` and `to` sit on consecutive lines in every rule this file
-    // writes.
+    // writes, and a `parent` follows them.
     let lines: Vec<&str> = outside.lines().map(str::trim).collect();
     let mut rules = BTreeMap::new();
-    for pair in lines.windows(2) {
+    for (i, pair) in lines.windows(2).enumerate() {
+        let scoped = lines
+            .get(i + 2)
+            .is_some_and(|next| next.starts_with("parent = "));
+        if scoped {
+            continue;
+        }
         if let (Some(from), Some(to)) = (
             pair[0].strip_prefix("from = "),
             pair[1].strip_prefix("to = "),

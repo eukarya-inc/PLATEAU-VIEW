@@ -213,13 +213,20 @@ fn row_subjects(path: &str, row: &Value) -> Vec<String> {
         "element" => "from",
         _ => return Vec::new(),
     };
-    match row.get(field) {
+    let subjects: Vec<String> = match row.get(field) {
         Some(Value::String(one)) => vec![one.clone()],
         Some(Value::Array(many)) => many
             .iter()
             .filter_map(|v| v.as_str().map(str::to_owned))
             .collect(),
         _ => Vec::new(),
+    };
+    match row.get("parent").and_then(Value::as_str) {
+        Some(parent) => subjects
+            .into_iter()
+            .map(|s| format!("{s}` under `{parent}"))
+            .collect(),
+        None => subjects,
     }
 }
 
@@ -289,6 +296,10 @@ pub struct ElementRule {
     pub from: String,
     #[serde(default)]
     pub to: Option<String>,
+    /// The input name of the parent the rule is limited to. A rule with a
+    /// parent is applied before a rule without one.
+    #[serde(default)]
+    pub parent: Option<String>,
     /// Remove the element, and its subtree, instead of renaming it.
     #[serde(default)]
     pub drop: bool,
@@ -602,6 +613,9 @@ pub struct Rules {
     namespace_map: HashMap<String, String>,
     /// `None` means "drop this element".
     renames: HashMap<Name, Option<Name>>,
+    /// Rules limited to one parent, by the parent's input name and then the
+    /// element's. `None` means "drop this element".
+    scoped: HashMap<Name, HashMap<Name, Option<Name>>>,
     output_namespaces: IndexMap<String, String>,
     prefixes: PrefixMap,
     schema_location: Option<String>,
@@ -629,8 +643,14 @@ impl Rules {
         let codelists = profile.codelists.clone();
 
         let mut renames = HashMap::new();
+        let mut scoped: HashMap<Name, HashMap<Name, Option<Name>>> = HashMap::new();
         for rule in &profile.element {
             let sources = parse_input_names(&rule.from, input)?;
+            let parents = rule
+                .parent
+                .as_deref()
+                .map(|p| parse_input_names(p, input))
+                .transpose()?;
             let to = match (&rule.to, rule.drop) {
                 (Some(_), true) => {
                     return Err(Error::Profile(format!(
@@ -647,12 +667,28 @@ impl Rules {
                     )));
                 }
             };
-            for from in sources {
-                if let Some(previous) = renames.insert(from, to.clone()) {
-                    return Err(Error::Profile(format!(
-                        "duplicate rule for `{}` (previously mapped to {previous:?})",
-                        rule.from
-                    )));
+            let Some(parents) = parents else {
+                for from in sources {
+                    if let Some(previous) = renames.insert(from, to.clone()) {
+                        return Err(Error::Profile(format!(
+                            "duplicate rule for `{}` (previously mapped to {previous:?})",
+                            rule.from
+                        )));
+                    }
+                }
+                continue;
+            };
+            for parent in parents {
+                let rows = scoped.entry(parent).or_default();
+                for from in &sources {
+                    if let Some(previous) = rows.insert(from.clone(), to.clone()) {
+                        return Err(Error::Profile(format!(
+                            "duplicate rule for `{}` under `{}` (previously mapped to \
+                             {previous:?})",
+                            rule.from,
+                            rule.parent.as_deref().unwrap_or_default()
+                        )));
+                    }
                 }
             }
         }
@@ -825,6 +861,7 @@ impl Rules {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             renames,
+            scoped,
             output_namespaces,
             prefixes,
             schema_location,
@@ -860,6 +897,18 @@ impl Rules {
         match self.renames.get(name) {
             Some(mapped) => mapped.clone(),
             None => Some(self.bump_namespace(name)),
+        }
+    }
+
+    /// [`Self::map_element`] for an element whose parent's input name is
+    /// `parent`. A rule limited to that parent wins over the rest.
+    pub fn map_child(&self, parent: Option<&Name>, name: &Name) -> Option<Name> {
+        match parent
+            .and_then(|p| self.scoped.get(p))
+            .and_then(|rows| rows.get(name))
+        {
+            Some(mapped) => mapped.clone(),
+            None => self.map_element(name),
         }
     }
 

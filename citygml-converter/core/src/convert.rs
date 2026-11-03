@@ -23,7 +23,7 @@ use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
 use crate::xal::XalRewrite;
-use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
+use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
 
 /// Directories copied through unchanged when converting a whole dataset.
 ///
@@ -258,6 +258,7 @@ impl Converter {
         let mut writer = Writer::new(sink, self.rules.prefixes().clone(), self.options.indent);
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
+        let mut root_input: Option<Name> = None;
         let mut closed = false;
         let mut state = FileState {
             floors: self.storey.scan(label, source, &mut report.warnings)?,
@@ -272,6 +273,7 @@ impl Converter {
                 Chunk::Prologue(Node::Comment(text)) => writer.write_comment(&text)?,
                 Chunk::Prologue(_) => {}
                 Chunk::RootStart(element) => {
+                    root_input = Some(element.name.clone());
                     let element = transform::rename(&self.rules, element).ok_or_else(|| {
                         Error::Profile(format!("the profile drops the root element of {label}"))
                     })?;
@@ -282,7 +284,9 @@ impl Converter {
                     if root.is_none() {
                         return Err(Error::malformed(label, "content before the root element"));
                     }
-                    if let Some(element) = self.convert_member(element, &mut report, &mut state) {
+                    if let Some(element) =
+                        self.convert_member(element, root_input.as_ref(), &mut report, &mut state)
+                    {
                         writer.write_element(&element, 1)?;
                     }
                 }
@@ -335,14 +339,16 @@ impl Converter {
     /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry an earlier
     /// member of the same document dropped are removed, and a member left
-    /// with no content is `None`.
+    /// with no content is `None`. `root` is the input name of the document's
+    /// root element.
     fn convert_member(
         &self,
         element: Element,
+        root: Option<&Name>,
         report: &mut FileReport,
         state: &mut FileState,
     ) -> Option<Element> {
-        let mut element = transform::rename(&self.rules, element)?;
+        let mut element = transform::rename_under(&self.rules, element, root)?;
         if self.storey.is_floor(&element, &state.floors) {
             return None;
         }
