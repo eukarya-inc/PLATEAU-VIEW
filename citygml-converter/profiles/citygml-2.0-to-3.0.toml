@@ -331,3 +331,41 @@ lod2 = [
 ]
 lod3 = ["500"]
 fallback = "lod3"
+# The modules whose lod4* geometry properties are folded, by output prefix.
+modules = ["bldg"]
+# The elements that put everything under them in the interior model, written
+# as they stand after the rename pass.
+interior = [
+  "bldg:BuildingRoom",
+  "bldg:buildingRoom",
+  "bldg:BuildingFurniture",
+  "bldg:buildingFurniture",
+  "bldg:interiorBuildingInstallation",
+  "bldg:roomInstallation",
+  "con:CeilingSurface",
+  "con:InteriorWallSurface",
+  "con:FloorSurface",
+]
+
+# ---------------------------------------------------------------------------
+# The construction rewrites (core/src/construction.rs), shared by every module
+# deriving from the CityGML 3.0 construction module. Names are written as they
+# stand after the rename pass.
+#
+# geometry_hosts are the types whose lod0Geometry to lod3Geometry children
+# become core:lodNSolid or core:lodNMultiSurface by the geometry they hold.
+# installations maps each 2.0 installation property to its 3.0 property and
+# the con:relationToConstruction value its installations gain. dates maps each
+# gYear property to the date property it becomes.
+# ---------------------------------------------------------------------------
+[construction]
+geometry_hosts = ["bldg:BuildingInstallation"]
+
+[construction.installations]
+"bldg:outerBuildingInstallation" = { to = "bldg:buildingInstallation", relation = "outside" }
+"bldg:interiorBuildingInstallation" = { to = "bldg:buildingInstallation", relation = "inside" }
+"bldg:roomInstallation" = { to = "bldg:buildingInstallation", relation = "inside" }
+
+[construction.dates]
+"bldg:yearOfConstruction" = "con:dateOfConstruction"
+"bldg:yearOfDemolition" = "con:dateOfDemolition"

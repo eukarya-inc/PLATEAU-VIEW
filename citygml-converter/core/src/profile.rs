@@ -50,6 +50,13 @@ pub struct Profile {
     /// Where CityGML 2.0 LOD4 goes, since 3.0 has no LOD4. See [`Lod4Policy`].
     #[serde(default)]
     pub lod4: Lod4Policy,
+    /// The `lodType` code list each feature type cites, keyed by the type's
+    /// `prefix:local` name. See [`LodTypeTable`].
+    #[serde(default)]
+    pub lod_types: IndexMap<String, LodTypeTable>,
+    /// The construction rewrites' properties. See [`ConstructionPolicy`].
+    #[serde(default)]
+    pub construction: ConstructionPolicy,
     /// How the input's code lists are carried into the output. See
     /// [`CodelistsPolicy`].
     #[serde(default)]
@@ -356,6 +363,12 @@ pub struct Lod4Policy {
     /// Codes whose LOD4 becomes LOD3.
     pub lod3: Vec<String>,
     pub fallback: Lod4Fallback,
+    /// Output prefixes of the modules whose `lod4*` geometry properties are
+    /// folded.
+    pub modules: Vec<String>,
+    /// Elements that put everything under them in the interior model, written
+    /// with output prefixes as they stand after the rename pass.
+    pub interior: Vec<String>,
 }
 
 impl Default for Lod4Policy {
@@ -365,8 +378,58 @@ impl Default for Lod4Policy {
             lod2: Vec::new(),
             lod3: Vec::new(),
             fallback: Lod4Fallback::Lod3,
+            modules: Vec::new(),
+            interior: Vec::new(),
         }
     }
+}
+
+/// The `lodType` codes of one feature type.
+///
+/// `list` is the published code list the type's codes belong to. A `codeSpace`
+/// naming one of `cited_as` is pointed at `list`. `map` rewrites a plain code
+/// to its published form, `drop` names the codes removed, each with the label
+/// shown when reporting it. A code in neither is kept and reported. `4.x`
+/// codes are left to the LOD4 fold.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct LodTypeTable {
+    pub list: String,
+    pub cited_as: Vec<String>,
+    pub map: IndexMap<String, String>,
+    pub drop: IndexMap<String, String>,
+}
+
+/// The properties the construction rewrites act on, written with output
+/// prefixes as they stand after the rename pass.
+///
+/// `geometry_hosts` are the types whose `lod0Geometry` to `lod3Geometry`
+/// children are routed to a `core` slot by the geometry they hold.
+/// `installations` maps a 2.0 installation property to the 3.0 property and
+/// the `con:relationToConstruction` value its installations gain. `dates` maps
+/// a `gYear` property to the `date` property it becomes.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ConstructionPolicy {
+    pub geometry_hosts: Vec<String>,
+    pub installations: IndexMap<String, InstallationRule>,
+    pub dates: IndexMap<String, String>,
+}
+
+/// One row of [`ConstructionPolicy::installations`].
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstallationRule {
+    pub to: String,
+    pub relation: String,
+}
+
+/// [`ConstructionPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct ConstructionRules {
+    pub geometry_hosts: Vec<Name>,
+    pub installations: HashMap<Name, (Name, String)>,
+    pub dates: HashMap<Name, Name>,
 }
 
 /// What happens to an underground utility's Dm attribute once its geometry
@@ -404,6 +467,9 @@ pub struct Lod4Rules {
     pub lod2: Vec<String>,
     pub lod3: Vec<String>,
     pub fallback: Lod4Fallback,
+    /// Namespace URIs of [`Lod4Policy::modules`].
+    pub modules: Vec<String>,
+    pub interior: Vec<Name>,
 }
 
 /// How the input's `codelists/` is carried into the output.
@@ -541,6 +607,8 @@ pub struct Rules {
     schema_location: Option<String>,
     height: HeightDefaults,
     lod4: Lod4Rules,
+    lod_types: Vec<(Name, LodTypeTable)>,
+    construction: ConstructionRules,
     codelists: CodelistsPolicy,
     ade_hooks: HashMap<Name, Name>,
     quality: QualityRules,
@@ -664,12 +732,58 @@ impl Rules {
             lod2: policy.lod2.clone(),
             lod3: policy.lod3.clone(),
             fallback: policy.fallback,
+            modules: policy
+                .modules
+                .iter()
+                .map(|prefix| {
+                    output.get(prefix).cloned().ok_or_else(|| {
+                        Error::Profile(format!("[lod4] modules names undeclared prefix `{prefix}`"))
+                    })
+                })
+                .collect::<Result<_>>()?,
+            interior: policy
+                .interior
+                .iter()
+                .map(|n| parse_name(n, output))
+                .collect::<Result<_>>()?,
         };
         if let Some(code) = lod4.lod2.iter().find(|c| lod4.lod3.contains(c)) {
             return Err(Error::Profile(format!(
                 "[lod4] lists code `{code}` under both lod2 and lod3"
             )));
         }
+
+        let mut lod_types = Vec::new();
+        for (ty, table) in &profile.lod_types {
+            if let Some(code) = table.map.keys().find(|c| table.drop.contains_key(*c)) {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` both maps and drops code `{code}`"
+                )));
+            }
+            lod_types.push((parse_name(ty, output)?, table.clone()));
+        }
+
+        let policy = &profile.construction;
+        let mut installations = HashMap::new();
+        for (from, rule) in &policy.installations {
+            installations.insert(
+                parse_name(from, output)?,
+                (parse_name(&rule.to, output)?, rule.relation.clone()),
+            );
+        }
+        let mut dates = HashMap::new();
+        for (from, to) in &policy.dates {
+            dates.insert(parse_name(from, output)?, parse_name(to, output)?);
+        }
+        let construction = ConstructionRules {
+            geometry_hosts: policy
+                .geometry_hosts
+                .iter()
+                .map(|h| parse_name(h, output))
+                .collect::<Result<_>>()?,
+            installations,
+            dates,
+        };
 
         if let Some(pattern) = codelists.local.iter().find(|p| p.matches('*').count() > 1) {
             return Err(Error::Profile(format!(
@@ -716,6 +830,8 @@ impl Rules {
             schema_location,
             height: profile.height.clone(),
             lod4,
+            lod_types,
+            construction,
             codelists,
             ade_hooks,
             quality,
@@ -775,6 +891,16 @@ impl Rules {
     /// Where LOD4 content goes. See [`Lod4Policy`].
     pub fn lod4(&self) -> &Lod4Rules {
         &self.lod4
+    }
+
+    /// Feature type `ty` and its `lodType` table, if the profile gives one.
+    pub fn lod_types(&self, ty: &Name) -> Option<&(Name, LodTypeTable)> {
+        self.lod_types.iter().find(|(name, _)| name == ty)
+    }
+
+    /// The construction rewrites' properties. See [`ConstructionPolicy`].
+    pub fn construction(&self) -> &ConstructionRules {
+        &self.construction
     }
 
     /// The CityGML property an i-UR class hangs off in 3.0, keyed by the

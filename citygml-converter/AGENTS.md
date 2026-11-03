@@ -69,10 +69,17 @@ The single most common mistake here is putting a mapping in the wrong layer.
   `# BEGIN/END GENERATED` markers. Everything outside those markers is
   hand-written and wins, and the generator skips any `from` already ruled on.
 * **A rewrite that changes a value or the shape of a subtree** →
+  `core/src/construction.rs` for those every construction shares (installations
+  with their `con:relationToConstruction`, construction dates, `lodNGeometry`
+  by the geometry it holds), which names no thematic module and reads the
+  properties it acts on from the profile's `[construction]` table,
   `core/src/bldg.rs` for building-specific ones, `core/src/iur.rs` for i-UR ones
   (the ADE hook rewrite), `core/src/lod4.rs` for where LOD4 goes (decided per
   feature from its measurement code and the profile's `[lod4]` table, never a
-  rename row, since a `lod4*` rule in a profile would hide it from that pass),
+  rename row, since a `lod4*` rule in a profile would hide it from that pass,
+  with the modules it folds and the elements marking the interior model listed
+  in that table too, and the plain `lodType` codes it rewrites first read from
+  the `[lod_types]` table),
   `core/src/xal.rs` for addresses (the xAL 2.0 content of `core:xalAddress`
   becomes an xAL 3.0 Address, and addresses appear on several feature types, so
   it is not part of `bldg.rs`), `core/src/app.rs` for the appearance module (the
@@ -84,7 +91,11 @@ The single most common mistake here is putting a mapping in the wrong layer.
 * **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
   own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
   the transportation module and `core/src/unf.rs` and the `[unf]` table are for
-  underground utilities. Do not grow `bldg.rs` sideways.
+  underground utilities. Do not grow `bldg.rs` sideways. A module deriving from
+  the construction module (`brid`, `tun`, `cons`) adds rows to
+  `[construction]`, `[lod4]` and `[lod_types]` before it adds Rust. Rows naming
+  i-UR source classes (`uro:OtherConstruction`) go in `iur-4.0-target.toml`,
+  since they hold for every source minor.
 * **A rewrite that moves content between top-level members** → read ahead
   with `xml::Reader::scan` and keep only the small part that moves, the way
   `core/src/storey.rs` collects floor groups (a 2.0 `grp:CityObjectGroup`
@@ -95,13 +106,13 @@ The single most common mistake here is putting a mapping in the wrong layer.
   decides when to call it. Coordinates are copied as strings, never
   reformatted, except the one value the construction changes.
 
-`storey.rs`, `common.rs`, `unf.rs`, `lod4.rs`, `bldg.rs`, `tran.rs` and
-`iur.rs` run **after** the rename pass, so they speak CityGML **3.0** and i-UR
+`storey.rs`, `common.rs`, `unf.rs`, `lod4.rs`, `construction.rs`, `bldg.rs`,
+`tran.rs` and `iur.rs` run **after** the rename pass, so they speak CityGML **3.0** and i-UR
 **4.0** names only. Writing a 2.0 namespace constant in there is a bug
 (`storey`'s read-ahead sees 2.0 input and maps each name through the profile
 before comparing). The order is
-`storey` -> `common` -> `xal` -> `app` -> `unf` -> `lod4` -> `bldg` -> `tran` ->
-`iur`, and each step is placed so that a wrapper it introduces is never
+`storey` -> `common` -> `xal` -> `app` -> `unf` -> `lod4` -> `construction` ->
+`bldg` -> `tran` -> `iur`, and each step is placed so that a wrapper it introduces is never
 mistaken for something the next step handles. `storey` nests each storey in its
 building before anything else runs, so every later pass converts the storey's
 generic attributes, dates and i-UR attributes along with the building's, and
@@ -110,7 +121,9 @@ is not a building property, `unf` has removed an underground utility's LOD4 and 
 descriptors before `lod4` would read them as describing nothing, the appearance
 links to geometry `unf` dropped are pruned right after it, member by member and
 on later members of the same document, `lod4` has retagged every `lod4*` before
-`bldg` looks at geometry so `bldg` can never emit an LOD4 slot, `tran` has
+`construction` looks at geometry so it can never emit an LOD4 slot, the
+storey check runs right after `lod4` and only when it kept an interior model,
+`tran` has
 renumbered the LOD-indexed quality descriptors before `iur` supplies the one
 i-UR requires, and `iur`'s
 `bldg:adeOfAbstractBuilding` would be a building property if it ran before

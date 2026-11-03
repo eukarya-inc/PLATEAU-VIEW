@@ -21,6 +21,7 @@
 pub mod app;
 pub mod bldg;
 pub mod common;
+pub mod construction;
 pub mod convert;
 pub mod dataset;
 pub mod detect;

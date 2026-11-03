@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use crate::app::AppearanceRewrite;
 use crate::bldg::BuildingRewrite;
 use crate::common::CommonRewrite;
+use crate::construction::ConstructionRewrite;
 use crate::dataset::Dataset;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
@@ -77,6 +78,7 @@ pub struct Converter {
     app: AppearanceRewrite,
     unf: UnfRewrite,
     lod4: Lod4Rewrite,
+    construction: ConstructionRewrite,
     bldg: BuildingRewrite,
     tran: TranRewrite,
     iur: IurRewrite,
@@ -106,6 +108,7 @@ impl Converter {
         let schema = ChildOrder::target()?;
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
+        let construction = ConstructionRewrite::new(&rules)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules, &schema)?;
@@ -124,6 +127,7 @@ impl Converter {
             app,
             unf,
             lod4,
+            construction,
             bldg,
             tran,
             iur,
@@ -327,7 +331,7 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `storey`,
-    /// `common`, `xal`, `app`, `unf`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values
+    /// `common`, `xal`, `app`, `unf`, `lod4`, `construction`, `bldg`, `tran`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry an earlier
     /// member of the same document dropped are removed, and a member left
@@ -373,7 +377,10 @@ impl Converter {
         if element.is(&self.core_ns, "appearanceMember") {
             state.appearance_seen = true;
         }
-        self.lod4.apply(&mut element, &mut report.warnings);
+        if self.lod4.apply(&mut element, &mut report.warnings) {
+            self.storey.warn_missing(&element, &mut report.warnings);
+        }
+        self.construction.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
         self.tran
