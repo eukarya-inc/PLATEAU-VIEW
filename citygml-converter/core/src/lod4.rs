@@ -121,20 +121,12 @@ impl Lod4Rewrite {
                     if let Some(host) = host.filter(|_| self.is_plain_lod_type(&child)) {
                         let old = child.text().trim().to_owned();
                         let list = host.list();
-                        if host.exterior().contains(&old.as_str()) {
-                            child.children = vec![Node::Text(format!("{old}_exterior"))];
+                        if let Some(new) = exterior_lod_type(&old) {
                             warnings.add(format!(
-                                "lodType {old} became {old}_exterior: the i-UR 4.0 \
-                                 {list} codes classify the exterior and interior \
-                                 models separately"
+                                "lodType {old} became {new}: the i-UR 4.0 {list} codes \
+                                 classify the exterior and interior models separately"
                             ));
-                        } else if EXTERIOR_LOD_TYPES.contains(&old.as_str()) {
-                            warnings.add(format!(
-                                "lodType {old} was dropped: the i-UR 4.0 {list} code \
-                                 list defines no exterior LOD2 code, so {old}_exterior \
-                                 does not exist"
-                            ));
-                            continue;
+                            child.children = vec![Node::Text(new)];
                         } else if old == "8" {
                             warnings.add(format!(
                                 "lodType 8 (不明) has no entry in the i-UR 4.0 {list} \
@@ -502,16 +494,21 @@ impl Lod4Rewrite {
     }
 }
 
-/// Building `lodType` codes the i-UR 4.0 list defines for the exterior model.
-/// A plain 2.0-era code in this set gains the `_exterior` suffix. A code
+/// Plain 2.0-era `lodType` codes that gain the `_exterior` suffix. A code
 /// outside it, such as 3.2 or 3.3, has no 4.0 form.
+///
+/// The mapping is the same for every building type, so an underground
+/// building follows whatever a building does; only the code list differs.
 const EXTERIOR_LOD_TYPES: &[&str] = &[
     "0.0", "0.1", "1.0", "1.1", "2.0", "2.1", "2.2", "2.3", "3.0", "3.1",
 ];
 
-/// Underground building `lodType` codes the i-UR 4.0 list defines for the
-/// exterior model. Its exterior LOD2 has no code at all.
-const UNDERGROUND_EXTERIOR_LOD_TYPES: &[&str] = &["0.0", "0.1", "1.0", "1.1", "3.0", "3.1"];
+/// The i-UR 4.0 exterior code for a plain 2.0-era `lodType`, if it has one.
+fn exterior_lod_type(old: &str) -> Option<String> {
+    EXTERIOR_LOD_TYPES
+        .contains(&old)
+        .then(|| format!("{old}_exterior"))
+}
 
 /// The code list 2.0 data cites for every building's `lodType`, and the one
 /// i-UR 4.0 publishes for underground buildings.
@@ -530,13 +527,6 @@ impl LodTypes {
         match self {
             LodTypes::Building => "Building_lodType",
             LodTypes::Underground => "UndergroundBuilding_lodType",
-        }
-    }
-
-    fn exterior(self) -> &'static [&'static str] {
-        match self {
-            LodTypes::Building => EXTERIOR_LOD_TYPES,
-            LodTypes::Underground => UNDERGROUND_EXTERIOR_LOD_TYPES,
         }
     }
 }
@@ -930,8 +920,13 @@ mod tests {
             .collect();
         assert_eq!(
             lod_types.iter().map(|e| e.text()).collect::<Vec<_>>(),
-            ["1.0_exterior", "3.0_exterior", "3.1_interior"],
-            "2.1 has no exterior code in the underground list, 4.1 folds"
+            [
+                "1.0_exterior",
+                "2.1_exterior",
+                "3.0_exterior",
+                "3.1_interior"
+            ],
+            "plain codes map as on a building, 4.1 folds"
         );
         for lod_type in lod_types {
             assert_eq!(
@@ -939,7 +934,10 @@ mod tests {
                 Some("../../codelists/UndergroundBuilding_lodType.xml")
             );
         }
-        assert!(w.iter().any(|(m, _)| m.contains("lodType 2.1 was dropped")));
+        assert!(
+            w.iter()
+                .any(|(m, _)| m.starts_with("lodType 2.1 became 2.1_exterior"))
+        );
     }
 
     /// srcScaleLodN admits one value, and an existing one wins.
