@@ -29,10 +29,21 @@ const GENERIC_ATTRIBUTES: &[(&str, &str)] = &[
 /// 3.0.
 const LIFESPAN_DATES: &[&str] = &["creationDate", "terminationDate"];
 
+/// GML surfaces a `gml:Shell` can hold as its single member.
+const SHELL_MEMBERS: &[&str] = &[
+    "Polygon",
+    "Surface",
+    "OrientableSurface",
+    "PolyhedralSurface",
+    "TriangulatedSurface",
+    "Tin",
+];
+
 #[derive(Debug, Clone)]
 pub struct CommonRewrite {
     core: String,
     generics: String,
+    gml: String,
     rules: Rules,
 }
 
@@ -41,6 +52,7 @@ impl CommonRewrite {
         Ok(CommonRewrite {
             core: rules.output_ns("core")?.to_owned(),
             generics: rules.output_ns("gen")?.to_owned(),
+            gml: rules.output_ns("gml")?.to_owned(),
             rules: rules.clone(),
         })
     }
@@ -60,6 +72,9 @@ impl CommonRewrite {
             host
         };
         self.code_space(el, host, warnings);
+        if el.is(&self.gml, "Solid") {
+            self.solid_shells(el, warnings);
+        }
 
         let wrapper_ns = if el.is(&self.generics, "GenericAttributeSet") {
             &self.generics
@@ -80,6 +95,66 @@ impl CommonRewrite {
 
         for child in el.elements_mut() {
             self.apply_in(child, host, warnings);
+        }
+    }
+
+    /// Writes the surface under each `gml:exterior` and `gml:interior` of
+    /// `solid` as a `gml:Shell`. A `gml:CompositeSurface` becomes one with the
+    /// same attributes and members, and a single surface becomes its only
+    /// `gml:surfaceMember`. Anything else is left as it is and reported.
+    fn solid_shells(&self, solid: &mut Element, warnings: &mut Warnings) {
+        for boundary in solid.elements_mut() {
+            if !(boundary.is(&self.gml, "exterior") || boundary.is(&self.gml, "interior")) {
+                continue;
+            }
+            let Some(i) = boundary
+                .children
+                .iter()
+                .position(|n| matches!(n, Node::Element(_)))
+            else {
+                warnings.add(format!(
+                    "a gml:Solid's gml:{} holds no surface, which GML 3.2 does not allow \
+                     by reference, and was left as it is",
+                    boundary.name.local
+                ));
+                continue;
+            };
+            let Node::Element(surface) = &mut boundary.children[i] else {
+                unreachable!()
+            };
+            if surface.is(&self.gml, "Shell") {
+                continue;
+            }
+            if surface.is(&self.gml, "CompositeSurface") {
+                surface.name = Name::qualified(&self.gml, "Shell");
+                warnings.add(
+                    "a gml:CompositeSurface bounding a gml:Solid became a gml:Shell with \
+                     the same members, the only boundary GML 3.2 allows there",
+                );
+                continue;
+            }
+            if surface.name.in_ns(&self.gml) && SHELL_MEMBERS.contains(&surface.name.local.as_str())
+            {
+                let Node::Element(surface) = boundary.children.remove(i) else {
+                    unreachable!()
+                };
+                warnings.add(format!(
+                    "a gml:{} bounding a gml:Solid became the only member of a gml:Shell, \
+                     the only boundary GML 3.2 allows there",
+                    surface.name.local
+                ));
+                let mut member = Element::new(Name::qualified(&self.gml, "surfaceMember"));
+                member.push(surface);
+                let mut shell = Element::new(Name::qualified(&self.gml, "Shell"));
+                shell.push(member);
+                boundary.children.insert(i, Node::Element(shell));
+                continue;
+            }
+            warnings.add(format!(
+                "a gml:Solid is bounded by {}, which no gml:Shell can hold, and was left \
+                 as it is",
+                self.rules.display_name(&surface.name)
+            ));
         }
     }
 

@@ -147,12 +147,7 @@ fn geometry_coordinates_are_carried_through_unchanged() {
 #[test]
 fn every_geometry_gets_a_gml_id() {
     let (output, _) = convert_fixture();
-    for geometry in [
-        "gml:Solid",
-        "gml:CompositeSurface",
-        "gml:MultiSurface",
-        "gml:Polygon",
-    ] {
+    for geometry in ["gml:Solid", "gml:Shell", "gml:MultiSurface", "gml:Polygon"] {
         let opens = output.matches(&format!("<{geometry} ")).count();
         assert!(opens > 0, "no {geometry} in the output");
     }
@@ -160,7 +155,7 @@ fn every_geometry_gets_a_gml_id() {
     let ids = output.matches("gml:id=").count();
     let geometries = [
         "gml:Solid ",
-        "gml:CompositeSurface ",
+        "gml:Shell ",
         "gml:MultiSurface ",
         "gml:Polygon ",
     ]
