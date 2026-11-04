@@ -26,6 +26,7 @@ use rstar::{AABB, RTree, RTreeObject};
 use super::dem::{DemError, DemProvider, DemTile, GeoBounds, PixelPositions, Upsampled};
 use super::vertical::{DhMemo, SourceCorrection};
 use super::{DEM_RESAMPLE_VERSION, upsample_subregion};
+use terrain_core::paint::paint_over;
 
 /// How many overlays may be fetched at once for a single tile.
 ///
@@ -394,16 +395,6 @@ fn upsample_from_ancestor(parent: DemTile, factor: u32, x: u32, y: u32, tile_siz
             }),
             ..parent_positions
         }),
-    }
-}
-
-/// Paint `overlay` onto `base` per pixel. Where overlay is finite, it wins.
-fn paint_over(base: &mut [f64], overlay: &[f64]) {
-    let n = base.len().min(overlay.len());
-    for i in 0..n {
-        if overlay[i].is_finite() {
-            base[i] = overlay[i];
-        }
     }
 }
 

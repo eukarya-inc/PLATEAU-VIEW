@@ -40,9 +40,66 @@ jobs:
       - name: Test
         working-directory: tile
         run: cargo test --all-targets
+  # terrain-core must build for wasm32 and give the same ΔH as the server
+  # (golden vectors, bit for bit). Also reports, without gating, how the
+  # transcendental position maths differs native vs wasm32 and the size of a
+  # wasm32 release build.
+  terrain-core-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.92"
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: tile
+          key: terrain-core-wasm
+      - name: Install wasm-bindgen-cli (the version Cargo.lock pins)
+        working-directory: tile
+        run: |
+          v=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print }' Cargo.lock)
+          if [ "$(wasm-bindgen-test-runner --version 2>/dev/null)" != "wasm-bindgen-test-runner $v" ]; then
+            cargo install wasm-bindgen-cli --version "$v" --locked
+          fi
+          wasm-bindgen-test-runner --version
+      - name: Build terrain-core (wasm32, release)
+        working-directory: tile
+        run: cargo build -p terrain-core --release --target wasm32-unknown-unknown --lib --example wasm_size
+      - name: Trig probe (native half)
+        working-directory: tile
+        env:
+          TRIG_PROBE_NATIVE: ${{ runner.temp }}/trig-native.bin
+        run: |
+          set -o pipefail
+          cargo test -p terrain-core --release --test trig_probe -- --ignored --nocapture 2>&1 | tee "$RUNNER_TEMP/native.log"
+      - name: Test terrain-core in wasm32 (Node)
+        working-directory: tile
+        env:
+          TRIG_PROBE_NATIVE: ${{ runner.temp }}/trig-native.bin
+        run: |
+          set -o pipefail
+          cargo test -p terrain-core --release --target wasm32-unknown-unknown --tests -- --nocapture 2>&1 | tee "$RUNNER_TEMP/wasm.log"
+      - name: Report
+        working-directory: tile
+        run: |
+          f=target/wasm32-unknown-unknown/release/examples/wasm_size.wasm
+          raw=$(stat -c %s "$f")
+          gz=$(gzip -9c "$f" | wc -c)
+          {
+            echo "### terrain-core wasm32"
+            echo
+            echo "- size probe wasm_size.wasm: ${raw} B raw, ${gz} B gzip -9"
+            grep -hE 'golden-nodes|trig-probe' "$RUNNER_TEMP/native.log" "$RUNNER_TEMP/wasm.log" | sed 's/^/- /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
   ci-tile-check:
     runs-on: ubuntu-latest
-    needs: [ci-tile-lint, ci-tile-test]
+    needs: [ci-tile-lint, ci-tile-test, terrain-core-wasm]
     if: always()
     steps:
       - name: Harden Runner
@@ -51,7 +108,7 @@ jobs:
           egress-policy: audit
       - name: Check if all jobs succeeded
         run: |
-          if [[ "${{ needs.ci-tile-lint.result }}" != "success" ]] || [[ "${{ needs.ci-tile-test.result }}" != "success" ]]; then
-            echo "Lint or test failed"
+          if [[ "${{ needs.ci-tile-lint.result }}" != "success" ]] || [[ "${{ needs.ci-tile-test.result }}" != "success" ]] || [[ "${{ needs.terrain-core-wasm.result }}" != "success" ]]; then
+            echo "Lint, test or terrain-core-wasm failed"
             exit 1
           fi

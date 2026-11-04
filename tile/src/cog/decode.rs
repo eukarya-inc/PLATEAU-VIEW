@@ -2,20 +2,9 @@
 
 use async_tiff::tags::SampleFormat;
 
-/// Maximum plausible terrain elevation in metres. Anything beyond this magnitude
-/// is not a real Earth elevation (Mt. Everest is ~8.85 km, Mariana Trench
-/// ~−10.9 km), so we treat such samples as nodata regardless of the COG's
-/// declared sentinel.
-///
-/// This guard catches resampling-blended fringe values that a strict nodata
-/// equality check misses — most commonly when a COG was built with a huge
-/// sentinel like `f32::MIN` (≈ −3.4 × 10³⁸) and a non-nearest resampler
-/// (`-r bilinear`, `cubic`, …) blends real elevations with the sentinel at
-/// every mask boundary, leaving values like `−2.7 × 10³⁷` that pass through
-/// any reasonable tolerance check. Even one such pixel in a quantized-mesh
-/// tile collapses the header's `min_height` / bounding-sphere / horizon
-/// occlusion into garbage and false-culls the whole tile in Cesium.
-pub const MAX_PHYSICAL_ELEVATION_M: f64 = 50_000.0;
+// Defined in `terrain-core` (shared with the WebAssembly build), next to
+// `sanitize_height`; see there for the rationale.
+pub use terrain_core::sanitize::MAX_PHYSICAL_ELEVATION_M;
 
 /// Decode raw bytes to RGBA pixel data.
 ///

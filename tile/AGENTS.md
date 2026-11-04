@@ -13,7 +13,9 @@ A high-performance tile server written in Rust. Supports XYZ tile proxying and C
 ## Directory Structure
 
 ```
-tile/
+tile/                    # Cargo workspace: the server (root package) + crates/
+├── crates/
+│   └── terrain-core/    # Pure, sync terrain primitives shared with the wasm32 build
 ├── src/
 │   ├── main.rs          # Entry point
 │   ├── lib.rs           # Library root
@@ -27,6 +29,17 @@ tile/
 ├── tests/               # E2E tests
 └── fixtures/            # Test COG files
 ```
+
+`crates/terrain-core` (std only, no runtime dependencies) holds the code that
+must give identical results natively and in WebAssembly: DEM sample positions,
+DEM resampling, the ΔH sampler, `sanitize_height`, `paint_over`. The server
+re-exports it at the old paths (`terrain::PixelPositions`,
+`terrain::vertical::sample`, …); change the code in the crate, not a copy. It
+must stay free of I/O, async, clocks and panics on input. `cargo test` /
+`cargo clippy` from `tile/` cover both packages (`default-members`); the wasm32
+tests run with `cargo test -p terrain-core --target wasm32-unknown-unknown`
+(needs the `wasm-bindgen-cli` version that `Cargo.lock` pins for
+`wasm-bindgen`).
 
 ## Development Commands
 

@@ -5,7 +5,16 @@ edition = "2024"
 description = "High-performance tile server with COG overlay support"
 license = "Apache-2.0"
 
+# The server is the root package; `crates/terrain-core` holds the pure,
+# synchronous terrain primitives it shares with the WebAssembly build.
+# `default-members` lists both so `cargo test` / `cargo clippy` run from here
+# cover the whole workspace.
+[workspace]
+members = [".", "crates/terrain-core"]
+default-members = [".", "crates/terrain-core"]
+
 [dependencies]
+terrain-core = { path = "crates/terrain-core" }
 # Web framework
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
