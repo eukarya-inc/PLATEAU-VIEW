@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use plateau_converter_core::convert::{Converter, Options};
 use plateau_converter_core::dataset::{Dataset, Staging};
-use plateau_converter_core::profile::{Lod4Fallback, Rules};
+use plateau_converter_core::profile::{Lod4Fallback, Rules, UnfDm};
 use plateau_converter_core::tran::Clearance;
 use plateau_converter_core::xml::{self, Indent};
 use plateau_converter_core::{PROFILES, detect, report::Report};
@@ -95,6 +95,12 @@ struct ConvertArgs {
     #[arg(long, value_enum, value_name = "MODE")]
     lod4_fallback: Option<Lod4FallbackArg>,
 
+    /// What happens to an underground utility's Dm attributes once their
+    /// geometry has become the feature's LOD0, namely: drop them (the
+    /// profile's default) or keep them. Always reported.
+    #[arg(long, value_enum, value_name = "MODE")]
+    unf_dm: Option<UnfDmArg>,
+
     /// Extrude every transportation LOD1 space into a solid by the clearance
     /// gauge (建築限界) height, using the profile's default per feature type.
     #[arg(long)]
@@ -114,10 +120,6 @@ struct ConvertArgs {
     /// Worker threads. 0 uses one per core.
     #[arg(short = 'j', long, default_value_t = 0)]
     jobs: usize,
-
-    /// Overwrite an existing output directory.
-    #[arg(long)]
-    force: bool,
 }
 
 #[derive(Args, Debug)]
@@ -147,6 +149,21 @@ enum Lod4FallbackArg {
     Lod3,
     Lod2,
     Drop,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum UnfDmArg {
+    Drop,
+    Keep,
+}
+
+impl From<UnfDmArg> for UnfDm {
+    fn from(value: UnfDmArg) -> Self {
+        match value {
+            UnfDmArg::Drop => UnfDm::Drop,
+            UnfDmArg::Keep => UnfDm::Keep,
+        }
+    }
 }
 
 impl From<Lod4FallbackArg> for Lod4Fallback {
@@ -197,7 +214,7 @@ fn init_tracing(verbose: u8) {
 }
 
 fn convert(args: &ConvertArgs) -> Result<()> {
-    if args.output.exists() && !args.force {
+    if args.output.exists() {
         let empty = args
             .output
             .read_dir()
@@ -205,7 +222,8 @@ fn convert(args: &ConvertArgs) -> Result<()> {
             .unwrap_or(false);
         if !empty {
             bail!(
-                "{} already exists and is not empty; pass --force to write into it",
+                "{} already exists and is not empty. Remove it or choose another \
+                 output directory",
                 args.output.display()
             );
         }
@@ -232,6 +250,7 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         parallel: true,
         lod4_fallback: args.lod4_fallback.map(Into::into),
         clearance: clearance(args)?,
+        unf_dm: args.unf_dm.map(Into::into),
     };
 
     let dataset = Dataset::open_with(&args.inputs, &staging(args.staging.as_deref()))

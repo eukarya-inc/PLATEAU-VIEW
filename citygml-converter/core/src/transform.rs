@@ -76,6 +76,7 @@ const ID_REQUIRED: &[&str] = &[
     "Surface",
     "OrientableSurface",
     "CompositeSurface",
+    "Shell",
     "TriangulatedSurface",
     "Tin",
     "MultiSurface",

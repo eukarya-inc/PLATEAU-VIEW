@@ -15,11 +15,71 @@
 //! 2.0   <uro:buildingIDAttribute>   <uro:BuildingIDAttribute>…</…></…>
 //! 3.0   <bldg:adeOfAbstractBuilding><uro:BuildingIDAttribute>…</…></…>
 //! ```
+//!
+//! A child of an i-UR class moves into the i-UR module that class declares it
+//! in, when the target schemas declare it there under the same local name and
+//! in no other module.
 
 use crate::error::Result;
 use crate::profile::{QualityRules, Rules};
 use crate::report::Warnings;
+use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
+
+/// The prefixes of the i-UR 4.0 modules.
+const MODULES: &[&str] = &["uro", "urc", "urf", "urg", "urt"];
+
+/// The per-LOD data quality descriptors, by stem.
+const QUALITY_STEMS: &[&str] = &[
+    "geometrySrcDesc",
+    "appearanceSrcDesc",
+    "publicSurveySrcDesc",
+    "srcScale",
+];
+
+/// The i-UR module namespaces a profile declares.
+#[derive(Debug, Clone, Default)]
+pub struct IurModules {
+    uris: Vec<String>,
+}
+
+impl IurModules {
+    pub fn new(rules: &Rules) -> Self {
+        Self::with_prefixes(rules, MODULES)
+    }
+
+    /// The modules among `prefixes` that `rules` declares.
+    fn with_prefixes(rules: &Rules, prefixes: &[&str]) -> Self {
+        IurModules {
+            uris: prefixes
+                .iter()
+                .filter_map(|prefix| rules.output_ns(prefix).ok())
+                .map(str::to_owned)
+                .collect(),
+        }
+    }
+
+    /// True when `name` is in one of the modules.
+    pub fn contains(&self, name: &Name) -> bool {
+        self.uris.iter().any(|uri| name.in_ns(uri))
+    }
+
+    /// The stem and LOD digit of a per-LOD quality descriptor, such as
+    /// `("geometrySrcDesc", '2')` for `urc:geometrySrcDescLod2`.
+    pub fn quality_descriptor(&self, name: &Name) -> Option<(&'static str, char)> {
+        if !self.contains(name) {
+            return None;
+        }
+        let stem = QUALITY_STEMS
+            .iter()
+            .copied()
+            .find(|stem| name.local.starts_with(stem))?;
+        let rest = name.local[stem.len()..].strip_prefix("Lod")?;
+        let mut chars = rest.chars();
+        let digit = chars.next().filter(char::is_ascii_digit)?;
+        chars.as_str().is_empty().then_some((stem, digit))
+    }
+}
 
 /// i-UR elements that were a `gYear` or `gYearMonth` in 3.x and are a full
 /// date in the 4.0 schemas. `urg` is absent, since its statistical-grid types
@@ -54,13 +114,17 @@ const YEAR_TO_DATE: &[&str] = &[
 #[derive(Debug, Clone)]
 pub struct IurRewrite {
     /// The i-UR namespaces whose properties are candidates for rehoming.
-    modules: Vec<String>,
+    modules: IurModules,
     /// The subset of [`IurRewrite::modules`] whose year-valued elements became
     /// dates in 4.0, meaning everything but `urg`.
-    date_modules: Vec<String>,
+    date_modules: IurModules,
     /// The child a data quality attribute must carry, and what to put in it.
     quality: QualityRules,
     rules: Rules,
+    /// The target schemas' content models.
+    schema: ChildOrder,
+    /// `core:adeOfAbstractCityObject`, which every city object declares.
+    city_object_hook: Name,
 }
 
 /// Why an i-UR element in a property position is not an ADE wrapper.
@@ -72,39 +136,35 @@ enum NotAHook {
 }
 
 impl IurRewrite {
-    pub fn new(rules: &Rules) -> Result<Self> {
-        let mut modules = Vec::new();
-        let mut date_modules = Vec::new();
-        for prefix in ["uro", "urc", "urf", "urg", "urt"] {
-            if let Ok(uri) = rules.output_ns(prefix) {
-                modules.push(uri.to_owned());
-                if prefix != "urg" {
-                    date_modules.push(uri.to_owned());
-                }
-            }
-        }
+    /// `schema` holds the target schemas' content models.
+    pub fn new(rules: &Rules, schema: &ChildOrder) -> Result<Self> {
+        let date_prefixes: Vec<&str> = MODULES.iter().copied().filter(|p| *p != "urg").collect();
         Ok(IurRewrite {
-            modules,
-            date_modules,
+            modules: IurModules::new(rules),
+            date_modules: IurModules::with_prefixes(rules, &date_prefixes),
             quality: rules.quality().clone(),
             rules: rules.clone(),
+            schema: schema.clone(),
+            city_object_hook: Name::qualified(rules.output_ns("core")?, "adeOfAbstractCityObject"),
         })
     }
 
     /// Rewrites `el` and its descendants in place.
     ///
     /// The hook rewrite is attempted on the children of a non-i-UR element
-    /// only.
+    /// and of an i-UR city object, except a child the element's own content
+    /// model declares.
     pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
         self.required_quality_child(el, warnings);
-        let host = !self.is_iur(&el.name);
+        let host = !self.is_iur(&el.name) || self.schema.declares(&el.name, &self.city_object_hook);
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
                 Node::Element(child) => {
+                    let child = self.move_to_declared_module(&el.name, child, warnings);
                     let child = self.year_to_date(child, warnings);
-                    let child = if host {
+                    let child = if host && !self.schema.declares(&el.name, &child.name) {
                         self.rewrite(child, warnings)
                     } else {
                         child
@@ -153,7 +213,8 @@ impl IurRewrite {
 
     /// The CityGML property that should carry `property`'s single class
     /// child. An element whose own name is upper-case, one holding no class,
-    /// or one holding several is a [`NotAHook`].
+    /// one holding a child outside i-UR, or one holding several is a
+    /// [`NotAHook`].
     fn hook_for(&self, property: &Element) -> std::result::Result<Name, NotAHook> {
         if property.name.local.starts_with(char::is_uppercase) {
             return Err(NotAHook::NotAWrapper);
@@ -171,6 +232,9 @@ impl IurRewrite {
             };
         };
         let class = class.name.clone();
+        if !self.is_iur(&class) {
+            return Err(NotAHook::NotAWrapper);
+        }
         if elements.next().is_some() {
             let n = property.elements().count();
             return Err(NotAHook::Unresolved(format!(
@@ -185,11 +249,46 @@ impl IurRewrite {
         })
     }
 
+    /// Renames an i-UR `child` of `parent` into the one i-UR module whose
+    /// element of the same local name `parent`'s content model declares. A
+    /// child the model already declares, or one it declares in no module or in
+    /// several, is returned unchanged.
+    fn move_to_declared_module(
+        &self,
+        parent: &Name,
+        mut child: Element,
+        warnings: &mut Warnings,
+    ) -> Element {
+        if !self.is_iur(&child.name) {
+            return child;
+        }
+        let Some(ranks) = self.schema.of(parent) else {
+            return child;
+        };
+        if ranks.contains_key(&child.name) {
+            return child;
+        }
+        let mut found = ranks
+            .keys()
+            .filter(|n| n.local == child.name.local && self.is_iur(n));
+        let (Some(to), None) = (found.next(), found.next()) else {
+            return child;
+        };
+        warnings.add(format!(
+            "{} in {} became {}, the module {} declares it in",
+            self.rules.display_name(&child.name),
+            self.rules.display_name(parent),
+            self.rules.display_name(to),
+            self.rules.display_name(parent),
+        ));
+        child.name = to.clone();
+        child
+    }
+
     /// Pads a 3.x year (`2021`) or year-month (`2021-04`) value to the full
     /// date the 4.0 schemas require, on the elements they retyped.
     fn year_to_date(&self, mut el: Element, warnings: &mut Warnings) -> Element {
-        if !self.date_modules.iter().any(|uri| el.name.in_ns(uri))
-            || !YEAR_TO_DATE.contains(&el.name.local.as_str())
+        if !self.date_modules.contains(&el.name) || !YEAR_TO_DATE.contains(&el.name.local.as_str())
         {
             return el;
         }
@@ -253,7 +352,7 @@ impl IurRewrite {
     }
 
     fn is_iur(&self, name: &Name) -> bool {
-        self.modules.iter().any(|uri| name.in_ns(uri))
+        self.modules.contains(name)
     }
 }
 
@@ -266,7 +365,11 @@ mod tests {
     const URO: &str = "https://www.geospatial.jp/iur/uro/4.0";
 
     fn rewrite() -> IurRewrite {
-        IurRewrite::new(&Rules::from_toml(PROFILES[1].1).unwrap()).unwrap()
+        IurRewrite::new(
+            &Rules::from_toml(PROFILES[1].1).unwrap(),
+            &ChildOrder::target().unwrap(),
+        )
+        .unwrap()
     }
 
     /// Wraps `child` in a 3.0 Building and applies the rewrite.

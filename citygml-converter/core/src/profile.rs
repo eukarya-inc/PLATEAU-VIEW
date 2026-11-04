@@ -60,6 +60,9 @@ pub struct Profile {
     /// The values the transportation rewrite supplies. See [`TranPolicy`].
     #[serde(default)]
     pub tran: TranPolicy,
+    /// The underground utility rewrite's choices. See [`UnfPolicy`].
+    #[serde(default)]
+    pub unf: UnfPolicy,
 }
 
 impl Profile {
@@ -366,6 +369,34 @@ impl Default for Lod4Policy {
     }
 }
 
+/// What happens to an underground utility's Dm attribute once its geometry
+/// has become the feature's LOD0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UnfDm {
+    /// Remove every Dm attribute from the feature.
+    #[default]
+    Drop,
+    /// Keep the Dm attributes beside the LOD0 copied out of them.
+    Keep,
+}
+
+impl UnfDm {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UnfDm::Drop => "drop",
+            UnfDm::Keep => "keep",
+        }
+    }
+}
+
+/// The choices the underground utility rewrite takes from the profile.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct UnfPolicy {
+    pub dm: UnfDm,
+}
+
 /// [`Lod4Policy`] with its attribute resolved to an expanded name.
 #[derive(Debug, Clone)]
 pub struct Lod4Rules {
@@ -515,6 +546,7 @@ pub struct Rules {
     quality: QualityRules,
     retarget_by_type: HashMap<Name, IndexMap<String, String>>,
     tran: TranRules,
+    unf: UnfPolicy,
 }
 
 impl Rules {
@@ -689,6 +721,7 @@ impl Rules {
             quality,
             retarget_by_type,
             tran,
+            unf: profile.unf.clone(),
         })
     }
 
@@ -772,6 +805,11 @@ impl Rules {
     /// The values the transportation rewrite supplies. See [`TranPolicy`].
     pub fn tran(&self) -> &TranRules {
         &self.tran
+    }
+
+    /// The underground utility rewrite's choices. See [`UnfPolicy`].
+    pub fn unf(&self) -> &UnfPolicy {
+        &self.unf
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.

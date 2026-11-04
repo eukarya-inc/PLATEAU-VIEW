@@ -159,7 +159,7 @@ fn clearance_extrudes_every_lod1_space() {
 
     // 5 divided-area spaces and 2 minted full-width spaces carry LOD1.
     assert_eq!(count(&output, "<core:lod1Solid>"), 7);
-    assert_eq!(count(&output, "<gml:Shell>"), 7);
+    assert_eq!(count(&output, "<gml:Shell gml:id="), 7);
     assert_eq!(count(&output, "<gml:CompositeSolid"), 0);
     assert!(
         output.contains(

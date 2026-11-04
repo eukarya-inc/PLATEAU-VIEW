@@ -166,3 +166,13 @@ lane_function = "1010"
 [tran.clearance_lod_type."tran:Railway"]
 traffic = "1.0"
 auxiliary = "1.1"
+
+# ---------------------------------------------------------------------------
+# What the underground utility rewrite (core/src/unf.rs) does with a feature's
+# Dm attributes after copying their geometry into the feature's LOD0.
+#
+# dm is "drop" to remove every Dm attribute from the feature, or "keep" to
+# leave them beside the copied LOD0. `--unf-dm` overrides it per run.
+# ---------------------------------------------------------------------------
+[unf]
+dm = "drop"

@@ -25,20 +25,13 @@
 //! recorded in [`Warnings`].
 
 use crate::error::Result;
+use crate::iur::IurModules;
 use crate::profile::{Lod4Fallback, Lod4Rules, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
 /// GML geometry types that count as solids when naming a folded `lod4Geometry`.
 const SOLIDS: &[&str] = &["Solid", "CompositeSolid", "MultiSolid"];
-
-/// Data quality descriptors recorded per LOD, in their LOD4 form.
-const QUALITY_LOD4: &[&str] = &[
-    "geometrySrcDescLod4",
-    "appearanceSrcDescLod4",
-    "publicSurveySrcDescLod4",
-    "srcScaleLod4",
-];
 
 /// Where one feature's LOD4 content goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +53,7 @@ pub struct Lod4Rewrite {
     /// profile declares one.
     urc: Option<String>,
     /// The i-UR namespaces a quality descriptor may still sit in after rename.
-    iur: Vec<String>,
+    iur: IurModules,
     rules: Lod4Rules,
     display: Rules,
 }
@@ -72,18 +65,12 @@ impl Lod4Rewrite {
         if let Some(fallback) = fallback {
             lod4.fallback = fallback;
         }
-        let mut iur = Vec::new();
-        for prefix in ["uro", "urc", "urf", "urg", "urt"] {
-            if let Ok(uri) = rules.output_ns(prefix) {
-                iur.push(uri.to_owned());
-            }
-        }
         Ok(Lod4Rewrite {
             core: rules.output_ns("core")?.to_owned(),
             bldg: rules.output_ns("bldg")?.to_owned(),
             con: rules.output_ns("con")?.to_owned(),
             urc: rules.output_ns("urc").ok().map(str::to_owned),
-            iur,
+            iur: IurModules::new(rules),
             rules: lod4,
             display: rules.clone(),
         })
@@ -155,7 +142,7 @@ impl Lod4Rewrite {
     /// `4.x` values the LOD4 fold owns.
     fn is_plain_lod_type(&self, el: &Element) -> bool {
         el.name.local == "lodType"
-            && self.iur.iter().any(|ns| el.name.in_ns(ns))
+            && self.iur.contains(&el.name)
             && !el.text().trim().starts_with('4')
     }
 
@@ -470,13 +457,12 @@ impl Lod4Rewrite {
     }
 
     fn is_lod4_quality(&self, el: &Element) -> bool {
-        self.iur.iter().any(|ns| el.name.in_ns(ns))
-            && QUALITY_LOD4.contains(&el.name.local.as_str())
+        is_lod4_quality(&self.iur, el)
     }
 
     fn is_lod4_lod_type(&self, el: &Element) -> bool {
         el.name.local == "lodType"
-            && self.iur.iter().any(|ns| el.name.in_ns(ns))
+            && self.iur.contains(&el.name)
             && el.text().trim().starts_with('4')
     }
 }
@@ -526,12 +512,14 @@ fn has_lod4_geometry(el: &Element, bldg: &str) -> bool {
 }
 
 /// True when any LOD4 quality descriptor sits under `el`.
-fn has_lod4_quality(el: &Element, iur: &[String]) -> bool {
-    el.elements().any(|child| {
-        (iur.iter().any(|ns| child.name.in_ns(ns))
-            && QUALITY_LOD4.contains(&child.name.local.as_str()))
-            || has_lod4_quality(child, iur)
-    })
+fn has_lod4_quality(el: &Element, iur: &IurModules) -> bool {
+    el.elements()
+        .any(|child| is_lod4_quality(iur, child) || has_lod4_quality(child, iur))
+}
+
+/// True when `el` is a LOD4 quality descriptor.
+fn is_lod4_quality(iur: &IurModules, el: &Element) -> bool {
+    matches!(iur.quality_descriptor(&el.name), Some((_, '4')))
 }
 
 /// True when an element named `(ns, local)` sits anywhere under `el`.
