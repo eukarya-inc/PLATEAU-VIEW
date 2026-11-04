@@ -22,6 +22,35 @@ pub const SURFACES: &[&str] = &[
 /// GML curves a `gml:MultiCurve` member holds.
 pub const CURVES: &[&str] = &["LineString", "Curve", "CompositeCurve", "OrientableCurve"];
 
+/// The geometry property families a `lodN` prefix is followed by, in `core`
+/// or in a module's namespace, the 2.0 names a module's `lod4*` still
+/// carries included.
+const FAMILIES: &[&str] = &[
+    "Solid",
+    "MultiSurface",
+    "MultiCurve",
+    "Point",
+    "Geometry",
+    "TerrainIntersection",
+    "TerrainIntersectionCurve",
+    "ImplicitRepresentation",
+];
+
+/// The LOD digit of a geometry property of local name `local`, in any
+/// namespace, or `None` for anything else.
+pub fn lod_of(local: &str) -> Option<char> {
+    let rest = local.strip_prefix("lod")?;
+    let mut chars = rest.chars();
+    let lod = chars.next().filter(char::is_ascii_digit)?;
+    FAMILIES.contains(&chars.as_str()).then_some(lod)
+}
+
+/// True when any geometry property sits under `el`.
+pub fn has_geometry(el: &Element) -> bool {
+    el.elements()
+        .any(|child| lod_of(&child.name.local).is_some() || has_geometry(child))
+}
+
 /// The suffix of the `core:lod{lod}*` property a GML geometry of local name
 /// `kind` goes to, one of `Solid`, `MultiSurface`, `MultiCurve` and `Point`,
 /// or `None` when 3.0 has no property for it at that LOD.

@@ -387,6 +387,19 @@ pub struct Lod4Policy {
     /// Feature types whose LOD4 interior content goes to one place whatever
     /// its measurement code says, keyed by the type's `prefix:local` name.
     pub fixed: IndexMap<String, Lod4Fallback>,
+    /// Where a feature type's LOD4 exterior shell goes, keyed by the type's
+    /// `prefix:local` name. A type not listed folds it into LOD3.
+    pub exterior: IndexMap<String, Lod4Exterior>,
+}
+
+/// Where a feature's LOD4 exterior shell goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Lod4Exterior {
+    /// Fold into the LOD3 slots, where they are empty.
+    Lod3,
+    /// Remove it, with every feature it leaves without geometry.
+    Drop,
 }
 
 impl Default for Lod4Policy {
@@ -399,6 +412,7 @@ impl Default for Lod4Policy {
             modules: Vec::new(),
             interior: Vec::new(),
             fixed: IndexMap::new(),
+            exterior: IndexMap::new(),
         }
     }
 }
@@ -520,6 +534,7 @@ pub struct Lod4Rules {
     pub modules: Vec<String>,
     pub interior: Vec<Name>,
     pub fixed: HashMap<Name, Lod4Fallback>,
+    pub exterior: HashMap<Name, Lod4Exterior>,
 }
 
 /// How the input's `codelists/` is carried into the output.
@@ -824,6 +839,11 @@ impl Rules {
                 .collect::<Result<_>>()?,
             fixed: policy
                 .fixed
+                .iter()
+                .map(|(ty, target)| Ok((parse_name(ty, output)?, *target)))
+                .collect::<Result<_>>()?,
+            exterior: policy
+                .exterior
                 .iter()
                 .map(|(ty, target)| Ok((parse_name(ty, output)?, *target)))
                 .collect::<Result<_>>()?,

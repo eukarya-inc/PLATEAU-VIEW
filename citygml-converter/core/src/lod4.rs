@@ -30,8 +30,12 @@
 //! recorded in [`Warnings`].
 
 use crate::error::Result;
+use std::collections::HashSet;
+
+use crate::geometry::{collect_ids, has_geometry};
 use crate::iur::IurModules;
-use crate::profile::{Lod4Fallback, Lod4Rules, LodTypeTable, Rules};
+use crate::lod_type::{self, Added};
+use crate::profile::{Lod4Exterior, Lod4Fallback, Lod4Rules, LodTypeTable, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
@@ -47,6 +51,9 @@ enum Target {
     Drop,
     /// The feature carries LOD4 descriptors but no LOD4 geometry.
     Absent,
+    /// The feature's only LOD4 geometry was the exterior shell, which the
+    /// profile's `[lod4.exterior]` drops.
+    Shed,
 }
 
 /// What one member's fold placed, per side. `Some` when geometry of that side
@@ -70,6 +77,7 @@ impl Folded {
 
 #[derive(Debug, Clone)]
 pub struct Lod4Rewrite {
+    gml: String,
     core: String,
     /// The properties whose child is a boundary surface.
     surface_properties: Vec<Name>,
@@ -95,6 +103,7 @@ impl Lod4Rewrite {
             surface_properties.push(Name::qualified(con, "fillingSurface"));
         }
         Ok(Lod4Rewrite {
+            gml: rules.output_ns("gml")?.to_owned(),
             core: core.to_owned(),
             surface_properties,
             urc: rules.output_ns("urc").ok().map(str::to_owned),
@@ -106,11 +115,23 @@ impl Lod4Rewrite {
 
     /// Rewrites one top-level member and its descendants in place.
     ///
-    /// One decision is taken from the code `member` carries and applied to
-    /// every LOD4 element under it. Returns true when an interior model was
-    /// folded to an LOD rather than dropped.
-    pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) -> bool {
+    /// A feature type the profile's `[lod4.exterior]` drops the shell of
+    /// loses it first, along with every feature it leaves without geometry,
+    /// whose `gml:id`s are added to `dropped`. One decision is then taken
+    /// from the code `member` carries and applied to every LOD4 element left
+    /// under it. Returns true when an interior model was folded to an LOD
+    /// rather than dropped.
+    pub fn apply(
+        &self,
+        member: &mut Element,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> bool {
         self.map_lod_types(member, None, warnings);
+        let shed = self.rules.exterior.get(&feature(member).name) == Some(&Lod4Exterior::Drop) && {
+            let label = self.feature_name(member);
+            self.drop_exterior(member, false, &label, dropped, warnings)
+        };
         let target = if self.has_lod4_geometry(member) {
             match self.rules.fixed.get(&feature(member).name) {
                 Some(fixed) => {
@@ -125,7 +146,7 @@ impl Lod4Rewrite {
                 None => self.decide(member, warnings),
             }
         } else if has_lod4_quality(member, &self.iur) {
-            Target::Absent
+            if shed { Target::Shed } else { Target::Absent }
         } else {
             return false;
         };
@@ -347,11 +368,69 @@ impl Lod4Rewrite {
         }
     }
 
+    /// Removes the LOD4 geometry properties under `el` outside the interior
+    /// model, with each feature they leave without geometry and each property
+    /// they leave empty, adding their `gml:id`s to `dropped`. `interior` says
+    /// whether `el` belongs to the interior model and `label` names the
+    /// feature being decided. Returns true when anything was removed.
+    fn drop_exterior(
+        &self,
+        el: &mut Element,
+        interior: bool,
+        label: &str,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> bool {
+        if interior {
+            return false;
+        }
+        let mut lost = false;
+        let children = std::mem::take(&mut el.children);
+        let mut out = Vec::with_capacity(children.len());
+        for child in children {
+            let Node::Element(mut child) = child else {
+                out.push(child);
+                continue;
+            };
+            if self.is_lod4_geometry(&child) {
+                warnings.add(format!(
+                    "{} was dropped: CityGML 3.0 has no LOD4, and the LOD4 exterior of a \
+                     {label} has no LOD to go to",
+                    self.display.display_name(&child.name)
+                ));
+                collect_ids(&child, &self.gml, dropped);
+                lost = true;
+                continue;
+            }
+            let had_content = child.elements().next().is_some();
+            let child_interior = self.marks_interior(&child.name);
+            let child_lost =
+                self.drop_exterior(&mut child, child_interior, label, dropped, warnings);
+            lost |= child_lost;
+            let is_feature =
+                child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
+            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
+            let emptied_property =
+                !is_feature && child_lost && had_content && child.elements().next().is_none();
+            if emptied_feature || emptied_property {
+                if emptied_feature {
+                    warnings.add(format!(
+                        "{} was dropped along with the LOD4 exterior, its only geometry",
+                        self.display.display_name(&child.name)
+                    ));
+                }
+                collect_ids(&child, &self.gml, dropped);
+                continue;
+            }
+            out.push(Node::Element(child));
+        }
+        el.children = out;
+        lost
+    }
+
     /// Adds to `member`'s feature the `folded` codes of its `[lod_types]`
     /// table for each side `folded` records, the interior one keyed by `lod`
-    /// and the exterior one by LOD3. A code goes next to the feature's first
-    /// `lodType`, or else among its first quality descriptors, and is skipped
-    /// when already present.
+    /// and the exterior one by LOD3, as [`lod_type::add`] places them.
     fn add_folded_lod_types(
         &self,
         member: &mut Element,
@@ -373,75 +452,22 @@ impl Lod4Rewrite {
                 continue;
             };
             let code = if split { &codes.split } else { &codes.whole };
-            let Some(path) = self.lod_type_holder(feature) else {
-                warnings.add(format!(
+            match lod_type::add(&self.iur, feature, code, &table.list) {
+                Added::Added => {
+                    let surfaces = if split { "with" } else { "without" };
+                    warnings.add(format!(
+                        "lodType {code} was added to the {label}: its LOD4 {side} became \
+                         LOD{lod} {surfaces} boundary surfaces, and it carried no code of its \
+                         own"
+                    ));
+                }
+                Added::Present => {}
+                Added::NoHolder => warnings.add(format!(
                     "the {label} was given no lodType {code} for its folded LOD4 {side}: it \
                      carries no data quality attribute to hold one"
-                ));
-                continue;
-            };
-            let holder = path.iter().fold(&mut *feature, |el, &i| {
-                el.elements_mut().nth(i).expect("a path just found")
-            });
-            if holder
-                .elements()
-                .any(|c| self.is_lod_type(c) && c.text().trim() == code)
-            {
-                continue;
+                )),
             }
-            holder.push(self.new_lod_type(holder, code, &table.list));
-            let surfaces = if split { "with" } else { "without" };
-            warnings.add(format!(
-                "lodType {code} was added to the {label}: its LOD4 {side} became LOD{lod} \
-                 {surfaces} boundary surfaces, and it carried no code of its own"
-            ));
         }
-    }
-
-    /// The child indices from `el` down to the first element holding a
-    /// `lodType`, or else the first holding a quality descriptor.
-    fn lod_type_holder(&self, el: &Element) -> Option<Vec<usize>> {
-        let lod_type = |e: &Element| e.elements().any(|c| self.is_lod_type(c));
-        let descriptor = |e: &Element| {
-            e.elements()
-                .any(|c| self.iur.quality_descriptor(&c.name).is_some())
-        };
-        path_to(el, &lod_type).or_else(|| path_to(el, &descriptor))
-    }
-
-    /// A `lodType` holding `code`, named and with its `codeSpace` taken from
-    /// a `lodType` in `holder`, or else from a quality descriptor there, with
-    /// the code list `list`.
-    fn new_lod_type(&self, holder: &Element, code: &str, list: &str) -> Element {
-        let sibling = holder.elements().find(|c| self.is_lod_type(c));
-        let (name, code_space) = match sibling {
-            Some(sibling) => (
-                sibling.name.clone(),
-                sibling.attr(None, "codeSpace").map(str::to_owned),
-            ),
-            None => {
-                let descriptor = holder
-                    .elements()
-                    .find(|c| self.iur.quality_descriptor(&c.name).is_some());
-                let ns = descriptor
-                    .and_then(|d| d.name.ns.clone())
-                    .or_else(|| self.urc.clone())
-                    .unwrap_or_default();
-                let dir = descriptor
-                    .and_then(|d| d.attr(None, "codeSpace"))
-                    .and_then(|c| c.rsplit_once('/'))
-                    .map(|(dir, _)| format!("{dir}/"));
-                (
-                    Name::qualified(&ns, "lodType"),
-                    dir.map(|dir| format!("{dir}{list}")),
-                )
-            }
-        };
-        let mut el = Element::with_text(name, code);
-        if let Some(code_space) = code_space {
-            el.set_attr(Name::unqualified("codeSpace"), code_space);
-        }
-        el
     }
 
     /// True when a `4.x` `lodType` sits under `el`.
@@ -483,7 +509,7 @@ impl Lod4Rewrite {
     ) -> Option<Element> {
         let from = self.display.display_name(&child.name);
         let lod = match target {
-            Target::Drop | Target::Absent => {
+            Target::Drop | Target::Absent | Target::Shed => {
                 warnings.add(format!(
                     "{from} was dropped: CityGML 3.0 has no LOD4 and the fallback is drop"
                 ));
@@ -533,6 +559,12 @@ impl Lod4Rewrite {
             Target::Drop => {
                 warnings.add(format!(
                     "{from} was dropped: CityGML 3.0 has no LOD4 and the fallback is drop"
+                ));
+                return None;
+            }
+            Target::Shed => {
+                warnings.add(format!(
+                    "{from} was dropped: it described the LOD4 exterior, which was dropped"
                 ));
                 return None;
             }
@@ -586,7 +618,7 @@ impl Lod4Rewrite {
                 child.children = vec![Node::Text(new)];
                 Some(child)
             }
-            Target::Drop | Target::Absent => {
+            Target::Drop | Target::Absent | Target::Shed => {
                 warnings.add(format!(
                     "lodType {old} was dropped along with the LOD4 content it classified"
                 ));
@@ -671,20 +703,6 @@ fn feature_mut(member: &mut Element) -> &mut Element {
     member
 }
 
-/// The child indices from `el` down to the first descendant, `el` included,
-/// for which `found` holds.
-fn path_to(el: &Element, found: &dyn Fn(&Element) -> bool) -> Option<Vec<usize>> {
-    if found(el) {
-        return Some(Vec::new());
-    }
-    el.elements().enumerate().find_map(|(i, child)| {
-        path_to(child, found).map(|mut path| {
-            path.insert(0, i);
-            path
-        })
-    })
-}
-
 /// A code list's file name without its extension, for diagnostics.
 fn list_stem(list: &str) -> &str {
     list.strip_suffix(".xml").unwrap_or(list)
@@ -753,7 +771,8 @@ mod tests {
     const URO: &str = "https://www.geospatial.jp/iur/uro/4.0";
     const URC: &str = "https://www.geospatial.jp/iur/urc/4.0";
 
-    /// The 3.1 profile with a code table controlled by the tests.
+    /// The 3.1 profile with a code table controlled by the tests, and every
+    /// LOD4 exterior shell folding.
     fn rules() -> Rules {
         rules_with(vec!["L2".into()], vec!["L3".into()]).unwrap()
     }
@@ -763,6 +782,7 @@ mod tests {
         let policy = &mut profile.lod4;
         policy.lod2 = lod2;
         policy.lod3 = lod3;
+        policy.exterior.clear();
 
         Rules::compile(&profile)
     }
@@ -852,11 +872,67 @@ mod tests {
         bridge.push(rooms);
         bridge.push(quality(Some("L2")));
 
-        rewrite(None).apply(&mut bridge, &mut Warnings::new());
+        rewrite(None).apply(&mut bridge, &mut HashSet::new(), &mut Warnings::new());
 
         let mut codes = Vec::new();
         collect_codes(&bridge, &Name::qualified(URC, "lodType"), &mut codes);
         assert_eq!(codes, ["3.1_exterior", "3.0_interior"]);
+    }
+
+    /// Under the shipped `[lod4.exterior]`, a building's LOD4 shell goes with
+    /// the wall and opening it leaves without geometry, their ids reported,
+    /// while a wall keeping other geometry stays and the interior still folds.
+    #[test]
+    fn a_dropped_exterior_takes_the_surfaces_it_empties() {
+        let mut shipped = Profile::load(PROFILES[1].1).unwrap();
+        shipped.lod4.lod2 = vec!["L2".into()];
+        let rules = Rules::compile(&shipped).unwrap();
+        let surface = |id: &str, children: Vec<Element>| {
+            let mut wall = Element::new(Name::qualified(ns::CONSTRUCTION_3, "WallSurface"));
+            wall.set_attr(Name::qualified(ns::GML_32, "id"), id);
+            for c in children {
+                wall.push(c);
+            }
+            let mut boundary = Element::new(Name::qualified(ns::CITYGML_3, "boundary"));
+            boundary.push(wall);
+            boundary
+        };
+        let mut door = Element::new(Name::qualified(ns::CONSTRUCTION_3, "DoorSurface"));
+        door.set_attr(Name::qualified(ns::GML_32, "id"), "door");
+        door.push(geometry("lod4MultiSurface", "MultiSurface"));
+        let mut opening = Element::new(Name::qualified(ns::CONSTRUCTION_3, "fillingSurface"));
+        opening.push(door);
+        let mut lod2 = Element::new(Name::qualified(ns::CITYGML_3, "lod2MultiSurface"));
+        lod2.push(Element::new(Name::qualified(ns::GML_32, "MultiSurface")));
+        let mut b = building(vec![
+            geometry("lod4Solid", "Solid"),
+            surface(
+                "gone",
+                vec![geometry("lod4MultiSurface", "MultiSurface"), opening],
+            ),
+            surface(
+                "kept",
+                vec![lod2, geometry("lod4MultiSurface", "MultiSurface")],
+            ),
+            room(vec![geometry("lod4Solid", "Solid")]),
+            quality(Some("L2")),
+        ]);
+
+        let mut dropped = HashSet::new();
+        Lod4Rewrite::new(&rules, None)
+            .unwrap()
+            .apply(&mut b, &mut dropped, &mut Warnings::new());
+
+        assert!(dropped.contains("gone") && dropped.contains("door"));
+        assert!(b.child(ns::CITYGML_3, "lod3Solid").is_none());
+        let walls: Vec<_> = b
+            .elements()
+            .filter(|e| e.is(ns::CITYGML_3, "boundary"))
+            .filter_map(|e| e.elements().next())
+            .collect();
+        assert_eq!(walls.len(), 1);
+        assert_eq!(locals(walls[0]), ["lod2MultiSurface"]);
+        assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
     }
 
     /// The building's own LOD4 shell folds to LOD3 whatever the interior
@@ -869,7 +945,7 @@ mod tests {
             quality(Some("L2")),
         ]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
         assert!(b.child(ns::CITYGML_3, "lod3Solid").is_some());
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
@@ -885,7 +961,7 @@ mod tests {
             children.push(quality(Some("L3")));
             let mut b = building(children);
             let mut w = Warnings::new();
-            rewrite(None).apply(&mut b, &mut w);
+            rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
 
             let solids: Vec<_> = b
                 .elements()
@@ -915,7 +991,7 @@ mod tests {
             room(vec![geometry("lod4Solid", "Solid")]),
             quality(Some("L2")),
         ]);
-        rewrite(None).apply(&mut b, &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
         let wall = b
             .child(ns::CITYGML_3, "boundary")
             .unwrap()
@@ -956,7 +1032,7 @@ mod tests {
             inst_prop,
             quality(Some("L2")),
         ]);
-        rewrite(None).apply(&mut b, &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
 
         let room = the_room(&b);
         assert!(room.child(ns::CITYGML_3, "lod2Solid").is_some());
@@ -999,7 +1075,7 @@ mod tests {
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")]), class]);
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
 
         let class = b.elements().nth(1).unwrap();
         assert_eq!(
@@ -1028,13 +1104,13 @@ mod tests {
     #[test]
     fn plain_lod_types_are_suffixed_without_any_lod4() {
         let mut class = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
-        for value in ["2.0", "3.2", "8"] {
+        for value in ["2.0", "3.2", "3.4", "8"] {
             class.push(Element::with_text(Name::qualified(URC, "lodType"), value));
         }
         let mut b = building(vec![class]);
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
 
         let class = b.elements().next().unwrap();
         let lod_types: Vec<String> = class
@@ -1044,12 +1120,13 @@ mod tests {
             .collect();
         assert_eq!(
             lod_types,
-            ["2.0_exterior", "3.2"],
-            "2.0 gains the suffix, 3.2 has no 4.0 home and stays, 8 is dropped"
+            ["2.0_exterior", "2.2_exterior", "3.4"],
+            "2.0 gains the suffix, 3.2 is exterior LOD2.2, 3.4 has no 4.0 home and \
+             stays, 8 is dropped"
         );
         assert!(
             w.iter()
-                .any(|(m, _)| m.contains("lodType 3.2 has no entry"))
+                .any(|(m, _)| m.contains("lodType 3.4 has no entry"))
         );
         assert!(w.iter().any(|(m, _)| m.contains("lodType 8 (不明)")));
     }
@@ -1072,7 +1149,7 @@ mod tests {
         b.push(room(vec![geometry("lod4Solid", "Solid")]));
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
 
         let class = b.elements().next().unwrap();
         let lod_types: Vec<_> = class
@@ -1122,7 +1199,7 @@ mod tests {
             "L3",
         ));
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")]), class]);
-        rewrite(None).apply(&mut b, &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
         let class = b.elements().nth(1).unwrap();
         assert_eq!(
             locals(class),
@@ -1136,7 +1213,7 @@ mod tests {
     fn a_missing_code_takes_the_fallback_and_is_reported() {
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")])]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
         assert!(
             the_room(&b).child(ns::CITYGML_3, "lod3Solid").is_some(),
             "lod3 by default"
@@ -1147,7 +1224,7 @@ mod tests {
         );
 
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")])]);
-        rewrite(Some(Lod4Fallback::Lod2)).apply(&mut b, &mut Warnings::new());
+        rewrite(Some(Lod4Fallback::Lod2)).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
         let mut b = building(vec![
@@ -1155,7 +1232,7 @@ mod tests {
             quality(None),
         ]);
         let mut w = Warnings::new();
-        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut w);
+        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut HashSet::new(), &mut w);
         assert!(the_room(&b).children.is_empty(), "the room's LOD4 goes");
         let class = b.elements().nth(1).unwrap().elements().next().unwrap();
         assert!(class.children.is_empty(), "the LOD4 descriptors go too");
@@ -1168,7 +1245,7 @@ mod tests {
     fn lod4_descriptors_without_lod4_geometry_are_dropped_not_folded() {
         let mut b = building(vec![geometry("lod3Solid", "Solid"), quality(Some("999"))]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut w);
+        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
         let class = b
             .child(URO, "bldgDataQualityAttribute")
             .unwrap()

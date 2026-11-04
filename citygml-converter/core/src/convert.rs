@@ -95,10 +95,9 @@ pub struct Converter {
 /// What one document's conversion carries from member to member.
 #[derive(Debug, Default)]
 struct FileState {
-    /// The `gml:id`s under geometry a pass removed.
+    /// The `gml:id`s under geometry a pass removed, including those removed
+    /// from members after the first appearance member before any is written.
     dropped: HashSet<String>,
-    /// A member holding an appearance has been converted.
-    appearance_seen: bool,
     /// Floors read ahead of conversion, waiting for their building.
     floors: Floors,
 }
@@ -268,9 +267,10 @@ impl Converter {
         let mut root: Option<Element> = None;
         let mut root_input: Option<Name> = None;
         let mut closed = false;
+        let floors = self.storey.scan(label, source, &mut report.warnings)?;
         let mut state = FileState {
-            floors: self.storey.scan(label, source, &mut report.warnings)?,
-            ..FileState::default()
+            dropped: self.dropped_after_appearance(label, source, &floors)?,
+            floors,
         };
 
         writer.write_declaration(None)?;
@@ -346,8 +346,8 @@ impl Converter {
     /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
     /// `tran`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
-    /// dataset and stable across runs. Appearance links to geometry an earlier
-    /// member of the same document dropped are removed, and a member left
+    /// dataset and stable across runs. Appearance links to geometry dropped
+    /// from any member of the same document are removed, and a member left
     /// with no content is `None`. `root` is the input name of the document's
     /// root element.
     fn convert_member(
@@ -372,25 +372,22 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
-        let dropped = self
-            .unf
-            .apply(&mut element, &mut state.dropped, &mut report.warnings)
-            | self
-                .lodmap
-                .apply(&mut element, &mut state.dropped, &mut report.warnings);
-        if !self.after_drop(&mut element, dropped, report, state) {
+        self.unf
+            .apply(&mut element, &mut state.dropped, &mut report.warnings);
+        self.lodmap
+            .apply(&mut element, &mut state.dropped, &mut report.warnings);
+        if !self.after_drop(&mut element, report, state) {
             return None;
         }
-        if element.is(&self.core_ns, "appearanceMember") {
-            state.appearance_seen = true;
-        }
-        if self.lod4.apply(&mut element, &mut report.warnings) {
+        if self
+            .lod4
+            .apply(&mut element, &mut state.dropped, &mut report.warnings)
+        {
             self.storey.warn_missing(&element, &mut report.warnings);
         }
-        let dropped =
-            self.construction
-                .apply(&mut element, &mut state.dropped, &mut report.warnings);
-        if !self.after_drop(&mut element, dropped, report, state) {
+        self.construction
+            .apply(&mut element, &mut state.dropped, &mut report.warnings);
+        if !self.after_drop(&mut element, report, state) {
             return None;
         }
         self.bldg
@@ -413,23 +410,60 @@ impl Converter {
         Some(element)
     }
 
-    /// Removes the appearance links under `element` to geometry removed so
-    /// far in the document, after a pass that reports in `dropped` whether it
-    /// removed any. Reports a removal that an appearance written earlier may
-    /// still link to. Returns false when `element` is left without content.
+    /// The `gml:id`s under geometry the `unf`, `lodmap`, `lod4` and
+    /// `construction` passes remove from the members of `source` that follow
+    /// its first appearance member, skipping the floor groups in `floors`.
+    /// Empty when `source` has no appearance member.
+    fn dropped_after_appearance(
+        &self,
+        label: &str,
+        source: &str,
+        floors: &Floors,
+    ) -> Result<HashSet<String>> {
+        let mut dropped = HashSet::new();
+        if !source.contains("appearanceMember") {
+            return Ok(dropped);
+        }
+        let mut reader = Reader::new(label, source);
+        let mut root: Option<Name> = None;
+        let mut seen = false;
+        let mut warnings = Warnings::new();
+        while let Some(chunk) = reader.next_chunk()? {
+            match chunk {
+                Chunk::RootStart(element) => root = Some(element.name),
+                Chunk::Member(element) => {
+                    let Some(mut element) =
+                        transform::rename_under(&self.rules, element, root.as_ref())
+                    else {
+                        continue;
+                    };
+                    if element.is(&self.core_ns, "appearanceMember") {
+                        seen = true;
+                        continue;
+                    }
+                    if !seen || self.storey.is_floor(&element, floors) {
+                        continue;
+                    }
+                    self.unf.apply(&mut element, &mut dropped, &mut warnings);
+                    self.lodmap.apply(&mut element, &mut dropped, &mut warnings);
+                    self.lod4.apply(&mut element, &mut dropped, &mut warnings);
+                    self.construction
+                        .apply(&mut element, &mut dropped, &mut warnings);
+                }
+                _ => {}
+            }
+        }
+        Ok(dropped)
+    }
+
+    /// Removes the appearance links under `element` to geometry in
+    /// `state.dropped`. Returns false when `element` is left without content.
     fn after_drop(
         &self,
         element: &mut Element,
-        dropped: bool,
         report: &mut FileReport,
         state: &FileState,
     ) -> bool {
-        if dropped && state.appearance_seen {
-            report.warnings.add(
-                "geometry was dropped after an appearance earlier in the document was \
-                 written, so that appearance may still link to it",
-            );
-        }
         state.dropped.is_empty()
             || !self
                 .app

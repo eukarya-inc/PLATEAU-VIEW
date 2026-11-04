@@ -31,6 +31,7 @@ pub mod extrude;
 pub mod geometry;
 pub mod iur;
 pub mod lod4;
+pub mod lod_type;
 pub mod lodmap;
 pub mod profile;
 pub mod report;

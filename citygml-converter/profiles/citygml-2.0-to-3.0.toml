@@ -561,6 +561,13 @@ interior = [
 [lod4.fixed]
 "brid:Bridge" = "lod3"
 
+# Feature types whose LOD4 exterior shell is dropped, with every surface,
+# opening and installation it leaves without geometry, instead of folding into
+# the LOD3 slots. A type not listed folds it.
+[lod4.exterior]
+"bldg:Building" = "drop"
+"tun:Tunnel" = "drop"
+
 # ---------------------------------------------------------------------------
 # The LOD each feature type's 2.0 geometry moves to (core/src/lodmap.rs),
 # keyed by the type as it stands after the rename pass, then by the old LOD
@@ -572,6 +579,12 @@ interior = [
 # openings and installations it leaves without geometry, its quality
 # descriptors and its lodType codes.
 # ---------------------------------------------------------------------------
+[lod_map."bldg:Building"]
+"3" = "2"
+
+[lod_map."bldg:BuildingPart"]
+"3" = "2"
+
 [lod_map."brid:Bridge"]
 "3" = "2"
 

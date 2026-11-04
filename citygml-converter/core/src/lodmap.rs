@@ -14,8 +14,10 @@
 //!   installation or other feature left without geometry by it
 //! * its LOD `b` data quality descriptors and the `lodType` codes of LOD `b`
 //!   are removed. When the feature carries no code of LOD `a` and its
-//!   `[lod_types]` table names a `moved` code for LOD `a`, the first such
-//!   code is rewritten to that code instead
+//!   `[lod_types]` table, or that of the feature it sits in, names a `moved`
+//!   code for LOD `a`, the first such code is rewritten to that code
+//!   instead, and the code is added as [`lod_type::add`] places it when there
+//!   was none to rewrite
 //! * its LOD `a` geometry properties and descriptors are renamed to LOD `b`
 //!
 //! Every removal and move is reported, and the `gml:id` of every removed
@@ -24,25 +26,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::error::Result;
-use crate::geometry::collect_ids;
+use crate::geometry::{collect_ids, has_geometry, lod_of};
 use crate::iur::IurModules;
-use crate::profile::Rules;
+use crate::lod_type::{self, Added};
+use crate::profile::{LodTypeTable, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
-
-/// The geometry property families a `lodN` prefix is followed by, in `core`
-/// or in a module's namespace, the 2.0 names a module's `lod4*` still
-/// carries included.
-const FAMILIES: &[&str] = &[
-    "Solid",
-    "MultiSurface",
-    "MultiCurve",
-    "Point",
-    "Geometry",
-    "TerrainIntersection",
-    "TerrainIntersectionCurve",
-    "ImplicitRepresentation",
-];
 
 /// One move's removal of LOD `lod`, for [`LodMapRewrite::strip`].
 ///
@@ -88,29 +77,39 @@ impl LodMapRewrite {
             return false;
         }
         let before = dropped.len();
-        self.walk(member, dropped, warnings);
+        self.walk(member, None, dropped, warnings);
         dropped.len() > before
     }
 
-    fn walk(&self, el: &mut Element, dropped: &mut HashSet<String>, warnings: &mut Warnings) {
+    /// `host` is the `[lod_types]` table of the outermost feature `el` sits
+    /// in, if any.
+    fn walk<'a>(
+        &'a self,
+        el: &mut Element,
+        host: Option<&'a LodTypeTable>,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) {
+        let host = host.or_else(|| self.display.lod_types(&el.name).map(|(_, t)| t));
         if let Some(moves) = self.moves.get(&el.name) {
             for &(from, to) in moves {
-                self.relod(el, from, to, dropped, warnings);
+                self.relod(el, (from, to), host, dropped, warnings);
             }
         }
         for child in el.elements_mut() {
             if self.lod_of(child).is_none() {
-                self.walk(child, dropped, warnings);
+                self.walk(child, host, dropped, warnings);
             }
         }
     }
 
-    /// Moves `feature`'s LOD `from` to LOD `to`.
+    /// Moves `feature`'s LOD `from` to LOD `to`. `table` gives the `moved`
+    /// code.
     fn relod(
         &self,
         feature: &mut Element,
-        from: char,
-        to: char,
+        (from, to): (char, char),
+        table: Option<&LodTypeTable>,
         dropped: &mut HashSet<String>,
         warnings: &mut Warnings,
     ) {
@@ -125,10 +124,8 @@ impl LodMapRewrite {
                  geometry was dropped, with every feature left without geometry by it"
             ));
         }
-        let mut moved = self
-            .display
-            .lod_types(&feature.name)
-            .and_then(|(_, table)| table.moved.get(&from.to_string()))
+        let mut moved = table
+            .and_then(|table| table.moved.get(&from.to_string()))
             .filter(|_| !self.has_lod_type(feature, from, true))
             .cloned();
         let mut strip = Strip {
@@ -140,14 +137,24 @@ impl LodMapRewrite {
         };
         self.strip(feature, &mut strip, true, warnings);
         self.rename(feature, from, to, &label, true, warnings);
+        if let (Some(code), Some(table)) = (moved, table) {
+            match lod_type::add(&self.iur, feature, &code, &table.list) {
+                Added::Added => warnings.add(format!(
+                    "lodType {code} was added to the {label}: its LOD{from} takes LOD{to} and \
+                     carries no code of its own"
+                )),
+                Added::Present => {}
+                Added::NoHolder => warnings.add(format!(
+                    "the {label} was given no lodType {code} for its LOD{from} that took \
+                     LOD{to}: it carries no data quality attribute to hold one"
+                )),
+            }
+        }
     }
 
     /// The LOD digit of a geometry property, or `None` for anything else.
     fn lod_of(&self, el: &Element) -> Option<char> {
-        let rest = el.name.local.strip_prefix("lod")?;
-        let mut chars = rest.chars();
-        let lod = chars.next().filter(char::is_ascii_digit)?;
-        FAMILIES.contains(&chars.as_str()).then_some(lod)
+        lod_of(&el.name.local)
     }
 
     /// True for a feature of a listed type other than the one being decided.
@@ -175,12 +182,6 @@ impl LodMapRewrite {
         }
         el.elements()
             .any(|child| self.is_lod_type(child, lod) || self.has_lod_type(child, lod, false))
-    }
-
-    /// True when any geometry property sits under `el`.
-    fn has_geometry(&self, el: &Element) -> bool {
-        el.elements()
-            .any(|child| self.lod_of(child).is_some() || self.has_geometry(child))
     }
 
     /// Removes the LOD `lod` geometry properties under `el`, with each feature
@@ -247,7 +248,7 @@ impl LodMapRewrite {
             lost |= child_lost;
             let is_feature =
                 child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
-            let emptied_feature = is_feature && child_lost && !self.has_geometry(&child);
+            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
             let emptied_property =
                 !is_feature && child_lost && had_content && child.elements().next().is_none();
             if emptied_feature || emptied_property {
@@ -354,7 +355,9 @@ mod tests {
     }
 
     /// The moved LOD takes the slot. What the slot held goes, with the wall
-    /// it leaves empty and the descriptor that described it.
+    /// it leaves empty and the descriptor that described it, and the bridge,
+    /// which carries no lodType, gains the `moved` code beside its
+    /// descriptors.
     #[test]
     fn the_moved_lod_replaces_what_its_new_slot_held() {
         let mut quality = Element::new(Name::qualified(URC, "ExteriorDataQualityAttribute"));
@@ -391,7 +394,13 @@ mod tests {
             .elements()
             .map(|e| (e.name.local.clone(), e.text()))
             .collect();
-        assert_eq!(descriptors, [("geometrySrcDescLod2".into(), "b".into())]);
+        assert_eq!(
+            descriptors,
+            [
+                ("geometrySrcDescLod2".into(), "b".into()),
+                ("lodType".into(), "2.1_exterior".into())
+            ]
+        );
     }
 
     /// A wall whose remaining geometry is LOD4, still in the module's

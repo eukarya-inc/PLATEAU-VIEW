@@ -83,6 +83,8 @@ The single most common mistake here is putting a mapping in the wrong layer.
   3.0 LOD (`[lod_map]`, such as a bridge's old LOD3 to LOD2, the moved LOD
   winning over what the slot held, and a feature whose moved LOD carries no
   `lodType` code given the `[lod_types]` table's `moved` code),
+  `core/src/lod_type.rs` for adding a `lodType` code to a feature (shared by
+  `lodmap` and `lod4`),
   `core/src/geometry.rs` for which `core`
   property a GML geometry goes to (no module knowledge, shared by
   `construction` and `unf`), `core/src/bldg.rs` for building-specific ones,
@@ -92,8 +94,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   feature from its measurement code and the profile's `[lod4]` table, never a
   rename row, since a `lod4*` rule in a profile would hide it from that pass,
   with the modules it folds, the elements marking the interior model and the
-  feature types whose LOD4 ignores the code (`[lod4.fixed]`) listed in that
-  table too, and the plain `lodType` codes it rewrites first, plus the codes a
+  feature types whose LOD4 ignores the code (`[lod4.fixed]`) and those whose
+  LOD4 exterior shell is dropped instead of folded (`[lod4.exterior]`) listed
+  in that table too, and the plain `lodType` codes it rewrites first, plus the codes a
   folded feature without a `4.x` code gains, read from the `[lod_types]`
   table),
   `core/src/xal.rs` for addresses (the xAL 2.0 content of `core:xalAddress`
@@ -138,8 +141,10 @@ generic attributes, dates and i-UR attributes along with the building's, and
 is not a building property, `unf` has removed an underground utility's LOD4 and its
 descriptors before `lod4` would read them as describing nothing, the appearance
 links to geometry `unf` and `lodmap` dropped are pruned right after them, and
-those to geometry `construction` dropped right after it, member by member and
-on later members of the same document, `lodmap` has moved a feature's old LOD3
+those to geometry `lod4` and `construction` dropped right after the latter, member by member and
+on later members of the same document (a document with an appearance member
+is first read with only these four passes, so an appearance member ahead of
+the features already knows what they drop), `lodmap` has moved a feature's old LOD3
 out of the LOD3 slots before `lod4` folds its LOD4 shell into them, and runs
 before `construction` so a module's `lodNGeometry` moves as it is, `lod4` has
 retagged every `lod4*` before
