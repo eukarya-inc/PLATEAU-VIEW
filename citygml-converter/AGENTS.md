@@ -97,8 +97,10 @@ The single most common mistake here is putting a mapping in the wrong layer.
   feature types whose LOD4 ignores the code (`[lod4.fixed]`) and those whose
   LOD4 exterior shell is dropped instead of folded (`[lod4.exterior]`) listed
   in that table too, and the plain `lodType` codes it rewrites first, plus the codes a
-  folded feature without a `4.x` code gains, read from the `[lod_types]`
-  table),
+  folded feature without a `4.x` code gains and the interior codes a `4.x`
+  code becomes, read from the `[lod_types]` table, and the
+  `urc:InteriorDataQualityAttribute` a folded interior model's descriptors
+  move into),
   `core/src/xal.rs` for addresses (the xAL 2.0 content of `core:xalAddress`
   becomes an xAL 3.0 Address, and addresses appear on several feature types, so
   it is not part of `bldg.rs`), `core/src/app.rs` for the appearance module (the

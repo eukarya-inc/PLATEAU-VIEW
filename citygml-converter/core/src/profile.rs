@@ -423,7 +423,7 @@ impl Default for Lod4Policy {
 /// naming one of `cited_as` is pointed at `list`. `map` rewrites a plain code
 /// to its published form, `drop` names the codes removed, each with the label
 /// shown when reporting it. A code in neither is kept and reported, unless it
-/// is already one of `map`'s published codes. `4.x` codes are left to the
+/// is already one the table publishes. `4.x` codes are left to the
 /// LOD4 fold.
 ///
 /// `moved` maps an old LOD digit the type's `[lod_map]` moves to the
@@ -432,6 +432,11 @@ impl Default for Lod4Policy {
 ///
 /// `folded` gives the codes a feature is given when its LOD4 folded and it
 /// carries no `4.x` code. See [`FoldedCodes`].
+///
+/// `interior` maps a `4.x` code, then the LOD digit the interior model folds
+/// into, to the published code it becomes. A `4.x` code with one LOD only
+/// sends the interior model to that LOD whatever the measurement code says.
+/// A type without `interior` rewrites `4.x` to `<lod>.x_interior`.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct LodTypeTable {
@@ -441,6 +446,25 @@ pub struct LodTypeTable {
     pub drop: IndexMap<String, String>,
     pub moved: IndexMap<String, String>,
     pub folded: FoldedCodes,
+    pub interior: IndexMap<String, IndexMap<String, String>>,
+}
+
+impl LodTypeTable {
+    /// True when `code` is one of the published codes the table writes.
+    pub fn publishes(&self, code: &str) -> bool {
+        let folded = self
+            .folded
+            .exterior
+            .values()
+            .chain(self.folded.interior.values())
+            .flat_map(|c| [&c.whole, &c.split]);
+        self.map
+            .values()
+            .chain(self.moved.values())
+            .chain(folded)
+            .chain(self.interior.values().flat_map(IndexMap::values))
+            .any(|c| c == code)
+    }
 }
 
 /// The codes for LOD4 content folded into a LOD, per side of the model and
@@ -866,13 +890,19 @@ impl Rules {
                 .exterior
                 .keys()
                 .chain(table.folded.interior.keys());
-            if let Some(lod) = folded.into_iter().find(|lod| {
+            let interior = table.interior.values().flat_map(IndexMap::keys);
+            if let Some(code) = table.interior.keys().find(|c| !c.starts_with("4.")) {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` lists interior code `{code}`, which is not a 4.x code"
+                )));
+            }
+            if let Some(lod) = folded.chain(interior).find(|lod| {
                 let mut chars = lod.chars();
                 !matches!((chars.next(), chars.next()), (Some('0'..='3'), None))
             }) {
                 return Err(Error::Profile(format!(
-                    "[lod_types] `{ty}` keys folded codes by `{lod}`, which is not a \
-                     LOD digit 0 to 3"
+                    "[lod_types] `{ty}` keys folded or interior codes by `{lod}`, which is \
+                     not a LOD digit 0 to 3"
                 )));
             }
             lod_types.push((parse_name(ty, output)?, table.clone()));

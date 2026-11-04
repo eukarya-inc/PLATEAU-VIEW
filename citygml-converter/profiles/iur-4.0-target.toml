@@ -277,14 +277,18 @@ to = "uro:OtherConstructionInstallation"
 # list is the published code list the type's codes belong to, and a codeSpace
 # naming one of cited_as is pointed at it. map rewrites a plain 2.0-era code to
 # its published form. drop names the codes removed, each with its label. A code
-# in neither is kept and reported, unless it is already one of map's published
-# codes. 4.x codes are left to the LOD4 fold. moved names, per old LOD that
+# in neither is kept and reported, unless it is already one the table publishes.
+# 4.x codes are left to the LOD4 fold. moved names, per old LOD that
 # [lod_map] moves, the code a feature is given when that LOD moved and the
 # feature carries no code of it. It replaces the first code the move dropped.
 # folded gives, per side and keyed by the LOD the LOD4 content folded into, the
 # code a feature is given when its LOD4 folded and it carries no 4.x code. split
 # applies when any folded geometry of that side sits on a boundary surface, and
-# whole otherwise.
+# whole otherwise. interior maps a 4.x code, then the LOD the interior model
+# folds into, to its published code. A 4.x code listed under one LOD only sends
+# the interior model there whatever its measurement code says, and a code with
+# no entry at the decided LOD is dropped. A type without interior writes
+# <lod>.x_interior.
 # ---------------------------------------------------------------------------
 [lod_types."bldg:Building"]
 list = "Building_lodType.xml"
@@ -342,6 +346,17 @@ drop = { "8" = "不明" }
 
 [lod_types."brid:Bridge".folded.interior]
 "3" = { whole = "3.0_interior", split = "3.1_interior" }
+
+[lod_types."tun:Tunnel"]
+list = "Tunnel_lodType.xml"
+
+[lod_types."tun:Tunnel".moved]
+"3" = "2.0_exterior"
+
+[lod_types."tun:Tunnel".interior]
+"4.0" = { "2" = "2.0_interior" }
+"4.1" = { "2" = "2.1_interior", "3" = "3.1_interior" }
+"4.2" = { "2" = "2.2_interior", "3" = "3.1_interior" }
 
 [lod_types."con:OtherConstruction"]
 list = "OtherConstruction_lodType.xml"

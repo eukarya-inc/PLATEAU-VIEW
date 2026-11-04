@@ -38,6 +38,32 @@ pub fn add(iur: &IurModules, feature: &mut Element, code: &str, list: &str) -> A
     Added::Added
 }
 
+/// Adds a `lodType` holding `code` from the code list `list` to `holder`,
+/// named and with a `codeSpace` as [`add`] would place it in `feature`.
+/// `holder` lies outside `feature`.
+pub fn add_to(
+    iur: &IurModules,
+    feature: &Element,
+    holder: &mut Element,
+    code: &str,
+    list: &str,
+) -> Added {
+    let Some(path) = self::holder(iur, feature) else {
+        return Added::NoHolder;
+    };
+    if holder
+        .elements()
+        .any(|c| is_lod_type(iur, c) && c.text().trim() == code)
+    {
+        return Added::Present;
+    }
+    let template = path.iter().fold(feature, |el, &i| {
+        el.elements().nth(i).expect("a path just found")
+    });
+    holder.push(new_lod_type(iur, template, code, list));
+    Added::Added
+}
+
 /// An i-UR `lodType`, whatever code it holds.
 pub fn is_lod_type(iur: &IurModules, el: &Element) -> bool {
     el.name.local == "lodType" && iur.contains(&el.name)
