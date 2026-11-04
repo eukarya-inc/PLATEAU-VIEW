@@ -1,6 +1,5 @@
 //! The top-level driver, taking a dataset in and writing a converted tree out.
 
-use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -13,6 +12,7 @@ use crate::common::CommonRewrite;
 use crate::cons::ConsRewrite;
 use crate::construction::ConstructionRewrite;
 use crate::dataset::Dataset;
+use crate::dropped::Dropped;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
@@ -88,6 +88,7 @@ pub struct Converter {
     iur: IurRewrite,
     order: ChildOrder,
     gml_ns: String,
+    xlink_ns: String,
     core_ns: String,
     options: Options,
 }
@@ -95,9 +96,9 @@ pub struct Converter {
 /// What one document's conversion carries from member to member.
 #[derive(Debug, Default)]
 struct FileState {
-    /// The `gml:id`s under geometry a pass removed, including those removed
-    /// from members after the first appearance member before any is written.
-    dropped: HashSet<String>,
+    /// The geometry the passes removed, including that removed from members
+    /// after the first appearance member before any is written.
+    dropped: Dropped,
     /// Floors read ahead of conversion, waiting for their building.
     floors: Floors,
 }
@@ -124,6 +125,7 @@ impl Converter {
         };
         let gml_ns = rules.output_ns("gml")?.to_owned();
         let core_ns = rules.output_ns("core")?.to_owned();
+        let xlink_ns = rules.output_ns("xlink")?.to_owned();
         Ok(Converter {
             rules,
             storey,
@@ -140,6 +142,7 @@ impl Converter {
             iur,
             order,
             gml_ns,
+            xlink_ns,
             core_ns,
             options,
         })
@@ -372,22 +375,14 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
-        self.unf
-            .apply(&mut element, &mut state.dropped, &mut report.warnings);
-        self.lodmap
-            .apply(&mut element, &mut state.dropped, &mut report.warnings);
-        if !self.after_drop(&mut element, report, state) {
-            return None;
-        }
-        if self
-            .lod4
-            .apply(&mut element, &mut state.dropped, &mut report.warnings)
-        {
+        if self.remove_geometry(&mut element, &mut state.dropped, &mut report.warnings) {
             self.storey.warn_missing(&element, &mut report.warnings);
         }
-        self.construction
-            .apply(&mut element, &mut state.dropped, &mut report.warnings);
-        if !self.after_drop(&mut element, report, state) {
+        if !state.dropped.is_empty()
+            && self
+                .app
+                .prune(&mut element, state.dropped.ids(), &mut report.warnings)
+        {
             return None;
         }
         self.bldg
@@ -410,17 +405,16 @@ impl Converter {
         Some(element)
     }
 
-    /// The `gml:id`s under geometry the `unf`, `lodmap`, `lod4` and
-    /// `construction` passes remove from the members of `source` that follow
-    /// its first appearance member, skipping the floor groups in `floors`.
-    /// Empty when `source` has no appearance member.
+    /// The geometry [`Self::remove_geometry`] removes from the members of
+    /// `source` that follow its first appearance member, skipping the floor
+    /// groups in `floors`. Empty when `source` has no appearance member.
     fn dropped_after_appearance(
         &self,
         label: &str,
         source: &str,
         floors: &Floors,
-    ) -> Result<HashSet<String>> {
-        let mut dropped = HashSet::new();
+    ) -> Result<Dropped> {
+        let mut dropped = Dropped::new(&self.gml_ns, &self.xlink_ns);
         if !source.contains("appearanceMember") {
             return Ok(dropped);
         }
@@ -444,11 +438,7 @@ impl Converter {
                     if !seen || self.storey.is_floor(&element, floors) {
                         continue;
                     }
-                    self.unf.apply(&mut element, &mut dropped, &mut warnings);
-                    self.lodmap.apply(&mut element, &mut dropped, &mut warnings);
-                    self.lod4.apply(&mut element, &mut dropped, &mut warnings);
-                    self.construction
-                        .apply(&mut element, &mut dropped, &mut warnings);
+                    self.remove_geometry(&mut element, &mut dropped, &mut warnings);
                 }
                 _ => {}
             }
@@ -456,18 +446,23 @@ impl Converter {
         Ok(dropped)
     }
 
-    /// Removes the appearance links under `element` to geometry in
-    /// `state.dropped`. Returns false when `element` is left without content.
-    fn after_drop(
+    /// Runs the `unf`, `lodmap`, `lod4` and `construction` passes on
+    /// `element`, recording what they remove in `dropped`, then writes each
+    /// removed object kept geometry still links to back in place of the link.
+    /// Returns true when `lod4` folded an interior model to an LOD.
+    fn remove_geometry(
         &self,
         element: &mut Element,
-        report: &mut FileReport,
-        state: &FileState,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
     ) -> bool {
-        state.dropped.is_empty()
-            || !self
-                .app
-                .prune(element, &state.dropped, &mut report.warnings)
+        dropped.begin(element);
+        self.unf.apply(element, dropped, warnings);
+        self.lodmap.apply(element, dropped, warnings);
+        let interior = self.lod4.apply(element, dropped, warnings);
+        self.construction.apply(element, dropped, warnings);
+        dropped.restore(element, warnings);
+        interior
     }
 }
 

@@ -40,9 +40,9 @@
 //! recorded in [`Warnings`].
 
 use crate::error::Result;
-use std::collections::HashSet;
 
-use crate::geometry::{collect_ids, has_geometry};
+use crate::dropped::Dropped;
+use crate::geometry::has_geometry;
 use crate::iur::IurModules;
 use crate::lod_type::{self, Added};
 use crate::profile::{Lod4Exterior, Lod4Fallback, Lod4Rules, LodTypeTable, Rules};
@@ -134,7 +134,7 @@ impl Lod4Rewrite {
     pub fn apply(
         &self,
         member: &mut Element,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
         self.map_lod_types(member, None, warnings);
@@ -571,7 +571,7 @@ impl Lod4Rewrite {
         el: &mut Element,
         interior: bool,
         label: &str,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
         if interior {
@@ -591,7 +591,7 @@ impl Lod4Rewrite {
                      {label} has no LOD to go to",
                     self.display.display_name(&child.name)
                 ));
-                collect_ids(&child, &self.gml, dropped);
+                dropped.add(&child);
                 lost = true;
                 continue;
             }
@@ -612,7 +612,7 @@ impl Lod4Rewrite {
                         self.display.display_name(&child.name)
                     ));
                 }
-                collect_ids(&child, &self.gml, dropped);
+                dropped.add(&child);
                 continue;
             }
             out.push(Node::Element(child));
@@ -1102,7 +1102,7 @@ mod tests {
         bridge.push(rooms);
         bridge.push(quality(Some("L2")));
 
-        rewrite(None).apply(&mut bridge, &mut HashSet::new(), &mut Warnings::new());
+        rewrite(None).apply(&mut bridge, &mut Dropped::default(), &mut Warnings::new());
 
         let mut codes = Vec::new();
         collect_codes(&bridge, &Name::qualified(URC, "lodType"), &mut codes);
@@ -1148,7 +1148,7 @@ mod tests {
             quality(Some("L2")),
         ]);
 
-        let mut dropped = HashSet::new();
+        let mut dropped = Dropped::default();
         Lod4Rewrite::new(&rules, None)
             .unwrap()
             .apply(&mut b, &mut dropped, &mut Warnings::new());
@@ -1175,7 +1175,7 @@ mod tests {
             quality(Some("L2")),
         ]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
         assert!(b.child(ns::CITYGML_3, "lod3Solid").is_some());
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
@@ -1191,7 +1191,7 @@ mod tests {
             children.push(quality(Some("L3")));
             let mut b = building(children);
             let mut w = Warnings::new();
-            rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+            rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
 
             let solids: Vec<_> = b
                 .elements()
@@ -1221,7 +1221,7 @@ mod tests {
             room(vec![geometry("lod4Solid", "Solid")]),
             quality(Some("L2")),
         ]);
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut Warnings::new());
         let wall = b
             .child(ns::CITYGML_3, "boundary")
             .unwrap()
@@ -1262,7 +1262,7 @@ mod tests {
             inst_prop,
             quality(Some("L2")),
         ]);
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut Warnings::new());
 
         let room = the_room(&b);
         assert!(room.child(ns::CITYGML_3, "lod2Solid").is_some());
@@ -1307,7 +1307,7 @@ mod tests {
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")]), prop]);
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
 
         let class = |local: &str| {
             b.elements()
@@ -1364,7 +1364,7 @@ mod tests {
             t.push(hollow);
             t.push(quality);
             let mut w = Warnings::new();
-            rewrite(None).apply(&mut t, &mut HashSet::new(), &mut w);
+            rewrite(None).apply(&mut t, &mut Dropped::default(), &mut w);
             let space = t.elements().next().unwrap().elements().next().unwrap();
             let interior = t
                 .elements()
@@ -1403,7 +1403,7 @@ mod tests {
         let mut b = building(vec![class]);
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
 
         let class = b.elements().next().unwrap();
         let lod_types: Vec<String> = class
@@ -1442,7 +1442,7 @@ mod tests {
         b.push(room(vec![geometry("lod4Solid", "Solid")]));
 
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
 
         let class = b.elements().next().unwrap();
         let lod_types: Vec<_> = class
@@ -1492,7 +1492,7 @@ mod tests {
             "L3",
         ));
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")]), class]);
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut Warnings::new());
         let class = b.elements().nth(1).unwrap();
         assert_eq!(
             locals(class),
@@ -1506,7 +1506,7 @@ mod tests {
     fn a_missing_code_takes_the_fallback_and_is_reported() {
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")])]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
         assert!(
             the_room(&b).child(ns::CITYGML_3, "lod3Solid").is_some(),
             "lod3 by default"
@@ -1517,7 +1517,11 @@ mod tests {
         );
 
         let mut b = building(vec![room(vec![geometry("lod4Solid", "Solid")])]);
-        rewrite(Some(Lod4Fallback::Lod2)).apply(&mut b, &mut HashSet::new(), &mut Warnings::new());
+        rewrite(Some(Lod4Fallback::Lod2)).apply(
+            &mut b,
+            &mut Dropped::default(),
+            &mut Warnings::new(),
+        );
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
         let mut b = building(vec![
@@ -1525,7 +1529,7 @@ mod tests {
             quality(None),
         ]);
         let mut w = Warnings::new();
-        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut Dropped::default(), &mut w);
         assert!(the_room(&b).children.is_empty(), "the room's LOD4 goes");
         let class = b.elements().nth(1).unwrap().elements().next().unwrap();
         assert!(class.children.is_empty(), "the LOD4 descriptors go too");
@@ -1538,7 +1542,7 @@ mod tests {
     fn lod4_descriptors_without_lod4_geometry_are_dropped_not_folded() {
         let mut b = building(vec![geometry("lod3Solid", "Solid"), quality(Some("999"))]);
         let mut w = Warnings::new();
-        rewrite(None).apply(&mut b, &mut HashSet::new(), &mut w);
+        rewrite(None).apply(&mut b, &mut Dropped::default(), &mut w);
         let class = b
             .child(URO, "bldgDataQualityAttribute")
             .unwrap()

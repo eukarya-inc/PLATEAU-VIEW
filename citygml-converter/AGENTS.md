@@ -84,7 +84,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   winning over what the slot held, and a feature whose moved LOD carries no
   `lodType` code given the `[lod_types]` table's `moved` code),
   `core/src/lod_type.rs` for adding a `lodType` code to a feature (shared by
-  `lodmap` and `lod4`),
+  `lodmap` and `lod4`), `core/src/dropped.rs` for what the passes that
+  remove geometry record and for writing back the removed geometry a kept
+  link names (every removing pass hands what it removes to `Dropped::add`),
   `core/src/geometry.rs` for which `core`
   property a GML geometry goes to (no module knowledge, shared by
   `construction` and `unf`), `core/src/bldg.rs` for building-specific ones,
@@ -141,12 +143,14 @@ building before anything else runs, so every later pass converts the storey's
 generic attributes, dates and i-UR attributes along with the building's, and
 `lod4` sees the storey CityGML 3.0 requires. `common`'s `core:genericAttribute`
 is not a building property, `unf` has removed an underground utility's LOD4 and its
-descriptors before `lod4` would read them as describing nothing, the appearance
-links to geometry `unf` and `lodmap` dropped are pruned right after them, and
-those to geometry `lod4` and `construction` dropped right after the latter, member by member and
-on later members of the same document (a document with an appearance member
-is first read with only these four passes, so an appearance member ahead of
-the features already knows what they drop), `lodmap` has moved a feature's old LOD3
+descriptors before `lod4` would read them as describing nothing, the geometry
+`unf`, `lodmap`, `lod4` and `construction` drop that kept geometry of the
+same member still links to is written back in place of the link right after
+them (`core/src/dropped.rs`), and the appearance links to what stays dropped
+are pruned right after that, member by member and on later members of the
+same document (a document with an appearance member is first read with only
+these steps, so an appearance member ahead of the features already knows
+what they drop), `lodmap` has moved a feature's old LOD3
 out of the LOD3 slots before `lod4` folds its LOD4 shell into them, and runs
 before `construction` so a module's `lodNGeometry` moves as it is, `lod4` has
 retagged every `lod4*` before

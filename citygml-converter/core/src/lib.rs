@@ -26,6 +26,7 @@ pub mod construction;
 pub mod convert;
 pub mod dataset;
 pub mod detect;
+pub mod dropped;
 pub mod error;
 pub mod extrude;
 pub mod geometry;

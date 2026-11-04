@@ -39,8 +39,9 @@
 
 use std::collections::HashSet;
 
+use crate::dropped::Dropped;
 use crate::error::Result;
-use crate::geometry::{collect_ids, multi_of, slot, wrap_single};
+use crate::geometry::{multi_of, slot, wrap_single};
 use crate::iur::IurModules;
 use crate::profile::{Rules, UnfDm};
 use crate::report::Warnings;
@@ -101,7 +102,7 @@ impl UnfRewrite {
     pub fn apply(
         &self,
         member: &mut Element,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
         let before = dropped.len();
@@ -121,12 +122,7 @@ impl UnfRewrite {
         self.is_iur(&el.name) && self.schema.declares(&el.name, &self.furniture_hook)
     }
 
-    fn feature(
-        &self,
-        feature: &mut Element,
-        dropped: &mut HashSet<String>,
-        warnings: &mut Warnings,
-    ) {
+    fn feature(&self, feature: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         let label = self.display.display_name(&feature.name);
         let children = std::mem::take(&mut feature.children);
         let mut out = Vec::with_capacity(children.len());
@@ -139,7 +135,7 @@ impl UnfRewrite {
             };
             if let Some((family, lod)) = self.lod_property(&child) {
                 if lod == '4' {
-                    collect_ids(&child, &self.gml, dropped);
+                    dropped.add(&child);
                     warnings.add(format!(
                         "{} on the {label} was dropped. CityGML 3.0 has no LOD4, and an \
                          underground utility's LOD4 holds its exterior and interior faces \
@@ -150,7 +146,7 @@ impl UnfRewrite {
                 }
                 if let Some(property) = self.retag(child, family, lod, &label, dropped, warnings) {
                     if geometry.iter().any(|g| g.name == property.name) {
-                        collect_ids(&property, &self.gml, dropped);
+                        dropped.add(&property);
                         warnings.add(format!(
                             "a second {} on the {label} was dropped. The property holds one \
                              geometry",
@@ -185,7 +181,7 @@ impl UnfRewrite {
         match self.dm {
             UnfDm::Drop => {
                 for property in &dm {
-                    collect_ids(property, &self.gml, dropped);
+                    dropped.add(property);
                     warnings.add(format!(
                         "{} on the {label} was dropped, as [unf] dm = drop says",
                         self.display.display_name(&property.name)
@@ -230,7 +226,7 @@ impl UnfRewrite {
         family: Family,
         lod: char,
         label: &str,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> Option<Element> {
         let from = self.display.display_name(&property.name);
@@ -252,7 +248,7 @@ impl UnfRewrite {
                     None
                 };
                 let Some(target) = target else {
-                    collect_ids(&property, &self.gml, dropped);
+                    dropped.add(&property);
                     warnings.add(format!(
                         "{from} on the {label} held a gml:{kind}, for which CityGML 3.0 has \
                          no LOD{to_lod} property, and was dropped"

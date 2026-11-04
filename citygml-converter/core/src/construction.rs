@@ -9,10 +9,9 @@
 //! Everything here speaks CityGML **3.0** names, since
 //! [`crate::transform::rename`] has already run.
 
-use std::collections::HashSet;
-
+use crate::dropped::Dropped;
 use crate::error::Result;
-use crate::geometry::{collect_ids, slot, wrap_single};
+use crate::geometry::{slot, wrap_single};
 use crate::profile::{ConstructionRules, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
@@ -43,18 +42,13 @@ impl ConstructionRewrite {
     /// Rewrites `el` and its descendants in place. The `gml:id` of every
     /// element removed with a geometry 3.0 has no property for is added to
     /// `dropped`. Returns true when anything was added.
-    pub fn apply(
-        &self,
-        el: &mut Element,
-        dropped: &mut HashSet<String>,
-        warnings: &mut Warnings,
-    ) -> bool {
+    pub fn apply(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) -> bool {
         let before = dropped.len();
         self.walk(el, dropped, warnings);
         dropped.len() > before
     }
 
-    fn walk(&self, el: &mut Element, dropped: &mut HashSet<String>, warnings: &mut Warnings) {
+    fn walk(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         let host = self.rules.lod_geometry.get(&el.name).map(String::as_str);
         let label = self.display.display_name(&el.name);
         let children = std::mem::take(&mut el.children);
@@ -84,7 +78,7 @@ impl ConstructionRewrite {
         child: Element,
         host: Option<&str>,
         label: &str,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> Option<Element> {
         if let Some((to, relation)) = self.rules.installations.get(&child.name) {
@@ -159,7 +153,7 @@ impl ConstructionRewrite {
         mut src: Element,
         lod: char,
         label: &str,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> Option<Element> {
         let from = self.display.display_name(&src.name);
@@ -169,7 +163,7 @@ impl ConstructionRewrite {
             .filter(|g| g.name.in_ns(&self.gml))
             .map(|g| g.name.local.clone());
         let Some(target) = inner.as_deref().and_then(|kind| slot(kind, lod)) else {
-            collect_ids(&src, &self.gml, dropped);
+            dropped.add(&src);
             warnings.add(format!(
                 "{from} on the {label} held {}, for which CityGML 3.0 has no LOD{lod} \
                  property, and was dropped",
@@ -219,7 +213,7 @@ mod tests {
         let mut el = Element::new(Name::qualified(ns::BUILDING_3, parent));
         el.push(child);
         let mut warnings = Warnings::new();
-        rewrite().apply(&mut el, &mut HashSet::new(), &mut warnings);
+        rewrite().apply(&mut el, &mut Dropped::default(), &mut warnings);
         (el, warnings)
     }
 

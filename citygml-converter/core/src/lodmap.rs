@@ -23,10 +23,11 @@
 //! Every removal and move is reported, and the `gml:id` of every removed
 //! element is added to the caller's set.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+use crate::dropped::Dropped;
 use crate::error::Result;
-use crate::geometry::{collect_ids, has_geometry, lod_of};
+use crate::geometry::{has_geometry, lod_of};
 use crate::iur::IurModules;
 use crate::lod_type::{self, Added};
 use crate::profile::{LodTypeTable, Rules};
@@ -44,7 +45,7 @@ struct Strip<'a> {
     from: char,
     label: &'a str,
     moved: &'a mut Option<String>,
-    dropped: &'a mut HashSet<String>,
+    dropped: &'a mut Dropped,
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +71,7 @@ impl LodMapRewrite {
     pub fn apply(
         &self,
         member: &mut Element,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
         if self.moves.is_empty() {
@@ -87,7 +88,7 @@ impl LodMapRewrite {
         &'a self,
         el: &mut Element,
         host: Option<&'a LodTypeTable>,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) {
         let host = host.or_else(|| self.display.lod_types(&el.name).map(|(_, t)| t));
@@ -110,7 +111,7 @@ impl LodMapRewrite {
         feature: &mut Element,
         (from, to): (char, char),
         table: Option<&LodTypeTable>,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) {
         if !self.has_lod(feature, from, true) {
@@ -210,7 +211,7 @@ impl LodMapRewrite {
             };
             if let Some(l) = self.lod_of(&child) {
                 if l == lod {
-                    collect_ids(&child, &self.gml, strip.dropped);
+                    strip.dropped.add(&child);
                     lost = true;
                     continue;
                 }
@@ -252,7 +253,7 @@ impl LodMapRewrite {
             let emptied_property =
                 !is_feature && child_lost && had_content && child.elements().next().is_none();
             if emptied_feature || emptied_property {
-                collect_ids(&child, &self.gml, strip.dropped);
+                strip.dropped.add(&child);
                 continue;
             }
             out.push(Node::Element(child));
@@ -382,7 +383,7 @@ mod tests {
         )]));
         bridge.push(quality);
 
-        let mut dropped = HashSet::new();
+        let mut dropped = Dropped::default();
         assert!(rewrite().apply(&mut bridge, &mut dropped, &mut Warnings::new()));
 
         let walls = walls(&bridge);
@@ -418,7 +419,7 @@ mod tests {
         ]));
         bridge.push(geometry(ns::CITYGML_3, "lod3Solid", "old3"));
 
-        let mut dropped = HashSet::new();
+        let mut dropped = Dropped::default();
         rewrite().apply(&mut bridge, &mut dropped, &mut Warnings::new());
 
         assert_eq!(walls(&bridge).len(), 1);
