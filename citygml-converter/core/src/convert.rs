@@ -17,6 +17,7 @@ use crate::lod4::Lod4Rewrite;
 use crate::profile::{Lod4Fallback, Rules, UnfDm};
 use crate::report::{FileReport, Report, Warnings};
 use crate::schema::ChildOrder;
+use crate::storey::{Floors, StoreyRewrite};
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
@@ -70,6 +71,7 @@ impl Default for Options {
 
 pub struct Converter {
     rules: Rules,
+    storey: StoreyRewrite,
     common: CommonRewrite,
     xal: XalRewrite,
     app: AppearanceRewrite,
@@ -91,10 +93,13 @@ struct FileState {
     dropped: HashSet<String>,
     /// A member holding an appearance has been converted.
     appearance_seen: bool,
+    /// Floors read ahead of conversion, waiting for their building.
+    floors: Floors,
 }
 
 impl Converter {
     pub fn new(rules: Rules, options: Options) -> Result<Self> {
+        let storey = StoreyRewrite::new(&rules)?;
         let common = CommonRewrite::new(&rules)?;
         let xal = XalRewrite::new(&rules)?;
         let app = AppearanceRewrite::new(&rules)?;
@@ -113,6 +118,7 @@ impl Converter {
         let core_ns = rules.output_ns("core")?.to_owned();
         Ok(Converter {
             rules,
+            storey,
             common,
             xal,
             app,
@@ -249,7 +255,10 @@ impl Converter {
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
         let mut closed = false;
-        let mut state = FileState::default();
+        let mut state = FileState {
+            floors: self.storey.scan(label, source, &mut report.warnings)?,
+            ..FileState::default()
+        };
 
         writer.write_declaration(None)?;
 
@@ -296,6 +305,12 @@ impl Converter {
                 ),
             ));
         }
+        if !state.floors.is_settled() {
+            report.warnings.add(
+                "a floor's building was not written, so the bldg:Storey made from its \
+                 grp:CityObjectGroup was dropped with it",
+            );
+        }
         if root.children.is_empty() && report.features == 0 {
             report.warnings.add("the document held no city objects");
         }
@@ -311,8 +326,8 @@ impl Converter {
 
     /// Renames, restructures and reorders one top-level member.
     ///
-    /// The restructuring passes run in a fixed order, namely: `common`, `xal`,
-    /// `app`, `unf`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values
+    /// The restructuring passes run in a fixed order, namely: `storey`,
+    /// `common`, `xal`, `app`, `unf`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry an earlier
     /// member of the same document dropped are removed, and a member left
@@ -324,6 +339,11 @@ impl Converter {
         state: &mut FileState,
     ) -> Option<Element> {
         let mut element = transform::rename(&self.rules, element)?;
+        if self.storey.is_floor(&element, &state.floors) {
+            return None;
+        }
+        self.storey
+            .attach(&mut element, &mut state.floors, &mut report.warnings);
 
         let seed = first_gml_id(&element, &self.gml_ns)
             .unwrap_or_else(|| format!("{}_{}", element.name.local, report.features + 1));
