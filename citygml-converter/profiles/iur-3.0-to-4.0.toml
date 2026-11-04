@@ -199,6 +199,12 @@ to = "urc:codeValue"
 from = "uro:Waterway"
 to = "tran:Waterway"
 
+# ConstructionBaseAttribute's administrator, misspelled in this minor and
+# corrected in 3.2.
+[[element]]
+from = "uro:administorator"
+to = "uro:administrator"
+
 # BEGIN GENERATED -- i-UR rules
 #
 # Derived from the schemas, not written by hand. Regenerate with:
@@ -509,7 +515,7 @@ to = "urc:visibility"
 #     target
 #     validFrom
 #     validTo
-#   uro: 160 name(s) declared in 3.0 and in no 4.0 module
+#   uro: 159 name(s) declared in 3.0 and in no 4.0 module
 #     AbstractConstruction
 #     BuildingAttribute
 #     CityFurnitureAttribute
@@ -535,7 +541,6 @@ to = "urc:visibility"
 #     WallSurface
 #     WaterBodyAttribute
 #     _BoundarySurface
-#     administorator
 #     appearanceSrcDesc
 #     bldgDmAttribute
 #     bldgFacilityAttribute
@@ -703,5 +708,6 @@ to = "urc:visibility"
 #   uro:WaterBodyRiverFloodingRiskAttribute
 #   uro:WaterBodyTsunamiRiskAttribute
 #   uro:Waterway
+#   uro:administorator
 #   uro:codeValue
 # END GENERATED -- i-UR rules

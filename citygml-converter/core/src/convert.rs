@@ -10,11 +10,13 @@ use rayon::prelude::*;
 use crate::app::AppearanceRewrite;
 use crate::bldg::BuildingRewrite;
 use crate::common::CommonRewrite;
+use crate::cons::ConsRewrite;
 use crate::construction::ConstructionRewrite;
 use crate::dataset::Dataset;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
+use crate::lodmap::LodMapRewrite;
 use crate::profile::{Lod4Fallback, Rules, UnfDm};
 use crate::report::{FileReport, Report, Warnings};
 use crate::schema::ChildOrder;
@@ -77,9 +79,11 @@ pub struct Converter {
     xal: XalRewrite,
     app: AppearanceRewrite,
     unf: UnfRewrite,
+    lodmap: LodMapRewrite,
     lod4: Lod4Rewrite,
     construction: ConstructionRewrite,
     bldg: BuildingRewrite,
+    cons: ConsRewrite,
     tran: TranRewrite,
     iur: IurRewrite,
     order: ChildOrder,
@@ -107,9 +111,11 @@ impl Converter {
         let app = AppearanceRewrite::new(&rules)?;
         let schema = ChildOrder::target()?;
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
+        let lodmap = LodMapRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
         let construction = ConstructionRewrite::new(&rules)?;
         let bldg = BuildingRewrite::new(&rules)?;
+        let cons = ConsRewrite::new(&rules, &schema)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules, &schema)?;
         let order = if options.reorder {
@@ -126,9 +132,11 @@ impl Converter {
             xal,
             app,
             unf,
+            lodmap,
             lod4,
             construction,
             bldg,
+            cons,
             tran,
             iur,
             order,
@@ -335,7 +343,8 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `storey`,
-    /// `common`, `xal`, `app`, `unf`, `lod4`, `construction`, `bldg`, `tran`, `iur`. Generated `gml:id` values
+    /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
+    /// `tran`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry an earlier
     /// member of the same document dropped are removed, and a member left
@@ -363,21 +372,13 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
-        if self
+        let dropped = self
             .unf
             .apply(&mut element, &mut state.dropped, &mut report.warnings)
-            && state.appearance_seen
-        {
-            report.warnings.add(
-                "geometry was dropped after an appearance earlier in the document was \
-                 written, so that appearance may still link to it",
-            );
-        }
-        if !state.dropped.is_empty()
-            && self
-                .app
-                .prune(&mut element, &state.dropped, &mut report.warnings)
-        {
+            | self
+                .lodmap
+                .apply(&mut element, &mut state.dropped, &mut report.warnings);
+        if !self.after_drop(&mut element, dropped, report, state) {
             return None;
         }
         if element.is(&self.core_ns, "appearanceMember") {
@@ -386,9 +387,15 @@ impl Converter {
         if self.lod4.apply(&mut element, &mut report.warnings) {
             self.storey.warn_missing(&element, &mut report.warnings);
         }
-        self.construction.apply(&mut element, &mut report.warnings);
+        let dropped =
+            self.construction
+                .apply(&mut element, &mut state.dropped, &mut report.warnings);
+        if !self.after_drop(&mut element, dropped, report, state) {
+            return None;
+        }
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
+        self.cons.apply(&mut element, &mut report.warnings);
         self.tran
             .apply(&mut element, &mut ids, &mut report.warnings);
         self.iur.apply(&mut element, &mut report.warnings);
@@ -404,6 +411,29 @@ impl Converter {
         }
         collect_code_spaces(&element, &mut report.code_spaces);
         Some(element)
+    }
+
+    /// Removes the appearance links under `element` to geometry removed so
+    /// far in the document, after a pass that reports in `dropped` whether it
+    /// removed any. Reports a removal that an appearance written earlier may
+    /// still link to. Returns false when `element` is left without content.
+    fn after_drop(
+        &self,
+        element: &mut Element,
+        dropped: bool,
+        report: &mut FileReport,
+        state: &FileState,
+    ) -> bool {
+        if dropped && state.appearance_seen {
+            report.warnings.add(
+                "geometry was dropped after an appearance earlier in the document was \
+                 written, so that appearance may still link to it",
+            );
+        }
+        state.dropped.is_empty()
+            || !self
+                .app
+                .prune(element, &state.dropped, &mut report.warnings)
     }
 }
 

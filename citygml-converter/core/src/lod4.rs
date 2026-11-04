@@ -20,6 +20,11 @@
 //!   `lod4MultiSurface` on the building itself and on its exterior surfaces,
 //!   folds into the LOD3 slot and only where that slot is empty.
 //!
+//! A member whose LOD4 folded and that carries no `4.x` `lodType` code is
+//! given the codes its type's `[lod_types]` table lists under `folded`, one
+//! per side that received geometry, chosen by whether any of that geometry
+//! sits on a boundary surface.
+//!
 //! A member holding LOD4 quality descriptors but no LOD4 geometry has those
 //! descriptors dropped rather than folded. Every fold, drop and fallback is
 //! recorded in [`Warnings`].
@@ -44,9 +49,30 @@ enum Target {
     Absent,
 }
 
+/// What one member's fold placed, per side. `Some` when geometry of that side
+/// folded, holding whether any of it sits on a boundary surface.
+#[derive(Debug, Default)]
+struct Folded {
+    exterior: Option<bool>,
+    interior: Option<bool>,
+}
+
+impl Folded {
+    fn record(&mut self, interior: bool, surface: bool) {
+        let side = if interior {
+            &mut self.interior
+        } else {
+            &mut self.exterior
+        };
+        *side = Some(side.unwrap_or(false) || surface);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Lod4Rewrite {
     core: String,
+    /// The properties whose child is a boundary surface.
+    surface_properties: Vec<Name>,
     /// Namespace the folded quality descriptors are written into, when the
     /// profile declares one.
     urc: Option<String>,
@@ -63,8 +89,14 @@ impl Lod4Rewrite {
         if let Some(fallback) = fallback {
             lod4.fallback = fallback;
         }
+        let core = rules.output_ns("core")?;
+        let mut surface_properties = vec![Name::qualified(core, "boundary")];
+        if let Ok(con) = rules.output_ns("con") {
+            surface_properties.push(Name::qualified(con, "fillingSurface"));
+        }
         Ok(Lod4Rewrite {
-            core: rules.output_ns("core")?.to_owned(),
+            core: core.to_owned(),
+            surface_properties,
             urc: rules.output_ns("urc").ok().map(str::to_owned),
             iur: IurModules::new(rules),
             rules: lod4,
@@ -80,13 +112,29 @@ impl Lod4Rewrite {
     pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) -> bool {
         self.map_lod_types(member, None, warnings);
         let target = if self.has_lod4_geometry(member) {
-            self.decide(member, warnings)
+            match self.rules.fixed.get(&feature(member).name) {
+                Some(fixed) => {
+                    warnings.add(format!(
+                        "{} holds LOD4 content, which the profile's [lod4.fixed] sends to {} \
+                         whatever its measurement code",
+                        self.feature_name(member),
+                        fixed.as_str()
+                    ));
+                    target_from(*fixed)
+                }
+                None => self.decide(member, warnings),
+            }
         } else if has_lod4_quality(member, &self.iur) {
             Target::Absent
         } else {
             return false;
         };
-        self.rewrite(member, false, target, warnings);
+        let coded = self.has_lod4_lod_type(member);
+        let mut folded = Folded::default();
+        self.rewrite(member, false, false, target, &mut folded, warnings);
+        if let (Target::Lod(lod), false) = (target, coded) {
+            self.add_folded_lod_types(member, lod, &folded, warnings);
+        }
         matches!(target, Target::Lod(_))
     }
 
@@ -95,7 +143,8 @@ impl Lod4Rewrite {
     /// `codeSpace` at that table's list.
     ///
     /// `host` is the table of the outermost feature `el` already sits in, if
-    /// any. A `4.x` value is left for [`Self::fold_lod_type`].
+    /// any. A `4.x` value is left for [`Self::fold_lod_type`], and a value
+    /// already one of the table's published codes is left as it is.
     fn map_lod_types<'a>(
         &'a self,
         el: &mut Element,
@@ -111,7 +160,11 @@ impl Lod4Rewrite {
                     if let Some(host) = host.filter(|_| self.is_lod_type(&child)) {
                         self.retarget_lod_type(&mut child, host, warnings);
                     }
-                    if let Some((_, table)) = host.filter(|_| self.is_plain_lod_type(&child)) {
+                    let pending = host.filter(|(_, table)| {
+                        self.is_plain_lod_type(&child)
+                            && !table.map.values().any(|c| c == child.text().trim())
+                    });
+                    if let Some((_, table)) = pending {
                         let old = child.text().trim().to_owned();
                         let list = list_stem(&table.list);
                         if let Some(new) = table.map.get(&old) {
@@ -188,13 +241,7 @@ impl Lod4Rewrite {
     /// The name to show for `member` in diagnostics. A lowercase-named member
     /// is a property wrapping the feature, and the feature is named instead.
     fn feature_name(&self, member: &Element) -> String {
-        let feature = member
-            .elements()
-            .next()
-            .filter(|_| member.name.local.starts_with(char::is_lowercase))
-            .map(|f| &f.name)
-            .unwrap_or(&member.name);
-        self.display.display_name(feature)
+        self.display.display_name(&feature(member).name)
     }
 
     /// The interior LOD this member's LOD4 content becomes, read from the
@@ -249,7 +296,17 @@ impl Lod4Rewrite {
     /// Folds the LOD4 children of `el` and of its descendants. `interior`
     /// says whether `el` belongs to the interior model, in which case its own
     /// LOD4 children fold to `target` rather than into the exterior LOD3 slot.
-    fn rewrite(&self, el: &mut Element, interior: bool, target: Target, warnings: &mut Warnings) {
+    /// `surface` says whether `el` is a boundary surface. Each geometry
+    /// property folded is recorded in `folded`.
+    fn rewrite(
+        &self,
+        el: &mut Element,
+        interior: bool,
+        surface: bool,
+        target: Target,
+        folded: &mut Folded,
+        warnings: &mut Warnings,
+    ) {
         let occupied: Vec<Name> = el
             .elements()
             .filter(|c| !self.is_lod4_geometry(c) && !self.is_lod4_quality(c))
@@ -261,9 +318,13 @@ impl Lod4Rewrite {
         for child in children {
             match child {
                 Node::Element(child) => {
+                    let geometry = self.is_lod4_geometry(&child);
                     if let Some(kept) =
                         self.rewrite_child(child, interior, &occupied, &out, target, warnings)
                     {
+                        if geometry {
+                            folded.record(interior, surface);
+                        }
                         out.push(Node::Element(kept));
                     }
                 }
@@ -272,10 +333,121 @@ impl Lod4Rewrite {
         }
         el.children = out;
 
+        let child_surface = self.surface_properties.contains(&el.name);
         for child in el.elements_mut() {
             let child_interior = interior || self.marks_interior(&child.name);
-            self.rewrite(child, child_interior, target, warnings);
+            self.rewrite(
+                child,
+                child_interior,
+                child_surface,
+                target,
+                folded,
+                warnings,
+            );
         }
+    }
+
+    /// Adds to `member`'s feature the `folded` codes of its `[lod_types]`
+    /// table for each side `folded` records, the interior one keyed by `lod`
+    /// and the exterior one by LOD3. A code goes next to the feature's first
+    /// `lodType`, or else among its first quality descriptors, and is skipped
+    /// when already present.
+    fn add_folded_lod_types(
+        &self,
+        member: &mut Element,
+        lod: char,
+        folded: &Folded,
+        warnings: &mut Warnings,
+    ) {
+        let feature = feature_mut(member);
+        let Some((_, table)) = self.display.lod_types(&feature.name) else {
+            return;
+        };
+        let label = self.display.display_name(&feature.name);
+        let sides = [
+            ("exterior", '3', folded.exterior, &table.folded.exterior),
+            ("interior", lod, folded.interior, &table.folded.interior),
+        ];
+        for (side, lod, split, codes) in sides {
+            let (Some(split), Some(codes)) = (split, codes.get(&lod.to_string())) else {
+                continue;
+            };
+            let code = if split { &codes.split } else { &codes.whole };
+            let Some(path) = self.lod_type_holder(feature) else {
+                warnings.add(format!(
+                    "the {label} was given no lodType {code} for its folded LOD4 {side}: it \
+                     carries no data quality attribute to hold one"
+                ));
+                continue;
+            };
+            let holder = path.iter().fold(&mut *feature, |el, &i| {
+                el.elements_mut().nth(i).expect("a path just found")
+            });
+            if holder
+                .elements()
+                .any(|c| self.is_lod_type(c) && c.text().trim() == code)
+            {
+                continue;
+            }
+            holder.push(self.new_lod_type(holder, code, &table.list));
+            let surfaces = if split { "with" } else { "without" };
+            warnings.add(format!(
+                "lodType {code} was added to the {label}: its LOD4 {side} became LOD{lod} \
+                 {surfaces} boundary surfaces, and it carried no code of its own"
+            ));
+        }
+    }
+
+    /// The child indices from `el` down to the first element holding a
+    /// `lodType`, or else the first holding a quality descriptor.
+    fn lod_type_holder(&self, el: &Element) -> Option<Vec<usize>> {
+        let lod_type = |e: &Element| e.elements().any(|c| self.is_lod_type(c));
+        let descriptor = |e: &Element| {
+            e.elements()
+                .any(|c| self.iur.quality_descriptor(&c.name).is_some())
+        };
+        path_to(el, &lod_type).or_else(|| path_to(el, &descriptor))
+    }
+
+    /// A `lodType` holding `code`, named and with its `codeSpace` taken from
+    /// a `lodType` in `holder`, or else from a quality descriptor there, with
+    /// the code list `list`.
+    fn new_lod_type(&self, holder: &Element, code: &str, list: &str) -> Element {
+        let sibling = holder.elements().find(|c| self.is_lod_type(c));
+        let (name, code_space) = match sibling {
+            Some(sibling) => (
+                sibling.name.clone(),
+                sibling.attr(None, "codeSpace").map(str::to_owned),
+            ),
+            None => {
+                let descriptor = holder
+                    .elements()
+                    .find(|c| self.iur.quality_descriptor(&c.name).is_some());
+                let ns = descriptor
+                    .and_then(|d| d.name.ns.clone())
+                    .or_else(|| self.urc.clone())
+                    .unwrap_or_default();
+                let dir = descriptor
+                    .and_then(|d| d.attr(None, "codeSpace"))
+                    .and_then(|c| c.rsplit_once('/'))
+                    .map(|(dir, _)| format!("{dir}/"));
+                (
+                    Name::qualified(&ns, "lodType"),
+                    dir.map(|dir| format!("{dir}{list}")),
+                )
+            }
+        };
+        let mut el = Element::with_text(name, code);
+        if let Some(code_space) = code_space {
+            el.set_attr(Name::unqualified("codeSpace"), code_space);
+        }
+        el
+    }
+
+    /// True when a `4.x` `lodType` sits under `el`.
+    fn has_lod4_lod_type(&self, el: &Element) -> bool {
+        el.elements()
+            .any(|child| self.is_lod4_lod_type(child) || self.has_lod4_lod_type(child))
     }
 
     /// Rewrites one child, returning it possibly retagged, or `None` to
@@ -354,7 +526,7 @@ impl Lod4Rewrite {
             Target::Absent => {
                 warnings.add(format!(
                     "{from} was dropped: it describes LOD4 content the feature does \
-                     not have (PLATEAU writes it on every building, as 999 = 未作成)"
+                     not have (PLATEAU writes it on every feature, as 999 = 未作成)"
                 ));
                 return None;
             }
@@ -479,6 +651,38 @@ impl Lod4Rewrite {
             && self.iur.contains(&el.name)
             && el.text().trim().starts_with('4')
     }
+}
+
+/// The feature `member` holds, looking through a lowercase-named property
+/// wrapping it.
+fn feature(member: &Element) -> &Element {
+    member
+        .elements()
+        .next()
+        .filter(|_| member.name.local.starts_with(char::is_lowercase))
+        .unwrap_or(member)
+}
+
+/// [`feature`], mutably.
+fn feature_mut(member: &mut Element) -> &mut Element {
+    if member.name.local.starts_with(char::is_lowercase) && member.elements().next().is_some() {
+        return member.elements_mut().next().expect("checked above");
+    }
+    member
+}
+
+/// The child indices from `el` down to the first descendant, `el` included,
+/// for which `found` holds.
+fn path_to(el: &Element, found: &dyn Fn(&Element) -> bool) -> Option<Vec<usize>> {
+    if found(el) {
+        return Some(Vec::new());
+    }
+    el.elements().enumerate().find_map(|(i, child)| {
+        path_to(child, found).map(|mut path| {
+            path.insert(0, i);
+            path
+        })
+    })
 }
 
 /// A code list's file name without its extension, for diagnostics.
@@ -619,6 +823,40 @@ mod tests {
             .elements()
             .next()
             .unwrap()
+    }
+
+    /// A folded bridge gains one code per side, `split` for the side whose
+    /// geometry sits on a boundary surface, here the exterior wall reached
+    /// through `core:boundary`, and `whole` for the side of bare room solids.
+    #[test]
+    fn folded_codes_follow_whether_each_side_has_boundary_surfaces() {
+        let brid =
+            |local: &str| Name::qualified("http://www.opengis.net/citygml/bridge/3.0", local);
+        let lod4 = |inner: &str| {
+            let mut prop = Element::new(brid("lod4MultiSurface"));
+            prop.push(Element::new(Name::qualified(ns::GML_32, inner)));
+            prop
+        };
+        let mut wall = Element::new(Name::qualified(ns::CONSTRUCTION_3, "WallSurface"));
+        wall.push(lod4("MultiSurface"));
+        let mut boundary = Element::new(Name::qualified(ns::CITYGML_3, "boundary"));
+        boundary.push(wall);
+        let mut room = Element::new(brid("BridgeRoom"));
+        let mut solid = Element::new(brid("lod4Solid"));
+        solid.push(Element::new(Name::qualified(ns::GML_32, "Solid")));
+        room.push(solid);
+        let mut rooms = Element::new(brid("bridgeRoom"));
+        rooms.push(room);
+        let mut bridge = Element::new(brid("Bridge"));
+        bridge.push(boundary);
+        bridge.push(rooms);
+        bridge.push(quality(Some("L2")));
+
+        rewrite(None).apply(&mut bridge, &mut Warnings::new());
+
+        let mut codes = Vec::new();
+        collect_codes(&bridge, &Name::qualified(URC, "lodType"), &mut codes);
+        assert_eq!(codes, ["3.1_exterior", "3.0_interior"]);
     }
 
     /// The building's own LOD4 shell folds to LOD3 whatever the interior

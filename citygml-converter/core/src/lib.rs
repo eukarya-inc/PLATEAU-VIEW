@@ -21,14 +21,17 @@
 pub mod app;
 pub mod bldg;
 pub mod common;
+pub mod cons;
 pub mod construction;
 pub mod convert;
 pub mod dataset;
 pub mod detect;
 pub mod error;
 pub mod extrude;
+pub mod geometry;
 pub mod iur;
 pub mod lod4;
+pub mod lodmap;
 pub mod profile;
 pub mod report;
 pub mod schema;

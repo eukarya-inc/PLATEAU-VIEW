@@ -9,20 +9,20 @@
 //! Everything here speaks CityGML **3.0** names, since
 //! [`crate::transform::rename`] has already run.
 
+use std::collections::HashSet;
+
 use crate::error::Result;
+use crate::geometry::{collect_ids, slot, wrap_single};
 use crate::profile::{ConstructionRules, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
-
-/// Solid-valued GML geometries, used to decide what a 2.0 `lodNGeometry`
-/// property became in 3.0.
-const SOLIDS: &[&str] = &["Solid", "CompositeSolid", "MultiSolid"];
 
 /// The construction rewrites, bound to one profile.
 #[derive(Debug, Clone)]
 pub struct ConstructionRewrite {
     core: String,
     con: String,
+    gml: String,
     relation: Name,
     rules: ConstructionRules,
     display: Rules,
@@ -33,21 +33,38 @@ impl ConstructionRewrite {
         Ok(ConstructionRewrite {
             core: rules.output_ns("core")?.to_owned(),
             con: rules.output_ns("con")?.to_owned(),
+            gml: rules.output_ns("gml")?.to_owned(),
             relation: Name::qualified(rules.output_ns("con")?, "relationToConstruction"),
             rules: rules.construction().clone(),
             display: rules.clone(),
         })
     }
 
-    /// Rewrites `el` and its descendants in place.
-    pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
-        let host = self.rules.geometry_hosts.contains(&el.name);
+    /// Rewrites `el` and its descendants in place. The `gml:id` of every
+    /// element removed with a geometry 3.0 has no property for is added to
+    /// `dropped`. Returns true when anything was added.
+    pub fn apply(
+        &self,
+        el: &mut Element,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> bool {
+        let before = dropped.len();
+        self.walk(el, dropped, warnings);
+        dropped.len() > before
+    }
+
+    fn walk(&self, el: &mut Element, dropped: &mut HashSet<String>, warnings: &mut Warnings) {
+        let host = self.rules.lod_geometry.get(&el.name).map(String::as_str);
+        let label = self.display.display_name(&el.name);
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
                 Node::Element(child) => {
-                    out.push(Node::Element(self.rewrite(child, host, warnings)));
+                    if let Some(child) = self.rewrite(child, host, &label, dropped, warnings) {
+                        out.push(Node::Element(child));
+                    }
                 }
                 other => out.push(other),
             }
@@ -55,22 +72,32 @@ impl ConstructionRewrite {
         el.children = out;
 
         for child in el.elements_mut() {
-            self.apply(child, warnings);
+            self.walk(child, dropped, warnings);
         }
     }
 
-    /// Rewrites one child of an element. `host` says whether that element is
-    /// one of the profile's geometry hosts.
-    fn rewrite(&self, child: Element, host: bool, warnings: &mut Warnings) -> Element {
+    /// Rewrites one child of the element named `label`, or returns `None` to
+    /// remove it. `host` is the namespace of that element's `lodNGeometry`
+    /// children when it is one of the profile's geometry hosts.
+    fn rewrite(
+        &self,
+        child: Element,
+        host: Option<&str>,
+        label: &str,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> Option<Element> {
         if let Some((to, relation)) = self.rules.installations.get(&child.name) {
-            return self.installation(child, to, relation, warnings);
+            return Some(self.installation(child, to, relation, warnings));
         }
         if let Some(to) = self.rules.dates.get(&child.name) {
-            return self.date(child, to, warnings);
+            return Some(self.date(child, to, warnings));
         }
-        match lod_geometry(&child.name.local).filter(|_| host) {
-            Some(lod) => self.lod_geometry(child, lod, warnings),
-            None => child,
+        match lod_geometry(&child.name.local)
+            .filter(|_| host.is_some_and(|ns| child.name.in_ns(ns)))
+        {
+            Some(lod) => self.lod_geometry(child, lod, label, dropped, warnings),
+            None => Some(child),
         }
     }
 
@@ -123,31 +150,41 @@ impl ConstructionRewrite {
         Element::with_text(to.clone(), value)
     }
 
-    /// Rewrites a `lodNGeometry` property into `core:lodNSolid` or
-    /// `core:lodNMultiSurface`, depending on the geometry it holds.
-    fn lod_geometry(&self, src: Element, lod: char, warnings: &mut Warnings) -> Element {
+    /// Rewrites a `lodNGeometry` property into the `core:lodN*` property for
+    /// the geometry it holds, wrapping a single surface or curve in its
+    /// multi-geometry. A geometry with no such property at that LOD is removed
+    /// and its `gml:id`s are added to `dropped`.
+    fn lod_geometry(
+        &self,
+        mut src: Element,
+        lod: char,
+        label: &str,
+        dropped: &mut HashSet<String>,
+        warnings: &mut Warnings,
+    ) -> Option<Element> {
         let from = self.display.display_name(&src.name);
-        let inner = src.elements().next().map(|g| g.name.local.clone());
-        let solid = inner.as_deref().is_some_and(|g| SOLIDS.contains(&g));
-        let local = if solid {
-            format!("lod{lod}Solid")
-        } else {
-            format!("lod{lod}MultiSurface")
+        let inner = src
+            .elements()
+            .next()
+            .filter(|g| g.name.in_ns(&self.gml))
+            .map(|g| g.name.local.clone());
+        let Some(target) = inner.as_deref().and_then(|kind| slot(kind, lod)) else {
+            collect_ids(&src, &self.gml, dropped);
+            warnings.add(format!(
+                "{from} on the {label} held {}, for which CityGML 3.0 has no LOD{lod} \
+                 property, and was dropped",
+                inner.map_or("no geometry".to_owned(), |k| format!("a gml:{k}"))
+            ));
+            return None;
         };
-
-        if !solid && !matches!(inner.as_deref(), Some("MultiSurface")) {
-            warnings.add(format!(
-                "{from} held gml:{} and became core:{local}, which expects a \
-                 gml:MultiSurface; check the result",
-                inner.as_deref().unwrap_or("(nothing)")
-            ));
-        } else {
-            warnings.add(format!(
-                "{from} became core:{local} based on the geometry it holds"
-            ));
+        if target != "Solid" && target != "Point" {
+            wrap_single(&mut src, target, &self.gml);
         }
-
-        retag(src, Name::qualified(&self.core, local))
+        let local = format!("lod{lod}{target}");
+        warnings.add(format!(
+            "{from} became core:{local} based on the geometry it holds"
+        ));
+        Some(retag(src, Name::qualified(&self.core, local)))
     }
 }
 
@@ -182,7 +219,7 @@ mod tests {
         let mut el = Element::new(Name::qualified(ns::BUILDING_3, parent));
         el.push(child);
         let mut warnings = Warnings::new();
-        rewrite().apply(&mut el, &mut warnings);
+        rewrite().apply(&mut el, &mut HashSet::new(), &mut warnings);
         (el, warnings)
     }
 
