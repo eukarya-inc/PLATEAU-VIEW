@@ -1382,7 +1382,6 @@ export type Query = {
   projects: ProjectConnection;
   requests: RequestConnection;
   searchItem: ItemConnection;
-  userByNameOrEmail?: Maybe<User>;
   userSearch: Array<User>;
   versionsByItem: Array<VersionedItem>;
   view: Array<View>;
@@ -1473,11 +1472,6 @@ export type QueryRequestsArgs = {
 
 export type QuerySearchItemArgs = {
   input: SearchItemInput;
-};
-
-
-export type QueryUserByNameOrEmailArgs = {
-  nameOrEmail: Scalars['String']['input'];
 };
 
 
@@ -2885,13 +2879,6 @@ export type CreateThreadWithCommentMutationVariables = Exact<{
 
 
 export type CreateThreadWithCommentMutation = { __typename?: 'Mutation', createThreadWithComment?: { __typename?: 'CommentPayload', thread: { __typename?: 'Thread', id: string, workspaceId: string, comments: Array<{ __typename?: 'Comment', id: string, authorType: OperatorType, authorId: string, content: string, createdAt: Date, author?: { __typename?: 'Integration', id: string, name: string } | { __typename?: 'User', id: string, name: string, email: string } | null }> } } | null };
-
-export type GetUserByNameOrEmailQueryVariables = Exact<{
-  nameOrEmail: Scalars['String']['input'];
-}>;
-
-
-export type GetUserByNameOrEmailQuery = { __typename?: 'Query', userByNameOrEmail?: { __typename?: 'User', id: string, name: string, email: string } | null };
 
 export type GetUsersQueryVariables = Exact<{
   keyword: Scalars['String']['input'];
@@ -6536,48 +6523,6 @@ export function useCreateThreadWithCommentMutation(baseOptions?: Apollo.Mutation
 export type CreateThreadWithCommentMutationHookResult = ReturnType<typeof useCreateThreadWithCommentMutation>;
 export type CreateThreadWithCommentMutationResult = Apollo.MutationResult<CreateThreadWithCommentMutation>;
 export type CreateThreadWithCommentMutationOptions = Apollo.BaseMutationOptions<CreateThreadWithCommentMutation, CreateThreadWithCommentMutationVariables>;
-export const GetUserByNameOrEmailDocument = gql`
-    query GetUserByNameOrEmail($nameOrEmail: String!) {
-  userByNameOrEmail(nameOrEmail: $nameOrEmail) {
-    id
-    name
-    email
-  }
-}
-    `;
-
-/**
- * __useGetUserByNameOrEmailQuery__
- *
- * To run a query within a React component, call `useGetUserByNameOrEmailQuery` and pass it any options that fit your needs.
- * When your component renders, `useGetUserByNameOrEmailQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useGetUserByNameOrEmailQuery({
- *   variables: {
- *      nameOrEmail: // value for 'nameOrEmail'
- *   },
- * });
- */
-export function useGetUserByNameOrEmailQuery(baseOptions: Apollo.QueryHookOptions<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables> & ({ variables: GetUserByNameOrEmailQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>(GetUserByNameOrEmailDocument, options);
-      }
-export function useGetUserByNameOrEmailLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>(GetUserByNameOrEmailDocument, options);
-        }
-export function useGetUserByNameOrEmailSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>(GetUserByNameOrEmailDocument, options);
-        }
-export type GetUserByNameOrEmailQueryHookResult = ReturnType<typeof useGetUserByNameOrEmailQuery>;
-export type GetUserByNameOrEmailLazyQueryHookResult = ReturnType<typeof useGetUserByNameOrEmailLazyQuery>;
-export type GetUserByNameOrEmailSuspenseQueryHookResult = ReturnType<typeof useGetUserByNameOrEmailSuspenseQuery>;
-export type GetUserByNameOrEmailQueryResult = Apollo.QueryResult<GetUserByNameOrEmailQuery, GetUserByNameOrEmailQueryVariables>;
 export const GetUsersDocument = gql`
     query GetUsers($keyword: String!) {
   userSearch(keyword: $keyword) {

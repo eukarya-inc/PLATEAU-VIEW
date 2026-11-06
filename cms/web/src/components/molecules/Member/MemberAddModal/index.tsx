@@ -103,7 +103,7 @@ const MemberAddModal: React.FC<Props> = ({
             <UserAvatar username={user.name} size={24} />
             <UserInfo>
               <UserName>{user.name}</UserName>
-              <Email>{user.email}</Email>
+              {user.email && <Email>{user.email}</Email>}
             </UserInfo>
           </UserWrapper>
         ),
@@ -213,7 +213,7 @@ const MemberAddModal: React.FC<Props> = ({
                   <UserAvatar username={user.name} size={24} />
                   <UserInfo>
                     <UserName>{user.name}</UserName>
-                    <Email>{user.email}</Email>
+                    {user.email && <Email>{user.email}</Email>}
                   </UserInfo>
                 </UserWrapperShrinked>
                 <Actions>
