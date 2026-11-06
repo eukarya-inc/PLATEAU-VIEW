@@ -1,6 +1,5 @@
 //! The top-level driver, taking a dataset in and writing a converted tree out.
 
-use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -10,10 +9,14 @@ use rayon::prelude::*;
 use crate::app::AppearanceRewrite;
 use crate::bldg::BuildingRewrite;
 use crate::common::CommonRewrite;
+use crate::cons::ConsRewrite;
+use crate::construction::ConstructionRewrite;
 use crate::dataset::Dataset;
+use crate::dropped::Dropped;
 use crate::error::{Error, Result};
 use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
+use crate::lodmap::LodMapRewrite;
 use crate::profile::{Lod4Fallback, Rules, UnfDm};
 use crate::report::{FileReport, Report, Warnings};
 use crate::schema::ChildOrder;
@@ -22,7 +25,7 @@ use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
 use crate::xal::XalRewrite;
-use crate::xml::{self, Chunk, Element, Indent, Node, Reader, Writer};
+use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
 
 /// Directories copied through unchanged when converting a whole dataset.
 ///
@@ -76,12 +79,16 @@ pub struct Converter {
     xal: XalRewrite,
     app: AppearanceRewrite,
     unf: UnfRewrite,
+    lodmap: LodMapRewrite,
     lod4: Lod4Rewrite,
+    construction: ConstructionRewrite,
     bldg: BuildingRewrite,
+    cons: ConsRewrite,
     tran: TranRewrite,
     iur: IurRewrite,
     order: ChildOrder,
     gml_ns: String,
+    xlink_ns: String,
     core_ns: String,
     options: Options,
 }
@@ -89,10 +96,9 @@ pub struct Converter {
 /// What one document's conversion carries from member to member.
 #[derive(Debug, Default)]
 struct FileState {
-    /// The `gml:id`s under geometry a pass removed.
-    dropped: HashSet<String>,
-    /// A member holding an appearance has been converted.
-    appearance_seen: bool,
+    /// The geometry the passes removed, including that removed from members
+    /// after the first appearance member before any is written.
+    dropped: Dropped,
     /// Floors read ahead of conversion, waiting for their building.
     floors: Floors,
 }
@@ -105,8 +111,11 @@ impl Converter {
         let app = AppearanceRewrite::new(&rules)?;
         let schema = ChildOrder::target()?;
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
+        let lodmap = LodMapRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
+        let construction = ConstructionRewrite::new(&rules)?;
         let bldg = BuildingRewrite::new(&rules)?;
+        let cons = ConsRewrite::new(&rules, &schema)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
         let iur = IurRewrite::new(&rules, &schema)?;
         let order = if options.reorder {
@@ -116,6 +125,7 @@ impl Converter {
         };
         let gml_ns = rules.output_ns("gml")?.to_owned();
         let core_ns = rules.output_ns("core")?.to_owned();
+        let xlink_ns = rules.output_ns("xlink")?.to_owned();
         Ok(Converter {
             rules,
             storey,
@@ -123,12 +133,16 @@ impl Converter {
             xal,
             app,
             unf,
+            lodmap,
             lod4,
+            construction,
             bldg,
+            cons,
             tran,
             iur,
             order,
             gml_ns,
+            xlink_ns,
             core_ns,
             options,
         })
@@ -254,10 +268,12 @@ impl Converter {
         let mut writer = Writer::new(sink, self.rules.prefixes().clone(), self.options.indent);
         let mut report = FileReport::default();
         let mut root: Option<Element> = None;
+        let mut root_input: Option<Name> = None;
         let mut closed = false;
+        let floors = self.storey.scan(label, source, &mut report.warnings)?;
         let mut state = FileState {
-            floors: self.storey.scan(label, source, &mut report.warnings)?,
-            ..FileState::default()
+            dropped: self.dropped_after_appearance(label, source, &floors)?,
+            floors,
         };
 
         writer.write_declaration(None)?;
@@ -268,6 +284,7 @@ impl Converter {
                 Chunk::Prologue(Node::Comment(text)) => writer.write_comment(&text)?,
                 Chunk::Prologue(_) => {}
                 Chunk::RootStart(element) => {
+                    root_input = Some(element.name.clone());
                     let element = transform::rename(&self.rules, element).ok_or_else(|| {
                         Error::Profile(format!("the profile drops the root element of {label}"))
                     })?;
@@ -278,7 +295,9 @@ impl Converter {
                     if root.is_none() {
                         return Err(Error::malformed(label, "content before the root element"));
                     }
-                    if let Some(element) = self.convert_member(element, &mut report, &mut state) {
+                    if let Some(element) =
+                        self.convert_member(element, root_input.as_ref(), &mut report, &mut state)
+                    {
                         writer.write_element(&element, 1)?;
                     }
                 }
@@ -327,18 +346,21 @@ impl Converter {
     /// Renames, restructures and reorders one top-level member.
     ///
     /// The restructuring passes run in a fixed order, namely: `storey`,
-    /// `common`, `xal`, `app`, `unf`, `lod4`, `bldg`, `tran`, `iur`. Generated `gml:id` values
+    /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
+    /// `tran`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
-    /// dataset and stable across runs. Appearance links to geometry an earlier
-    /// member of the same document dropped are removed, and a member left
-    /// with no content is `None`.
+    /// dataset and stable across runs. Appearance links to geometry dropped
+    /// from any member of the same document are removed, and a member left
+    /// with no content is `None`. `root` is the input name of the document's
+    /// root element.
     fn convert_member(
         &self,
         element: Element,
+        root: Option<&Name>,
         report: &mut FileReport,
         state: &mut FileState,
     ) -> Option<Element> {
-        let mut element = transform::rename(&self.rules, element)?;
+        let mut element = transform::rename_under(&self.rules, element, root)?;
         if self.storey.is_floor(&element, &state.floors) {
             return None;
         }
@@ -353,29 +375,19 @@ impl Converter {
         self.common.apply(&mut element, &mut report.warnings);
         self.xal.apply(&mut element, &mut report.warnings);
         self.app.apply(&mut element, &mut ids, &mut report.warnings);
-        if self
-            .unf
-            .apply(&mut element, &mut state.dropped, &mut report.warnings)
-            && state.appearance_seen
-        {
-            report.warnings.add(
-                "geometry was dropped after an appearance earlier in the document was \
-                 written, so that appearance may still link to it",
-            );
+        if self.remove_geometry(&mut element, &mut state.dropped, &mut report.warnings) {
+            self.storey.warn_missing(&element, &mut report.warnings);
         }
         if !state.dropped.is_empty()
             && self
                 .app
-                .prune(&mut element, &state.dropped, &mut report.warnings)
+                .prune(&mut element, state.dropped.ids(), &mut report.warnings)
         {
             return None;
         }
-        if element.is(&self.core_ns, "appearanceMember") {
-            state.appearance_seen = true;
-        }
-        self.lod4.apply(&mut element, &mut report.warnings);
         self.bldg
             .apply(&mut element, &mut ids, &mut report.warnings);
+        self.cons.apply(&mut element, &mut report.warnings);
         self.tran
             .apply(&mut element, &mut ids, &mut report.warnings);
         self.iur.apply(&mut element, &mut report.warnings);
@@ -391,6 +403,66 @@ impl Converter {
         }
         collect_code_spaces(&element, &mut report.code_spaces);
         Some(element)
+    }
+
+    /// The geometry [`Self::remove_geometry`] removes from the members of
+    /// `source` that follow its first appearance member, skipping the floor
+    /// groups in `floors`. Empty when `source` has no appearance member.
+    fn dropped_after_appearance(
+        &self,
+        label: &str,
+        source: &str,
+        floors: &Floors,
+    ) -> Result<Dropped> {
+        let mut dropped = Dropped::new(&self.gml_ns, &self.xlink_ns);
+        if !source.contains("appearanceMember") {
+            return Ok(dropped);
+        }
+        let mut reader = Reader::new(label, source);
+        let mut root: Option<Name> = None;
+        let mut seen = false;
+        let mut warnings = Warnings::new();
+        while let Some(chunk) = reader.next_chunk()? {
+            match chunk {
+                Chunk::RootStart(element) => root = Some(element.name),
+                Chunk::Member(element) => {
+                    let Some(mut element) =
+                        transform::rename_under(&self.rules, element, root.as_ref())
+                    else {
+                        continue;
+                    };
+                    if element.is(&self.core_ns, "appearanceMember") {
+                        seen = true;
+                        continue;
+                    }
+                    if !seen || self.storey.is_floor(&element, floors) {
+                        continue;
+                    }
+                    self.remove_geometry(&mut element, &mut dropped, &mut warnings);
+                }
+                _ => {}
+            }
+        }
+        Ok(dropped)
+    }
+
+    /// Runs the `unf`, `lodmap`, `lod4` and `construction` passes on
+    /// `element`, recording what they remove in `dropped`, then writes each
+    /// removed object kept geometry still links to back in place of the link.
+    /// Returns true when `lod4` folded an interior model to an LOD.
+    fn remove_geometry(
+        &self,
+        element: &mut Element,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
+    ) -> bool {
+        dropped.begin(element);
+        self.unf.apply(element, dropped, warnings);
+        self.lodmap.apply(element, dropped, warnings);
+        let interior = self.lod4.apply(element, dropped, warnings);
+        self.construction.apply(element, dropped, warnings);
+        dropped.restore(element, warnings);
+        interior
     }
 }
 

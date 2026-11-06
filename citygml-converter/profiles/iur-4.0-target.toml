@@ -62,7 +62,14 @@ local = [
 
 # Lists whose values the conversion itself rewrites into the published codes.
 # The published file always wins, or the rewritten values would not resolve.
-superseded = ["Building_lodType.xml", "Road_lodType.xml", "Railway_lodType.xml"]
+superseded = [
+  "Building_lodType.xml",
+  "Bridge_lodType.xml",
+  "Tunnel_lodType.xml",
+  "OtherConstruction_lodType.xml",
+  "Road_lodType.xml",
+  "Railway_lodType.xml",
+]
 
 # Files the published 4.0 set carries under a new name, with unchanged codes.
 # Every codeSpace naming the old file is rewritten.
@@ -114,6 +121,249 @@ child = "urc:geometrySrcDescLod1"
 value = "999"
 code_space = "../../codelists/DataQualityAttribute_geometrySrcDesc.xml"
 after = ["urc:geometrySrcDescLod0"]
+
+# ---------------------------------------------------------------------------
+# Other constructions. i-UR 3.x declares the class, its boundary surfaces and
+# its construction properties in uro, and CityGML 3.0 declares them in con and
+# core. Its installations keep their i-UR class, renamed, and move into the
+# structure attribute (core/src/cons.rs). Names `uro` 3.x reuses on other
+# classes take the parent they hold under.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "uro:OtherConstruction"
+to = "con:OtherConstruction"
+[[element]]
+from = "uro:class"
+to = "con:class"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:function"
+to = "con:function"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:usage"
+to = "con:usage"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:elevation"
+to = "con:elevation"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:height"
+to = "con:height"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:conditionOfConstruction"
+to = "con:conditionOfConstruction"
+[[element]]
+from = "uro:dateOfConstruction"
+to = "con:dateOfConstruction"
+[[element]]
+from = "uro:dateOfDemolition"
+to = "con:dateOfDemolition"
+[[element]]
+from = "uro:Height"
+to = "con:Height"
+[[element]]
+from = "uro:value"
+to = "con:value"
+parent = "uro:Height"
+[[element]]
+from = "uro:status"
+to = "con:status"
+parent = "uro:Height"
+[[element]]
+from = "uro:lowReference"
+to = "con:lowReference"
+parent = "uro:Height"
+[[element]]
+from = "uro:highReference"
+to = "con:highReference"
+parent = "uro:Height"
+[[element]]
+from = "uro:Elevation"
+to = "con:Elevation"
+[[element]]
+from = "uro:elevationReference"
+to = "con:elevationReference"
+parent = "uro:Elevation"
+[[element]]
+from = "uro:elevationValue"
+to = "con:elevationValue"
+parent = "uro:Elevation"
+[[element]]
+from = "uro:constructionEvent"
+to = "con:constructionEvent"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:ConstructionEvent"
+to = "con:ConstructionEvent"
+[[element]]
+from = "uro:event"
+to = "con:event"
+parent = "uro:ConstructionEvent"
+[[element]]
+from = "uro:dateOfEvent"
+to = "con:dateOfEvent"
+parent = "uro:ConstructionEvent"
+[[element]]
+from = "uro:description"
+to = "con:description"
+parent = "uro:ConstructionEvent"
+[[element]]
+from = "uro:occupancy"
+to = "con:occupancy"
+parent = "uro:OtherConstruction"
+[[element]]
+from = "uro:Occupancy"
+to = "core:Occupancy"
+[[element]]
+from = "uro:numberOfOccupants"
+to = "core:numberOfOccupants"
+parent = "uro:Occupancy"
+[[element]]
+from = "uro:interval"
+to = "core:interval"
+parent = "uro:Occupancy"
+[[element]]
+from = "uro:occupantType"
+to = "core:occupantType"
+parent = "uro:Occupancy"
+[[element]]
+from = "uro:boundedBy"
+to = "core:boundary"
+[[element]]
+from = "uro:RoofSurface"
+to = "con:RoofSurface"
+[[element]]
+from = "uro:WallSurface"
+to = "con:WallSurface"
+[[element]]
+from = "uro:GroundSurface"
+to = "con:GroundSurface"
+[[element]]
+from = "uro:OuterCeilingSurface"
+to = "con:OuterCeilingSurface"
+[[element]]
+from = "uro:OuterFloorSurface"
+to = "con:OuterFloorSurface"
+[[element]]
+from = "uro:ClosureSurface"
+to = "core:ClosureSurface"
+[[element]]
+from = "uro:lod2MultiSurface"
+to = "core:lod2MultiSurface"
+[[element]]
+from = "uro:lod3MultiSurface"
+to = "core:lod3MultiSurface"
+[[element]]
+from = "uro:ConstructionInstallation"
+to = "uro:OtherConstructionInstallation"
+
+# The construction rewrites' rows for other constructions. See
+# [construction] in citygml-2.0-to-3.0.
+[construction.lod_geometry]
+"con:OtherConstruction" = "uro"
+"uro:OtherConstructionInstallation" = "uro"
+
+# An other construction's old LOD3 is LOD2. See [lod_map] in
+# citygml-2.0-to-3.0.
+[lod_map."con:OtherConstruction"]
+"3" = "2"
+
+# ---------------------------------------------------------------------------
+# The lodType codes of each feature type, keyed by the type.
+#
+# list is the published code list the type's codes belong to, and a codeSpace
+# naming one of cited_as is pointed at it. map rewrites a plain 2.0-era code to
+# its published form. drop names the codes removed, each with its label. A code
+# in neither is kept and reported, unless it is already one the table publishes.
+# 4.x codes are left to the LOD4 fold. moved names, per old LOD that
+# [lod_map] moves, the code a feature is given when that LOD moved and the
+# feature carries no code of it. It replaces the first code the move dropped.
+# folded gives, per side and keyed by the LOD the LOD4 content folded into, the
+# code a feature is given when its LOD4 folded and it carries no 4.x code. split
+# applies when any folded geometry of that side sits on a boundary surface, and
+# whole otherwise. interior maps a 4.x code, then the LOD the interior model
+# folds into, to its published code. A 4.x code listed under one LOD only sends
+# the interior model there whatever its measurement code says, and a code with
+# no entry at the decided LOD is dropped. A type without interior writes
+# <lod>.x_interior.
+# ---------------------------------------------------------------------------
+[lod_types."bldg:Building"]
+list = "Building_lodType.xml"
+drop = { "8" = "不明" }
+
+[lod_types."bldg:Building".map]
+"0.0" = "0.0_exterior"
+"0.1" = "0.1_exterior"
+"1.0" = "1.0_exterior"
+"1.1" = "1.1_exterior"
+"2.0" = "2.0_exterior"
+"2.1" = "2.1_exterior"
+"2.2" = "2.2_exterior"
+"2.3" = "2.3_exterior"
+"3.0" = "2.0_exterior"
+"3.1" = "2.1_exterior"
+"3.2" = "2.2_exterior"
+"3.3" = "2.3_exterior"
+
+[lod_types."bldg:Building".moved]
+"3" = "2.0_exterior"
+
+[lod_types."uro:UndergroundBuilding"]
+list = "UndergroundBuilding_lodType.xml"
+cited_as = ["Building_lodType.xml"]
+drop = { "8" = "不明" }
+
+[lod_types."uro:UndergroundBuilding".map]
+"0.0" = "0.0_exterior"
+"0.1" = "0.1_exterior"
+"1.0" = "1.0_exterior"
+"1.1" = "1.1_exterior"
+"2.0" = "2.0_exterior"
+"2.1" = "2.1_exterior"
+"2.2" = "2.2_exterior"
+"2.3" = "2.3_exterior"
+"3.0" = "3.0_exterior"
+"3.1" = "3.1_exterior"
+
+[lod_types."brid:Bridge"]
+list = "Bridge_lodType.xml"
+cited_as = ["Building_lodType.xml"]
+drop = { "8" = "不明" }
+
+[lod_types."brid:Bridge".map]
+"2.0" = "2.0_exterior"
+"2.1" = "2.1_exterior"
+"3.0" = "2.1_exterior"
+
+[lod_types."brid:Bridge".moved]
+"3" = "2.1_exterior"
+
+[lod_types."brid:Bridge".folded.exterior]
+"3" = { whole = "3.0_exterior", split = "3.1_exterior" }
+
+[lod_types."brid:Bridge".folded.interior]
+"3" = { whole = "3.0_interior", split = "3.1_interior" }
+
+[lod_types."tun:Tunnel"]
+list = "Tunnel_lodType.xml"
+
+[lod_types."tun:Tunnel".moved]
+"3" = "2.0_exterior"
+
+[lod_types."tun:Tunnel".interior]
+"4.0" = { "2" = "2.0_interior" }
+"4.1" = { "2" = "2.1_interior", "3" = "3.1_interior" }
+"4.2" = { "2" = "2.2_interior", "3" = "3.1_interior" }
+
+[lod_types."con:OtherConstruction"]
+list = "OtherConstruction_lodType.xml"
+
+[lod_types."con:OtherConstruction".map]
+"3.0" = "2.1"
+"3.1" = "2.1"
 
 # ---------------------------------------------------------------------------
 # What the transportation rewrite (core/src/tran.rs) supplies.

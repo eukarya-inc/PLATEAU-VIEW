@@ -62,6 +62,7 @@ pub struct StoreyRewrite {
     /// The 3.0 types a floor can belong to.
     hosts: Vec<Name>,
     room: Name,
+    storey: Name,
 }
 
 impl StoreyRewrite {
@@ -78,6 +79,7 @@ impl StoreyRewrite {
             rules: rules.clone(),
             grp: rules.output_ns("grp")?.to_owned(),
             room: Name::qualified(&bldg, "BuildingRoom"),
+            storey: Name::qualified(&bldg, "Storey"),
             bldg,
             gml: rules.output_ns("gml")?.to_owned(),
             xlink: rules.output_ns("xlink")?.to_owned(),
@@ -142,6 +144,28 @@ impl StoreyRewrite {
             .filter(|f| f.is(&self.grp, "CityObjectGroup"))
             .and_then(|f| f.attr(Some(&self.gml), "id"))
             .is_some_and(|id| floors.groups.contains(id))
+    }
+
+    /// Reports an interior model under `member` that carries no `bldg:Storey`,
+    /// which CityGML 3.0 requires in every interior LOD. `member` is a
+    /// top-level member whose interior model was folded to an LOD.
+    pub fn warn_missing(&self, member: &Element, warnings: &mut Warnings) {
+        if !has_descendant(member, &self.room) || has_descendant(member, &self.storey) {
+            return;
+        }
+        let feature = member
+            .elements()
+            .next()
+            .filter(|_| member.name.local.starts_with(char::is_lowercase))
+            .map(|f| &f.name)
+            .unwrap_or(&member.name);
+        warnings.add(format!(
+            "{}'s interior model has no bldg:Storey, which CityGML 3.0 requires \
+             in every interior LOD; the input has no floor (a grp:CityObjectGroup \
+             whose grp:parent is the building) to make one from, so none were \
+             created",
+            self.rules.display_name(feature)
+        ));
     }
 
     /// Nests every storey waiting for a building under `el` in that building,
@@ -276,6 +300,12 @@ impl StoreyRewrite {
             .find(|a| a.name.local == "id" && self.rules.map_attribute(&a.name).in_ns(&self.gml))
             .map(|a| a.value.as_str())
     }
+}
+
+/// True when an element named `name` sits anywhere under `el`.
+fn has_descendant(el: &Element, name: &Name) -> bool {
+    el.elements()
+        .any(|child| child.name == *name || has_descendant(child, name))
 }
 
 #[cfg(test)]

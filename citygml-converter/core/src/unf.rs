@@ -39,21 +39,14 @@
 
 use std::collections::HashSet;
 
+use crate::dropped::Dropped;
 use crate::error::Result;
+use crate::geometry::{multi_of, slot, wrap_single};
 use crate::iur::IurModules;
 use crate::profile::{Rules, UnfDm};
 use crate::report::Warnings;
 use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
-
-const SOLIDS: &[&str] = &["Solid", "CompositeSolid"];
-const SURFACES: &[&str] = &[
-    "Polygon",
-    "Surface",
-    "CompositeSurface",
-    "OrientableSurface",
-];
-const CURVES: &[&str] = &["LineString", "Curve", "CompositeCurve", "OrientableCurve"];
 
 /// The three LOD-indexed property families of CityGML 2.0 city furniture.
 #[derive(Debug, Clone, Copy)]
@@ -104,15 +97,8 @@ impl UnfRewrite {
 
     /// Rewrites one top-level member in place, looking through a property
     /// that wraps the feature. The `gml:id` of every element removed with a
-    /// geometry or Dm property is added to `dropped`. Returns true when
-    /// anything was added.
-    pub fn apply(
-        &self,
-        member: &mut Element,
-        dropped: &mut HashSet<String>,
-        warnings: &mut Warnings,
-    ) -> bool {
-        let before = dropped.len();
+    /// geometry or Dm property is added to `dropped`.
+    pub fn apply(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         if self.is_feature(member) {
             self.feature(member, dropped, warnings);
         } else {
@@ -122,19 +108,13 @@ impl UnfRewrite {
                 }
             }
         }
-        dropped.len() > before
     }
 
     fn is_feature(&self, el: &Element) -> bool {
         self.is_iur(&el.name) && self.schema.declares(&el.name, &self.furniture_hook)
     }
 
-    fn feature(
-        &self,
-        feature: &mut Element,
-        dropped: &mut HashSet<String>,
-        warnings: &mut Warnings,
-    ) {
+    fn feature(&self, feature: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         let label = self.display.display_name(&feature.name);
         let children = std::mem::take(&mut feature.children);
         let mut out = Vec::with_capacity(children.len());
@@ -147,7 +127,7 @@ impl UnfRewrite {
             };
             if let Some((family, lod)) = self.lod_property(&child) {
                 if lod == '4' {
-                    collect_ids(&child, &self.gml, dropped);
+                    dropped.add(&child);
                     warnings.add(format!(
                         "{} on the {label} was dropped. CityGML 3.0 has no LOD4, and an \
                          underground utility's LOD4 holds its exterior and interior faces \
@@ -158,7 +138,7 @@ impl UnfRewrite {
                 }
                 if let Some(property) = self.retag(child, family, lod, &label, dropped, warnings) {
                     if geometry.iter().any(|g| g.name == property.name) {
-                        collect_ids(&property, &self.gml, dropped);
+                        dropped.add(&property);
                         warnings.add(format!(
                             "a second {} on the {label} was dropped. The property holds one \
                              geometry",
@@ -193,7 +173,7 @@ impl UnfRewrite {
         match self.dm {
             UnfDm::Drop => {
                 for property in &dm {
-                    collect_ids(property, &self.gml, dropped);
+                    dropped.add(property);
                     warnings.add(format!(
                         "{} on the {label} was dropped, as [unf] dm = drop says",
                         self.display.display_name(&property.name)
@@ -238,7 +218,7 @@ impl UnfRewrite {
         family: Family,
         lod: char,
         label: &str,
-        dropped: &mut HashSet<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> Option<Element> {
         let from = self.display.display_name(&property.name);
@@ -254,17 +234,13 @@ impl UnfRewrite {
                     return None;
                 };
                 let kind = inner.name.local.clone();
-                let target = if !inner.name.in_ns(&self.gml) {
-                    None
-                } else if SOLIDS.contains(&kind.as_str()) {
-                    Some("Solid")
-                } else if to_lod == '1' {
-                    None
+                let target = if inner.name.in_ns(&self.gml) {
+                    slot(&kind, to_lod)
                 } else {
-                    multi_of(&kind)
+                    None
                 };
                 let Some(target) = target else {
-                    collect_ids(&property, &self.gml, dropped);
+                    dropped.add(&property);
                     warnings.add(format!(
                         "{from} on the {label} held a gml:{kind}, for which CityGML 3.0 has \
                          no LOD{to_lod} property, and was dropped"
@@ -272,7 +248,7 @@ impl UnfRewrite {
                     return None;
                 };
                 if target != "Solid" {
-                    self.wrap_single(&mut property, target);
+                    wrap_single(&mut property, target, &self.gml);
                 }
                 format!("lod{to_lod}{target}")
             }
@@ -287,38 +263,6 @@ impl UnfRewrite {
         }
         property.name = to;
         Some(property)
-    }
-
-    /// Wraps the single geometry under `property` in a `gml:<multi>` unless it
-    /// already is one.
-    fn wrap_single(&self, property: &mut Element, multi: &str) {
-        let Some(Node::Element(inner)) = property
-            .children
-            .iter()
-            .position(|n| matches!(n, Node::Element(_)))
-            .map(|i| property.children.remove(i))
-        else {
-            return;
-        };
-        if inner.is(&self.gml, multi) {
-            property.push(inner);
-            return;
-        }
-        let member = if multi == "MultiSurface" {
-            "surfaceMember"
-        } else {
-            "curveMember"
-        };
-        let mut wrapper = Element::new(Name::qualified(&self.gml, multi));
-        for attr in ["srsName", "srsDimension"] {
-            if let Some(value) = inner.attr(None, attr) {
-                wrapper.set_attr(Name::unqualified(attr), value);
-            }
-        }
-        let mut item = Element::new(Name::qualified(&self.gml, member));
-        item.push(inner);
-        wrapper.push(item);
-        property.push(wrapper);
     }
 
     /// True when `el` is a property holding one Dm class.
@@ -425,7 +369,7 @@ impl UnfRewrite {
         let mut property = Element::new(Name::qualified(&self.core, local));
         property.push(geometry);
         if let Some(multi) = multi {
-            self.wrap_single(&mut property, multi);
+            wrap_single(&mut property, multi, &self.gml);
         }
         warnings.add(format!(
             "the Dm lod0Geometry of the {label} became core:{local}. CityGML 3.0 gives an \
@@ -536,28 +480,6 @@ impl UnfRewrite {
 
     fn is_iur(&self, name: &Name) -> bool {
         self.iur.contains(name)
-    }
-}
-
-/// The GML aggregate a geometry named `kind` belongs in, or `None` when it
-/// is neither a surface nor a curve.
-fn multi_of(kind: &str) -> Option<&'static str> {
-    if kind == "MultiSurface" || SURFACES.contains(&kind) {
-        Some("MultiSurface")
-    } else if kind == "MultiCurve" || CURVES.contains(&kind) {
-        Some("MultiCurve")
-    } else {
-        None
-    }
-}
-
-/// Adds the `gml:id` of `el` and of every descendant to `out`.
-fn collect_ids(el: &Element, gml: &str, out: &mut HashSet<String>) {
-    if let Some(id) = el.attr(Some(gml), "id") {
-        out.insert(id.to_owned());
-    }
-    for child in el.elements() {
-        collect_ids(child, gml, out);
     }
 }
 

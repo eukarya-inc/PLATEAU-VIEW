@@ -50,6 +50,17 @@ pub struct Profile {
     /// Where CityGML 2.0 LOD4 goes, since 3.0 has no LOD4. See [`Lod4Policy`].
     #[serde(default)]
     pub lod4: Lod4Policy,
+    /// The `lodType` code list each feature type cites, keyed by the type's
+    /// `prefix:local` name. See [`LodTypeTable`].
+    #[serde(default)]
+    pub lod_types: IndexMap<String, LodTypeTable>,
+    /// The construction rewrites' properties. See [`ConstructionPolicy`].
+    #[serde(default)]
+    pub construction: ConstructionPolicy,
+    /// The LODs a feature type's 2.0 geometry moves to, keyed by the type's
+    /// `prefix:local` name, then by the old LOD digit, giving the new one.
+    #[serde(default)]
+    pub lod_map: IndexMap<String, IndexMap<String, String>>,
     /// How the input's code lists are carried into the output. See
     /// [`CodelistsPolicy`].
     #[serde(default)]
@@ -206,13 +217,20 @@ fn row_subjects(path: &str, row: &Value) -> Vec<String> {
         "element" => "from",
         _ => return Vec::new(),
     };
-    match row.get(field) {
+    let subjects: Vec<String> = match row.get(field) {
         Some(Value::String(one)) => vec![one.clone()],
         Some(Value::Array(many)) => many
             .iter()
             .filter_map(|v| v.as_str().map(str::to_owned))
             .collect(),
         _ => Vec::new(),
+    };
+    match row.get("parent").and_then(Value::as_str) {
+        Some(parent) => subjects
+            .into_iter()
+            .map(|s| format!("{s}` under `{parent}"))
+            .collect(),
+        None => subjects,
     }
 }
 
@@ -282,6 +300,10 @@ pub struct ElementRule {
     pub from: String,
     #[serde(default)]
     pub to: Option<String>,
+    /// The input name of the parent the rule is limited to. A rule with a
+    /// parent is applied before a rule without one.
+    #[serde(default)]
+    pub parent: Option<String>,
     /// Remove the element, and its subtree, instead of renaming it.
     #[serde(default)]
     pub drop: bool,
@@ -356,6 +378,28 @@ pub struct Lod4Policy {
     /// Codes whose LOD4 becomes LOD3.
     pub lod3: Vec<String>,
     pub fallback: Lod4Fallback,
+    /// Output prefixes of the modules whose `lod4*` geometry properties are
+    /// folded.
+    pub modules: Vec<String>,
+    /// Elements that put everything under them in the interior model, written
+    /// with output prefixes as they stand after the rename pass.
+    pub interior: Vec<String>,
+    /// Feature types whose LOD4 interior content goes to one place whatever
+    /// its measurement code says, keyed by the type's `prefix:local` name.
+    pub fixed: IndexMap<String, Lod4Fallback>,
+    /// Where a feature type's LOD4 exterior shell goes, keyed by the type's
+    /// `prefix:local` name. A type not listed folds it into LOD3.
+    pub exterior: IndexMap<String, Lod4Exterior>,
+}
+
+/// Where a feature's LOD4 exterior shell goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Lod4Exterior {
+    /// Fold into the LOD3 slots, where they are empty.
+    Lod3,
+    /// Remove it, with every feature it leaves without geometry.
+    Drop,
 }
 
 impl Default for Lod4Policy {
@@ -365,8 +409,114 @@ impl Default for Lod4Policy {
             lod2: Vec::new(),
             lod3: Vec::new(),
             fallback: Lod4Fallback::Lod3,
+            modules: Vec::new(),
+            interior: Vec::new(),
+            fixed: IndexMap::new(),
+            exterior: IndexMap::new(),
         }
     }
+}
+
+/// The `lodType` codes of one feature type.
+///
+/// `list` is the published code list the type's codes belong to. A `codeSpace`
+/// naming one of `cited_as` is pointed at `list`. `map` rewrites a plain code
+/// to its published form, `drop` names the codes removed, each with the label
+/// shown when reporting it. A code in neither is kept and reported, unless it
+/// is already one the table publishes. `4.x` codes are left to the
+/// LOD4 fold.
+///
+/// `moved` maps an old LOD digit the type's `[lod_map]` moves to the
+/// published code a feature is given when that LOD moved and the feature
+/// carries no code of it. The code replaces the first code the move dropped.
+///
+/// `folded` gives the codes a feature is given when its LOD4 folded and it
+/// carries no `4.x` code. See [`FoldedCodes`].
+///
+/// `interior` maps a `4.x` code, then the LOD digit the interior model folds
+/// into, to the published code it becomes. A `4.x` code with one LOD only
+/// sends the interior model to that LOD whatever the measurement code says.
+/// A type without `interior` rewrites `4.x` to `<lod>.x_interior`.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct LodTypeTable {
+    pub list: String,
+    pub cited_as: Vec<String>,
+    pub map: IndexMap<String, String>,
+    pub drop: IndexMap<String, String>,
+    pub moved: IndexMap<String, String>,
+    pub folded: FoldedCodes,
+    pub interior: IndexMap<String, IndexMap<String, String>>,
+}
+
+impl LodTypeTable {
+    /// True when `code` is one of the published codes the table writes.
+    pub fn publishes(&self, code: &str) -> bool {
+        let folded = self
+            .folded
+            .exterior
+            .values()
+            .chain(self.folded.interior.values())
+            .flat_map(|c| [&c.whole, &c.split]);
+        self.map
+            .values()
+            .chain(self.moved.values())
+            .chain(folded)
+            .chain(self.interior.values().flat_map(IndexMap::values))
+            .any(|c| c == code)
+    }
+}
+
+/// The codes for LOD4 content folded into a LOD, per side of the model and
+/// keyed by the LOD digit it folded into.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FoldedCodes {
+    pub exterior: IndexMap<String, FoldedCode>,
+    pub interior: IndexMap<String, FoldedCode>,
+}
+
+/// `split` is the code when any folded geometry of that side sits on a
+/// boundary surface, and `whole` the code otherwise.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FoldedCode {
+    pub whole: String,
+    pub split: String,
+}
+
+/// The properties the construction rewrites act on, written with output
+/// prefixes as they stand after the rename pass.
+///
+/// `lod_geometry` maps each type whose `lod0Geometry` to `lod3Geometry`
+/// children are routed to a `core` slot by the geometry they hold to the
+/// output prefix those children are in.
+/// `installations` maps a 2.0 installation property to the 3.0 property and
+/// the `con:relationToConstruction` value its installations gain. `dates` maps
+/// a `gYear` property to the `date` property it becomes.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ConstructionPolicy {
+    pub lod_geometry: IndexMap<String, String>,
+    pub installations: IndexMap<String, InstallationRule>,
+    pub dates: IndexMap<String, String>,
+}
+
+/// One row of [`ConstructionPolicy::installations`].
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstallationRule {
+    pub to: String,
+    pub relation: String,
+}
+
+/// [`ConstructionPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct ConstructionRules {
+    /// Host type to the namespace URI of its `lodNGeometry` children.
+    pub lod_geometry: HashMap<Name, String>,
+    pub installations: HashMap<Name, (Name, String)>,
+    pub dates: HashMap<Name, Name>,
 }
 
 /// What happens to an underground utility's Dm attribute once its geometry
@@ -404,6 +554,11 @@ pub struct Lod4Rules {
     pub lod2: Vec<String>,
     pub lod3: Vec<String>,
     pub fallback: Lod4Fallback,
+    /// Namespace URIs of [`Lod4Policy::modules`].
+    pub modules: Vec<String>,
+    pub interior: Vec<Name>,
+    pub fixed: HashMap<Name, Lod4Fallback>,
+    pub exterior: HashMap<Name, Lod4Exterior>,
 }
 
 /// How the input's `codelists/` is carried into the output.
@@ -536,11 +691,17 @@ pub struct Rules {
     namespace_map: HashMap<String, String>,
     /// `None` means "drop this element".
     renames: HashMap<Name, Option<Name>>,
+    /// Rules limited to one parent, by the parent's input name and then the
+    /// element's. `None` means "drop this element".
+    scoped: HashMap<Name, HashMap<Name, Option<Name>>>,
     output_namespaces: IndexMap<String, String>,
     prefixes: PrefixMap,
     schema_location: Option<String>,
     height: HeightDefaults,
     lod4: Lod4Rules,
+    lod_types: Vec<(Name, LodTypeTable)>,
+    construction: ConstructionRules,
+    lod_map: HashMap<Name, Vec<(char, char)>>,
     codelists: CodelistsPolicy,
     ade_hooks: HashMap<Name, Name>,
     quality: QualityRules,
@@ -561,8 +722,14 @@ impl Rules {
         let codelists = profile.codelists.clone();
 
         let mut renames = HashMap::new();
+        let mut scoped: HashMap<Name, HashMap<Name, Option<Name>>> = HashMap::new();
         for rule in &profile.element {
             let sources = parse_input_names(&rule.from, input)?;
+            let parents = rule
+                .parent
+                .as_deref()
+                .map(|p| parse_input_names(p, input))
+                .transpose()?;
             let to = match (&rule.to, rule.drop) {
                 (Some(_), true) => {
                     return Err(Error::Profile(format!(
@@ -579,12 +746,28 @@ impl Rules {
                     )));
                 }
             };
-            for from in sources {
-                if let Some(previous) = renames.insert(from, to.clone()) {
-                    return Err(Error::Profile(format!(
-                        "duplicate rule for `{}` (previously mapped to {previous:?})",
-                        rule.from
-                    )));
+            let Some(parents) = parents else {
+                for from in sources {
+                    if let Some(previous) = renames.insert(from, to.clone()) {
+                        return Err(Error::Profile(format!(
+                            "duplicate rule for `{}` (previously mapped to {previous:?})",
+                            rule.from
+                        )));
+                    }
+                }
+                continue;
+            };
+            for parent in parents {
+                let rows = scoped.entry(parent).or_default();
+                for from in &sources {
+                    if let Some(previous) = rows.insert(from.clone(), to.clone()) {
+                        return Err(Error::Profile(format!(
+                            "duplicate rule for `{}` under `{}` (previously mapped to \
+                             {previous:?})",
+                            rule.from,
+                            rule.parent.as_deref().unwrap_or_default()
+                        )));
+                    }
                 }
             }
         }
@@ -664,12 +847,133 @@ impl Rules {
             lod2: policy.lod2.clone(),
             lod3: policy.lod3.clone(),
             fallback: policy.fallback,
+            modules: policy
+                .modules
+                .iter()
+                .map(|prefix| {
+                    output.get(prefix).cloned().ok_or_else(|| {
+                        Error::Profile(format!("[lod4] modules names undeclared prefix `{prefix}`"))
+                    })
+                })
+                .collect::<Result<_>>()?,
+            interior: policy
+                .interior
+                .iter()
+                .map(|n| parse_name(n, output))
+                .collect::<Result<_>>()?,
+            fixed: policy
+                .fixed
+                .iter()
+                .map(|(ty, target)| Ok((parse_name(ty, output)?, *target)))
+                .collect::<Result<_>>()?,
+            exterior: policy
+                .exterior
+                .iter()
+                .map(|(ty, target)| Ok((parse_name(ty, output)?, *target)))
+                .collect::<Result<_>>()?,
         };
         if let Some(code) = lod4.lod2.iter().find(|c| lod4.lod3.contains(c)) {
             return Err(Error::Profile(format!(
                 "[lod4] lists code `{code}` under both lod2 and lod3"
             )));
         }
+
+        let mut lod_types = Vec::new();
+        for (ty, table) in &profile.lod_types {
+            if let Some(code) = table.map.keys().find(|c| table.drop.contains_key(*c)) {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` both maps and drops code `{code}`"
+                )));
+            }
+            let folded = table
+                .folded
+                .exterior
+                .keys()
+                .chain(table.folded.interior.keys());
+            let interior = table.interior.values().flat_map(IndexMap::keys);
+            if let Some(code) = table.interior.keys().find(|c| !c.starts_with("4.")) {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` lists interior code `{code}`, which is not a 4.x code"
+                )));
+            }
+            if let Some(lod) = folded.chain(interior).find(|lod| {
+                let mut chars = lod.chars();
+                !matches!((chars.next(), chars.next()), (Some('0'..='3'), None))
+            }) {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` keys folded or interior codes by `{lod}`, which is \
+                     not a LOD digit 0 to 3"
+                )));
+            }
+            lod_types.push((parse_name(ty, output)?, table.clone()));
+        }
+
+        let mut lod_map = HashMap::new();
+        for (ty, rows) in &profile.lod_map {
+            let mut moves = Vec::new();
+            for (from, to) in rows {
+                let digit = |text: &str, range: std::ops::RangeInclusive<char>| {
+                    let mut chars = text.chars();
+                    match (chars.next(), chars.next()) {
+                        (Some(d), None) if range.contains(&d) => Ok(d),
+                        _ => Err(Error::Profile(format!(
+                            "[lod_map] `{ty}` maps `{from}` to `{to}`; both must be single \
+                             LOD digits, the old one 1 to 3 and the new one 0 to 3"
+                        ))),
+                    }
+                };
+                moves.push((digit(from, '1'..='3')?, digit(to, '0'..='3')?));
+            }
+            if let Some((_, to)) = moves
+                .iter()
+                .find(|(_, to)| moves.iter().any(|(f, _)| f == to))
+            {
+                return Err(Error::Profile(format!(
+                    "[lod_map] `{ty}` moves LOD{to} and also moves geometry into it"
+                )));
+            }
+            lod_map.insert(parse_name(ty, output)?, moves);
+        }
+        for ((name, table), ty) in lod_types.iter().zip(profile.lod_types.keys()) {
+            let moves = lod_map.get(name).map(Vec::as_slice).unwrap_or_default();
+            if let Some(from) = table
+                .moved
+                .keys()
+                .find(|from| !moves.iter().any(|(f, _)| from.chars().eq([*f])))
+            {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` names a code for moved LOD `{from}`, which its \
+                     [lod_map] does not move"
+                )));
+            }
+        }
+
+        let policy = &profile.construction;
+        let mut installations = HashMap::new();
+        for (from, rule) in &policy.installations {
+            installations.insert(
+                parse_name(from, output)?,
+                (parse_name(&rule.to, output)?, rule.relation.clone()),
+            );
+        }
+        let mut dates = HashMap::new();
+        for (from, to) in &policy.dates {
+            dates.insert(parse_name(from, output)?, parse_name(to, output)?);
+        }
+        let mut lod_geometry = HashMap::new();
+        for (host, prefix) in &policy.lod_geometry {
+            let ns = output.get(prefix).ok_or_else(|| {
+                Error::Profile(format!(
+                    "[construction.lod_geometry] names undeclared prefix `{prefix}` for `{host}`"
+                ))
+            })?;
+            lod_geometry.insert(parse_name(host, output)?, ns.clone());
+        }
+        let construction = ConstructionRules {
+            lod_geometry,
+            installations,
+            dates,
+        };
 
         if let Some(pattern) = codelists.local.iter().find(|p| p.matches('*').count() > 1) {
             return Err(Error::Profile(format!(
@@ -711,11 +1015,15 @@ impl Rules {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             renames,
+            scoped,
             output_namespaces,
             prefixes,
             schema_location,
             height: profile.height.clone(),
             lod4,
+            lod_types,
+            construction,
+            lod_map,
             codelists,
             ade_hooks,
             quality,
@@ -747,6 +1055,18 @@ impl Rules {
         }
     }
 
+    /// [`Self::map_element`] for an element whose parent's input name is
+    /// `parent`. A rule limited to that parent wins over the rest.
+    pub fn map_child(&self, parent: Option<&Name>, name: &Name) -> Option<Name> {
+        match parent
+            .and_then(|p| self.scoped.get(p))
+            .and_then(|rows| rows.get(name))
+        {
+            Some(mapped) => mapped.clone(),
+            None => self.map_element(name),
+        }
+    }
+
     /// The output name for an attribute. Element rules do not apply, only the
     /// namespace bump.
     pub fn map_attribute(&self, name: &Name) -> Name {
@@ -775,6 +1095,21 @@ impl Rules {
     /// Where LOD4 content goes. See [`Lod4Policy`].
     pub fn lod4(&self) -> &Lod4Rules {
         &self.lod4
+    }
+
+    /// Feature type `ty` and its `lodType` table, if the profile gives one.
+    pub fn lod_types(&self, ty: &Name) -> Option<&(Name, LodTypeTable)> {
+        self.lod_types.iter().find(|(name, _)| name == ty)
+    }
+
+    /// The construction rewrites' properties. See [`ConstructionPolicy`].
+    pub fn construction(&self) -> &ConstructionRules {
+        &self.construction
+    }
+
+    /// The old LOD digit to new one, per feature type. See [`Profile::lod_map`].
+    pub fn lod_map(&self) -> &HashMap<Name, Vec<(char, char)>> {
+        &self.lod_map
     }
 
     /// The CityGML property an i-UR class hangs off in 3.0, keyed by the

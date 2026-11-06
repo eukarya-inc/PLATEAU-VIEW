@@ -122,3 +122,52 @@ fn materials_and_untouched_content_survive() {
         output.contains("<app:imageURI>52382287_bldg_6697_appearance/hnap0001.jpg</app:imageURI>")
     );
 }
+
+const LEADING: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"
+  xmlns:bldg="http://www.opengis.net/citygml/building/2.0"
+  xmlns:app="http://www.opengis.net/citygml/appearance/2.0"
+  xmlns:gml="http://www.opengis.net/gml">
+<app:appearanceMember>
+  <app:Appearance gml:id="ap1">
+    <app:theme>rgbTexture</app:theme>
+    <app:surfaceDataMember>
+      <app:ParameterizedTexture gml:id="tx1">
+        <app:imageURI>a.jpg</app:imageURI>
+        <app:target uri="#old2"><app:TexCoordList><app:textureCoordinates ring="#old2r">0 0 1 0 1 1 0 0</app:textureCoordinates></app:TexCoordList></app:target>
+        <app:target uri="#new2"><app:TexCoordList><app:textureCoordinates ring="#new2r">0 0 1 0 1 1 0 0</app:textureCoordinates></app:TexCoordList></app:target>
+      </app:ParameterizedTexture>
+    </app:surfaceDataMember>
+    <app:surfaceDataMember>
+      <app:ParameterizedTexture gml:id="tx2">
+        <app:imageURI>b.jpg</app:imageURI>
+        <app:target uri="#old2"><app:TexCoordList><app:textureCoordinates ring="#old2r">0 0 1 0 1 1 0 0</app:textureCoordinates></app:TexCoordList></app:target>
+      </app:ParameterizedTexture>
+    </app:surfaceDataMember>
+  </app:Appearance>
+</app:appearanceMember>
+<core:cityObjectMember>
+<bldg:Building gml:id="b1">
+  <bldg:lod2MultiSurface><gml:MultiSurface><gml:surfaceMember><gml:Polygon gml:id="old2"><gml:exterior><gml:LinearRing gml:id="old2r"><gml:posList>0 0 0 1 0 0 1 1 0 0 0 0</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon></gml:surfaceMember></gml:MultiSurface></bldg:lod2MultiSurface>
+  <bldg:lod3MultiSurface><gml:MultiSurface><gml:surfaceMember><gml:Polygon gml:id="new2"><gml:exterior><gml:LinearRing gml:id="new2r"><gml:posList>0 0 0 1 0 0 1 1 0 0 0 0</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon></gml:surfaceMember></gml:MultiSurface></bldg:lod3MultiSurface>
+</bldg:Building>
+</core:cityObjectMember>
+</core:CityModel>
+"##;
+
+#[test]
+fn an_appearance_ahead_of_the_features_loses_links_to_geometry_they_drop() {
+    let (_, toml) = PROFILES
+        .iter()
+        .find(|(name, _)| *name == "iur-3.1-to-4.0")
+        .unwrap();
+    let converter = Converter::new(Rules::from_toml(toml).unwrap(), Options::default()).unwrap();
+    let (output, _) = convert_to_string(&converter, "leading", LEADING).unwrap();
+    assert!(!output.contains("#old2"), "{output}");
+    assert!(output.contains("<app:target>#new2</app:target>"));
+    assert!(output.contains("a.jpg"));
+    assert!(
+        !output.contains("b.jpg"),
+        "a texture left with no target goes"
+    );
+}

@@ -9,11 +9,19 @@ use crate::profile::Rules;
 use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
 
-/// Applies the profile's element rules and namespace bump to a subtree.
+/// Applies the profile's element rules and namespace bump to a subtree whose
+/// root has no parent.
 ///
 /// Returns `None` when the profile drops the element outright.
-pub fn rename(rules: &Rules, mut el: Element) -> Option<Element> {
-    el.name = rules.map_element(&el.name)?;
+pub fn rename(rules: &Rules, el: Element) -> Option<Element> {
+    rename_under(rules, el, None)
+}
+
+/// [`rename`] for a subtree whose root sits under an element whose input name
+/// is `parent`, so that rules limited to that parent apply to the root.
+pub fn rename_under(rules: &Rules, mut el: Element, parent: Option<&Name>) -> Option<Element> {
+    let name = rules.map_child(parent, &el.name)?;
+    let input = std::mem::replace(&mut el.name, name);
     for attr in &mut el.attrs {
         attr.name = rules.map_attribute(&attr.name);
     }
@@ -21,7 +29,7 @@ pub fn rename(rules: &Rules, mut el: Element) -> Option<Element> {
     el.children = children
         .into_iter()
         .filter_map(|child| match child {
-            Node::Element(child) => rename(rules, child).map(Node::Element),
+            Node::Element(child) => rename_under(rules, child, Some(&input)).map(Node::Element),
             other => Some(other),
         })
         .collect();
@@ -179,6 +187,40 @@ mod tests {
             .expect("lod1Solid moved to core");
         let solid = prop.child(ns::GML_32, "Solid").expect("gml 3.2 Solid");
         assert_eq!(solid.attr(Some(ns::GML_32), "id"), Some("s1"));
+    }
+
+    /// A rule limited to a parent applies only to that parent's own children,
+    /// and wins over a rule for the same name without one.
+    #[test]
+    fn a_parent_limited_rule_applies_only_under_its_parent() {
+        let rules = Rules::from_toml(
+            r#"
+            name = "t"
+            [input.namespaces]
+            i = "urn:in"
+            [output.namespaces]
+            o = "urn:out"
+            [[element]]
+            from = "i:class"
+            to = "o:anyClass"
+            [[element]]
+            from = "i:class"
+            to = "o:hostClass"
+            parent = "i:Host"
+            "#,
+        )
+        .unwrap();
+        let class = || Element::new(Name::qualified("urn:in", "class"));
+        let mut nested = Element::new(Name::qualified("urn:in", "Other"));
+        nested.push(class());
+        let mut host = Element::new(Name::qualified("urn:in", "Host"));
+        host.push(class());
+        host.push(nested);
+
+        let out = rename(&rules, host).unwrap();
+        assert!(out.child("urn:out", "hostClass").is_some());
+        let nested = out.elements().nth(1).unwrap();
+        assert!(nested.child("urn:out", "anyClass").is_some());
     }
 
     /// A comment does not turn `reorder` into a no-op, and travels with the
