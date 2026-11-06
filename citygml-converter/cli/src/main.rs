@@ -51,9 +51,9 @@ struct ConvertArgs {
     #[arg(short, long, value_name = "DIR")]
     output: PathBuf,
 
-    /// udx feature types to convert. Repeatable. `all` converts everything
-    /// present.
-    #[arg(short = 't', long = "type", value_name = "TYPE", default_values_t = [String::from("bldg")])]
+    /// udx feature types to convert. Repeatable. Omitted, or `all`, converts
+    /// everything present.
+    #[arg(short = 't', long = "type", value_name = "TYPE")]
     types: Vec<String>,
 
     /// i-UR version to produce. Defaults to the only one a built-in profile
@@ -241,6 +241,15 @@ fn convert(args: &ConvertArgs) -> Result<()> {
     } else {
         args.types.clone()
     };
+    // Only the requested feature types are staged, so a multi-part or zipped
+    // input does not inflate types this run never reads.
+    let dataset = Dataset::open_selecting(
+        &args.inputs,
+        &staging(args.staging.as_deref()),
+        &feature_types,
+    )
+    .context("resolving the input dataset")?;
+
     let options = Options {
         feature_types,
         generate_gml_ids: !args.no_gml_ids,
@@ -253,8 +262,6 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         unf_dm: args.unf_dm.map(Into::into),
     };
 
-    let dataset = Dataset::open_with(&args.inputs, &staging(args.staging.as_deref()))
-        .context("resolving the input dataset")?;
     eprintln!("dataset root: {}", dataset.root().display());
     if dataset.is_staged() {
         eprintln!("  (reassembled from {} input(s))", args.inputs.len());

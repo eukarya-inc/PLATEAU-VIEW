@@ -23,7 +23,7 @@ Useful flags:
 
 | Flag | Effect |
 | --- | --- |
-| `-t, --type bldg` | which `udx/` feature types to convert (repeatable, `all` for everything) |
+| `-t, --type TYPE` | which `udx/` feature types to convert (repeatable; omitted or `all` converts everything) |
 | `--target-iur VER` | which i-UR version to produce. One choice today (`4.0`), and errors listing the rest once there are more |
 | `--profile FILE` | use a mapping profile from disk, overriding detection and `--target-iur` |
 | `--staging DIR` | reassemble multi-part input here instead of a temp dir, and keep it |

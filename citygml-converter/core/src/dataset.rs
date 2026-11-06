@@ -9,6 +9,10 @@
 //! The second shape is extracted into a staging directory laid out like the
 //! first. A directory that is already a package is used where it lies, with
 //! nothing copied.
+//!
+//! Staging can be limited to some `udx/` feature types, since a whole city's
+//! package is mostly feature types a run does not convert. A type left out
+//! is staged as an empty directory, so the package still lists it.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -52,6 +56,21 @@ impl Dataset {
     }
 
     pub fn open_with(inputs: &[PathBuf], staging: &Staging) -> Result<Self> {
+        Self::open_selecting(inputs, staging, &[])
+    }
+
+    /// Like [`Dataset::open_with`], but stages only the `udx/` feature types
+    /// named in `feature_types`, or every one when it is empty.
+    ///
+    /// A type left out is staged as an empty directory, so
+    /// [`Dataset::feature_types`] still lists it and [`Dataset::gml_files`]
+    /// finds nothing in it. Every other part is staged in full. A package used
+    /// in place is never filtered, since nothing is copied out of it.
+    pub fn open_selecting(
+        inputs: &[PathBuf],
+        staging: &Staging,
+        feature_types: &[String],
+    ) -> Result<Self> {
         if inputs.is_empty() {
             return Err(Error::Layout("no input given".into()));
         }
@@ -85,8 +104,9 @@ impl Dataset {
             }
         };
 
+        let select = Select { feature_types };
         for source in &sources {
-            source.stage(&root)?;
+            source.stage(&root, &select)?;
         }
         check_root(&root)?;
 
@@ -213,18 +233,48 @@ impl Source {
         }
     }
 
-    /// Copies or extracts this input into the staging tree.
-    fn stage(&self, root: &Path) -> Result<()> {
+    /// Copies or extracts the selected part of this input into the staging
+    /// tree.
+    fn stage(&self, root: &Path, select: &Select) -> Result<()> {
         match self {
             Source::Directory { path, layout } => match layout {
-                Layout::Bundle { prefix, .. } => copy_tree(&join_prefix(path, prefix), root),
-                Layout::LoosePart { part } => copy_tree(path, &root.join(part)),
+                Layout::Bundle { prefix, .. } => {
+                    copy_tree(&join_prefix(path, prefix), root, "", select)
+                }
+                Layout::LoosePart { part } => copy_tree(path, root, part, select),
             },
             Source::Archive { path, layout } => match layout {
-                Layout::Bundle { prefix, .. } => extract(path, prefix, root),
-                Layout::LoosePart { part } => extract(path, "", &root.join(part)),
+                Layout::Bundle { prefix, .. } => extract(path, prefix, root, "", select),
+                Layout::LoosePart { part } => extract(path, "", root, part, select),
             },
         }
+    }
+}
+
+/// Which of an input's entries are staged.
+struct Select<'a> {
+    /// The `udx/` feature types to stage. Empty stages them all.
+    feature_types: &'a [String],
+}
+
+impl Select<'_> {
+    /// The feature type whose directory `relative` lies in or names, when
+    /// that type is not selected. `relative` is `/`-separated and relative to
+    /// the package root, and `is_dir` says whether it names a directory.
+    fn skipped_type<'p>(&self, relative: &'p str, is_dir: bool) -> Option<&'p str> {
+        if self.feature_types.is_empty() {
+            return None;
+        }
+        let mut components = relative.split('/').filter(|c| !c.is_empty());
+        if components.next() != Some(REQUIRED_PART) {
+            return None;
+        }
+        let feature_type = components.next()?;
+        // A file directly under `udx/` belongs to no feature type.
+        if !is_dir && components.next().is_none() {
+            return None;
+        }
+        (!self.feature_types.iter().any(|t| t == feature_type)).then_some(feature_type)
     }
 }
 
@@ -402,7 +452,15 @@ fn zip_entries(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
-fn extract(archive_path: &Path, strip: &str, dest: &Path) -> Result<()> {
+/// Extracts the entries of `archive_path` under `strip` into `root/under`,
+/// skipping the feature types `select` leaves out.
+fn extract(
+    archive_path: &Path,
+    strip: &str,
+    root: &Path,
+    under: &str,
+    select: &Select,
+) -> Result<()> {
     let file = File::open(archive_path).map_err(|e| Error::io(archive_path, e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| Error::zip(archive_path, e))?;
 
@@ -424,7 +482,16 @@ fn extract(archive_path: &Path, strip: &str, dest: &Path) -> Result<()> {
             continue;
         }
 
-        let target = dest.join(&relative);
+        // Skipped before a byte of the entry is decompressed, which is the
+        // whole point of selecting.
+        let relative = join_relative(under, &relative);
+        if let Some(feature_type) = select.skipped_type(&relative, entry.is_dir()) {
+            let dir = join_prefix(root, &format!("{REQUIRED_PART}/{feature_type}"));
+            fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
+            continue;
+        }
+
+        let target = join_prefix(root, &relative);
         if entry.is_dir() {
             fs::create_dir_all(&target).map_err(|e| Error::io(&target, e))?;
             continue;
@@ -438,13 +505,33 @@ fn extract(archive_path: &Path, strip: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
-    for entry in WalkDir::new(from).into_iter().filter_map(|e| e.ok()) {
-        let relative = match entry.path().strip_prefix(from) {
-            Ok(r) => r,
-            Err(_) => continue,
+/// Copies the tree under `from` into `root/under`, skipping the feature types
+/// `select` leaves out.
+fn copy_tree(from: &Path, root: &Path, under: &str, select: &Select) -> Result<()> {
+    let relative_of = |path: &Path| -> Option<String> {
+        let relative = path.strip_prefix(from).ok()?;
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        Some(join_relative(under, &relative))
+    };
+
+    let mut skipped: Vec<String> = Vec::new();
+    let walk = WalkDir::new(from).into_iter().filter_entry(|entry| {
+        let Some(relative) = relative_of(entry.path()) else {
+            return true;
         };
-        let target = to.join(relative);
+        match select.skipped_type(&relative, entry.file_type().is_dir()) {
+            Some(feature_type) => {
+                skipped.push(feature_type.to_owned());
+                false
+            }
+            None => true,
+        }
+    });
+    for entry in walk.filter_map(|e| e.ok()) {
+        let Some(relative) = relative_of(entry.path()) else {
+            continue;
+        };
+        let target = join_prefix(root, &relative);
         if entry.file_type().is_dir() {
             fs::create_dir_all(&target).map_err(|e| Error::io(&target, e))?;
         } else if entry.file_type().is_file() {
@@ -454,7 +541,20 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
             fs::copy(entry.path(), &target).map_err(|e| Error::io(&target, e))?;
         }
     }
+    for feature_type in skipped {
+        let dir = join_prefix(root, &format!("{REQUIRED_PART}/{feature_type}"));
+        fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
+    }
     Ok(())
+}
+
+/// `relative` placed under the `/`-separated directory `under`.
+fn join_relative(under: &str, relative: &str) -> String {
+    match (under.is_empty(), relative.is_empty()) {
+        (true, _) => relative.to_owned(),
+        (false, true) => under.to_owned(),
+        (false, false) => format!("{under}/{relative}"),
+    }
 }
 
 fn join_prefix(base: &Path, prefix: &str) -> PathBuf {
