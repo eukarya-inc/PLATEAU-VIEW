@@ -51,9 +51,9 @@ struct ConvertArgs {
     #[arg(short, long, value_name = "DIR")]
     output: PathBuf,
 
-    /// udx feature types to convert. Repeatable. `all` converts everything
-    /// present.
-    #[arg(short = 't', long = "type", value_name = "TYPE", default_values_t = [String::from("bldg")])]
+    /// udx feature types to convert. Repeatable. Omitted, or `all`, converts
+    /// everything present.
+    #[arg(short = 't', long = "type", value_name = "TYPE")]
     types: Vec<String>,
 
     /// i-UR version to produce. Defaults to the only one a built-in profile

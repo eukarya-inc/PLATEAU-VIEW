@@ -59,7 +59,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            feature_types: vec!["bldg".to_string()],
+            feature_types: Vec::new(),
             generate_gml_ids: true,
             reorder: true,
             indent: Indent::Tab,
