@@ -84,11 +84,9 @@ impl Dropped {
 
     /// Prunes the children of `el` as `visit` decides for each, the children
     /// of each [`Prune::Descend`] in turn. A descended child that had geometry
-    /// removed under it is removed and recorded too when it is left a feature
-    /// without geometry, or a property without children that had some. A
-    /// feature is an element outside GML whose local name starts in
-    /// uppercase. `emptied` is called with each feature removed so. Returns
-    /// true when a [`Prune::Remove`] happened under `el`.
+    /// removed under it is removed too when [`Dropped::take_emptied`] takes
+    /// it, with `emptied` passed on. Returns true when a [`Prune::Remove`]
+    /// happened under `el`.
     pub fn prune<V, E>(
         &mut self,
         el: &mut Element,
@@ -124,22 +122,42 @@ impl Dropped {
             let had_content = child.elements().next().is_some();
             let child_lost = self.prune(&mut child, warnings, visit, emptied);
             lost |= child_lost;
-            let is_feature =
-                child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
-            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
-            let emptied_property =
-                !is_feature && child_lost && had_content && child.elements().next().is_none();
-            if emptied_feature || emptied_property {
-                if emptied_feature {
-                    emptied(&child, warnings);
-                }
-                self.add(&child);
-                continue;
+            if !(child_lost && self.take_emptied(&child, had_content, warnings, emptied)) {
+                out.push(Node::Element(child));
             }
-            out.push(Node::Element(child));
         }
         el.children = out;
         lost
+    }
+
+    /// Records `el`, which had geometry removed under it, and returns true
+    /// when it is left a feature without geometry, or a property without
+    /// children that had some, as `had_content` says. A feature is an element
+    /// outside GML whose local name starts in uppercase. `emptied` is called
+    /// with `el` when it is such a feature.
+    pub fn take_emptied<E>(
+        &mut self,
+        el: &Element,
+        had_content: bool,
+        warnings: &mut Warnings,
+        emptied: &mut E,
+    ) -> bool
+    where
+        E: FnMut(&Element, &mut Warnings),
+    {
+        let is_feature = el.name.local.starts_with(char::is_uppercase) && !el.name.in_ns(&self.gml);
+        let taken = if is_feature {
+            !has_geometry(el)
+        } else {
+            had_content && el.elements().next().is_none()
+        };
+        if taken {
+            if is_feature {
+                emptied(el, warnings);
+            }
+            self.add(el);
+        }
+        taken
     }
 
     /// Writes each removed GML object of the current member in place of the

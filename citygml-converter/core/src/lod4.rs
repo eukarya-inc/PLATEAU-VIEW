@@ -167,7 +167,19 @@ impl Lod4Rewrite {
             self.split_quality(member, warnings);
         }
         let mut folded = Folded::default();
-        self.rewrite(member, false, false, target, table, &mut folded, warnings);
+        let wrapped = !std::ptr::eq(feature(member), &*member);
+        let top = feature_mut(member);
+        let interior = wrapped && self.marks_interior(&top.name);
+        self.rewrite(
+            top,
+            interior,
+            false,
+            target,
+            table,
+            &mut folded,
+            dropped,
+            warnings,
+        );
         if let (Target::Lod(lod), false) = (target, coded) {
             self.add_folded_lod_types(member, lod, &folded, warnings);
         }
@@ -505,7 +517,10 @@ impl Lod4Rewrite {
     /// says whether `el` belongs to the interior model, in which case its own
     /// LOD4 children fold to `target` rather than into the exterior LOD3 slot.
     /// `surface` says whether `el` is a boundary surface. Each geometry
-    /// property folded is recorded in `folded`.
+    /// property folded is recorded in `folded`. Each geometry property
+    /// removed goes to `dropped`, along with each descendant of `el` it
+    /// leaves emptied as [`Dropped::take_emptied`] decides. Returns true when
+    /// a geometry property was removed under `el`.
     #[allow(clippy::too_many_arguments)]
     fn rewrite(
         &self,
@@ -515,47 +530,74 @@ impl Lod4Rewrite {
         target: Target,
         table: Option<&LodTypeTable>,
         folded: &mut Folded,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
-    ) {
+    ) -> bool {
         let occupied: Vec<Name> = el
             .elements()
             .filter(|c| !self.is_lod4_geometry(c) && !self.is_lod4_quality(c))
             .map(|c| c.name.clone())
             .collect();
 
+        let mut lost = false;
         let children = std::mem::take(&mut el.children);
         let mut out: Vec<Node> = Vec::with_capacity(children.len());
         for child in children {
-            match child {
-                Node::Element(child) => {
-                    let geometry = self.is_lod4_geometry(&child);
-                    if let Some(kept) = self
-                        .rewrite_child(child, interior, &occupied, &out, target, table, warnings)
-                    {
-                        if geometry {
-                            folded.record(interior, surface);
-                        }
-                        out.push(Node::Element(kept));
+            let Node::Element(child) = child else {
+                out.push(child);
+                continue;
+            };
+            let kept = if self.is_lod4_geometry(&child) {
+                match self.fold_geometry(child, interior, &occupied, &out, target, warnings) {
+                    Ok(kept) => {
+                        folded.record(interior, surface);
+                        Some(kept)
+                    }
+                    Err(gone) => {
+                        dropped.add(&gone);
+                        lost = true;
+                        None
                     }
                 }
-                other => out.push(other),
+            } else {
+                self.rewrite_child(child, &occupied, &out, target, table, warnings)
+            };
+            if let Some(kept) = kept {
+                out.push(Node::Element(kept));
             }
         }
-        el.children = out;
 
         let child_surface = self.surface_properties.contains(&el.name);
-        for child in el.elements_mut() {
+        let mut emptied = |feature: &Element, warnings: &mut Warnings| {
+            warnings.add(format!(
+                "{} was dropped along with its LOD4 geometry, its only geometry",
+                self.display.display_name(&feature.name)
+            ));
+        };
+        el.children = Vec::with_capacity(out.len());
+        for node in out {
+            let Node::Element(mut child) = node else {
+                el.children.push(node);
+                continue;
+            };
             let child_interior = interior || self.marks_interior(&child.name);
-            self.rewrite(
-                child,
+            let had_content = child.elements().next().is_some();
+            let child_lost = self.rewrite(
+                &mut child,
                 child_interior,
                 child_surface,
                 target,
                 table,
                 folded,
+                dropped,
                 warnings,
             );
+            lost |= child_lost;
+            if !(child_lost && dropped.take_emptied(&child, had_content, warnings, &mut emptied)) {
+                el.children.push(Node::Element(child));
+            }
         }
+        lost
     }
 
     /// Removes the LOD4 geometry properties under `member` outside the
@@ -660,16 +702,13 @@ impl Lod4Rewrite {
     fn rewrite_child(
         &self,
         child: Element,
-        interior: bool,
         occupied: &[Name],
         accepted: &[Node],
         target: Target,
         table: Option<&LodTypeTable>,
         warnings: &mut Warnings,
     ) -> Option<Element> {
-        if self.is_lod4_geometry(&child) {
-            self.fold_geometry(child, interior, occupied, accepted, target, warnings)
-        } else if self.is_lod4_quality(&child) {
+        if self.is_lod4_quality(&child) {
             self.fold_quality(child, occupied, accepted, target, warnings)
         } else if self.is_lod4_lod_type(&child) {
             self.fold_lod_type(child, target, table, warnings)
@@ -678,6 +717,8 @@ impl Lod4Rewrite {
         }
     }
 
+    /// Folds one LOD4 geometry property, giving it back retagged, or as the
+    /// error when it is removed.
     fn fold_geometry(
         &self,
         child: Element,
@@ -686,14 +727,14 @@ impl Lod4Rewrite {
         accepted: &[Node],
         target: Target,
         warnings: &mut Warnings,
-    ) -> Option<Element> {
+    ) -> std::result::Result<Element, Element> {
         let from = self.display.display_name(&child.name);
         let lod = match target {
             Target::Drop | Target::Absent | Target::Shed => {
                 warnings.add(format!(
                     "{from} was dropped: CityGML 3.0 has no LOD4 and the fallback is drop"
                 ));
-                return None;
+                return Err(child);
             }
             Target::Lod(lod) if interior => lod,
             Target::Lod(_) => '3',
@@ -706,7 +747,7 @@ impl Lod4Rewrite {
                 "{from} was dropped: it would become {to_display}, which the feature \
                  already has, and CityGML 3.0 allows one; the existing one was kept"
             ));
-            return None;
+            return Err(child);
         }
 
         let side = if interior { "interior" } else { "exterior" };
@@ -716,7 +757,7 @@ impl Lod4Rewrite {
         ));
         let mut child = child;
         child.name = to;
-        Some(child)
+        Ok(child)
     }
 
     fn fold_quality(
@@ -1494,14 +1535,23 @@ mod tests {
         );
         assert!(the_room(&b).child(ns::CITYGML_3, "lod2Solid").is_some());
 
-        let mut b = building(vec![
-            room(vec![geometry("lod4Solid", "Solid")]),
-            quality(None),
-        ]);
+        let mut solid = geometry("lod4Solid", "Solid");
+        solid
+            .elements_mut()
+            .next()
+            .unwrap()
+            .set_attr(Name::qualified(ns::GML_32, "id"), "s4");
+        let mut b = building(vec![room(vec![solid]), quality(None)]);
         let mut w = Warnings::new();
-        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut Dropped::default(), &mut w);
-        assert!(the_room(&b).children.is_empty(), "the room's LOD4 goes");
-        let class = b.elements().nth(1).unwrap().elements().next().unwrap();
+        let mut dropped = Dropped::default();
+        rewrite(Some(Lod4Fallback::Drop)).apply(&mut b, &mut dropped, &mut w);
+        assert!(dropped.ids().contains("s4"), "the dropped LOD4 is recorded");
+        assert!(
+            b.child(ns::BUILDING_3, "buildingRoom").is_none(),
+            "the room left without geometry goes with its LOD4"
+        );
+        assert!(w.iter().any(|(m, _)| m.contains("its only geometry")));
+        let class = b.elements().next().unwrap().elements().next().unwrap();
         assert!(class.children.is_empty(), "the LOD4 descriptors go too");
         assert!(w.iter().any(|(m, _)| m.contains("dropped")));
     }
