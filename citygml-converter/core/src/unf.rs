@@ -97,15 +97,8 @@ impl UnfRewrite {
 
     /// Rewrites one top-level member in place, looking through a property
     /// that wraps the feature. The `gml:id` of every element removed with a
-    /// geometry or Dm property is added to `dropped`. Returns true when
-    /// anything was added.
-    pub fn apply(
-        &self,
-        member: &mut Element,
-        dropped: &mut Dropped,
-        warnings: &mut Warnings,
-    ) -> bool {
-        let before = dropped.len();
+    /// geometry or Dm property is added to `dropped`.
+    pub fn apply(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         if self.is_feature(member) {
             self.feature(member, dropped, warnings);
         } else {
@@ -115,7 +108,6 @@ impl UnfRewrite {
                 }
             }
         }
-        dropped.len() > before
     }
 
     fn is_feature(&self, el: &Element) -> bool {

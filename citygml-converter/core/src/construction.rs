@@ -41,11 +41,9 @@ impl ConstructionRewrite {
 
     /// Rewrites `el` and its descendants in place. The `gml:id` of every
     /// element removed with a geometry 3.0 has no property for is added to
-    /// `dropped`. Returns true when anything was added.
-    pub fn apply(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) -> bool {
-        let before = dropped.len();
+    /// `dropped`.
+    pub fn apply(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         self.walk(el, dropped, warnings);
-        dropped.len() > before
     }
 
     fn walk(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
@@ -189,8 +187,7 @@ fn retag(mut el: Element, name: Name) -> Element {
 }
 
 /// The LOD digit of a `lodNGeometry` local name, so `lod2Geometry` gives
-/// `Some('2')`. LOD4 is not accepted, since [`crate::lod4`] has already
-/// decided where `lod4Geometry` went.
+/// `Some('2')`, for LOD 0 to 3 only.
 fn lod_geometry(local: &str) -> Option<char> {
     let rest = local.strip_prefix("lod")?;
     let mut chars = rest.chars();

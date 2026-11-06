@@ -11,8 +11,23 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::geometry::{collect_ids, has_geometry};
 use crate::report::Warnings;
-use crate::xml::{Element, Name, ns};
+use crate::xml::{Element, Name, Node, ns};
+
+/// What [`Dropped::prune`] does with one child element.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prune {
+    /// Removes the child, records it with [`Dropped::add`] and counts it as
+    /// removed geometry.
+    Remove,
+    /// Removes the child without recording it.
+    Discard,
+    /// Keeps the child without looking inside it.
+    Keep,
+    /// Prunes inside the child, then removes it when it was emptied.
+    Descend,
+}
 
 #[derive(Debug)]
 pub struct Dropped {
@@ -67,6 +82,66 @@ impl Dropped {
         }
     }
 
+    /// Prunes the children of `el` as `visit` decides for each, the children
+    /// of each [`Prune::Descend`] in turn. A descended child that had geometry
+    /// removed under it is removed and recorded too when it is left a feature
+    /// without geometry, or a property without children that had some. A
+    /// feature is an element outside GML whose local name starts in
+    /// uppercase. `emptied` is called with each feature removed so. Returns
+    /// true when a [`Prune::Remove`] happened under `el`.
+    pub fn prune<V, E>(
+        &mut self,
+        el: &mut Element,
+        warnings: &mut Warnings,
+        visit: &mut V,
+        emptied: &mut E,
+    ) -> bool
+    where
+        V: FnMut(&mut Element, &mut Warnings) -> Prune,
+        E: FnMut(&Element, &mut Warnings),
+    {
+        let mut lost = false;
+        let children = std::mem::take(&mut el.children);
+        let mut out = Vec::with_capacity(children.len());
+        for child in children {
+            let Node::Element(mut child) = child else {
+                out.push(child);
+                continue;
+            };
+            match visit(&mut child, warnings) {
+                Prune::Remove => {
+                    self.add(&child);
+                    lost = true;
+                    continue;
+                }
+                Prune::Discard => continue,
+                Prune::Keep => {
+                    out.push(Node::Element(child));
+                    continue;
+                }
+                Prune::Descend => {}
+            }
+            let had_content = child.elements().next().is_some();
+            let child_lost = self.prune(&mut child, warnings, visit, emptied);
+            lost |= child_lost;
+            let is_feature =
+                child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
+            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
+            let emptied_property =
+                !is_feature && child_lost && had_content && child.elements().next().is_none();
+            if emptied_feature || emptied_property {
+                if emptied_feature {
+                    emptied(&child, warnings);
+                }
+                self.add(&child);
+                continue;
+            }
+            out.push(Node::Element(child));
+        }
+        el.children = out;
+        lost
+    }
+
     /// Writes each removed GML object of the current member in place of the
     /// first link under `member` that names it, and reports each link to a
     /// removed object that is left, which names one removed from another
@@ -81,7 +156,7 @@ impl Dropped {
                 Some(object) => {
                     member.take_attr(Some(&self.xlink), "href");
                     let mut restored = HashSet::new();
-                    collect(&object, &self.gml, &mut restored);
+                    collect_ids(&object, &self.gml, &mut restored);
                     self.ids.retain(|i| !restored.contains(i));
                     warnings.add(format!(
                         "gml:{} was written inside {} in place of its link: a pass dropped \
@@ -107,14 +182,6 @@ impl Dropped {
         &self.ids
     }
 
-    pub fn contains(&self, id: &str) -> bool {
-        self.ids.contains(id)
-    }
-
-    pub fn len(&self) -> usize {
-        self.ids.len()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
@@ -135,15 +202,6 @@ impl Dropped {
         for child in el.elements() {
             self.links(child, out);
         }
-    }
-}
-
-fn collect(el: &Element, gml: &str, out: &mut HashSet<String>) {
-    if let Some(id) = el.attr(Some(gml), "id") {
-        out.insert(id.to_owned());
-    }
-    for child in el.elements() {
-        collect(child, gml, out);
     }
 }
 
@@ -209,7 +267,7 @@ mod tests {
         );
         assert_eq!(members[0].attr(Some(ns::XLINK), "href"), None);
         assert_eq!(members[1].attr(Some(ns::XLINK), "href"), Some("#p1"));
-        assert!(!dropped.contains("p1") && !dropped.contains("r1"));
-        assert!(dropped.contains("p2"));
+        assert!(!dropped.ids().contains("p1") && !dropped.ids().contains("r1"));
+        assert!(dropped.ids().contains("p2"));
     }
 }

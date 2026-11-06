@@ -25,32 +25,17 @@
 
 use std::collections::HashMap;
 
-use crate::dropped::Dropped;
+use crate::dropped::{Dropped, Prune};
 use crate::error::Result;
-use crate::geometry::{has_geometry, lod_of};
+use crate::geometry::lod_of;
 use crate::iur::IurModules;
 use crate::lod_type::{self, Added};
 use crate::profile::{LodTypeTable, Rules};
 use crate::report::Warnings;
 use crate::xml::{Element, Name, Node};
 
-/// One move's removal of LOD `lod`, for [`LodMapRewrite::strip`].
-///
-/// `from` is the LOD moving in and `label` the feature being decided, both
-/// for the report. `moved` is the code the first removed `lodType` is
-/// rewritten to instead, taken once used. `dropped` gains the `gml:id` of
-/// every removed element.
-struct Strip<'a> {
-    lod: char,
-    from: char,
-    label: &'a str,
-    moved: &'a mut Option<String>,
-    dropped: &'a mut Dropped,
-}
-
 #[derive(Debug, Clone)]
 pub struct LodMapRewrite {
-    gml: String,
     iur: IurModules,
     moves: HashMap<Name, Vec<(char, char)>>,
     display: Rules,
@@ -59,7 +44,6 @@ pub struct LodMapRewrite {
 impl LodMapRewrite {
     pub fn new(rules: &Rules) -> Result<Self> {
         Ok(LodMapRewrite {
-            gml: rules.output_ns("gml")?.to_owned(),
             iur: IurModules::new(rules),
             moves: rules.lod_map().clone(),
             display: rules.clone(),
@@ -67,19 +51,11 @@ impl LodMapRewrite {
     }
 
     /// Rewrites every feature of a listed type under `member`, `member`
-    /// included. Returns true when anything was added to `dropped`.
-    pub fn apply(
-        &self,
-        member: &mut Element,
-        dropped: &mut Dropped,
-        warnings: &mut Warnings,
-    ) -> bool {
-        if self.moves.is_empty() {
-            return false;
+    /// included.
+    pub fn apply(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
+        if !self.moves.is_empty() {
+            self.walk(member, None, dropped, warnings);
         }
-        let before = dropped.len();
-        self.walk(member, None, dropped, warnings);
-        dropped.len() > before
     }
 
     /// `host` is the `[lod_types]` table of the outermost feature `el` sits
@@ -129,14 +105,7 @@ impl LodMapRewrite {
             .and_then(|table| table.moved.get(&from.to_string()))
             .filter(|_| !self.has_lod_type(feature, from, true))
             .cloned();
-        let mut strip = Strip {
-            lod: to,
-            from,
-            label: &label,
-            moved: &mut moved,
-            dropped,
-        };
-        self.strip(feature, &mut strip, true, warnings);
+        self.strip(feature, (from, to), &label, &mut moved, dropped, warnings);
         self.rename(feature, from, to, &label, true, warnings);
         if let (Some(code), Some(table)) = (moved, table) {
             match lod_type::add(&self.iur, feature, &code, &table.list) {
@@ -185,81 +154,55 @@ impl LodMapRewrite {
             .any(|child| self.is_lod_type(child, lod) || self.has_lod_type(child, lod, false))
     }
 
-    /// Removes the LOD `lod` geometry properties under `el`, with each feature
-    /// they leave without geometry and each property they leave empty, and
-    /// the LOD `lod` quality descriptors and `lodType` codes, as [`Strip`]
-    /// describes. Returns true when a geometry property was removed under
-    /// `el`.
+    /// Removes LOD `lod` from `feature` for a move from LOD `from`, outside
+    /// any nested feature of a listed type, as [`Dropped::prune`] removes it.
+    /// The LOD `lod` geometry properties, quality descriptors and `lodType`
+    /// codes go, except that the first such code is rewritten to `moved`,
+    /// which is then taken. `label` names the feature in the report.
     fn strip(
         &self,
-        el: &mut Element,
-        strip: &mut Strip,
-        top: bool,
+        feature: &mut Element,
+        (from, lod): (char, char),
+        label: &str,
+        moved: &mut Option<String>,
+        dropped: &mut Dropped,
         warnings: &mut Warnings,
-    ) -> bool {
-        let (lod, from, label) = (strip.lod, strip.from, strip.label);
-        if self.is_nested(el, top) {
-            return false;
-        }
-        let mut lost = false;
-        let children = std::mem::take(&mut el.children);
-        let mut out = Vec::with_capacity(children.len());
-        for child in children {
-            let Node::Element(mut child) = child else {
-                out.push(child);
-                continue;
-            };
-            if let Some(l) = self.lod_of(&child) {
-                if l == lod {
-                    strip.dropped.add(&child);
-                    lost = true;
-                    continue;
-                }
-                out.push(Node::Element(child));
-                continue;
+    ) {
+        let mut visit = |child: &mut Element, warnings: &mut Warnings| {
+            if self.is_nested(child, false) {
+                return Prune::Keep;
             }
-            if self.is_quality(&child, lod) {
+            if let Some(l) = self.lod_of(child) {
+                return if l == lod { Prune::Remove } else { Prune::Keep };
+            }
+            if self.is_quality(child, lod) {
                 warnings.add(format!(
                     "{} on the {label} was dropped: its LOD{from} takes LOD{lod}, and the \
                      descriptor described what LOD{lod} held before",
                     self.display.display_name(&child.name)
                 ));
-                continue;
+                return Prune::Discard;
             }
-            if self.is_lod_type(&child, lod) {
-                if let Some(code) = strip.moved.take() {
-                    warnings.add(format!(
-                        "lodType {} on the {label} became {code}: its LOD{from} takes \
-                         LOD{lod} and carries no code of its own",
-                        child.text().trim()
-                    ));
-                    child.children = vec![Node::Text(code)];
-                    out.push(Node::Element(child));
-                    continue;
-                }
+            if !self.is_lod_type(child, lod) {
+                return Prune::Descend;
+            }
+            if let Some(code) = moved.take() {
                 warnings.add(format!(
-                    "lodType {} on the {label} was dropped: its LOD{from} takes LOD{lod}, \
-                     and the code classified what LOD{lod} held before",
+                    "lodType {} on the {label} became {code}: its LOD{from} takes \
+                     LOD{lod} and carries no code of its own",
                     child.text().trim()
                 ));
-                continue;
+                child.children = vec![Node::Text(code)];
+                return Prune::Keep;
             }
-            let had_content = child.elements().next().is_some();
-            let child_lost = self.strip(&mut child, strip, false, warnings);
-            lost |= child_lost;
-            let is_feature =
-                child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
-            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
-            let emptied_property =
-                !is_feature && child_lost && had_content && child.elements().next().is_none();
-            if emptied_feature || emptied_property {
-                strip.dropped.add(&child);
-                continue;
-            }
-            out.push(Node::Element(child));
-        }
-        el.children = out;
-        lost
+            warnings.add(format!(
+                "lodType {} on the {label} was dropped: its LOD{from} takes LOD{lod}, \
+                 and the code classified what LOD{lod} held before",
+                child.text().trim()
+            ));
+            Prune::Discard
+        };
+        dropped.prune(feature, warnings, &mut visit, &mut |_, _| {});
     }
 
     /// Renames the LOD `from` geometry properties and quality descriptors
@@ -384,12 +327,12 @@ mod tests {
         bridge.push(quality);
 
         let mut dropped = Dropped::default();
-        assert!(rewrite().apply(&mut bridge, &mut dropped, &mut Warnings::new()));
+        rewrite().apply(&mut bridge, &mut dropped, &mut Warnings::new());
 
         let walls = walls(&bridge);
         assert_eq!(walls.len(), 1, "the emptied wall and its boundary went");
         assert!(walls[0].child(ns::CITYGML_3, "lod2MultiSurface").is_some());
-        assert!(dropped.contains("old2") && !dropped.contains("old3"));
+        assert!(dropped.ids().contains("old2") && !dropped.ids().contains("old3"));
         let quality = bridge.child(URC, "ExteriorDataQualityAttribute").unwrap();
         let descriptors: Vec<(String, String)> = quality
             .elements()
@@ -423,7 +366,7 @@ mod tests {
         rewrite().apply(&mut bridge, &mut dropped, &mut Warnings::new());
 
         assert_eq!(walls(&bridge).len(), 1);
-        assert!(!dropped.contains("w4"));
+        assert!(!dropped.ids().contains("w4"));
         assert!(bridge.child(ns::CITYGML_3, "lod2Solid").is_some());
     }
 }

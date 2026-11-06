@@ -41,8 +41,7 @@
 
 use crate::error::Result;
 
-use crate::dropped::Dropped;
-use crate::geometry::has_geometry;
+use crate::dropped::{Dropped, Prune};
 use crate::iur::IurModules;
 use crate::lod_type::{self, Added};
 use crate::profile::{Lod4Exterior, Lod4Fallback, Lod4Rules, LodTypeTable, Rules};
@@ -87,7 +86,6 @@ impl Folded {
 
 #[derive(Debug, Clone)]
 pub struct Lod4Rewrite {
-    gml: String,
     core: String,
     /// The properties whose child is a boundary surface.
     surface_properties: Vec<Name>,
@@ -113,7 +111,6 @@ impl Lod4Rewrite {
             surface_properties.push(Name::qualified(con, "fillingSurface"));
         }
         Ok(Lod4Rewrite {
-            gml: rules.output_ns("gml")?.to_owned(),
             core: core.to_owned(),
             surface_properties,
             urc: rules.output_ns("urc").ok().map(str::to_owned),
@@ -140,7 +137,7 @@ impl Lod4Rewrite {
         self.map_lod_types(member, None, warnings);
         let shed = self.rules.exterior.get(&feature(member).name) == Some(&Lod4Exterior::Drop) && {
             let label = self.feature_name(member);
-            self.drop_exterior(member, false, &label, dropped, warnings)
+            self.drop_exterior(member, &label, dropped, warnings)
         };
         let target = if self.has_lod4_geometry(member) {
             match self.rules.fixed.get(&feature(member).name) {
@@ -561,64 +558,37 @@ impl Lod4Rewrite {
         }
     }
 
-    /// Removes the LOD4 geometry properties under `el` outside the interior
-    /// model, with each feature they leave without geometry and each property
-    /// they leave empty, adding their `gml:id`s to `dropped`. `interior` says
-    /// whether `el` belongs to the interior model and `label` names the
+    /// Removes the LOD4 geometry properties under `member` outside the
+    /// interior model, as [`Dropped::prune`] removes them. `label` names the
     /// feature being decided. Returns true when anything was removed.
     fn drop_exterior(
         &self,
-        el: &mut Element,
-        interior: bool,
+        member: &mut Element,
         label: &str,
         dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
-        if interior {
-            return false;
-        }
-        let mut lost = false;
-        let children = std::mem::take(&mut el.children);
-        let mut out = Vec::with_capacity(children.len());
-        for child in children {
-            let Node::Element(mut child) = child else {
-                out.push(child);
-                continue;
-            };
-            if self.is_lod4_geometry(&child) {
+        let mut visit = |child: &mut Element, warnings: &mut Warnings| {
+            if self.is_lod4_geometry(child) {
                 warnings.add(format!(
                     "{} was dropped: CityGML 3.0 has no LOD4, and the LOD4 exterior of a \
                      {label} has no LOD to go to",
                     self.display.display_name(&child.name)
                 ));
-                dropped.add(&child);
-                lost = true;
-                continue;
+                Prune::Remove
+            } else if self.marks_interior(&child.name) {
+                Prune::Keep
+            } else {
+                Prune::Descend
             }
-            let had_content = child.elements().next().is_some();
-            let child_interior = self.marks_interior(&child.name);
-            let child_lost =
-                self.drop_exterior(&mut child, child_interior, label, dropped, warnings);
-            lost |= child_lost;
-            let is_feature =
-                child.name.local.starts_with(char::is_uppercase) && !child.name.in_ns(&self.gml);
-            let emptied_feature = is_feature && child_lost && !has_geometry(&child);
-            let emptied_property =
-                !is_feature && child_lost && had_content && child.elements().next().is_none();
-            if emptied_feature || emptied_property {
-                if emptied_feature {
-                    warnings.add(format!(
-                        "{} was dropped along with the LOD4 exterior, its only geometry",
-                        self.display.display_name(&child.name)
-                    ));
-                }
-                dropped.add(&child);
-                continue;
-            }
-            out.push(Node::Element(child));
-        }
-        el.children = out;
-        lost
+        };
+        let mut emptied = |feature: &Element, warnings: &mut Warnings| {
+            warnings.add(format!(
+                "{} was dropped along with the LOD4 exterior, its only geometry",
+                self.display.display_name(&feature.name)
+            ));
+        };
+        dropped.prune(member, warnings, &mut visit, &mut emptied)
     }
 
     /// Adds to `member`'s feature the `folded` codes of its `[lod_types]`
@@ -1153,7 +1123,7 @@ mod tests {
             .unwrap()
             .apply(&mut b, &mut dropped, &mut Warnings::new());
 
-        assert!(dropped.contains("gone") && dropped.contains("door"));
+        assert!(dropped.ids().contains("gone") && dropped.ids().contains("door"));
         assert!(b.child(ns::CITYGML_3, "lod3Solid").is_none());
         let walls: Vec<_> = b
             .elements()
