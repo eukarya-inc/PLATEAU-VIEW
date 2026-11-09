@@ -29,7 +29,11 @@ func NewConfig() (*Config, error) {
 	return &c, err
 }
 
+// Print returns the config for logging, with the CMS token masked.
 func (c *Config) Print() string {
-	s := fmt.Sprintf("%+v", c)
-	return s
+	r := *c
+	if r.CMS_Token != "" {
+		r.CMS_Token = "***"
+	}
+	return fmt.Sprintf("%+v", r)
 }

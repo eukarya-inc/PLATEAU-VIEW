@@ -18,6 +18,14 @@ type Config struct {
 	Clean        bool
 }
 
+// redacted returns a copy of the config that is safe to log.
+func (conf Config) redacted() Config {
+	if conf.CMSToken != "" {
+		conf.CMSToken = "***"
+	}
+	return conf
+}
+
 func (conf Config) CMS() (*cms.CMS, error) {
 	cms, err := cms.New(conf.CMSURL, conf.CMSToken)
 	if err != nil {

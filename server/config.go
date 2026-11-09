@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/citygml"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration"
@@ -116,35 +115,36 @@ func NewConfig() (*Config, error) {
 	return &c, err
 }
 
+// Print returns the config for logging, with every secret field masked.
+// It masks the fields of a copy instead of searching the printed text, because
+// the printer escapes characters such as `"` and `\`, so a secret containing
+// them would not match its printed form and would leak.
 func (c *Config) Print() string {
-	s := noColorPP.Sprint(c)
-
-	for _, secret := range c.secrets() {
-		if secret == "" {
-			continue
+	redacted := *c
+	for _, secret := range redacted.secrets() {
+		if *secret != "" {
+			*secret = "***"
 		}
-		s = strings.ReplaceAll(s, secret, "***")
 	}
-
-	return s
+	return noColorPP.Sprint(&redacted)
 }
 
-// secrets returns every credential-like config value so Print can redact them.
+// secrets returns a pointer to every credential-like config field so Print can mask them.
 // Add new secret fields here whenever they are introduced.
-func (c *Config) secrets() []string {
-	return []string{
-		c.Secret,
-		c.CMS_Webhook_Secret,
-		c.CMS_Token,
-		c.FME_Token,
-		c.Ckan_Token,
-		c.SDK_Token,
-		c.SendGrid_APIKey,
-		c.Sidebar_Token,
-		c.DataCatalog_CacheUpdateKey,
-		c.DataCatalog_GeocodingAppID,
-		c.Flow_Token,
-		c.Proxy_ODPT_ConsumerKey,
+func (c *Config) secrets() []*string {
+	return []*string{
+		&c.Secret,
+		&c.CMS_Webhook_Secret,
+		&c.CMS_Token,
+		&c.FME_Token,
+		&c.Ckan_Token,
+		&c.SDK_Token,
+		&c.SendGrid_APIKey,
+		&c.Sidebar_Token,
+		&c.DataCatalog_CacheUpdateKey,
+		&c.DataCatalog_GeocodingAppID,
+		&c.Flow_Token,
+		&c.Proxy_ODPT_ConsumerKey,
 	}
 }
 

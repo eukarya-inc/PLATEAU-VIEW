@@ -35,6 +35,18 @@ type Config struct {
 	FeatureTypeNames    map[string]string
 }
 
+// redacted returns a copy of the config that is safe to log.
+func (c *Config) redacted() *Config {
+	if c == nil {
+		return nil
+	}
+	r := *c
+	if r.CMSToken != "" {
+		r.CMSToken = "***"
+	}
+	return &r
+}
+
 type MergeContext struct {
 	TmpDir             string
 	CityItem           *CityItem
@@ -50,7 +62,7 @@ func (m MergeContext) FileName(ty, suffix string) string {
 
 func CommandSingle(conf *Config) (err error) {
 	ctx := context.Background()
-	log.Infofc(ctx, "preparegeospatialjp conf: %s", pp.Sprint(conf))
+	log.Infofc(ctx, "preparegeospatialjp conf: %s", pp.Sprint(conf.redacted()))
 
 	if conf == nil || conf.SkipCityGML && conf.SkipPlateau && conf.SkipMaxLOD && conf.SkipRelated && conf.SkipIndex && !conf.ValidateMaxLOD {
 		return fmt.Errorf("no command to run")

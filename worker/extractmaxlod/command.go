@@ -25,7 +25,7 @@ const model = "plateau-city"
 
 func Run(conf Config) error {
 	ctx := context.Background()
-	log.Infofc(ctx, "extractmaxlod conf: %s", pp.Sprint(conf))
+	log.Infofc(ctx, "extractmaxlod conf: %s", pp.Sprint(conf.redacted()))
 
 	// init cms
 	cms, err := conf.CMS()

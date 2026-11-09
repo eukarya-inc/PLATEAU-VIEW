@@ -35,7 +35,11 @@ func prepareOnCloudBuild(ctx context.Context, conf prepareOnCloudBuildConfig) er
 		conf.CloudBuildDiskSizeGb = defaultDiskSizeGb
 	}
 
-	log.Debugfc(ctx, "prepare (cloud build): %s", pp.Sprint(conf))
+	logConf := conf
+	if logConf.CMSToken != "" {
+		logConf.CMSToken = "***"
+	}
+	log.Debugfc(ctx, "prepare (cloud build): %s", pp.Sprint(logConf))
 
 	return runCloudBuild(ctx, CloudBuildConfig{
 		Image: conf.CloudBuildImage,
