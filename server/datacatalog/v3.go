@@ -61,7 +61,9 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	// warning API
 	plateauapig.GET("/:pid/warnings", h.WarningHandler)
 
-	// cache update API
+	// cache update API: rebuilds every loaded project's catalog from the CMS. A scheduler outside this
+	// repository calls it periodically (every 10 minutes or so, as it is configured), so what the CMS
+	// integrations write back to the CMS shows on the public routes at the next rebuild, not at once.
 	g.POST("/update-cache", h.UpdateCacheHandler)
 
 	// Data catalog MCP API
