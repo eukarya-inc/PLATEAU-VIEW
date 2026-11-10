@@ -137,6 +137,8 @@ fn class_and_hooks_take_their_3_0_homes() {
     assert!(!output.contains("TransportationComplex_class.xml"));
     assert_eq!(count(&output, "<core:adeOfAbstractCityObject>"), 4);
     assert_eq!(count(&output, "<tran:adeOfRoad>"), 4);
+    assert_eq!(count(&output, "<urc:DataQualityAttribute>"), 4);
+    assert!(!output.contains("ExteriorDataQualityAttribute"));
 }
 
 /// With the extrusion enabled, every space whose area has an LOD1 surface

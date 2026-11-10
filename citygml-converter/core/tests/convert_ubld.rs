@@ -187,6 +187,19 @@ fn the_group_classification_is_dropped_and_reported() {
     assert_eq!(warned(&report, "was dropped from a floor"), 0);
 }
 
+/// The quality attribute takes the Exterior variant, as a building's does.
+#[test]
+fn quality_takes_the_building_variant() {
+    for file in [TOKYO, TAITO] {
+        let (output, _) = convert(file);
+        assert!(
+            output.contains("<urc:ExteriorDataQualityAttribute>"),
+            "{file}"
+        );
+        assert!(!output.contains("<urc:DataQualityAttribute>"), "{file}");
+    }
+}
+
 #[test]
 fn lod_type_cites_the_underground_building_list() {
     for file in [TOKYO, TAITO] {

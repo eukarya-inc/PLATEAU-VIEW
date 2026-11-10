@@ -36,15 +36,16 @@ urg = "https://www.geospatial.jp/iur/urg/4.0"
 urc = "https://www.geospatial.jp/iur/urc/4.0"
 urt = "https://www.geospatial.jp/iur/urt/4.0"
 
-# i-UR resolves through a relative path into the package's own schemas/, which
-# the converter writes. The CityGML locations, which are remote, are in
-# `citygml-2.0-to-3.0`.
+# i-UR resolves into the package's own schemas/, which the converter writes.
+# Each path is written from the package root, and every document gains the
+# ../ steps back to it from where it sits. The CityGML locations, which are
+# remote, are in `citygml-2.0-to-3.0`.
 [output.schema_locations]
-"https://www.geospatial.jp/iur/uro/4.0" = "../../schemas/iur/uro/4.0/urbanObject.xsd"
-"https://www.geospatial.jp/iur/urc/4.0" = "../../schemas/iur/urc/4.0/urbanCore.xsd"
-"https://www.geospatial.jp/iur/urf/4.0" = "../../schemas/iur/urf/4.0/urbanFunction.xsd"
-"https://www.geospatial.jp/iur/urg/4.0" = "../../schemas/iur/urg/4.0/statisticalGrid.xsd"
-"https://www.geospatial.jp/iur/urt/4.0" = "../../schemas/iur/urt/4.0/publicTransit.xsd"
+"https://www.geospatial.jp/iur/uro/4.0" = "schemas/iur/uro/4.0/urbanObject.xsd"
+"https://www.geospatial.jp/iur/urc/4.0" = "schemas/iur/urc/4.0/urbanCore.xsd"
+"https://www.geospatial.jp/iur/urf/4.0" = "schemas/iur/urf/4.0/urbanFunction.xsd"
+"https://www.geospatial.jp/iur/urg/4.0" = "schemas/iur/urg/4.0/statisticalGrid.xsd"
+"https://www.geospatial.jp/iur/urt/4.0" = "schemas/iur/urt/4.0/publicTransit.xsd"
 
 # How the input's codelists/ is carried into the output (core/src/convert.rs,
 # with the codeSpace rewrites in core/src/common.rs). The published i-UR 4.0
@@ -110,7 +111,8 @@ superseded = [
 #
 # `classes` are the concrete classes carrying the requirement, `child` the
 # element to supply, and `after` the children it must follow, since the type is
-# a sequence.
+# a sequence. `code_space` is written from the package root, like every
+# code list path in this file.
 [quality]
 classes = [
   "urc:DataQualityAttribute",
@@ -119,7 +121,7 @@ classes = [
 ]
 child = "urc:geometrySrcDescLod1"
 value = "999"
-code_space = "../../codelists/DataQualityAttribute_geometrySrcDesc.xml"
+code_space = "codelists/DataQualityAttribute_geometrySrcDesc.xml"
 after = ["urc:geometrySrcDescLod0"]
 
 # ---------------------------------------------------------------------------
@@ -281,6 +283,9 @@ to = "uro:OtherConstructionInstallation"
 # 4.x codes are left to the LOD4 fold. moved names, per old LOD that
 # [lod_map] moves, the code a feature is given when that LOD moved and the
 # feature carries no code of it. It replaces the first code the move dropped.
+# kept names, per old LOD of a type [lod_map] lists, the code a feature with
+# geometry at that LOD is given once the moves are done, when it carries no
+# code of that LOD.
 # folded gives, per side and keyed by the LOD the LOD4 content folded into, the
 # code a feature is given when its LOD4 folded and it carries no 4.x code. split
 # applies when any folded geometry of that side sits on a boundary surface, and
@@ -347,6 +352,16 @@ drop = { "8" = "不明" }
 [lod_types."brid:Bridge".folded.interior]
 "3" = { whole = "3.0_interior", split = "3.1_interior" }
 
+[lod_types."wtr:WaterBody"]
+list = "WaterBody_lodType.xml"
+drop = { "3.0" = "未定義", "3.1" = "未定義" }
+
+[lod_types."wtr:WaterBody".moved]
+"3" = "2.1"
+
+[lod_types."wtr:WaterBody".kept]
+"2" = "2.0"
+
 [lod_types."tun:Tunnel"]
 list = "Tunnel_lodType.xml"
 
@@ -383,7 +398,7 @@ list = "OtherConstruction_lodType.xml"
 # its mapped lodType.
 # ---------------------------------------------------------------------------
 [tran]
-function_code_space = "../../codelists/TrafficArea_function.xml"
+function_code_space = "codelists/TrafficArea_function.xml"
 lane_function = "1010"
 
 [tran.full_width_function]
@@ -426,3 +441,12 @@ auxiliary = "1.1"
 # ---------------------------------------------------------------------------
 [unf]
 dm = "drop"
+
+# ---------------------------------------------------------------------------
+# The water body rewrite (core/src/wtr.rs).
+#
+# lod1_surface maps each feature type whose LOD1 multi-surface moves into a
+# new boundary surface to the type of that surface.
+# ---------------------------------------------------------------------------
+[wtr]
+lod1_surface = { "wtr:WaterBody" = "wtr:WaterSurface" }

@@ -20,6 +20,12 @@
 //!   was none to rewrite
 //! * its LOD `a` geometry properties and descriptors are renamed to LOD `b`
 //!
+//! Once its moves are done, a feature with geometry at a LOD its
+//! `[lod_types]` table, or that of the feature it sits in, names a `kept`
+//! code for, and with no code of that LOD, is given that code as
+//! [`lod_type::add`] places it. A LOD that a move filled is left to the
+//! move.
+//!
 //! Every removal and move is reported, and the `gml:id` of every removed
 //! element is added to the caller's set.
 
@@ -69,8 +75,14 @@ impl LodMapRewrite {
     ) {
         let host = host.or_else(|| self.display.lod_types(&el.name).map(|(_, t)| t));
         if let Some(moves) = self.moves.get(&el.name) {
+            let mut filled = Vec::new();
             for &(from, to) in moves {
-                self.relod(el, (from, to), host, dropped, warnings);
+                if self.relod(el, (from, to), host, dropped, warnings) {
+                    filled.push(to);
+                }
+            }
+            if let Some(table) = host {
+                self.keep(el, table, &filled, warnings);
             }
         }
         for child in el.elements_mut() {
@@ -80,8 +92,8 @@ impl LodMapRewrite {
         }
     }
 
-    /// Moves `feature`'s LOD `from` to LOD `to`. `table` gives the `moved`
-    /// code.
+    /// Moves `feature`'s LOD `from` to LOD `to`, and returns whether it had
+    /// LOD `from` geometry to move. `table` gives the `moved` code.
     fn relod(
         &self,
         feature: &mut Element,
@@ -89,9 +101,9 @@ impl LodMapRewrite {
         table: Option<&LodTypeTable>,
         dropped: &mut Dropped,
         warnings: &mut Warnings,
-    ) {
+    ) -> bool {
         if !self.has_lod(feature, from, true) {
-            return;
+            return false;
         }
         let label = self.display.display_name(&feature.name);
         if self.has_lod(feature, to, true) {
@@ -117,6 +129,41 @@ impl LodMapRewrite {
                 Added::NoHolder => warnings.add(format!(
                     "the {label} was given no lodType {code} for its LOD{from} that took \
                      LOD{to}: it carries no data quality attribute to hold one"
+                )),
+            }
+        }
+        true
+    }
+
+    /// Gives `feature` the `kept` code of `table` for each LOD it has
+    /// geometry at and no code of, except the LODs in `filled`.
+    fn keep(
+        &self,
+        feature: &mut Element,
+        table: &LodTypeTable,
+        filled: &[char],
+        warnings: &mut Warnings,
+    ) {
+        for (lod, code) in &table.kept {
+            let Some(lod) = lod.chars().next() else {
+                continue;
+            };
+            if filled.contains(&lod)
+                || !self.has_lod(feature, lod, true)
+                || self.has_lod_type(feature, lod, true)
+            {
+                continue;
+            }
+            let label = self.display.display_name(&feature.name);
+            match lod_type::add(&self.iur, feature, code, &table.list) {
+                Added::Added => warnings.add(format!(
+                    "lodType {code} was added to the {label}: its LOD{lod} carries no code \
+                     of its own"
+                )),
+                Added::Present => {}
+                Added::NoHolder => warnings.add(format!(
+                    "the {label} was given no lodType {code} for its LOD{lod}: it carries \
+                     no data quality attribute to hold one"
                 )),
             }
         }

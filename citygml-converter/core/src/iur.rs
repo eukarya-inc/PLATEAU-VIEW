@@ -21,7 +21,7 @@
 //! in no other module.
 
 use crate::error::Result;
-use crate::profile::{QualityRules, Rules};
+use crate::profile::{QualityRules, Rules, locate};
 use crate::report::Warnings;
 use crate::schema::ChildOrder;
 use crate::xml::{Element, Name, Node};
@@ -149,13 +149,14 @@ impl IurRewrite {
         })
     }
 
-    /// Rewrites `el` and its descendants in place.
+    /// Rewrites `el` and its descendants in place. `to_root` is the path from
+    /// the document back to the package root, such as `../../`.
     ///
     /// The hook rewrite is attempted on the children of a non-i-UR element
     /// and of an i-UR city object, except a child the element's own content
     /// model declares.
-    pub fn apply(&self, el: &mut Element, warnings: &mut Warnings) {
-        self.required_quality_child(el, warnings);
+    pub fn apply(&self, el: &mut Element, to_root: &str, warnings: &mut Warnings) {
+        self.required_quality_child(el, to_root, warnings);
         let host = !self.is_iur(&el.name) || self.schema.declares(&el.name, &self.city_object_hook);
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
@@ -177,7 +178,7 @@ impl IurRewrite {
         el.children = out;
 
         for child in el.elements_mut() {
-            self.apply(child, warnings);
+            self.apply(child, to_root, warnings);
         }
     }
 
@@ -321,7 +322,7 @@ impl IurRewrite {
     /// i-UR records provenance per LOD and makes one of those children
     /// mandatory. A source that records it without an LOD leaves the slot
     /// empty, and the profile's `[quality]` value fills it.
-    fn required_quality_child(&self, el: &mut Element, warnings: &mut Warnings) {
+    fn required_quality_child(&self, el: &mut Element, to_root: &str, warnings: &mut Warnings) {
         let Some(child) = &self.quality.child else {
             return;
         };
@@ -331,7 +332,7 @@ impl IurRewrite {
 
         let mut supplied = Element::with_text(child.clone(), &self.quality.value);
         if let Some(code_space) = &self.quality.code_space {
-            supplied.set_attr(Name::unqualified("codeSpace"), code_space.clone());
+            supplied.set_attr(Name::unqualified("codeSpace"), locate(code_space, to_root));
         }
 
         let at = el
@@ -360,6 +361,7 @@ impl IurRewrite {
 mod tests {
     use super::*;
     use crate::PROFILES;
+    use crate::convert::FEATURE_TYPE_TO_ROOT;
     use crate::xml::ns;
 
     const URO: &str = "https://www.geospatial.jp/iur/uro/4.0";
@@ -377,7 +379,7 @@ mod tests {
         let mut building = Element::new(Name::qualified(ns::BUILDING_3, "Building"));
         building.push(child);
         let mut warnings = Warnings::new();
-        rewrite().apply(&mut building, &mut warnings);
+        rewrite().apply(&mut building, FEATURE_TYPE_TO_ROOT, &mut warnings);
         (building, warnings)
     }
 

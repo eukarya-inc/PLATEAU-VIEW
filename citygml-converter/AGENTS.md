@@ -113,8 +113,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
   `bldg:lod1Solid` → `core:lod1Solid` is a table row.
 * **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
   own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
-  the transportation module and `core/src/unf.rs` and the `[unf]` table are for
-  underground utilities. Do not grow `bldg.rs` sideways. A module deriving from
+  the transportation module, `core/src/unf.rs` and the `[unf]` table are for
+  underground utilities and `core/src/wtr.rs` and the `[wtr]` table are for
+  water bodies. Do not grow `bldg.rs` sideways. A module deriving from
   the construction module (`brid`, `tun`, `cons`) adds rows to
   `[construction]`, `[lod4]`, `[lod_map]` and `[lod_types]` before it adds
   Rust. Rows naming
@@ -131,13 +132,13 @@ The single most common mistake here is putting a mapping in the wrong layer.
   reformatted, except the one value the construction changes.
 
 `storey.rs`, `common.rs`, `unf.rs`, `lodmap.rs`, `lod4.rs`,
-`construction.rs`, `bldg.rs`, `cons.rs`, `tran.rs` and `iur.rs` run **after**
+`construction.rs`, `bldg.rs`, `cons.rs`, `tran.rs`, `wtr.rs` and `iur.rs` run **after**
 the rename pass, so they speak CityGML **3.0** and i-UR
 **4.0** names only. Writing a 2.0 namespace constant in there is a bug
 (`storey`'s read-ahead sees 2.0 input and maps each name through the profile
 before comparing). The order is
 `storey` -> `common` -> `xal` -> `app` -> `unf` -> `lodmap` -> `lod4` ->
-`construction` -> `bldg` -> `cons` -> `tran` -> `iur`, and each step is placed so that a wrapper it introduces is never
+`construction` -> `bldg` -> `cons` -> `tran` -> `wtr` -> `iur`, and each step is placed so that a wrapper it introduces is never
 mistaken for something the next step handles. `storey` nests each storey in its
 building before anything else runs, so every later pass converts the storey's
 generic attributes, dates and i-UR attributes along with the building's, and
@@ -159,7 +160,8 @@ storey check runs right after `lod4` and only when it kept an interior model,
 `cons` moves installations into a structure attribute while it is still in its
 2.0 property, before `iur` turns that into the ADE hook, `tran` has
 renumbered the LOD-indexed quality descriptors before `iur` supplies the one
-i-UR requires, and `iur`'s
+i-UR requires, `wtr` moves a water body's LOD1 into a new boundary surface
+only after `lodmap` has decided which boundary surfaces stay, and `iur`'s
 `bldg:adeOfAbstractBuilding` would be a building property if it ran before
 `bldg`. `xal` and `app` touch only address and appearance content
 respectively, which no later pass reads, so their slots are free.
@@ -178,6 +180,12 @@ respectively, which no later pass reads, so their slots are free.
   since conversion is parallel across files.
 * **Peak memory is one feature, not one file.** `xml::Reader` hands out one
   subtree per top-level member on purpose. Do not build a whole-document tree.
+* **Paths a profile names are written from the package root.** A schema
+  location or a `codeSpace` the converter writes itself is
+  `schemas/...` or `codelists/...` in the profile, and gains the `../` steps
+  back to the root from where each document sits (`profile::locate`), since
+  `udx/` nests to different depths per feature type. Never write a `../`
+  into a profile.
 * **Assumptions are reported, never hidden.** When a conversion has to invent a
   value, add a `Warnings` entry saying what and why. `report::Warnings`
   deduplicates with counts, so per-feature messages are fine.

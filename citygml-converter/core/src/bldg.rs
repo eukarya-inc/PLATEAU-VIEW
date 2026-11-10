@@ -9,7 +9,7 @@
 //! dates and `lodNGeometry`, are [`crate::construction`]'s.
 
 use crate::error::Result;
-use crate::profile::{HeightDefaults, Rules};
+use crate::profile::{HeightDefaults, Rules, locate};
 use crate::report::Warnings;
 use crate::transform::IdGen;
 use crate::xml::{Element, Name, Node};
@@ -35,20 +35,21 @@ impl BuildingRewrite {
         })
     }
 
-    /// Rewrites `el` and its descendants in place.
-    pub fn apply(&self, el: &mut Element, ids: &mut IdGen, warnings: &mut Warnings) {
+    /// Rewrites `el` and its descendants in place. `to_root` is the path from
+    /// the document back to the package root, such as `../../`.
+    pub fn apply(&self, el: &mut Element, to_root: &str, ids: &mut IdGen, warnings: &mut Warnings) {
         let children = std::mem::take(&mut el.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
-                Node::Element(child) => self.rewrite(child, &mut out, ids, warnings),
+                Node::Element(child) => self.rewrite(child, &mut out, to_root, ids, warnings),
                 other => out.push(other),
             }
         }
         el.children = out;
 
         for child in el.elements_mut() {
-            self.apply(child, ids, warnings);
+            self.apply(child, to_root, ids, warnings);
         }
     }
 
@@ -56,6 +57,7 @@ impl BuildingRewrite {
         &self,
         child: Element,
         out: &mut Vec<Node>,
+        to_root: &str,
         ids: &mut IdGen,
         warnings: &mut Warnings,
     ) {
@@ -65,7 +67,7 @@ impl BuildingRewrite {
         }
 
         let rewritten = match child.name.local.as_str() {
-            "measuredHeight" => self.height(child, warnings),
+            "measuredHeight" => self.height(child, to_root, warnings),
             "lod0RoofEdge" => self.lod0_boundary(child, "RoofSurface", ids, warnings),
             "lod0FootPrint" => self.lod0_boundary(child, "GroundSurface", ids, warnings),
             _ => child,
@@ -80,7 +82,7 @@ impl BuildingRewrite {
     /// `highReference` all mandatory. CityGML 2.0 records none of them, so
     /// they come from the profile's `[height]` section and every substitution
     /// is reported.
-    fn height(&self, src: Element, warnings: &mut Warnings) -> Element {
+    fn height(&self, src: Element, to_root: &str, warnings: &mut Warnings) -> Element {
         let uom = src.attr(None, "uom").map(str::to_owned);
         let mut value = Element::with_text(
             Name::qualified(&self.con, "value"),
@@ -96,8 +98,8 @@ impl BuildingRewrite {
             Name::qualified(&self.con, "status"),
             self.height.status.clone(),
         ));
-        height.push(self.height_reference("lowReference", &self.height.low_reference));
-        height.push(self.height_reference("highReference", &self.height.high_reference));
+        height.push(self.height_reference("lowReference", &self.height.low_reference, to_root));
+        height.push(self.height_reference("highReference", &self.height.high_reference, to_root));
 
         warnings.add(format!(
             "bldg:measuredHeight became con:height with status={}, lowReference={}, \
@@ -113,10 +115,10 @@ impl BuildingRewrite {
 
     /// A `con:lowReference` or `con:highReference` carrying a code and, when
     /// the profile gives one, the code list it came from.
-    fn height_reference(&self, local: &str, code: &str) -> Element {
+    fn height_reference(&self, local: &str, code: &str, to_root: &str) -> Element {
         let mut el = Element::with_text(Name::qualified(&self.con, local), code);
         if let Some(code_space) = &self.height.reference_code_space {
-            el.set_attr(Name::unqualified("codeSpace"), code_space.clone());
+            el.set_attr(Name::unqualified("codeSpace"), locate(code_space, to_root));
         }
         el
     }
@@ -163,6 +165,7 @@ fn retag(mut el: Element, name: Name) -> Element {
 mod tests {
     use super::*;
     use crate::DEFAULT_PROFILE;
+    use crate::convert::FEATURE_TYPE_TO_ROOT;
     use crate::xml::ns;
 
     fn rewrite() -> BuildingRewrite {
@@ -184,7 +187,7 @@ mod tests {
         )));
         let mut warnings = Warnings::new();
         let mut ids = IdGen::new("bldg_1");
-        rewrite().apply(&mut building, &mut ids, &mut warnings);
+        rewrite().apply(&mut building, FEATURE_TYPE_TO_ROOT, &mut ids, &mut warnings);
 
         let surfaces: Vec<&str> = building
             .elements()
