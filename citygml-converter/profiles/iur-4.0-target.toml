@@ -354,6 +354,7 @@ drop = { "8" = "不明" }
 
 [lod_types."wtr:WaterBody"]
 list = "WaterBody_lodType.xml"
+drop = { "3.0" = "未定義", "3.1" = "未定義" }
 
 [lod_types."wtr:WaterBody".moved]
 "3" = "2.1"

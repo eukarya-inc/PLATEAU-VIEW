@@ -395,8 +395,8 @@ impl Lod4Rewrite {
                             child.children = vec![Node::Text(new.clone())];
                         } else if let Some(label) = table.drop.get(&old) {
                             warnings.add(format!(
-                                "lodType {old} ({label}) has no entry in the i-UR 4.0 \
-                                 {list} code list and was dropped"
+                                "lodType {old} ({label}) was dropped: no code of the \
+                                 i-UR 4.0 {list} code list corresponds to it"
                             ));
                             continue;
                         } else {
