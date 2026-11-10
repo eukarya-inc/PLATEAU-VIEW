@@ -6,34 +6,41 @@
 //!   one with LOD0 to LOD3 and boundary surfaces at LOD2 and LOD3, one with
 //!   LOD0 and LOD1 only, cut down to two members per geometry, with their
 //!   appearance cut down to the textures and materials on the members kept.
-//! * `udx/fld/53393681_fld_6697_l2_op.gml`: One Takeshiba flood risk area
-//!   (i-UR 3.2) with LOD1 only and a river flooding risk attribute.
+//! * `udx/fld/pref/koto-naibu/53393681_fld_6697_l2_op.gml`: One Takeshiba
+//!   flood risk area (i-UR 3.2) with LOD1 only and a river flooding risk
+//!   attribute, at its real depth under `udx/`.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use plateau_converter_core::convert::{Converter, Options, convert_to_string};
+use plateau_converter_core::dataset::Dataset;
 use plateau_converter_core::profile::Rules;
 use plateau_converter_core::report::FileReport;
 use plateau_converter_core::xml;
 use plateau_converter_core::{PROFILES, detect};
 
 const WTR: &str = "wtr/533936_wtr_6697_op.gml";
-const FLD: &str = "fld/53393681_fld_6697_l2_op.gml";
+const FLD: &str = "fld/pref/koto-naibu/53393681_fld_6697_l2_op.gml";
 
-fn convert(file: &str) -> (String, FileReport) {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/plateau-wtr/udx")
-        .join(file);
-    let source = xml::read_to_string(&path).unwrap();
-    let declared = xml::root_namespaces(&source);
+fn fixture_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plateau-wtr")
+}
+
+/// The converter for the profile `source`'s namespaces select.
+fn converter(source: &str) -> Converter {
+    let declared = xml::root_namespaces(source);
     let candidates: Vec<Rules> = PROFILES
         .iter()
         .map(|(_, toml)| Rules::from_toml(toml).unwrap())
         .collect();
     let found = detect::select(&candidates, &declared).expect("the fixture must match a profile");
-    let converter = Converter::new(candidates[found.index].clone(), Options::default()).unwrap();
-    convert_to_string(&converter, file, &source).unwrap()
+    Converter::new(candidates[found.index].clone(), Options::default()).unwrap()
+}
+
+fn convert(file: &str) -> (String, FileReport) {
+    let source = xml::read_to_string(&fixture_root().join("udx").join(file)).unwrap();
+    convert_to_string(&converter(&source), file, &source).unwrap()
 }
 
 fn count(haystack: &str, needle: &str) -> usize {
@@ -121,6 +128,45 @@ fn the_risk_attribute_is_rehomed() {
     let (output, _) = convert(FLD);
     assert_eq!(count(&output, "<core:adeOfAbstractCityObject>"), 2);
     assert_eq!(count(&output, "<urc:RiverFloodingRiskAttribute>"), 1);
-    assert_eq!(count(&output, "<urc:ExteriorDataQualityAttribute>"), 1);
+    assert_eq!(count(&output, "<urc:DataQualityAttribute>"), 1);
+    assert!(!output.contains("ExteriorDataQualityAttribute"));
     assert!(!output.contains("<uro:floodingRiskAttribute"));
+}
+
+/// Every schema location and code list a converted document names is reached
+/// from where the document sits, however deep under `udx/` it is.
+#[test]
+fn relative_paths_reach_the_package_root_from_any_depth() {
+    let out = tempfile::tempdir().unwrap();
+    let source = xml::read_to_string(&fixture_root().join("udx").join(WTR)).unwrap();
+    let dataset = Dataset::open(&[fixture_root()]).unwrap();
+    converter(&source)
+        .convert_dataset(&dataset, out.path())
+        .unwrap();
+
+    for (file, to_root) in [(WTR, "../../"), (FLD, "../../../../")] {
+        let path = out.path().join("udx").join(file);
+        let output = std::fs::read_to_string(&path).unwrap();
+        let dir = path.parent().unwrap();
+        let locations = attribute_values(&output, "xsi:schemaLocation");
+        let local: Vec<&str> = locations[0]
+            .split_whitespace()
+            .skip(1)
+            .step_by(2)
+            .filter(|l| !l.contains("://"))
+            .collect();
+        assert!(!local.is_empty(), "{file} names no schema in the package");
+        for location in local {
+            assert!(
+                dir.join(location).is_file(),
+                "{file}: {location} does not resolve"
+            );
+        }
+        for code_space in attribute_values(&output, "codeSpace") {
+            assert!(
+                code_space.starts_with(&format!("{to_root}codelists/")),
+                "{file}: codeSpace {code_space} misses the package root"
+            );
+        }
+    }
 }

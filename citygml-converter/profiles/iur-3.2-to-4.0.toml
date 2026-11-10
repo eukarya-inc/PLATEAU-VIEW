@@ -74,13 +74,30 @@ urt = "https://www.geospatial.jp/iur/urt/3.2"
 # already ruled on above it.
 # ---------------------------------------------------------------------------
 
-# The quality attribute. urc:DataQualityAttribute is concrete, so it would
-# validate, but 3.0 data published for PLATEAU uses the Exterior variant --
-# these are outdoor city models. An indoor dataset wants
-# urc:InteriorDataQualityAttribute instead, which is a change to this one rule.
+# The quality attribute. A building, bridge, tunnel or other construction
+# records it in the Exterior variant, these being outdoor models, and every
+# other feature type in the class itself. i-UR 3.x names the property holding
+# it after the feature's module, so the Exterior rows key on that property. An
+# underground building holds it in the building property.
+[[element]]
+from = "uro:DataQualityAttribute"
+to = "urc:DataQualityAttribute"
 [[element]]
 from = "uro:DataQualityAttribute"
 to = "urc:ExteriorDataQualityAttribute"
+parent = "uro:bldgDataQualityAttribute"
+[[element]]
+from = "uro:DataQualityAttribute"
+to = "urc:ExteriorDataQualityAttribute"
+parent = "uro:bridDataQualityAttribute"
+[[element]]
+from = "uro:DataQualityAttribute"
+to = "urc:ExteriorDataQualityAttribute"
+parent = "uro:tunDataQualityAttribute"
+[[element]]
+from = "uro:DataQualityAttribute"
+to = "urc:ExteriorDataQualityAttribute"
+parent = "uro:consDataQualityAttribute"
 
 
 # Nested properties of the risk and key-value classes, which move to urc with

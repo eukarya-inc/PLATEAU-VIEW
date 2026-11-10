@@ -45,7 +45,7 @@ use std::sync::{Arc, Mutex};
 use crate::error::Result;
 use crate::extrude::extrude;
 use crate::iur::IurModules;
-use crate::profile::{Rules, TranRules};
+use crate::profile::{Rules, TranRules, locate};
 use crate::report::Warnings;
 use crate::transform::{IdGen, id_seed};
 use crate::xml::{Element, Name, Node, ns};
@@ -399,15 +399,22 @@ impl TranRewrite {
     }
 
     /// Rewrites one top-level member in place. A member that is a property
-    /// wrapping the feature is looked through.
-    pub fn apply(&self, member: &mut Element, ids: &mut IdGen, warnings: &mut Warnings) {
+    /// wrapping the feature is looked through. `to_root` is the path from the
+    /// document back to the package root, such as `../../`.
+    pub fn apply(
+        &self,
+        member: &mut Element,
+        to_root: &str,
+        ids: &mut IdGen,
+        warnings: &mut Warnings,
+    ) {
         if self.is_feature(member) {
-            self.feature(member, ids, warnings);
+            self.feature(member, to_root, ids, warnings);
             return;
         }
         for child in member.elements_mut() {
             if self.is_feature(child) {
-                self.feature(child, ids, warnings);
+                self.feature(child, to_root, ids, warnings);
             }
         }
     }
@@ -416,7 +423,13 @@ impl TranRewrite {
         el.name.in_ns(&self.tran) && FEATURES.contains(&el.name.local.as_str())
     }
 
-    fn feature(&self, feature: &mut Element, ids: &mut IdGen, warnings: &mut Warnings) {
+    fn feature(
+        &self,
+        feature: &mut Element,
+        to_root: &str,
+        ids: &mut IdGen,
+        warnings: &mut Warnings,
+    ) {
         let label = self.display.display_name(&feature.name);
         let shape = self.shape(feature);
         let clearance = self.feature_clearance(feature);
@@ -483,6 +496,7 @@ impl TranRewrite {
                 full_width,
                 clearance,
                 &mut extruded,
+                to_root,
                 ids,
                 warnings,
             )));
@@ -711,12 +725,14 @@ impl TranRewrite {
     }
 
     /// Builds the space and area that carry a feature's own geometry.
+    #[allow(clippy::too_many_arguments)]
     fn full_width_space(
         &self,
         feature: &Name,
         geometry: Vec<Element>,
         clearance: Option<Height>,
         extruded: &mut Extruded,
+        to_root: &str,
         ids: &mut IdGen,
         warnings: &mut Warnings,
     ) -> Element {
@@ -728,7 +744,7 @@ impl TranRewrite {
                 let mut function =
                     Element::with_text(Name::qualified(&self.tran, "function"), code.clone());
                 if let Some(code_space) = &self.rules.function_code_space {
-                    function.set_attr(Name::unqualified("codeSpace"), code_space.clone());
+                    function.set_attr(Name::unqualified("codeSpace"), locate(code_space, to_root));
                 }
                 area.push(function);
                 warnings.add(format!(
@@ -979,6 +995,7 @@ fn has_descendant(el: &Element, ns: &str, local: &str) -> bool {
 mod tests {
     use super::*;
     use crate::DEFAULT_PROFILE;
+    use crate::convert::FEATURE_TYPE_TO_ROOT;
 
     const TRAN: &str = "http://www.opengis.net/citygml/transportation/3.0";
     const URC: &str = "https://www.geospatial.jp/iur/urc/4.0";
@@ -1041,7 +1058,7 @@ mod tests {
     fn convert(mut feature: Element) -> (Element, Warnings) {
         let mut warnings = Warnings::new();
         let mut ids = IdGen::new("road_1");
-        rewrite().apply(&mut feature, &mut ids, &mut warnings);
+        rewrite().apply(&mut feature, FEATURE_TYPE_TO_ROOT, &mut ids, &mut warnings);
         (feature, warnings)
     }
 
@@ -1320,7 +1337,7 @@ mod tests {
         let run = |rewrite: &TranRewrite, mut feature: Element| {
             let mut warnings = Warnings::new();
             let mut ids = IdGen::new("f");
-            rewrite.apply(&mut feature, &mut ids, &mut warnings);
+            rewrite.apply(&mut feature, FEATURE_TYPE_TO_ROOT, &mut ids, &mut warnings);
             feature
         };
 

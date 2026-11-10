@@ -293,6 +293,7 @@ impl NamespaceValue {
 pub struct Output {
     #[serde(default)]
     pub namespaces: IndexMap<String, String>,
+    /// Per namespace, its schema, as a path from the package root or a URL.
     #[serde(default)]
     pub schema_locations: IndexMap<String, String>,
 }
@@ -324,7 +325,8 @@ pub struct HeightDefaults {
     /// `con:highReference`, also a code from the elevation-reference code
     /// list.
     pub high_reference: String,
-    /// `codeSpace` written on both reference elements.
+    /// `codeSpace` written on both reference elements, as a path from the
+    /// package root.
     pub reference_code_space: Option<String>,
 }
 
@@ -334,9 +336,7 @@ impl Default for HeightDefaults {
             status: "measured".to_string(),
             low_reference: "6".to_string(),
             high_reference: "2".to_string(),
-            reference_code_space: Some(
-                "../../codelists/Elevation_elevationReference.xml".to_string(),
-            ),
+            reference_code_space: Some("codelists/Elevation_elevationReference.xml".to_string()),
         }
     }
 }
@@ -637,12 +637,26 @@ fn glob_match(pattern: &str, name: &str) -> bool {
     }
 }
 
+/// `path` as written in a document `to_root` away from the package root.
+///
+/// A profile names a file the package ships by its path from the package
+/// root, which gains `to_root` in front, such as `../../`. A URL, meaning a
+/// path with a scheme, is returned unchanged.
+pub fn locate(path: &str, to_root: &str) -> String {
+    if path.contains("://") {
+        path.to_owned()
+    } else {
+        format!("{to_root}{path}")
+    }
+}
+
 /// The child i-UR requires on a data quality attribute, and the value to
 /// supply when the source records none.
 ///
 /// `classes` are the concrete classes carrying the requirement, `child` the
 /// element to supply, `value` and `code_space` its content, and `after` the
-/// children `child` must follow, since the type is a sequence.
+/// children `child` must follow, since the type is a sequence. `code_space`
+/// is a path from the package root, as [`locate`] resolves it.
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct QualityPolicy {
@@ -667,7 +681,8 @@ pub struct QualityRules {
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct TranPolicy {
-    /// The code list the minted full-width function cites.
+    /// The code list the minted full-width function cites, as a path from
+    /// the package root.
     pub function_code_space: Option<String>,
     /// The `tran:function` code of the minted full-width area.
     pub full_width_function: IndexMap<String, String>,
@@ -721,7 +736,7 @@ pub struct Rules {
     scoped: HashMap<Name, HashMap<Name, Option<Name>>>,
     output_namespaces: IndexMap<String, String>,
     prefixes: PrefixMap,
-    schema_location: Option<String>,
+    schema_locations: Vec<(String, String)>,
     height: HeightDefaults,
     lod4: Lod4Rules,
     lod_types: Vec<(Name, LodTypeTable)>,
@@ -1034,19 +1049,12 @@ impl Rules {
             prefixes.insert(prefix.clone(), uri.clone());
         }
 
-        let schema_location = if profile.output.schema_locations.is_empty() {
-            None
-        } else {
-            Some(
-                profile
-                    .output
-                    .schema_locations
-                    .iter()
-                    .map(|(ns, loc)| format!("{ns} {loc}"))
-                    .collect::<Vec<_>>()
-                    .join("\n\t\t"),
-            )
-        };
+        let schema_locations: Vec<(String, String)> = profile
+            .output
+            .schema_locations
+            .iter()
+            .map(|(ns, loc)| (ns.clone(), loc.clone()))
+            .collect();
 
         Ok(Rules {
             name: profile.name.clone(),
@@ -1061,7 +1069,7 @@ impl Rules {
             scoped,
             output_namespaces,
             prefixes,
-            schema_location,
+            schema_locations,
             height: profile.height.clone(),
             lod4,
             lod_types,
@@ -1128,8 +1136,20 @@ impl Rules {
         &self.prefixes
     }
 
-    pub fn schema_location(&self) -> Option<&str> {
-        self.schema_location.as_deref()
+    /// The `xsi:schemaLocation` value for a document `to_root` away from the
+    /// package root, as [`locate`] resolves each location. `None` when the
+    /// profile gives no location.
+    pub fn schema_location(&self, to_root: &str) -> Option<String> {
+        if self.schema_locations.is_empty() {
+            return None;
+        }
+        Some(
+            self.schema_locations
+                .iter()
+                .map(|(ns, loc)| format!("{ns} {}", locate(loc, to_root)))
+                .collect::<Vec<_>>()
+                .join("\n\t\t"),
+        )
     }
 
     pub fn height(&self) -> &HeightDefaults {

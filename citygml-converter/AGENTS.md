@@ -180,6 +180,12 @@ respectively, which no later pass reads, so their slots are free.
   since conversion is parallel across files.
 * **Peak memory is one feature, not one file.** `xml::Reader` hands out one
   subtree per top-level member on purpose. Do not build a whole-document tree.
+* **Paths a profile names are written from the package root.** A schema
+  location or a `codeSpace` the converter writes itself is
+  `schemas/...` or `codelists/...` in the profile, and gains the `../` steps
+  back to the root from where each document sits (`profile::locate`), since
+  `udx/` nests to different depths per feature type. Never write a `../`
+  into a profile.
 * **Assumptions are reported, never hidden.** When a conversion has to invent a
   value, add a `Warnings` entry saying what and why. `report::Warnings`
   deduplicates with counts, so per-feature messages are fine.

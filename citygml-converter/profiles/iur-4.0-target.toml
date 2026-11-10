@@ -36,15 +36,16 @@ urg = "https://www.geospatial.jp/iur/urg/4.0"
 urc = "https://www.geospatial.jp/iur/urc/4.0"
 urt = "https://www.geospatial.jp/iur/urt/4.0"
 
-# i-UR resolves through a relative path into the package's own schemas/, which
-# the converter writes. The CityGML locations, which are remote, are in
-# `citygml-2.0-to-3.0`.
+# i-UR resolves into the package's own schemas/, which the converter writes.
+# Each path is written from the package root, and every document gains the
+# ../ steps back to it from where it sits. The CityGML locations, which are
+# remote, are in `citygml-2.0-to-3.0`.
 [output.schema_locations]
-"https://www.geospatial.jp/iur/uro/4.0" = "../../schemas/iur/uro/4.0/urbanObject.xsd"
-"https://www.geospatial.jp/iur/urc/4.0" = "../../schemas/iur/urc/4.0/urbanCore.xsd"
-"https://www.geospatial.jp/iur/urf/4.0" = "../../schemas/iur/urf/4.0/urbanFunction.xsd"
-"https://www.geospatial.jp/iur/urg/4.0" = "../../schemas/iur/urg/4.0/statisticalGrid.xsd"
-"https://www.geospatial.jp/iur/urt/4.0" = "../../schemas/iur/urt/4.0/publicTransit.xsd"
+"https://www.geospatial.jp/iur/uro/4.0" = "schemas/iur/uro/4.0/urbanObject.xsd"
+"https://www.geospatial.jp/iur/urc/4.0" = "schemas/iur/urc/4.0/urbanCore.xsd"
+"https://www.geospatial.jp/iur/urf/4.0" = "schemas/iur/urf/4.0/urbanFunction.xsd"
+"https://www.geospatial.jp/iur/urg/4.0" = "schemas/iur/urg/4.0/statisticalGrid.xsd"
+"https://www.geospatial.jp/iur/urt/4.0" = "schemas/iur/urt/4.0/publicTransit.xsd"
 
 # How the input's codelists/ is carried into the output (core/src/convert.rs,
 # with the codeSpace rewrites in core/src/common.rs). The published i-UR 4.0
@@ -110,7 +111,8 @@ superseded = [
 #
 # `classes` are the concrete classes carrying the requirement, `child` the
 # element to supply, and `after` the children it must follow, since the type is
-# a sequence.
+# a sequence. `code_space` is written from the package root, like every
+# code list path in this file.
 [quality]
 classes = [
   "urc:DataQualityAttribute",
@@ -119,7 +121,7 @@ classes = [
 ]
 child = "urc:geometrySrcDescLod1"
 value = "999"
-code_space = "../../codelists/DataQualityAttribute_geometrySrcDesc.xml"
+code_space = "codelists/DataQualityAttribute_geometrySrcDesc.xml"
 after = ["urc:geometrySrcDescLod0"]
 
 # ---------------------------------------------------------------------------
@@ -395,7 +397,7 @@ list = "OtherConstruction_lodType.xml"
 # its mapped lodType.
 # ---------------------------------------------------------------------------
 [tran]
-function_code_space = "../../codelists/TrafficArea_function.xml"
+function_code_space = "codelists/TrafficArea_function.xml"
 lane_function = "1010"
 
 [tran.full_width_function]

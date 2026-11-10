@@ -167,7 +167,7 @@ impl Converter {
             self.options.feature_types.clone()
         };
 
-        let mut jobs: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let mut jobs: Vec<(PathBuf, PathBuf, String)> = Vec::new();
         for feature_type in &requested {
             let files = dataset.gml_files(feature_type)?;
             if files.is_empty() {
@@ -177,16 +177,18 @@ impl Converter {
                 let relative = input.strip_prefix(dataset.root()).map_err(|_| {
                     Error::Layout(format!("{} is outside the dataset root", input.display()))
                 })?;
-                jobs.push((input.clone(), out.join(relative)));
+                jobs.push((input.clone(), out.join(relative), to_root(relative)));
             }
         }
 
         let results: Vec<Result<FileReport>> = if self.options.parallel {
             jobs.par_iter()
-                .map(|(i, o)| self.convert_file(i, o))
+                .map(|(i, o, r)| self.convert_file(i, o, r))
                 .collect()
         } else {
-            jobs.iter().map(|(i, o)| self.convert_file(i, o)).collect()
+            jobs.iter()
+                .map(|(i, o, r)| self.convert_file(i, o, r))
+                .collect()
         };
 
         let mut report = Report::default();
@@ -250,7 +252,9 @@ impl Converter {
         Ok(report)
     }
 
-    pub fn convert_file(&self, input: &Path, output: &Path) -> Result<FileReport> {
+    /// Converts the document at `input` into `output`. `to_root` is the path
+    /// from the document back to its package root, such as `../../`.
+    pub fn convert_file(&self, input: &Path, output: &Path, to_root: &str) -> Result<FileReport> {
         let source = xml::read_to_string(input)?;
         if let Some(parent) = output.parent() {
             fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
@@ -258,16 +262,25 @@ impl Converter {
         let file = File::create(output).map_err(|e| Error::io(output, e))?;
         let mut sink = BufWriter::new(file);
         let label = input.file_name().map(|n| n.to_string_lossy().into_owned());
-        let report = self.convert(label.as_deref().unwrap_or("input"), &source, &mut sink)?;
+        let label = label.as_deref().unwrap_or("input");
+        let report = self.convert(label, to_root, &source, &mut sink)?;
         sink.flush().map_err(|e| Error::io(output, e))?;
         tracing::debug!(input = %input.display(), features = report.features, "converted");
         Ok(report)
     }
 
     /// Converts one CityGML document into `sink`. `label` names the input in
-    /// diagnostics. A document whose root element never closes is a
-    /// [`Error::MalformedXml`].
-    pub fn convert(&self, label: &str, source: &str, sink: impl Write) -> Result<FileReport> {
+    /// diagnostics, and `to_root` is the path from the document back to its
+    /// package root, such as `../../`, which every path the profile gives from
+    /// the package root is written with. A document whose root element never
+    /// closes is a [`Error::MalformedXml`].
+    pub fn convert(
+        &self,
+        label: &str,
+        to_root: &str,
+        source: &str,
+        sink: impl Write,
+    ) -> Result<FileReport> {
         let mut reader = Reader::new(label, source);
         let mut writer = Writer::new(sink, self.rules.prefixes().clone(), self.options.indent);
         let mut report = FileReport::default();
@@ -292,16 +305,21 @@ impl Converter {
                     let element = transform::rename(&self.rules, element).ok_or_else(|| {
                         Error::Profile(format!("the profile drops the root element of {label}"))
                     })?;
-                    writer.write_root_start(&element, self.rules.schema_location())?;
+                    let location = self.rules.schema_location(to_root);
+                    writer.write_root_start(&element, location.as_deref())?;
                     root = Some(element);
                 }
                 Chunk::Member(element) => {
                     if root.is_none() {
                         return Err(Error::malformed(label, "content before the root element"));
                     }
-                    if let Some(element) =
-                        self.convert_member(element, root_input.as_ref(), &mut report, &mut state)
-                    {
+                    if let Some(element) = self.convert_member(
+                        element,
+                        root_input.as_ref(),
+                        to_root,
+                        &mut report,
+                        &mut state,
+                    ) {
                         writer.write_element(&element, 1)?;
                     }
                 }
@@ -356,11 +374,13 @@ impl Converter {
     /// dataset and stable across runs. Appearance links to geometry dropped
     /// from any member of the same document are removed, and a member left
     /// with no content is `None`. `root` is the input name of the document's
-    /// root element.
+    /// root element, and `to_root` the path from the document back to its
+    /// package root.
     fn convert_member(
         &self,
         element: Element,
         root: Option<&Name>,
+        to_root: &str,
         report: &mut FileReport,
         state: &mut FileState,
     ) -> Option<Element> {
@@ -390,12 +410,12 @@ impl Converter {
             return None;
         }
         self.bldg
-            .apply(&mut element, &mut ids, &mut report.warnings);
+            .apply(&mut element, to_root, &mut ids, &mut report.warnings);
         self.cons.apply(&mut element, &mut report.warnings);
         self.tran
-            .apply(&mut element, &mut ids, &mut report.warnings);
+            .apply(&mut element, to_root, &mut ids, &mut report.warnings);
         self.wtr.apply(&mut element, &mut ids, &mut report.warnings);
-        self.iur.apply(&mut element, &mut report.warnings);
+        self.iur.apply(&mut element, to_root, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
         }
@@ -658,14 +678,26 @@ fn copy_tree(from: &Path, to: &Path) -> Result<usize> {
     Ok(copied)
 }
 
-/// Convenience for callers that only want the converted text.
+/// The path back to the package root from a document directly under
+/// `udx/<feature type>/`.
+pub const FEATURE_TYPE_TO_ROOT: &str = "../../";
+
+/// The path from the document at `relative`, a path from the package root,
+/// back to that root.
+pub fn to_root(relative: &Path) -> String {
+    let depth = relative.components().count().saturating_sub(1);
+    "../".repeat(depth)
+}
+
+/// Convenience for callers that only want the converted text, for a
+/// document directly under `udx/<feature type>/`.
 pub fn convert_to_string(
     converter: &Converter,
     label: &str,
     source: &str,
 ) -> Result<(String, FileReport)> {
     let mut out: Vec<u8> = Vec::new();
-    let report = converter.convert(label, source, &mut out)?;
+    let report = converter.convert(label, FEATURE_TYPE_TO_ROOT, source, &mut out)?;
     let text = String::from_utf8(out)
         .map_err(|e| Error::RawIo(io::Error::new(io::ErrorKind::InvalidData, e)))?;
     Ok((text, report))

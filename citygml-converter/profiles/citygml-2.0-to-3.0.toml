@@ -63,7 +63,9 @@ tun = "http://www.opengis.net/citygml/tunnel/3.0"
 veg = "http://www.opengis.net/citygml/vegetation/3.0"
 wtr = "http://www.opengis.net/citygml/waterbody/3.0"
 
-# Written unchanged into xsi:schemaLocation on the output root, in this order.
+# Written into xsi:schemaLocation on the output root, in this order. A URL is
+# written unchanged, and a path is written from the package root with the ../
+# steps back to it from where the document sits.
 #
 # i-UR resolves through a relative path into the package's own schemas/, which
 # the converter writes. CityGML is referenced remotely. That is the split a
@@ -528,7 +530,7 @@ to = "core:lod3MultiSurface"
 status = "measured"
 low_reference = "6"
 high_reference = "2"
-reference_code_space = "../../codelists/Elevation_elevationReference.xml"
+reference_code_space = "codelists/Elevation_elevationReference.xml"
 
 # ---------------------------------------------------------------------------
 # LOD4.
