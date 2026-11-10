@@ -24,6 +24,7 @@ use crate::storey::{Floors, StoreyRewrite};
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
+use crate::wtr::WtrRewrite;
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
 
@@ -85,6 +86,7 @@ pub struct Converter {
     bldg: BuildingRewrite,
     cons: ConsRewrite,
     tran: TranRewrite,
+    wtr: WtrRewrite,
     iur: IurRewrite,
     order: ChildOrder,
     gml_ns: String,
@@ -117,6 +119,7 @@ impl Converter {
         let bldg = BuildingRewrite::new(&rules)?;
         let cons = ConsRewrite::new(&rules, &schema)?;
         let tran = TranRewrite::new(&rules, options.clearance.clone())?;
+        let wtr = WtrRewrite::new(&rules)?;
         let iur = IurRewrite::new(&rules, &schema)?;
         let order = if options.reorder {
             schema
@@ -139,6 +142,7 @@ impl Converter {
             bldg,
             cons,
             tran,
+            wtr,
             iur,
             order,
             gml_ns,
@@ -347,7 +351,7 @@ impl Converter {
     ///
     /// The restructuring passes run in a fixed order, namely: `storey`,
     /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
-    /// `tran`, `iur`. Generated `gml:id` values
+    /// `tran`, `wtr`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
     /// dataset and stable across runs. Appearance links to geometry dropped
     /// from any member of the same document are removed, and a member left
@@ -390,6 +394,7 @@ impl Converter {
         self.cons.apply(&mut element, &mut report.warnings);
         self.tran
             .apply(&mut element, &mut ids, &mut report.warnings);
+        self.wtr.apply(&mut element, &mut ids, &mut report.warnings);
         self.iur.apply(&mut element, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);

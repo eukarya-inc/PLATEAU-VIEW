@@ -20,6 +20,11 @@
 //!   was none to rewrite
 //! * its LOD `a` geometry properties and descriptors are renamed to LOD `b`
 //!
+//! Once its moves are done, a feature with geometry at a LOD its
+//! `[lod_types]` table, or that of the feature it sits in, names a `kept`
+//! code for, and with no code of that LOD, is given that code as
+//! [`lod_type::add`] places it.
+//!
 //! Every removal and move is reported, and the `gml:id` of every removed
 //! element is added to the caller's set.
 
@@ -72,6 +77,9 @@ impl LodMapRewrite {
             for &(from, to) in moves {
                 self.relod(el, (from, to), host, dropped, warnings);
             }
+            if let Some(table) = host {
+                self.keep(el, table, warnings);
+            }
         }
         for child in el.elements_mut() {
             if self.lod_of(child).is_none() {
@@ -117,6 +125,31 @@ impl LodMapRewrite {
                 Added::NoHolder => warnings.add(format!(
                     "the {label} was given no lodType {code} for its LOD{from} that took \
                      LOD{to}: it carries no data quality attribute to hold one"
+                )),
+            }
+        }
+    }
+
+    /// Gives `feature` the `kept` code of `table` for each LOD it has
+    /// geometry at and no code of.
+    fn keep(&self, feature: &mut Element, table: &LodTypeTable, warnings: &mut Warnings) {
+        for (lod, code) in &table.kept {
+            let Some(lod) = lod.chars().next() else {
+                continue;
+            };
+            if !self.has_lod(feature, lod, true) || self.has_lod_type(feature, lod, true) {
+                continue;
+            }
+            let label = self.display.display_name(&feature.name);
+            match lod_type::add(&self.iur, feature, code, &table.list) {
+                Added::Added => warnings.add(format!(
+                    "lodType {code} was added to the {label}: its LOD{lod} carries no code \
+                     of its own"
+                )),
+                Added::Present => {}
+                Added::NoHolder => warnings.add(format!(
+                    "the {label} was given no lodType {code} for its LOD{lod}: it carries \
+                     no data quality attribute to hold one"
                 )),
             }
         }

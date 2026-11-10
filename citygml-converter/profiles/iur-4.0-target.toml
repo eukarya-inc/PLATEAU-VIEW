@@ -281,6 +281,9 @@ to = "uro:OtherConstructionInstallation"
 # 4.x codes are left to the LOD4 fold. moved names, per old LOD that
 # [lod_map] moves, the code a feature is given when that LOD moved and the
 # feature carries no code of it. It replaces the first code the move dropped.
+# kept names, per old LOD of a type [lod_map] lists, the code a feature with
+# geometry at that LOD is given once the moves are done, when it carries no
+# code of that LOD.
 # folded gives, per side and keyed by the LOD the LOD4 content folded into, the
 # code a feature is given when its LOD4 folded and it carries no 4.x code. split
 # applies when any folded geometry of that side sits on a boundary surface, and
@@ -346,6 +349,15 @@ drop = { "8" = "不明" }
 
 [lod_types."brid:Bridge".folded.interior]
 "3" = { whole = "3.0_interior", split = "3.1_interior" }
+
+[lod_types."wtr:WaterBody"]
+list = "WaterBody_lodType.xml"
+
+[lod_types."wtr:WaterBody".moved]
+"3" = "2.1"
+
+[lod_types."wtr:WaterBody".kept]
+"2" = "2.0"
 
 [lod_types."tun:Tunnel"]
 list = "Tunnel_lodType.xml"
@@ -426,3 +438,12 @@ auxiliary = "1.1"
 # ---------------------------------------------------------------------------
 [unf]
 dm = "drop"
+
+# ---------------------------------------------------------------------------
+# The water body rewrite (core/src/wtr.rs).
+#
+# lod1_surface maps each feature type whose LOD1 multi-surface moves into a
+# new boundary surface to the type of that surface.
+# ---------------------------------------------------------------------------
+[wtr]
+lod1_surface = { "wtr:WaterBody" = "wtr:WaterSurface" }

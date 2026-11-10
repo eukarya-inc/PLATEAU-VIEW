@@ -26,6 +26,7 @@ core = "http://www.opengis.net/citygml/2.0"
 bldg = "http://www.opengis.net/citygml/building/2.0"
 brid = "http://www.opengis.net/citygml/bridge/2.0"
 tun = "http://www.opengis.net/citygml/tunnel/2.0"
+wtr = "http://www.opengis.net/citygml/waterbody/2.0"
 gen = "http://www.opengis.net/citygml/generics/2.0"
 app = "http://www.opengis.net/citygml/appearance/2.0"
 gml = "http://www.opengis.net/gml"
@@ -475,6 +476,41 @@ from = "tun:consistsOfTunnelPart"
 to = "tun:tunnelPart"
 
 # ---------------------------------------------------------------------------
+# Water body module.
+#
+# A water body's geometry properties move to core like the building's, its
+# boundary surfaces keep the wtr prefix except the closure surface, which is
+# core::ClosureSurface. A 2.0 boundary surface's lodNSurface holds a single
+# surface, and becomes core:lodNMultiSurface here, wrapped in a
+# gml:MultiSurface by core/src/wtr.rs. The LOD1 multi-surface moves into a
+# boundary surface there too ([wtr]).
+# ---------------------------------------------------------------------------
+[[element]]
+from = "wtr:lod0MultiCurve"
+to = "core:lod0MultiCurve"
+[[element]]
+from = "wtr:lod1MultiSurface"
+to = "core:lod1MultiSurface"
+[[element]]
+from = "wtr:lod2Solid"
+to = "core:lod2Solid"
+[[element]]
+from = "wtr:lod3Solid"
+to = "core:lod3Solid"
+[[element]]
+from = "wtr:boundedBy"
+to = "core:boundary"
+[[element]]
+from = "wtr:WaterClosureSurface"
+to = "core:ClosureSurface"
+[[element]]
+from = "wtr:lod2Surface"
+to = "core:lod2MultiSurface"
+[[element]]
+from = "wtr:lod3Surface"
+to = "core:lod3MultiSurface"
+
+# ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.
 #
 # con::Height has value, status, lowReference and highReference, all [1..1].
@@ -595,6 +631,9 @@ interior = [
 "3" = "2"
 
 [lod_map."tun:TunnelPart"]
+"3" = "2"
+
+[lod_map."wtr:WaterBody"]
 "3" = "2"
 
 

@@ -74,6 +74,9 @@ pub struct Profile {
     /// The underground utility rewrite's choices. See [`UnfPolicy`].
     #[serde(default)]
     pub unf: UnfPolicy,
+    /// The water body rewrite's feature types. See [`WtrPolicy`].
+    #[serde(default)]
+    pub wtr: WtrPolicy,
 }
 
 impl Profile {
@@ -430,6 +433,10 @@ impl Default for Lod4Policy {
 /// published code a feature is given when that LOD moved and the feature
 /// carries no code of it. The code replaces the first code the move dropped.
 ///
+/// `kept` maps a LOD digit to the published code a feature of a type
+/// `[lod_map]` lists is given once its moves are done, when it has geometry
+/// at that LOD and carries no code of it.
+///
 /// `folded` gives the codes a feature is given when its LOD4 folded and it
 /// carries no `4.x` code. See [`FoldedCodes`].
 ///
@@ -445,6 +452,7 @@ pub struct LodTypeTable {
     pub map: IndexMap<String, String>,
     pub drop: IndexMap<String, String>,
     pub moved: IndexMap<String, String>,
+    pub kept: IndexMap<String, String>,
     pub folded: FoldedCodes,
     pub interior: IndexMap<String, IndexMap<String, String>>,
 }
@@ -461,6 +469,7 @@ impl LodTypeTable {
         self.map
             .values()
             .chain(self.moved.values())
+            .chain(self.kept.values())
             .chain(folded)
             .chain(self.interior.values().flat_map(IndexMap::values))
             .any(|c| c == code)
@@ -545,6 +554,22 @@ impl UnfDm {
 #[serde(deny_unknown_fields, default)]
 pub struct UnfPolicy {
     pub dm: UnfDm,
+}
+
+/// The feature types the water body rewrite acts on.
+///
+/// `lod1_surface` maps a feature type, by its `prefix:local` name, to the
+/// boundary surface type its LOD1 multi-surface moves into.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct WtrPolicy {
+    pub lod1_surface: IndexMap<String, String>,
+}
+
+/// [`WtrPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct WtrRules {
+    pub lod1_surface: HashMap<Name, Name>,
 }
 
 /// [`Lod4Policy`] with its attribute resolved to an expanded name.
@@ -708,6 +733,7 @@ pub struct Rules {
     retarget_by_type: HashMap<Name, IndexMap<String, String>>,
     tran: TranRules,
     unf: UnfPolicy,
+    wtr: WtrRules,
 }
 
 impl Rules {
@@ -828,6 +854,14 @@ impl Rules {
         for (ty, codes) in &profile.tran.clearance_lod_type {
             clearance_lod_type.insert(parse_name(ty, output)?, codes.clone());
         }
+        let wtr = WtrRules {
+            lod1_surface: profile
+                .wtr
+                .lod1_surface
+                .iter()
+                .map(|(ty, surface)| Ok((parse_name(ty, output)?, parse_name(surface, output)?)))
+                .collect::<Result<_>>()?,
+        };
         let tran = TranRules {
             function_code_space: profile.tran.function_code_space.clone(),
             full_width_function,
@@ -946,6 +980,15 @@ impl Rules {
                      [lod_map] does not move"
                 )));
             }
+            if let Some(lod) = table
+                .kept
+                .keys()
+                .find(|lod| lod.len() != 1 || !lod.chars().all(|c| c.is_ascii_digit()))
+            {
+                return Err(Error::Profile(format!(
+                    "[lod_types] `{ty}` keys a kept code by `{lod}`, which is not a LOD digit"
+                )));
+            }
         }
 
         let policy = &profile.construction;
@@ -1030,6 +1073,7 @@ impl Rules {
             retarget_by_type,
             tran,
             unf: profile.unf.clone(),
+            wtr,
         })
     }
 
@@ -1145,6 +1189,11 @@ impl Rules {
     /// The underground utility rewrite's choices. See [`UnfPolicy`].
     pub fn unf(&self) -> &UnfPolicy {
         &self.unf
+    }
+
+    /// The water body rewrite's feature types. See [`WtrPolicy`].
+    pub fn wtr(&self) -> &WtrRules {
+        &self.wtr
     }
 
     /// Renders a name the way the output document writes it, for diagnostics.
