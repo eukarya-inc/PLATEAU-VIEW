@@ -17,8 +17,8 @@
 //! ```
 //!
 //! The feature's `core:lod1MultiSurface` moves into one new boundary surface
-//! of the type the table gives, with a minted `gml:id`, and the move is
-//! reported. A `core:lodNMultiSurface` of a boundary surface holding a single
+//! of the type the table gives, with a minted `gml:id`. A
+//! `core:lodNMultiSurface` of a boundary surface holding a single
 //! surface, which a 2.0 `lodNSurface` becomes in the rename pass, is wrapped
 //! in a `gml:MultiSurface`.
 
@@ -27,7 +27,6 @@ use std::collections::HashMap;
 use crate::error::Result;
 use crate::geometry::{lod_of, wrap_single};
 use crate::profile::Rules;
-use crate::report::Warnings;
 use crate::transform::IdGen;
 use crate::xml::{Element, Name, Node};
 
@@ -38,7 +37,6 @@ pub struct WtrRewrite {
     lod1: Name,
     gml: String,
     core: String,
-    display: Rules,
 }
 
 impl WtrRewrite {
@@ -50,32 +48,25 @@ impl WtrRewrite {
             lod1: Name::qualified(&core, "lod1MultiSurface"),
             gml: rules.output_ns("gml")?.to_owned(),
             core,
-            display: rules.clone(),
         })
     }
 
     /// Rewrites every listed feature under `member`, `member` included.
     /// `ids` mints the new boundary surfaces' `gml:id`.
-    pub fn apply(&self, member: &mut Element, ids: &mut IdGen, warnings: &mut Warnings) {
+    pub fn apply(&self, member: &mut Element, ids: &mut IdGen) {
         if self.surfaces.is_empty() {
             return;
         }
         if let Some(surface) = self.surfaces.get(&member.name) {
-            self.feature(member, surface, ids, warnings);
+            self.feature(member, surface, ids);
             return;
         }
         for child in member.elements_mut() {
-            self.apply(child, ids, warnings);
+            self.apply(child, ids);
         }
     }
 
-    fn feature(
-        &self,
-        feature: &mut Element,
-        surface: &Name,
-        ids: &mut IdGen,
-        warnings: &mut Warnings,
-    ) {
+    fn feature(&self, feature: &mut Element, surface: &Name, ids: &mut IdGen) {
         for boundary in feature.elements_mut().filter(|e| e.name == self.boundary) {
             for part in boundary.elements_mut() {
                 for property in part.elements_mut() {
@@ -102,11 +93,5 @@ impl WtrRewrite {
         let mut boundary = Element::new(self.boundary.clone());
         boundary.push(part);
         feature.push(boundary);
-        let label = self.display.display_name(&feature.name);
-        warnings.add(format!(
-            "the LOD1 multi-surface of the {label} moved into a new {} in its \
-             core:boundary: CityGML 3.0 gives the {label} no LOD1 multi-surface of its own",
-            self.display.display_name(surface),
-        ));
     }
 }

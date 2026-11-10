@@ -414,7 +414,7 @@ impl Converter {
         self.cons.apply(&mut element, &mut report.warnings);
         self.tran
             .apply(&mut element, to_root, &mut ids, &mut report.warnings);
-        self.wtr.apply(&mut element, &mut ids, &mut report.warnings);
+        self.wtr.apply(&mut element, &mut ids);
         self.iur.apply(&mut element, to_root, &mut report.warnings);
         if self.options.generate_gml_ids {
             transform::assign_gml_ids(&mut element, &self.gml_ns, &mut ids);
