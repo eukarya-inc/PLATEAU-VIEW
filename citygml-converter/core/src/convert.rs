@@ -24,6 +24,7 @@ use crate::storey::{Floors, StoreyRewrite};
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
+use crate::urf::UrfRewrite;
 use crate::wtr::WtrRewrite;
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
@@ -86,6 +87,7 @@ pub struct Converter {
     bldg: BuildingRewrite,
     cons: ConsRewrite,
     tran: TranRewrite,
+    urf: UrfRewrite,
     wtr: WtrRewrite,
     iur: IurRewrite,
     order: ChildOrder,
@@ -111,7 +113,8 @@ impl Converter {
         let common = CommonRewrite::new(&rules)?;
         let xal = XalRewrite::new(&rules)?;
         let app = AppearanceRewrite::new(&rules)?;
-        let schema = ChildOrder::target()?;
+        let schema = ChildOrder::target_with(rules.schema_overrides())?;
+        let urf = UrfRewrite::new(&rules)?;
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
         let lodmap = LodMapRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
@@ -142,6 +145,7 @@ impl Converter {
             bldg,
             cons,
             tran,
+            urf,
             wtr,
             iur,
             order,
@@ -367,7 +371,7 @@ impl Converter {
 
     /// Renames, restructures and reorders one top-level member.
     ///
-    /// The restructuring passes run in a fixed order, namely: `storey`,
+    /// The restructuring passes run in a fixed order, namely: `urf`, `storey`,
     /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
     /// `tran`, `wtr`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
@@ -385,6 +389,9 @@ impl Converter {
         state: &mut FileState,
     ) -> Option<Element> {
         let mut element = transform::rename_under(&self.rules, element, root)?;
+        if self.urf.apply(&mut element, &mut report.warnings) {
+            return None;
+        }
         if self.storey.is_floor(&element, &state.floors) {
             return None;
         }

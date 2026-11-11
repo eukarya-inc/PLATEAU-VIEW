@@ -17,6 +17,7 @@ description = "The i-UR 4.0 target: namespaces, schema locations and code lists"
 label = "CityGML 3.0 + i-UR 4.0"
 citygml = "http://www.opengis.net/citygml/3.0"
 iur_version = "4.0"
+iur_patch = "4.0.2"
 iur = [
   "https://www.geospatial.jp/iur/uro/4.0",
   "https://www.geospatial.jp/iur/urf/4.0",
@@ -123,6 +124,44 @@ child = "urc:geometrySrcDescLod1"
 value = "999"
 code_space = "codelists/DataQualityAttribute_geometrySrcDesc.xml"
 after = ["urc:geometrySrcDescLod0"]
+
+# ---------------------------------------------------------------------------
+# Urban function module. An urban function area is a thematic surface, and its
+# LOD1 multi-surface moves to core. The cabinet-order facility classes i-UR 4.0
+# no longer declares become urf:UrbanFacilityStipulatedByCabinetOrder, told
+# apart by the urf:function they already carry, and the district facility
+# subclasses become urf:DistrictFacility the same way.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "urf:lod1MultiSurface"
+to = "core:lod1MultiSurface"
+[[element]]
+from = "urf:TelecommunicationFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:WindProtectionFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:FireProtectionFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:TideFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:FloodPreventionFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:SnowProtectionFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:SandControlFacility"
+to = "urf:UrbanFacilityStipulatedByCabinetOrder"
+[[element]]
+from = "urf:RuralDistrictFacility"
+to = "urf:DistrictFacility"
+[[element]]
+from = "urf:RoadsideDistrictFacility"
+to = "urf:DistrictFacility"
 
 # ---------------------------------------------------------------------------
 # Other constructions. i-UR 3.x declares the class, its boundary surfaces and
@@ -450,3 +489,22 @@ dm = "drop"
 # ---------------------------------------------------------------------------
 [wtr]
 lod1_surface = { "wtr:WaterBody" = "wtr:WaterSurface" }
+
+# ---------------------------------------------------------------------------
+# The urban function rewrite (core/src/urf.rs).
+#
+# removed lists the geometry properties taken off every urban function
+# feature. A feature they leave without a geometry property is dropped.
+# ---------------------------------------------------------------------------
+[urf]
+removed = ["urf:lod1MultiCurve"]
+
+# ---------------------------------------------------------------------------
+# Complex types the converter reads with another xs:extension base, for child
+# order and ADE hooks. An override applies while the vendored schema still
+# declares the base named in replaces, and does nothing once it declares any
+# other.
+# ---------------------------------------------------------------------------
+[schema_override."urf:AbstractDistrictPlanType"]
+replaces = "gml:AbstractFeatureType"
+base = "urf:ZoneType"
