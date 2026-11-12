@@ -119,9 +119,10 @@ The single most common mistake here is putting a mapping in the wrong layer.
   own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
   the transportation module, `core/src/unf.rs` and the `[unf]` table are for
   underground utilities, `core/src/wtr.rs` and the `[wtr]` table are for
-  water bodies and `core/src/urf.rs` and the `[urf]` table are for urban
-  function features. Do not grow `bldg.rs` sideways. A module deriving from
-  the construction module (`brid`, `tun`, `cons`) adds rows to
+  water bodies, `core/src/urf.rs` and the `[urf]` table are for urban
+  function features, `core/src/frn.rs` and the `[frn]` table are for city
+  furniture and `core/src/veg.rs` is for vegetation objects. Do not grow
+  `bldg.rs` sideways. A module deriving from the construction module (`brid`, `tun`, `cons`) adds rows to
   `[construction]`, `[lod4]`, `[lod_map]` and `[lod_types]` before it adds
   Rust. Rows naming
   i-UR source classes (`uro:OtherConstruction`) go in `iur-4.0-target.toml`,
@@ -137,13 +138,13 @@ The single most common mistake here is putting a mapping in the wrong layer.
   reformatted, except the one value the construction changes.
 
 `urf.rs`, `storey.rs`, `common.rs`, `unf.rs`, `lodmap.rs`, `lod4.rs`,
-`construction.rs`, `bldg.rs`, `cons.rs`, `tran.rs`, `wtr.rs` and `iur.rs` run **after**
+`frn.rs`, `veg.rs`, `construction.rs`, `bldg.rs`, `cons.rs`, `tran.rs`, `wtr.rs` and `iur.rs` run **after**
 the rename pass, so they speak CityGML **3.0** and i-UR
 **4.0** names only. Writing a 2.0 namespace constant in there is a bug
 (`storey`'s read-ahead sees 2.0 input and maps each name through the profile
 before comparing). The order is
 `urf` -> `storey` -> `common` -> `xal` -> `app` -> `unf` -> `lodmap` -> `lod4` ->
-`construction` -> `bldg` -> `cons` -> `tran` -> `wtr` -> `iur`, and each step is placed so that a wrapper it introduces is never
+`frn` -> `veg` -> `construction` -> `bldg` -> `cons` -> `tran` -> `wtr` -> `iur`, and each step is placed so that a wrapper it introduces is never
 mistaken for something the next step handles. `urf` decides whether a member
 is dropped before any pass works on it. `storey` nests each storey in its
 building before the remaining passes run, so every later pass converts the storey's
@@ -153,7 +154,7 @@ is not a building property, `unf` has removed an underground utility's LOD4 and 
 descriptors before `lod4` would read them as describing nothing, the geometry
 `urf` drops that kept geometry of the same member still links to is written
 back in place of the link right after `urf`, and likewise right after `unf`,
-`lodmap`, `lod4` and `construction` for theirs (`core/src/dropped.rs`), a
+`lodmap`, `lod4`, `frn`, `veg` and `construction` for theirs (`core/src/dropped.rs`), a
 member `urf` drops is recorded whole, and the appearance links to what stays dropped
 are pruned right after that, member by member and on later members of the
 same document (a document with an appearance member is first read with only
@@ -162,7 +163,11 @@ what they drop), `lodmap` has moved a feature's old LOD3
 out of the LOD3 slots before `lod4` folds its LOD4 shell into them, and runs
 before `construction` so a module's `lodNGeometry` moves as it is, `lod4` has
 retagged every `lod4*` before
-`construction` looks at geometry so it can never emit an LOD4 slot, the
+`construction` looks at geometry so it can never emit an LOD4 slot, `frn`
+moves a city furniture's LOD1 surface into its i-UR extension before
+`construction` would drop it for want of a core property, `veg` has turned
+a plant cover's multi-solids into solids after `lodmap` moved them as they
+are, the
 storey check runs right after `lod4` and only when it kept an interior model,
 `cons` moves installations into a structure attribute while it is still in its
 2.0 property, before `iur` turns that into the ADE hook, `tran` has

@@ -71,6 +71,7 @@ superseded = [
   "OtherConstruction_lodType.xml",
   "Road_lodType.xml",
   "Railway_lodType.xml",
+  "CityFurniture_lodType.xml",
 ]
 
 # Files the published 4.0 set carries under a new name, with unchanged codes.
@@ -419,6 +420,38 @@ list = "OtherConstruction_lodType.xml"
 "3.0" = "2.1"
 "3.1" = "2.1"
 
+[lod_types."frn:CityFurniture"]
+list = "CityFurniture_lodType.xml"
+drop = { "8" = "不明" }
+
+[lod_types."frn:CityFurniture".map]
+"3.0" = "2.1"
+"3.1" = "2.2"
+
+[lod_types."frn:CityFurniture".moved]
+"3" = "2.1"
+
+[lod_types."frn:CityFurniture".kept]
+"2" = "2.0"
+
+[lod_types."veg:SolitaryVegetationObject"]
+list = "Vegetation_lodType.xml"
+
+[lod_types."veg:SolitaryVegetationObject".moved]
+"3" = "2.1"
+
+[lod_types."veg:SolitaryVegetationObject".kept]
+"2" = "2.0"
+
+[lod_types."veg:PlantCover"]
+list = "Vegetation_lodType.xml"
+
+[lod_types."veg:PlantCover".moved]
+"3" = "2.1"
+
+[lod_types."veg:PlantCover".kept]
+"2" = "2.0"
+
 # ---------------------------------------------------------------------------
 # What the transportation rewrite (core/src/tran.rs) supplies.
 #
@@ -489,6 +522,16 @@ dm = "drop"
 # ---------------------------------------------------------------------------
 [wtr]
 lod1_surface = { "wtr:WaterBody" = "wtr:WaterSurface" }
+
+# ---------------------------------------------------------------------------
+# The city furniture rewrite (core/src/frn.rs).
+#
+# lod1_surface maps each feature type whose LOD1 surface moves into an i-UR
+# extension to the class holding it. The class goes in the type's
+# adeOf<Type> property and holds the surface as its lod1MultiSurface.
+# ---------------------------------------------------------------------------
+[frn]
+lod1_surface = { "frn:CityFurniture" = "uro:CityFurnitureExtendedGeometry" }
 
 # ---------------------------------------------------------------------------
 # The urban function rewrite (core/src/urf.rs).

@@ -78,6 +78,9 @@ pub struct Profile {
     /// The water body rewrite's feature types. See [`WtrPolicy`].
     #[serde(default)]
     pub wtr: WtrPolicy,
+    /// The city furniture rewrite's feature types. See [`FrnPolicy`].
+    #[serde(default)]
+    pub frn: FrnPolicy,
     /// The urban function rewrite's properties. See [`UrfPolicy`].
     #[serde(default)]
     pub urf: UrfPolicy,
@@ -594,6 +597,22 @@ pub struct WtrRules {
     pub lod1_surface: HashMap<Name, Name>,
 }
 
+/// The feature types the city furniture rewrite acts on.
+///
+/// `lod1_surface` maps a feature type, by its `prefix:local` name, to the
+/// i-UR class its LOD1 surface moves into.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FrnPolicy {
+    pub lod1_surface: IndexMap<String, String>,
+}
+
+/// [`FrnPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct FrnRules {
+    pub lod1_surface: HashMap<Name, Name>,
+}
+
 /// The properties the urban function rewrite removes.
 ///
 /// `removed` lists, by `prefix:local` name, the geometry properties removed
@@ -797,6 +816,7 @@ pub struct Rules {
     tran: TranRules,
     unf: UnfPolicy,
     wtr: WtrRules,
+    frn: FrnRules,
     urf: UrfRules,
     schema_overrides: Vec<BaseOverride>,
 }
@@ -925,6 +945,14 @@ impl Rules {
                 .lod1_surface
                 .iter()
                 .map(|(ty, surface)| Ok((parse_name(ty, output)?, parse_name(surface, output)?)))
+                .collect::<Result<_>>()?,
+        };
+        let frn = FrnRules {
+            lod1_surface: profile
+                .frn
+                .lod1_surface
+                .iter()
+                .map(|(ty, class)| Ok((parse_name(ty, output)?, parse_name(class, output)?)))
                 .collect::<Result<_>>()?,
         };
         let urf = UrfRules {
@@ -1151,6 +1179,7 @@ impl Rules {
             tran,
             unf: profile.unf.clone(),
             wtr,
+            frn,
             urf,
             schema_overrides,
         })
@@ -1285,6 +1314,11 @@ impl Rules {
     /// The water body rewrite's feature types. See [`WtrPolicy`].
     pub fn wtr(&self) -> &WtrRules {
         &self.wtr
+    }
+
+    /// The city furniture rewrite's feature types. See [`FrnPolicy`].
+    pub fn frn(&self) -> &FrnRules {
+        &self.frn
     }
 
     /// The urban function rewrite's properties. See [`UrfPolicy`].

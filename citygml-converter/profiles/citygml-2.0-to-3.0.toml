@@ -28,6 +28,8 @@ brid = "http://www.opengis.net/citygml/bridge/2.0"
 tun = "http://www.opengis.net/citygml/tunnel/2.0"
 wtr = "http://www.opengis.net/citygml/waterbody/2.0"
 luse = "http://www.opengis.net/citygml/landuse/2.0"
+frn = "http://www.opengis.net/citygml/cityfurniture/2.0"
+veg = "http://www.opengis.net/citygml/vegetation/2.0"
 gen = "http://www.opengis.net/citygml/generics/2.0"
 app = "http://www.opengis.net/citygml/appearance/2.0"
 gml = "http://www.opengis.net/gml"
@@ -536,6 +538,50 @@ from = "luse:lod4MultiSurface"
 drop = true
 
 # ---------------------------------------------------------------------------
+# City furniture and vegetation.
+#
+# A furniture's or a solitary vegetation object's lodNGeometry becomes the
+# core property for the geometry it holds ([construction] lod_geometry), and a
+# furniture's LOD1 surface moves into an i-UR extension (core/src/frn.rs,
+# [frn]). A plant cover's multi-surfaces are core rows, and its single-solid
+# multi-solids become core solids (core/src/veg.rs). Every LOD4 property is
+# removed by those two passes.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "frn:lod1ImplicitRepresentation"
+to = "core:lod1ImplicitRepresentation"
+[[element]]
+from = "frn:lod2ImplicitRepresentation"
+to = "core:lod2ImplicitRepresentation"
+[[element]]
+from = "frn:lod3ImplicitRepresentation"
+to = "core:lod3ImplicitRepresentation"
+[[element]]
+from = "veg:lod1ImplicitRepresentation"
+to = "core:lod1ImplicitRepresentation"
+[[element]]
+from = "veg:lod2ImplicitRepresentation"
+to = "core:lod2ImplicitRepresentation"
+[[element]]
+from = "veg:lod3ImplicitRepresentation"
+to = "core:lod3ImplicitRepresentation"
+[[element]]
+from = "frn:lod1TerrainIntersection"
+to = "core:lod1TerrainIntersectionCurve"
+[[element]]
+from = "frn:lod2TerrainIntersection"
+to = "core:lod2TerrainIntersectionCurve"
+[[element]]
+from = "frn:lod3TerrainIntersection"
+to = "core:lod3TerrainIntersectionCurve"
+[[element]]
+from = "veg:lod2MultiSurface"
+to = "core:lod2MultiSurface"
+[[element]]
+from = "veg:lod3MultiSurface"
+to = "core:lod3MultiSurface"
+
+# ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.
 #
 # con::Height has value, status, lowReference and highReference, all [1..1].
@@ -661,6 +707,15 @@ interior = [
 [lod_map."wtr:WaterBody"]
 "3" = "2"
 
+[lod_map."frn:CityFurniture"]
+"3" = "2"
+
+[lod_map."veg:SolitaryVegetationObject"]
+"3" = "2"
+
+[lod_map."veg:PlantCover"]
+"3" = "2"
+
 
 # ---------------------------------------------------------------------------
 # The construction rewrites (core/src/construction.rs), shared by every module
@@ -669,7 +724,8 @@ interior = [
 #
 # lod_geometry maps each type whose lod0Geometry to lod3Geometry children
 # become the core:lodN* property for the geometry they hold to the prefix
-# those children are in.
+# those children are in. City furniture and solitary vegetation objects hold
+# their geometry the same way and are listed too.
 # installations maps each 2.0 installation property to its 3.0 property and
 # the con:relationToConstruction value its installations gain. dates maps each
 # gYear property to the date property it becomes.
@@ -679,6 +735,8 @@ interior = [
 "brid:BridgeConstructiveElement" = "brid"
 "brid:BridgeInstallation" = "brid"
 "tun:TunnelInstallation" = "tun"
+"frn:CityFurniture" = "frn"
+"veg:SolitaryVegetationObject" = "veg"
 
 [construction.installations]
 "bldg:outerBuildingInstallation" = { to = "bldg:buildingInstallation", relation = "outside" }

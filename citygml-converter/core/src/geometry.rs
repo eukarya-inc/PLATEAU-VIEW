@@ -23,12 +23,14 @@ pub const SURFACES: &[&str] = &[
 pub const CURVES: &[&str] = &["LineString", "Curve", "CompositeCurve", "OrientableCurve"];
 
 /// The geometry property families a `lodN` prefix is followed by, in `core`
-/// or in a module's namespace, the 2.0 names a module's `lod4*` still
-/// carries included.
+/// or in a module's namespace, including the 2.0 names a module's property
+/// still carries before its rewrite, such as a `lod4*` or a plant cover's
+/// `lodNMultiSolid`.
 const FAMILIES: &[&str] = &[
     "Solid",
     "MultiSurface",
     "MultiCurve",
+    "MultiSolid",
     "Point",
     "Geometry",
     "TerrainIntersection",
