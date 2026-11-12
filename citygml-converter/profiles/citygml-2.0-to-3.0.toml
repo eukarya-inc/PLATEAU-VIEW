@@ -517,6 +517,7 @@ to = "core:lod3MultiSurface"
 # Land use module.
 #
 # A land use is a thematic surface, and its geometry properties move to core.
+# CityGML 3.0 has no LOD4, so its LOD4 multi-surface is dropped.
 # ---------------------------------------------------------------------------
 [[element]]
 from = "luse:lod0MultiSurface"
@@ -530,6 +531,9 @@ to = "core:lod2MultiSurface"
 [[element]]
 from = "luse:lod3MultiSurface"
 to = "core:lod3MultiSurface"
+[[element]]
+from = "luse:lod4MultiSurface"
+drop = true
 
 # ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.

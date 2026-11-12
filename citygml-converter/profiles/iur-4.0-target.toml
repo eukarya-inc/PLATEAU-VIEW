@@ -497,7 +497,15 @@ lod1_surface = { "wtr:WaterBody" = "wtr:WaterSurface" }
 # feature. A feature they leave without a geometry property is dropped.
 # ---------------------------------------------------------------------------
 [urf]
-removed = ["urf:lod1MultiCurve"]
+removed = [
+  "urf:lod-2MultiCurve",
+  "urf:lod-2MultiPoint",
+  "urf:lod-1MultiCurve",
+  "urf:lod-1MultiPoint",
+  "urf:lod0MultiPoint",
+  "urf:lod0MultiSurface",
+  "urf:lod1MultiCurve",
+]
 
 # ---------------------------------------------------------------------------
 # Complex types the converter reads with another xs:extension base, for child

@@ -151,9 +151,10 @@ generic attributes, dates and i-UR attributes along with the building's, and
 `lod4` sees the storey CityGML 3.0 requires. `common`'s `core:genericAttribute`
 is not a building property, `unf` has removed an underground utility's LOD4 and its
 descriptors before `lod4` would read them as describing nothing, the geometry
-`unf`, `lodmap`, `lod4` and `construction` drop that kept geometry of the
-same member still links to is written back in place of the link right after
-them (`core/src/dropped.rs`), and the appearance links to what stays dropped
+`urf` drops that kept geometry of the same member still links to is written
+back in place of the link right after `urf`, and likewise right after `unf`,
+`lodmap`, `lod4` and `construction` for theirs (`core/src/dropped.rs`), a
+member `urf` drops is recorded whole, and the appearance links to what stays dropped
 are pruned right after that, member by member and on later members of the
 same document (a document with an appearance member is first read with only
 these steps, so an appearance member ahead of the features already knows

@@ -389,7 +389,7 @@ impl Converter {
         state: &mut FileState,
     ) -> Option<Element> {
         let mut element = transform::rename_under(&self.rules, element, root)?;
-        if self.urf.apply(&mut element, &mut report.warnings) {
+        if self.remove_urf(&mut element, &mut state.dropped, &mut report.warnings) {
             return None;
         }
         if self.storey.is_floor(&element, &state.floors) {
@@ -437,9 +437,9 @@ impl Converter {
         Some(element)
     }
 
-    /// The geometry [`Self::remove_geometry`] removes from the members of
-    /// `source` that follow its first appearance member, skipping the floor
-    /// groups in `floors`. Empty when `source` has no appearance member.
+    /// The geometry [`Self::remove_urf`] and [`Self::remove_geometry`] remove
+    /// from the members of `source` that follow its first appearance member,
+    /// skipping the floor groups in `floors`. Empty when `source` has no appearance member.
     fn dropped_after_appearance(
         &self,
         label: &str,
@@ -467,7 +467,10 @@ impl Converter {
                         seen = true;
                         continue;
                     }
-                    if !seen || self.storey.is_floor(&element, floors) {
+                    if !seen
+                        || self.remove_urf(&mut element, &mut dropped, &mut warnings)
+                        || self.storey.is_floor(&element, floors)
+                    {
                         continue;
                     }
                     self.remove_geometry(&mut element, &mut dropped, &mut warnings);
@@ -476,6 +479,24 @@ impl Converter {
             }
         }
         Ok(dropped)
+    }
+
+    /// Runs the `urf` pass on `element`, recording what it removes in
+    /// `dropped`. Returns true when `element` is to be dropped. Otherwise
+    /// writes each removed object kept geometry still links to back in place
+    /// of the link.
+    fn remove_urf(
+        &self,
+        element: &mut Element,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
+    ) -> bool {
+        dropped.begin(element);
+        if self.urf.apply(element, dropped, warnings) {
+            return true;
+        }
+        dropped.restore(element, warnings);
+        false
     }
 
     /// Runs the `unf`, `lodmap`, `lod4` and `construction` passes on

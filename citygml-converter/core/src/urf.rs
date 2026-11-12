@@ -7,8 +7,10 @@
 //! The geometry properties the profile's `[urf] removed` list names are taken
 //! off the feature. A feature left with no `lod*` property is dropped, and the
 //! member holding it with it. Each removal is reported with the feature's
-//! `gml:id`.
+//! `gml:id`, and what is removed, the whole feature when it is dropped, is
+//! recorded with [`Dropped::add`].
 
+use crate::dropped::Dropped;
 use crate::error::Result;
 use crate::profile::Rules;
 use crate::report::Warnings;
@@ -37,24 +39,35 @@ impl UrfRewrite {
     /// Removes the listed properties from every urban function feature
     /// `member` holds. Returns true when a feature was left without geometry
     /// and `member` is to be dropped.
-    pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) -> bool {
+    pub fn apply(
+        &self,
+        member: &mut Element,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
+    ) -> bool {
         if self.removed.is_empty() {
             return false;
         }
         let mut drop = false;
         for feature in member.elements_mut() {
             if feature.name.in_ns(&self.urf) {
-                drop |= self.feature(feature, warnings);
+                drop |= self.feature(feature, dropped, warnings);
             }
         }
         drop
     }
 
-    fn feature(&self, feature: &mut Element, warnings: &mut Warnings) -> bool {
+    fn feature(
+        &self,
+        feature: &mut Element,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
+    ) -> bool {
         let mut removed = Vec::new();
         feature.children.retain(|node| match node {
             Node::Element(e) => match self.removed.iter().position(|n| *n == e.name) {
                 Some(i) => {
+                    dropped.add(e);
                     removed.push(i);
                     false
                 }
@@ -83,6 +96,9 @@ impl UrfRewrite {
                      function area takes no such geometry"
                 ));
             }
+        }
+        if !left {
+            dropped.add(feature);
         }
         !left
     }
