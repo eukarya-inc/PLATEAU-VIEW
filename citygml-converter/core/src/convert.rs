@@ -14,6 +14,7 @@ use crate::construction::ConstructionRewrite;
 use crate::dataset::Dataset;
 use crate::dropped::Dropped;
 use crate::error::{Error, Result};
+use crate::frn::FrnRewrite;
 use crate::iur::IurRewrite;
 use crate::lod4::Lod4Rewrite;
 use crate::lodmap::LodMapRewrite;
@@ -25,6 +26,7 @@ use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
 use crate::urf::UrfRewrite;
+use crate::veg::VegRewrite;
 use crate::wtr::WtrRewrite;
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
@@ -83,6 +85,8 @@ pub struct Converter {
     unf: UnfRewrite,
     lodmap: LodMapRewrite,
     lod4: Lod4Rewrite,
+    frn: FrnRewrite,
+    veg: VegRewrite,
     construction: ConstructionRewrite,
     bldg: BuildingRewrite,
     cons: ConsRewrite,
@@ -118,6 +122,8 @@ impl Converter {
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
         let lodmap = LodMapRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
+        let frn = FrnRewrite::new(&rules, &schema)?;
+        let veg = VegRewrite::new(&rules)?;
         let construction = ConstructionRewrite::new(&rules)?;
         let bldg = BuildingRewrite::new(&rules)?;
         let cons = ConsRewrite::new(&rules, &schema)?;
@@ -141,6 +147,8 @@ impl Converter {
             unf,
             lodmap,
             lod4,
+            frn,
+            veg,
             construction,
             bldg,
             cons,
@@ -499,7 +507,8 @@ impl Converter {
         false
     }
 
-    /// Runs the `unf`, `lodmap`, `lod4` and `construction` passes on
+    /// Runs the `unf`, `lodmap`, `lod4`, `frn`, `veg` and `construction`
+    /// passes on
     /// `element`, recording what they remove in `dropped`, then writes each
     /// removed object kept geometry still links to back in place of the link.
     /// Returns true when `lod4` folded an interior model to an LOD.
@@ -513,6 +522,8 @@ impl Converter {
         self.unf.apply(element, dropped, warnings);
         self.lodmap.apply(element, dropped, warnings);
         let interior = self.lod4.apply(element, dropped, warnings);
+        self.frn.apply(element, warnings);
+        self.veg.apply(element, dropped, warnings);
         self.construction.apply(element, dropped, warnings);
         dropped.restore(element, warnings);
         interior

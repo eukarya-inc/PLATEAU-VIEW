@@ -78,6 +78,9 @@ pub struct Profile {
     /// The water body rewrite's feature types. See [`WtrPolicy`].
     #[serde(default)]
     pub wtr: WtrPolicy,
+    /// The city furniture rewrite's feature types. See [`FrnPolicy`].
+    #[serde(default)]
+    pub frn: FrnPolicy,
     /// The urban function rewrite's properties. See [`UrfPolicy`].
     #[serde(default)]
     pub urf: UrfPolicy,
@@ -406,6 +409,9 @@ pub struct Lod4Policy {
     /// Output prefixes of the modules whose `lod4*` geometry properties are
     /// folded.
     pub modules: Vec<String>,
+    /// Output prefixes of the modules whose `lod4*` geometry properties are
+    /// removed.
+    pub drop: Vec<String>,
     /// Elements that put everything under them in the interior model, written
     /// with output prefixes as they stand after the rename pass.
     pub interior: Vec<String>,
@@ -435,6 +441,7 @@ impl Default for Lod4Policy {
             lod3: Vec::new(),
             fallback: Lod4Fallback::Lod3,
             modules: Vec::new(),
+            drop: Vec::new(),
             interior: Vec::new(),
             fixed: IndexMap::new(),
             exterior: IndexMap::new(),
@@ -594,6 +601,22 @@ pub struct WtrRules {
     pub lod1_surface: HashMap<Name, Name>,
 }
 
+/// The feature types the city furniture rewrite acts on.
+///
+/// `lod1_surface` maps a feature type, by its `prefix:local` name, to the
+/// i-UR class its LOD1 surface moves into.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FrnPolicy {
+    pub lod1_surface: IndexMap<String, String>,
+}
+
+/// [`FrnPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct FrnRules {
+    pub lod1_surface: HashMap<Name, Name>,
+}
+
 /// The properties the urban function rewrite removes.
 ///
 /// `removed` lists, by `prefix:local` name, the geometry properties removed
@@ -629,6 +652,8 @@ pub struct Lod4Rules {
     pub fallback: Lod4Fallback,
     /// Namespace URIs of [`Lod4Policy::modules`].
     pub modules: Vec<String>,
+    /// Namespace URIs of [`Lod4Policy::drop`].
+    pub drop: Vec<String>,
     pub interior: Vec<Name>,
     pub fixed: HashMap<Name, Lod4Fallback>,
     pub exterior: HashMap<Name, Lod4Exterior>,
@@ -797,6 +822,7 @@ pub struct Rules {
     tran: TranRules,
     unf: UnfPolicy,
     wtr: WtrRules,
+    frn: FrnRules,
     urf: UrfRules,
     schema_overrides: Vec<BaseOverride>,
 }
@@ -927,6 +953,14 @@ impl Rules {
                 .map(|(ty, surface)| Ok((parse_name(ty, output)?, parse_name(surface, output)?)))
                 .collect::<Result<_>>()?,
         };
+        let frn = FrnRules {
+            lod1_surface: profile
+                .frn
+                .lod1_surface
+                .iter()
+                .map(|(ty, class)| Ok((parse_name(ty, output)?, parse_name(class, output)?)))
+                .collect::<Result<_>>()?,
+        };
         let urf = UrfRules {
             removed: profile
                 .urf
@@ -965,15 +999,8 @@ impl Rules {
             lod2: policy.lod2.clone(),
             lod3: policy.lod3.clone(),
             fallback: policy.fallback,
-            modules: policy
-                .modules
-                .iter()
-                .map(|prefix| {
-                    output.get(prefix).cloned().ok_or_else(|| {
-                        Error::Profile(format!("[lod4] modules names undeclared prefix `{prefix}`"))
-                    })
-                })
-                .collect::<Result<_>>()?,
+            modules: lod4_namespaces("modules", &policy.modules, output)?,
+            drop: lod4_namespaces("drop", &policy.drop, output)?,
             interior: policy
                 .interior
                 .iter()
@@ -990,6 +1017,11 @@ impl Rules {
                 .map(|(ty, target)| Ok((parse_name(ty, output)?, *target)))
                 .collect::<Result<_>>()?,
         };
+        if let Some(prefix) = policy.drop.iter().find(|p| policy.modules.contains(p)) {
+            return Err(Error::Profile(format!(
+                "[lod4] lists `{prefix}` under both modules and drop"
+            )));
+        }
         if let Some(code) = lod4.lod2.iter().find(|c| lod4.lod3.contains(c)) {
             return Err(Error::Profile(format!(
                 "[lod4] lists code `{code}` under both lod2 and lod3"
@@ -1151,6 +1183,7 @@ impl Rules {
             tran,
             unf: profile.unf.clone(),
             wtr,
+            frn,
             urf,
             schema_overrides,
         })
@@ -1287,6 +1320,11 @@ impl Rules {
         &self.wtr
     }
 
+    /// The city furniture rewrite's feature types. See [`FrnPolicy`].
+    pub fn frn(&self) -> &FrnRules {
+        &self.frn
+    }
+
     /// The urban function rewrite's properties. See [`UrfPolicy`].
     pub fn urf(&self) -> &UrfRules {
         &self.urf
@@ -1353,6 +1391,22 @@ fn parse_input_names(
 
 /// Resolves a `prefix:local` name against a prefix table. A name with no prefix
 /// is unqualified.
+/// The namespace URIs of the `[lod4]` list `key` names by output prefix.
+fn lod4_namespaces(
+    key: &str,
+    prefixes: &[String],
+    output: &IndexMap<String, String>,
+) -> Result<Vec<String>> {
+    prefixes
+        .iter()
+        .map(|prefix| {
+            output.get(prefix).cloned().ok_or_else(|| {
+                Error::Profile(format!("[lod4] {key} names undeclared prefix `{prefix}`"))
+            })
+        })
+        .collect()
+}
+
 fn parse_name(text: &str, namespaces: &IndexMap<String, String>) -> Result<Name> {
     match text.split_once(':') {
         None => Ok(Name::unqualified(text)),

@@ -1,6 +1,7 @@
 //! Structural rewrites shared by every module deriving from the CityGML 3.0
 //! construction module, meaning buildings, bridges, tunnels and other
-//! constructions.
+//! constructions. The `lodNGeometry` rewrite acts on every type the table
+//! lists, constructions or not.
 //!
 //! The properties acted on come from the profile's `[construction]` table, so
 //! this module names no thematic module itself. It writes only `con` and
