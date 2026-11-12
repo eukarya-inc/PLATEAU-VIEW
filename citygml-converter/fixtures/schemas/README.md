@@ -18,9 +18,12 @@ depend on a server, and the published files are updated in place.
 | urg | `iur/urg/4.0/statisticalGrid.xsd` | `https://www.geospatial.jp/iur/urg/4.0` |
 | urt | `iur/urt/4.0/publicTransit.xsd` | `https://www.geospatial.jp/iur/urt/4.0` |
 
-All five declare `version="4.0.0"`. Replacing them means re-downloading all
-five together, because they import one another by exact namespace, so a partial
-update pairs versions that were never meant to meet.
+The set is the one published on 2026-10-30. uro and urf declare
+`version="4.0.2"`, and urc, urg and urt declare `version="4.0.0"`. The patch
+the converter targets is `[target] iur_patch` in `profiles/iur-4.0-target.toml`,
+which names the highest `version` in the set. Replacing them means
+re-downloading all five together, because they import one another by exact
+namespace, so a partial update pairs versions that were never meant to meet.
 
 # Vendored OGC schemas
 

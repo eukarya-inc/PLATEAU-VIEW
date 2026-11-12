@@ -27,6 +27,7 @@ bldg = "http://www.opengis.net/citygml/building/2.0"
 brid = "http://www.opengis.net/citygml/bridge/2.0"
 tun = "http://www.opengis.net/citygml/tunnel/2.0"
 wtr = "http://www.opengis.net/citygml/waterbody/2.0"
+luse = "http://www.opengis.net/citygml/landuse/2.0"
 gen = "http://www.opengis.net/citygml/generics/2.0"
 app = "http://www.opengis.net/citygml/appearance/2.0"
 gml = "http://www.opengis.net/gml"
@@ -511,6 +512,28 @@ to = "core:lod2MultiSurface"
 [[element]]
 from = "wtr:lod3Surface"
 to = "core:lod3MultiSurface"
+
+# ---------------------------------------------------------------------------
+# Land use module.
+#
+# A land use is a thematic surface, and its geometry properties move to core.
+# CityGML 3.0 has no LOD4, so its LOD4 multi-surface is dropped.
+# ---------------------------------------------------------------------------
+[[element]]
+from = "luse:lod0MultiSurface"
+to = "core:lod0MultiSurface"
+[[element]]
+from = "luse:lod1MultiSurface"
+to = "core:lod1MultiSurface"
+[[element]]
+from = "luse:lod2MultiSurface"
+to = "core:lod2MultiSurface"
+[[element]]
+from = "luse:lod3MultiSurface"
+to = "core:lod3MultiSurface"
+[[element]]
+from = "luse:lod4MultiSurface"
+drop = true
 
 # ---------------------------------------------------------------------------
 # Values the converter has to supply because CityGML 2.0 does not record them.

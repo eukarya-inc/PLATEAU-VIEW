@@ -137,9 +137,9 @@ to = "tran:Waterway"
 # source uro 3.2: union of revisions 3.2.1
 # source urt 3.2: union of revisions 3.2.0
 # target urc 4.0.0: 94 declarations
-# target urf 4.0.0: 487 declarations
+# target urf 4.0.2: 488 declarations
 # target urg 4.0.0: 92 declarations
-# target uro 4.0.0: 688 declarations
+# target uro 4.0.2: 688 declarations
 # target urt 4.0.0: 148 declarations
 
 # Elements that changed module. Same local name, so the only question is
@@ -475,7 +475,7 @@ to = "urc:visibility"
 "uro:WaterwayDetailAttribute" = "tran:adeOfWaterway"
 
 # Names with no rule, listed so they are not mistaken for oversights.
-#   urf: 23 name(s) declared in 3.2 and in no 4.0 module
+#   urf: 22 name(s) declared in 3.2 and in no 4.0 module
 #     Administration
 #     FireProtectionFacility
 #     FloodPreventionFacility
@@ -488,6 +488,7 @@ to = "urc:visibility"
 #     WindProtectionFacility
 #     _AbstractDistrictPlan
 #     _UrbanFunction
+#     dataQualityAttribute
 #     keyValuePairAttribute
 #     lod-1MultiCurve
 #     lod-1MultiPoint
@@ -497,8 +498,6 @@ to = "urc:visibility"
 #     lod0MultiSurface
 #     lod1MultiCurve
 #     target
-#     validFrom
-#     validTo
 #   urg: 3 name(s) declared in 3.2 and in no 4.0 module
 #     _StatisticalGrid
 #     fiscalYearOfPublication

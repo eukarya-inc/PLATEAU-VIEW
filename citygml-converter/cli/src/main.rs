@@ -276,7 +276,7 @@ fn convert(args: &ConvertArgs) -> Result<()> {
         "profile:      {} ({} -> {})",
         rules.name(),
         rules.source().label,
-        rules.target().label
+        rules.target().describe()
     );
 
     let converter = Converter::new(rules, options)?;
@@ -364,7 +364,7 @@ fn inspect(args: &InspectArgs) -> Result<()> {
             let rules = &candidates[found.index];
             println!("profile: {} (built-in)", rules.name());
             println!("source:  {}", rules.source().label);
-            println!("target:  {}", rules.target().label);
+            println!("target:  {}", rules.target().describe());
             if found.matched.is_empty() {
                 println!("         (nothing in the data selected it; this is the fallback)");
             }

@@ -68,7 +68,11 @@ The single most common mistake here is putting a mapping in the wrong layer.
   converted.
 * **A child order** → nowhere. `core/src/schema.rs` reads every CityGML 3.0
   and i-UR 4.0 element's order off the schemas vendored in `fixtures/schemas/`,
-  so a wrong order is fixed by updating those schemas.
+  so a wrong order is fixed by updating those schemas. The one exception is a
+  published schema that derives a type from the wrong base. That goes in
+  `[schema_override]` with the base it `replaces`, which keeps the override
+  inert once the published schema is corrected, and a test fails until the
+  stale row is removed. Vendored schemas are never edited.
 * **An i-UR rule that can be read off the schemas** → do not write it. Run the
   generator (`cargo run -p plateau-converter-gen -- --source 3.1 --write
   profiles/iur-3.1-to-4.0.toml`), which rewrites the block between the
@@ -114,8 +118,9 @@ The single most common mistake here is putting a mapping in the wrong layer.
 * **A new thematic module** (`frn`, `veg`, …) → a sibling of `bldg.rs` plus its
   own profile rules, the way `core/src/tran.rs` and the `[tran]` table are for
   the transportation module, `core/src/unf.rs` and the `[unf]` table are for
-  underground utilities and `core/src/wtr.rs` and the `[wtr]` table are for
-  water bodies. Do not grow `bldg.rs` sideways. A module deriving from
+  underground utilities, `core/src/wtr.rs` and the `[wtr]` table are for
+  water bodies and `core/src/urf.rs` and the `[urf]` table are for urban
+  function features. Do not grow `bldg.rs` sideways. A module deriving from
   the construction module (`brid`, `tun`, `cons`) adds rows to
   `[construction]`, `[lod4]`, `[lod_map]` and `[lod_types]` before it adds
   Rust. Rows naming
@@ -131,23 +136,25 @@ The single most common mistake here is putting a mapping in the wrong layer.
   decides when to call it. Coordinates are copied as strings, never
   reformatted, except the one value the construction changes.
 
-`storey.rs`, `common.rs`, `unf.rs`, `lodmap.rs`, `lod4.rs`,
+`urf.rs`, `storey.rs`, `common.rs`, `unf.rs`, `lodmap.rs`, `lod4.rs`,
 `construction.rs`, `bldg.rs`, `cons.rs`, `tran.rs`, `wtr.rs` and `iur.rs` run **after**
 the rename pass, so they speak CityGML **3.0** and i-UR
 **4.0** names only. Writing a 2.0 namespace constant in there is a bug
 (`storey`'s read-ahead sees 2.0 input and maps each name through the profile
 before comparing). The order is
-`storey` -> `common` -> `xal` -> `app` -> `unf` -> `lodmap` -> `lod4` ->
+`urf` -> `storey` -> `common` -> `xal` -> `app` -> `unf` -> `lodmap` -> `lod4` ->
 `construction` -> `bldg` -> `cons` -> `tran` -> `wtr` -> `iur`, and each step is placed so that a wrapper it introduces is never
-mistaken for something the next step handles. `storey` nests each storey in its
-building before anything else runs, so every later pass converts the storey's
+mistaken for something the next step handles. `urf` decides whether a member
+is dropped before any pass works on it. `storey` nests each storey in its
+building before the remaining passes run, so every later pass converts the storey's
 generic attributes, dates and i-UR attributes along with the building's, and
 `lod4` sees the storey CityGML 3.0 requires. `common`'s `core:genericAttribute`
 is not a building property, `unf` has removed an underground utility's LOD4 and its
 descriptors before `lod4` would read them as describing nothing, the geometry
-`unf`, `lodmap`, `lod4` and `construction` drop that kept geometry of the
-same member still links to is written back in place of the link right after
-them (`core/src/dropped.rs`), and the appearance links to what stays dropped
+`urf` drops that kept geometry of the same member still links to is written
+back in place of the link right after `urf`, and likewise right after `unf`,
+`lodmap`, `lod4` and `construction` for theirs (`core/src/dropped.rs`), a
+member `urf` drops is recorded whole, and the appearance links to what stays dropped
 are pruned right after that, member by member and on later members of the
 same document (a document with an appearance member is first read with only
 these steps, so an appearance member ahead of the features already knows

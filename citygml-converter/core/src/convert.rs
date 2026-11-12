@@ -24,6 +24,7 @@ use crate::storey::{Floors, StoreyRewrite};
 use crate::tran::{Clearance, TranRewrite};
 use crate::transform::{self, IdGen};
 use crate::unf::UnfRewrite;
+use crate::urf::UrfRewrite;
 use crate::wtr::WtrRewrite;
 use crate::xal::XalRewrite;
 use crate::xml::{self, Chunk, Element, Indent, Name, Node, Reader, Writer};
@@ -86,6 +87,7 @@ pub struct Converter {
     bldg: BuildingRewrite,
     cons: ConsRewrite,
     tran: TranRewrite,
+    urf: UrfRewrite,
     wtr: WtrRewrite,
     iur: IurRewrite,
     order: ChildOrder,
@@ -111,7 +113,8 @@ impl Converter {
         let common = CommonRewrite::new(&rules)?;
         let xal = XalRewrite::new(&rules)?;
         let app = AppearanceRewrite::new(&rules)?;
-        let schema = ChildOrder::target()?;
+        let schema = ChildOrder::target_with(rules.schema_overrides())?;
+        let urf = UrfRewrite::new(&rules)?;
         let unf = UnfRewrite::new(&rules, &schema, options.unf_dm)?;
         let lodmap = LodMapRewrite::new(&rules)?;
         let lod4 = Lod4Rewrite::new(&rules, options.lod4_fallback)?;
@@ -142,6 +145,7 @@ impl Converter {
             bldg,
             cons,
             tran,
+            urf,
             wtr,
             iur,
             order,
@@ -367,7 +371,7 @@ impl Converter {
 
     /// Renames, restructures and reorders one top-level member.
     ///
-    /// The restructuring passes run in a fixed order, namely: `storey`,
+    /// The restructuring passes run in a fixed order, namely: `urf`, `storey`,
     /// `common`, `xal`, `app`, `unf`, `lodmap`, `lod4`, `construction`, `bldg`, `cons`,
     /// `tran`, `wtr`, `iur`. Generated `gml:id` values
     /// are seeded from the member's own `gml:id`, so they are unique across a
@@ -385,6 +389,9 @@ impl Converter {
         state: &mut FileState,
     ) -> Option<Element> {
         let mut element = transform::rename_under(&self.rules, element, root)?;
+        if self.remove_urf(&mut element, &mut state.dropped, &mut report.warnings) {
+            return None;
+        }
         if self.storey.is_floor(&element, &state.floors) {
             return None;
         }
@@ -430,9 +437,9 @@ impl Converter {
         Some(element)
     }
 
-    /// The geometry [`Self::remove_geometry`] removes from the members of
-    /// `source` that follow its first appearance member, skipping the floor
-    /// groups in `floors`. Empty when `source` has no appearance member.
+    /// The geometry [`Self::remove_urf`] and [`Self::remove_geometry`] remove
+    /// from the members of `source` that follow its first appearance member,
+    /// skipping the floor groups in `floors`. Empty when `source` has no appearance member.
     fn dropped_after_appearance(
         &self,
         label: &str,
@@ -460,7 +467,10 @@ impl Converter {
                         seen = true;
                         continue;
                     }
-                    if !seen || self.storey.is_floor(&element, floors) {
+                    if !seen
+                        || self.remove_urf(&mut element, &mut dropped, &mut warnings)
+                        || self.storey.is_floor(&element, floors)
+                    {
                         continue;
                     }
                     self.remove_geometry(&mut element, &mut dropped, &mut warnings);
@@ -469,6 +479,24 @@ impl Converter {
             }
         }
         Ok(dropped)
+    }
+
+    /// Runs the `urf` pass on `element`, recording what it removes in
+    /// `dropped`. Returns true when `element` is to be dropped. Otherwise
+    /// writes each removed object kept geometry still links to back in place
+    /// of the link.
+    fn remove_urf(
+        &self,
+        element: &mut Element,
+        dropped: &mut Dropped,
+        warnings: &mut Warnings,
+    ) -> bool {
+        dropped.begin(element);
+        if self.urf.apply(element, dropped, warnings) {
+            return true;
+        }
+        dropped.restore(element, warnings);
+        false
     }
 
     /// Runs the `unf`, `lodmap`, `lod4` and `construction` passes on

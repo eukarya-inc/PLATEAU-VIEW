@@ -21,26 +21,52 @@ const XS: &str = "http://www.w3.org/2001/XMLSchema";
 #[derive(Debug, Clone, Default)]
 pub struct ChildOrder {
     by_element: HashMap<Name, Arc<HashMap<Name, usize>>>,
+    overridden: Vec<Name>,
+}
+
+/// A complex type whose `xs:extension` base is read as `base` while the
+/// schemas still declare it as `replaces`. Once they declare anything else,
+/// the override does nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BaseOverride {
+    pub ty: Name,
+    pub replaces: Name,
+    pub base: Name,
 }
 
 impl ChildOrder {
     /// Reads the schemas the converter targets, [`crate::OGC_SCHEMAS`] and
     /// [`crate::IUR_4_0_SCHEMAS`].
     pub fn target() -> Result<ChildOrder> {
+        ChildOrder::target_with(&[])
+    }
+
+    /// [`ChildOrder::target`] with `overrides` applied.
+    pub fn target_with(overrides: &[BaseOverride]) -> Result<ChildOrder> {
         let docs: Vec<(&str, &str)> = crate::OGC_SCHEMAS
             .iter()
             .chain(crate::IUR_4_0_SCHEMAS)
             .copied()
             .collect();
-        ChildOrder::read(&docs)
+        ChildOrder::read(&docs, overrides)
     }
 
-    /// Reads `(path, text)` schema documents. `path` names a document in
+    /// Reads `(path, text)` schema documents, applying each of `overrides`
+    /// whose type still extends its `replaces`. `path` names a document in
     /// errors only. A base type or group none of them declares is an error.
-    pub fn read(docs: &[(&str, &str)]) -> Result<ChildOrder> {
+    pub fn read(docs: &[(&str, &str)], overrides: &[BaseOverride]) -> Result<ChildOrder> {
         let mut set = SchemaSet::default();
         for (path, text) in docs {
             set.add(path, text)?;
+        }
+        let mut overridden = Vec::new();
+        for o in overrides {
+            if let Some((_, model)) = set.types.get_mut(&o.ty)
+                && model.base.as_ref() == Some(&o.replaces)
+            {
+                model.base = Some(o.base.clone());
+                overridden.push(o.ty.clone());
+            }
         }
 
         let mut by_type: HashMap<Name, Option<Arc<HashMap<Name, usize>>>> = HashMap::new();
@@ -64,7 +90,15 @@ impl ChildOrder {
                 by_element.insert(element.clone(), Arc::clone(ranks));
             }
         }
-        Ok(ChildOrder { by_element })
+        Ok(ChildOrder {
+            by_element,
+            overridden,
+        })
+    }
+
+    /// The types whose base an override replaced.
+    pub fn overridden(&self) -> &[Name] {
+        &self.overridden
     }
 
     /// The position of each child `element` may hold, or `None` when the

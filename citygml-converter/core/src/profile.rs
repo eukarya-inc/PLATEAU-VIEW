@@ -7,6 +7,7 @@ use serde::Deserialize;
 use toml::{Table, Value};
 
 use crate::error::{Error, Result};
+use crate::schema::BaseOverride;
 use crate::tran::Clearance;
 use crate::xml::{Name, PrefixMap};
 
@@ -77,6 +78,13 @@ pub struct Profile {
     /// The water body rewrite's feature types. See [`WtrPolicy`].
     #[serde(default)]
     pub wtr: WtrPolicy,
+    /// The urban function rewrite's properties. See [`UrfPolicy`].
+    #[serde(default)]
+    pub urf: UrfPolicy,
+    /// Complex types read with another `xs:extension` base, keyed by the
+    /// type's `prefix:local` name. See [`SchemaOverride`].
+    #[serde(default)]
+    pub schema_override: IndexMap<String, SchemaOverride>,
 }
 
 impl Profile {
@@ -257,7 +265,21 @@ pub struct Provenance {
     /// The i-UR minor version, written plainly rather than parsed back out of
     /// the URIs below. On the target side this is what `--target-iur` selects.
     pub iur_version: String,
+    /// The patch of the i-UR schemas the build embeds, such as `4.0.2`. Target
+    /// side only.
+    pub iur_patch: Option<String>,
     pub iur: Vec<String>,
+}
+
+impl Provenance {
+    /// [`label`](Provenance::label), followed by the schema patch when one is
+    /// given.
+    pub fn describe(&self) -> String {
+        match &self.iur_patch {
+            Some(patch) => format!("{} (schemas {patch})", self.label),
+            None => self.label.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -572,6 +594,32 @@ pub struct WtrRules {
     pub lod1_surface: HashMap<Name, Name>,
 }
 
+/// The properties the urban function rewrite removes.
+///
+/// `removed` lists, by `prefix:local` name, the geometry properties removed
+/// from every urban function feature. A feature they leave without a
+/// geometry property is dropped.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct UrfPolicy {
+    pub removed: Vec<String>,
+}
+
+/// The base a complex type is read with while the target schemas still
+/// declare `replaces`, both by `prefix:local` name.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SchemaOverride {
+    pub replaces: String,
+    pub base: String,
+}
+
+/// [`UrfPolicy`] with its names resolved.
+#[derive(Debug, Clone, Default)]
+pub struct UrfRules {
+    pub removed: Vec<Name>,
+}
+
 /// [`Lod4Policy`] with its attribute resolved to an expanded name.
 #[derive(Debug, Clone)]
 pub struct Lod4Rules {
@@ -749,6 +797,8 @@ pub struct Rules {
     tran: TranRules,
     unf: UnfPolicy,
     wtr: WtrRules,
+    urf: UrfRules,
+    schema_overrides: Vec<BaseOverride>,
 }
 
 impl Rules {
@@ -877,6 +927,25 @@ impl Rules {
                 .map(|(ty, surface)| Ok((parse_name(ty, output)?, parse_name(surface, output)?)))
                 .collect::<Result<_>>()?,
         };
+        let urf = UrfRules {
+            removed: profile
+                .urf
+                .removed
+                .iter()
+                .map(|name| parse_name(name, output))
+                .collect::<Result<_>>()?,
+        };
+        let schema_overrides = profile
+            .schema_override
+            .iter()
+            .map(|(ty, o)| {
+                Ok(BaseOverride {
+                    ty: parse_name(ty, output)?,
+                    replaces: parse_name(&o.replaces, output)?,
+                    base: parse_name(&o.base, output)?,
+                })
+            })
+            .collect::<Result<_>>()?;
         let tran = TranRules {
             function_code_space: profile.tran.function_code_space.clone(),
             full_width_function,
@@ -1082,6 +1151,8 @@ impl Rules {
             tran,
             unf: profile.unf.clone(),
             wtr,
+            urf,
+            schema_overrides,
         })
     }
 
@@ -1216,6 +1287,16 @@ impl Rules {
         &self.wtr
     }
 
+    /// The urban function rewrite's properties. See [`UrfPolicy`].
+    pub fn urf(&self) -> &UrfRules {
+        &self.urf
+    }
+
+    /// The complex types read with another base. See [`SchemaOverride`].
+    pub fn schema_overrides(&self) -> &[BaseOverride] {
+        &self.schema_overrides
+    }
+
     /// Renders a name the way the output document writes it, for diagnostics.
     pub fn display_name(&self, name: &Name) -> String {
         match name
@@ -1325,6 +1406,53 @@ to = "urc:srcScaleLod0"
                 rules.map_element(&from),
                 Some(Name::qualified(URC_4, "srcScaleLod0")),
                 "a rule must match uro {version}"
+            );
+        }
+    }
+
+    /// Every schema override of a built-in profile still finds the base it
+    /// replaces in the vendored schemas.
+    #[test]
+    fn every_schema_override_still_applies() {
+        for (name, toml) in crate::PROFILES {
+            let r = Rules::from_toml(toml).unwrap();
+            let order = crate::schema::ChildOrder::target_with(r.schema_overrides()).unwrap();
+            for o in r.schema_overrides() {
+                assert!(
+                    order.overridden().contains(&o.ty),
+                    "{name}: the vendored schemas no longer extend {} from {}; remove the \
+                     [schema_override] row",
+                    r.display_name(&o.ty),
+                    r.display_name(&o.replaces),
+                );
+            }
+        }
+    }
+
+    /// Every built-in profile names, as its target patch, the highest
+    /// `version` the embedded i-UR schemas declare.
+    #[test]
+    fn the_target_patch_is_the_embedded_schemas_newest() {
+        let version = |text: &str| -> Vec<u32> {
+            let root = &text[text.find("<schema").expect("a schema root")..];
+            let start = root.find(" version=\"").expect("a version") + " version=\"".len();
+            root[start..start + root[start..].find('"').unwrap()]
+                .split('.')
+                .map(|part| part.parse().unwrap())
+                .collect()
+        };
+        let newest = crate::IUR_4_0_SCHEMAS
+            .iter()
+            .map(|(_, text)| version(text))
+            .max()
+            .unwrap();
+        for (name, toml) in crate::PROFILES {
+            let r = Rules::from_toml(toml).unwrap();
+            let patch = r.target().iur_patch.as_deref().expect("a target patch");
+            assert_eq!(
+                version(&format!("<schema version=\"{patch}\"")),
+                newest,
+                "{name}"
             );
         }
     }
