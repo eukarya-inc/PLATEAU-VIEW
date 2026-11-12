@@ -106,7 +106,7 @@ The single most common mistake here is putting a mapping in the wrong layer.
   folded feature without a `4.x` code gains and the interior codes a `4.x`
   code becomes, read from the `[lod_types]` table, and the
   `urc:InteriorDataQualityAttribute` a folded interior model's descriptors
-  move into),
+  move into, and the modules whose LOD4 is removed instead of folded),
   `core/src/xal.rs` for addresses (the xAL 2.0 content of `core:xalAddress`
   becomes an xAL 3.0 Address, and addresses appear on several feature types, so
   it is not part of `bldg.rs`), `core/src/app.rs` for the appearance module (the
@@ -154,7 +154,7 @@ is not a building property, `unf` has removed an underground utility's LOD4 and 
 descriptors before `lod4` would read them as describing nothing, the geometry
 `urf` drops that kept geometry of the same member still links to is written
 back in place of the link right after `urf`, and likewise right after `unf`,
-`lodmap`, `lod4`, `frn`, `veg` and `construction` for theirs (`core/src/dropped.rs`), a
+`lodmap`, `lod4`, `veg` and `construction` for theirs (`core/src/dropped.rs`), a
 member `urf` drops is recorded whole, and the appearance links to what stays dropped
 are pruned right after that, member by member and on later members of the
 same document (a document with an appearance member is first read with only

@@ -544,8 +544,8 @@ drop = true
 # core property for the geometry it holds ([construction] lod_geometry), and a
 # furniture's LOD1 surface moves into an i-UR extension (core/src/frn.rs,
 # [frn]). A plant cover's multi-surfaces are core rows, and its single-solid
-# multi-solids become core solids (core/src/veg.rs). Every LOD4 property is
-# removed by those two passes.
+# multi-solids become core solids (core/src/veg.rs). Their LOD4 properties
+# are removed ([lod4] drop).
 # ---------------------------------------------------------------------------
 [[element]]
 from = "frn:lod1ImplicitRepresentation"
@@ -637,6 +637,8 @@ lod3 = ["500"]
 fallback = "lod3"
 # The modules whose lod4* geometry properties are folded, by output prefix.
 modules = ["bldg", "brid", "tun"]
+# The modules whose lod4* geometry properties are removed, by output prefix.
+drop = ["frn", "veg"]
 # The elements that put everything under them in the interior model, written
 # as they stand after the rename pass.
 interior = [
@@ -724,8 +726,7 @@ interior = [
 #
 # lod_geometry maps each type whose lod0Geometry to lod3Geometry children
 # become the core:lodN* property for the geometry they hold to the prefix
-# those children are in. City furniture and solitary vegetation objects hold
-# their geometry the same way and are listed too.
+# those children are in.
 # installations maps each 2.0 installation property to its 3.0 property and
 # the con:relationToConstruction value its installations gain. dates maps each
 # gYear property to the date property it becomes.

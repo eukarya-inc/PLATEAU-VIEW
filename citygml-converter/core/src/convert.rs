@@ -522,7 +522,7 @@ impl Converter {
         self.unf.apply(element, dropped, warnings);
         self.lodmap.apply(element, dropped, warnings);
         let interior = self.lod4.apply(element, dropped, warnings);
-        self.frn.apply(element, dropped, warnings);
+        self.frn.apply(element, warnings);
         self.veg.apply(element, dropped, warnings);
         self.construction.apply(element, dropped, warnings);
         dropped.restore(element, warnings);

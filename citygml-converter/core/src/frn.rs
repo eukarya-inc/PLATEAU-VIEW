@@ -1,8 +1,7 @@
 //! Structural rewrites for city furniture that a rename table cannot express.
 //!
-//! Runs after [`crate::lod4`] and before [`crate::construction`], so every
-//! name here is CityGML 3.0 and i-UR 4.0. Acts on each feature whose type the
-//! profile's `[frn] lod1_surface` table lists.
+//! Expects CityGML 3.0 and i-UR 4.0 names. Acts on each feature whose type
+//! the profile's `[frn] lod1_surface` table lists.
 //!
 //! ```text
 //! 2.0   <frn:CityFurniture>
@@ -22,15 +21,11 @@
 //! `adeOf<Type>` property, as that class's `lod1MultiSurface`. A single
 //! surface is wrapped in a `gml:MultiSurface`. Any other `lod1Geometry` is
 //! left to [`crate::construction`].
-//!
-//! Every LOD4 property in the feature's namespace is removed and reported,
-//! and the `gml:id`s under it are added to the caller's set.
 
 use std::collections::HashMap;
 
-use crate::dropped::Dropped;
 use crate::error::{Error, Result};
-use crate::geometry::{lod_of, multi_of, wrap_single};
+use crate::geometry::{multi_of, wrap_single};
 use crate::profile::Rules;
 use crate::report::Warnings;
 use crate::schema::ChildOrder;
@@ -74,43 +69,22 @@ impl FrnRewrite {
     }
 
     /// Rewrites every listed feature under `member`, `member` included.
-    pub fn apply(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
-        if self.classes.is_empty() {
+    pub fn apply(&self, member: &mut Element, warnings: &mut Warnings) {
+        if self.classes.is_empty() || member.name.in_ns(&self.gml) {
             return;
         }
         if let Some((hook, class)) = self.classes.get(&member.name) {
-            self.feature(member, hook, class, dropped, warnings);
+            self.feature(member, hook, class, warnings);
             return;
         }
         for child in member.elements_mut() {
-            self.apply(child, dropped, warnings);
+            self.apply(child, warnings);
         }
     }
 
-    fn feature(
-        &self,
-        feature: &mut Element,
-        hook: &Name,
-        class: &Name,
-        dropped: &mut Dropped,
-        warnings: &mut Warnings,
-    ) {
+    fn feature(&self, feature: &mut Element, hook: &Name, class: &Name, warnings: &mut Warnings) {
         let label = self.display.display_name(&feature.name);
         let ns = feature.name.ns.clone().unwrap_or_default();
-        feature.children.retain(|n| {
-            let Node::Element(e) = n else {
-                return true;
-            };
-            if !e.name.in_ns(&ns) || lod_of(&e.name.local) != Some('4') {
-                return true;
-            }
-            dropped.add(e);
-            warnings.add(format!(
-                "{} on the {label} was dropped. CityGML 3.0 has no LOD4",
-                self.display.display_name(&e.name)
-            ));
-            false
-        });
         let lod1 = Name::qualified(ns, "lod1Geometry");
         let Some(at) = feature
             .children

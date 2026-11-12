@@ -35,6 +35,9 @@
 //! LOD4 quality descriptors and the interior `lodType` codes. The descriptors
 //! stay in the exterior attribute too when an exterior shell folded.
 //!
+//! Every `lod4*` geometry property of a module the `[lod4]` table lists under
+//! `drop` is removed before the decision, wherever it sits under the member.
+//!
 //! A member holding LOD4 quality descriptors but no LOD4 geometry has those
 //! descriptors dropped rather than folded. Every fold, drop and fallback is
 //! recorded in [`Warnings`].
@@ -42,6 +45,7 @@
 use crate::error::Result;
 
 use crate::dropped::{Dropped, Prune};
+use crate::geometry::lod_of;
 use crate::iur::IurModules;
 use crate::lod_type::{self, Added};
 use crate::profile::{Lod4Exterior, Lod4Fallback, Lod4Rules, LodTypeTable, Rules};
@@ -87,6 +91,7 @@ impl Folded {
 #[derive(Debug, Clone)]
 pub struct Lod4Rewrite {
     core: String,
+    gml: String,
     /// The properties whose child is a boundary surface.
     surface_properties: Vec<Name>,
     /// Namespace the folded quality descriptors are written into, when the
@@ -112,6 +117,7 @@ impl Lod4Rewrite {
         }
         Ok(Lod4Rewrite {
             core: core.to_owned(),
+            gml: rules.output_ns("gml")?.to_owned(),
             surface_properties,
             urc: rules.output_ns("urc").ok().map(str::to_owned),
             iur: IurModules::new(rules),
@@ -134,6 +140,9 @@ impl Lod4Rewrite {
         dropped: &mut Dropped,
         warnings: &mut Warnings,
     ) -> bool {
+        if !self.rules.drop.is_empty() {
+            self.drop_modules(member, dropped, warnings);
+        }
         self.map_lod_types(member, None, warnings);
         let shed = self.rules.exterior.get(&feature(member).name) == Some(&Lod4Exterior::Drop) && {
             let label = self.feature_name(member);
@@ -185,6 +194,35 @@ impl Lod4Rewrite {
         }
         self.drop_empty_interior_quality(member);
         matches!(target, Target::Lod(_))
+    }
+
+    /// Removes every `lod4*` geometry property of a `[lod4] drop` module under
+    /// `el`, `el` included.
+    fn drop_modules(&self, el: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
+        let mut removed = Vec::new();
+        el.children.retain(|n| match n {
+            Node::Element(e)
+                if lod_of(&e.name.local) == Some('4')
+                    && self.rules.drop.iter().any(|m| e.name.in_ns(m)) =>
+            {
+                dropped.add(e);
+                removed.push(e.name.clone());
+                false
+            }
+            _ => true,
+        });
+        for name in removed {
+            warnings.add(format!(
+                "{} on the {} was dropped. CityGML 3.0 has no LOD4",
+                self.display.display_name(&name),
+                self.display.display_name(&el.name)
+            ));
+        }
+        for child in el.elements_mut() {
+            if !child.name.in_ns(&self.gml) {
+                self.drop_modules(child, dropped, warnings);
+            }
+        }
     }
 
     /// The target `member`'s first `4.x` `lodType` code allows, when its

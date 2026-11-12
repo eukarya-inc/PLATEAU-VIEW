@@ -1,9 +1,8 @@
 //! Structural rewrites for vegetation objects that a rename table cannot
 //! express.
 //!
-//! Runs after [`crate::lodmap`] and before [`crate::construction`], so every
-//! name here is CityGML 3.0. Acts on the `veg` geometry properties the rename
-//! pass leaves in place.
+//! Expects CityGML 3.0 names. Acts on the `veg` geometry properties the
+//! rename pass leaves in place.
 //!
 //! ```text
 //! 2.0   <veg:PlantCover>
@@ -18,9 +17,10 @@
 //!
 //! A `veg:lodNMultiSolid` whose multi-solid holds one solid becomes
 //! `core:lodNSolid` holding that solid, which takes the multi-solid's
-//! `srsName` and `srsDimension` when it has none of its own. A multi-solid
-//! holding any other number of solids, a `veg:lod1MultiSurface` and every
-//! `veg` LOD4 property have no CityGML 3.0 property and are removed. Every
+//! `srsName` and `srsDimension` when it has none of its own, and the
+//! `gml:id`s left under the multi-solid are added to the caller's set. A
+//! multi-solid holding any other number of solids and a
+//! `veg:lod1MultiSurface` have no CityGML 3.0 property and are removed. Every
 //! removal is reported, and the `gml:id`s under a removed property are added
 //! to the caller's set.
 
@@ -51,18 +51,24 @@ impl VegRewrite {
 
     /// Rewrites the `veg` geometry properties under `member`.
     pub fn apply(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
+        if member.name.in_ns(&self.gml) {
+            return;
+        }
+        if member.name.in_ns(&self.veg) {
+            self.feature(member, dropped, warnings);
+        }
+        for child in member.elements_mut() {
+            self.apply(child, dropped, warnings);
+        }
+    }
+
+    /// Rewrites the `veg` geometry properties of `member` itself.
+    fn feature(&self, member: &mut Element, dropped: &mut Dropped, warnings: &mut Warnings) {
         let label = self.display.display_name(&member.name);
         let children = std::mem::take(&mut member.children);
         let mut out = Vec::with_capacity(children.len());
         for child in children {
             match child {
-                Node::Element(child) if self.is_lod4(&child) => {
-                    dropped.add(&child);
-                    warnings.add(format!(
-                        "{} on the {label} was dropped. CityGML 3.0 has no LOD4",
-                        self.display.display_name(&child.name)
-                    ));
-                }
                 Node::Element(child) if self.is_property(&child, "MultiSolid") => {
                     if let Some(child) = self.multi_solid(child, &label, dropped, warnings) {
                         out.push(Node::Element(child));
@@ -81,14 +87,6 @@ impl VegRewrite {
             }
         }
         member.children = out;
-        for child in member.elements_mut() {
-            self.apply(child, dropped, warnings);
-        }
-    }
-
-    /// True for a `veg` geometry property of LOD4.
-    fn is_lod4(&self, el: &Element) -> bool {
-        el.name.in_ns(&self.veg) && lod_of(&el.name.local) == Some('4')
     }
 
     /// True for a `veg:lodN<family>` property.
@@ -108,7 +106,7 @@ impl VegRewrite {
         let from = self.display.display_name(&property.name);
         let lod = lod_of(&property.name.local).unwrap_or('?');
         let to = Name::qualified(&self.core, format!("lod{lod}Solid"));
-        let Some(solid) = self.only_solid(&mut property) else {
+        let Some(solid) = self.only_solid(&mut property, dropped) else {
             dropped.add(&property);
             warnings.add(format!(
                 "{from} on the {label} was dropped. Its gml:MultiSolid does not hold exactly \
@@ -128,8 +126,9 @@ impl VegRewrite {
 
     /// Takes the solid out of the `gml:MultiSolid` under `property` when it
     /// holds exactly one, giving it the multi-solid's `srsName` and
-    /// `srsDimension` where it has none.
-    fn only_solid(&self, property: &mut Element) -> Option<Element> {
+    /// `srsDimension` where it has none, and adds the `gml:id`s left under
+    /// the multi-solid to `dropped`.
+    fn only_solid(&self, property: &mut Element, dropped: &mut Dropped) -> Option<Element> {
         let multi = property.elements_mut().next()?;
         if !self.holds_one_solid(multi) {
             return None;
@@ -146,6 +145,7 @@ impl VegRewrite {
         let Node::Element(mut solid) = member.children.remove(at) else {
             unreachable!()
         };
+        dropped.add(multi);
         for (attr, value) in srs {
             if solid.attr(None, &attr).is_none() {
                 solid.set_attr(Name::unqualified(&attr), value);
