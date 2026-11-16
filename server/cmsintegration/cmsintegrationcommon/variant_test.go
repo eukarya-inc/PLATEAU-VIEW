@@ -47,6 +47,74 @@ func TestMergeConvertedAssets(t *testing.T) {
 	assert.ErrorContains(t, err, "unknown asset name: unknown")
 }
 
+func TestIsCRSIndependentAsset(t *testing.T) {
+	assert.True(t, IsCRSIndependentAsset("33211_bizen-shi_city_2023_citygml_1_op_tran_mvt_lod1.zip"))
+	assert.True(t, IsCRSIndependentAsset("https://example.com/x_urf_AreaClassification_mvt_lod1.zip"))
+	assert.True(t, IsCRSIndependentAsset("x_dm_geometric_attributes.zip"))
+	assert.False(t, IsCRSIndependentAsset("x_tran_3dtiles_lod1_jgd2024.zip"))
+	assert.False(t, IsCRSIndependentAsset("x_tran_3dtiles_lod2.zip"))
+}
+
+func TestMergeConvertedAssets_MVT(t *testing.T) {
+	// tran has 3D Tiles and MVT in one field. MVT has no heights, so it has no `_jgd2024`
+	// suffix even when it comes from a JGD2024 conversion.
+	names := map[string]string{
+		"t2011": "x_tran_3dtiles_lod1.zip",
+		"t2024": "x_tran_3dtiles_lod1_jgd2024.zip",
+		"mvt":   "x_tran_mvt_lod1.zip",
+		"n2011": "https://example.com/x_tran_3dtiles_lod1.zip",
+		"n2024": "https://example.com/x_tran_3dtiles_lod1_jgd2024.zip",
+		"nmvt":  "https://example.com/x_tran_mvt_lod1.zip",
+	}
+
+	// a JGD2024 conversion with MVT is not a mix, and its MVT replaces the existing one
+	res, err := MergeConvertedAssets([]string{"t2011", "mvt"}, []string{"n2024", "nmvt"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"n2024", "nmvt", "t2011"}, res)
+
+	// a JGD2024 conversion without MVT keeps the existing MVT
+	res, err = MergeConvertedAssets([]string{"t2011", "t2024", "mvt"}, []string{"n2024"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"mvt", "n2024", "t2011"}, res)
+
+	// a JGD2011 conversion with MVT keeps the JGD2024 3D Tiles
+	res, err = MergeConvertedAssets([]string{"t2011", "t2024", "mvt"}, []string{"n2011", "nmvt"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"n2011", "nmvt", "t2024"}, res)
+
+	// a conversion of MVT only keeps every 3D Tiles
+	res, err = MergeConvertedAssets([]string{"t2011", "t2024", "mvt"}, []string{"nmvt"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"nmvt", "t2011", "t2024"}, res)
+
+	// 3D Tiles of both CRSs are still a mix
+	_, err = MergeConvertedAssets(nil, []string{"n2011", "n2024", "nmvt"}, names)
+	assert.ErrorContains(t, err, "mix JGD2011 and JGD2024")
+}
+
+func TestMergeConvertedItems_MVT(t *testing.T) {
+	names := map[string]string{
+		"t2011": "x_veg_PlantCover_3dtiles_lod1.zip",
+		"mvt":   "x_veg_PlantCover_mvt_lod1.zip",
+		"n2024": "x_veg_PlantCover_3dtiles_lod1_jgd2024.zip",
+		"nmvt":  "x_veg_PlantCover_mvt_lod1.zip",
+	}
+	existing := []FeatureItemDatum{
+		{ID: "i3", Key: "veg_PlantCover_3dtiles", Data: []string{"t2011"}},
+		{ID: "im", Key: "veg_PlantCover_mvt", Data: []string{"mvt"}},
+	}
+
+	res, err := MergeConvertedItems(existing, map[string][]string{
+		"veg_PlantCover_3dtiles": {"n2024"},
+		"veg_PlantCover_mvt":     {"nmvt"},
+	}, []string{"veg_PlantCover_3dtiles", "veg_PlantCover_mvt"}, names, func() string { return "new" })
+	assert.NoError(t, err)
+	assert.Equal(t, []FeatureItemDatum{
+		{ID: "i3", Key: "veg_PlantCover_3dtiles", Data: []string{"n2024", "t2011"}},
+		{ID: "im", Key: "veg_PlantCover_mvt", Data: []string{"nmvt"}},
+	}, res)
+}
+
 func TestMergeConvertedItems(t *testing.T) {
 	names := map[string]string{
 		"a2011": "x_fld_natl_a_3dtiles_l1.zip",

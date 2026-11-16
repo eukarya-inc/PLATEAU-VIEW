@@ -48,32 +48,63 @@ func TrimAssetVariants(name string) (_ string, jgd2024, full bool) {
 
 // IsJGD2024Asset reports whether the asset file name or URL is of the JGD2024 variant.
 func IsJGD2024Asset(nameOrURL string) bool {
+	_, jgd2024, _ := TrimAssetVariants(assetBaseName(nameOrURL))
+	return jgd2024
+}
+
+// IsCRSIndependentAsset reports whether the asset has no heights, so that it is the same in
+// every CRS. That is MVT, whose name has "_mvt" or "_dm_geometric_attributes". Such an asset
+// has no `_jgd2024` suffix even when it is output by a JGD2024 conversion.
+func IsCRSIndependentAsset(nameOrURL string) bool {
+	name := assetBaseName(nameOrURL)
+	return strings.Contains(name, "_mvt") || strings.Contains(name, "_dm_geometric_attributes")
+}
+
+func assetBaseName(nameOrURL string) string {
 	name := nameOrURL
 	if u, err := url.Parse(nameOrURL); err == nil && u.Path != "" {
 		name = u.Path
 	}
 	name = path.Base(name)
-	name = strings.TrimSuffix(name, path.Ext(name))
-	_, jgd2024, _ := TrimAssetVariants(name)
-	return jgd2024
+	return strings.TrimSuffix(name, path.Ext(name))
+}
+
+// convertedVariant tells which existing assets a conversion replaces.
+type convertedVariant struct {
+	// jgd2024 is the CRS of the converted assets that have heights.
+	jgd2024 bool
+	// heights is true when the conversion output any asset that has heights.
+	heights bool
+	// crsIndependent is true when the conversion output any CRS-independent asset (MVT).
+	crsIndependent bool
+}
+
+// replaces reports whether the converted assets replace the existing asset.
+func (v convertedVariant) replaces(name string) bool {
+	if IsCRSIndependentAsset(name) {
+		return v.crsIndependent
+	}
+	return v.heights && IsJGD2024Asset(name) == v.jgd2024
 }
 
 // MergeConvertedAssets returns the assets of a field after a conversion. The converted
 // assets replace the existing assets of the same CRS, and the existing assets of the other
 // CRS are kept, so converting into JGD2024 does not remove the JGD2011 assets and vice versa.
+// MVT has no heights, so the converted MVT replaces the existing MVT whatever the CRS of the
+// conversion is.
 //
 // names maps every asset ID in existing and converted to its file name or URL. An existing
 // asset that is not in names no longer exists in CMS and is removed. The converted assets
-// must all be of the same CRS.
+// that have heights must all be of the same CRS.
 func MergeConvertedAssets(existing, converted []string, names map[string]string) ([]string, error) {
-	jgd2024, err := convertedCRS(converted, names)
+	v, err := convertedCRS(converted, names)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]string, 0, len(existing)+len(converted))
 	for _, id := range existing {
-		if name, ok := names[id]; ok && IsJGD2024Asset(name) != jgd2024 {
+		if name, ok := names[id]; ok && !v.replaces(name) {
 			res = append(res, id)
 		}
 	}
@@ -90,7 +121,7 @@ func MergeConvertedItems(existing []FeatureItemDatum, converted map[string][]str
 	for _, k := range keys {
 		all = append(all, converted[k]...)
 	}
-	jgd2024, err := convertedCRS(all, names)
+	v, err := convertedCRS(all, names)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +158,7 @@ func MergeConvertedItems(existing []FeatureItemDatum, converted map[string][]str
 		d := byKey[k]
 		var data []string
 		for _, id := range d.Data {
-			if name, ok := names[id]; ok && IsJGD2024Asset(name) != jgd2024 {
+			if name, ok := names[id]; ok && !v.replaces(name) {
 				data = append(data, id)
 			}
 		}
@@ -141,20 +172,27 @@ func MergeConvertedItems(existing []FeatureItemDatum, converted map[string][]str
 	return res, nil
 }
 
-func convertedCRS(converted []string, names map[string]string) (jgd2024 bool, _ error) {
-	for i, id := range converted {
+// convertedCRS reads the CRS of the converted assets. MVT is left out of the check because
+// it has no heights and so no `_jgd2024` suffix.
+func convertedCRS(converted []string, names map[string]string) (v convertedVariant, _ error) {
+	for _, id := range converted {
 		name, ok := names[id]
 		if !ok {
-			return false, fmt.Errorf("unknown asset name: %s", id)
+			return convertedVariant{}, fmt.Errorf("unknown asset name: %s", id)
+		}
+		if IsCRSIndependentAsset(name) {
+			v.crsIndependent = true
+			continue
 		}
 		j := IsJGD2024Asset(name)
-		if i == 0 {
-			jgd2024 = j
-		} else if j != jgd2024 {
-			return false, fmt.Errorf("converted assets mix JGD2011 and JGD2024: %s", name)
+		if !v.heights {
+			v.jgd2024 = j
+			v.heights = true
+		} else if j != v.jgd2024 {
+			return convertedVariant{}, fmt.Errorf("converted assets mix JGD2011 and JGD2024: %s", name)
 		}
 	}
-	return jgd2024, nil
+	return v, nil
 }
 
 // AssetGetter gets an asset from CMS.

@@ -86,14 +86,7 @@ func includeInPlateau(url string, jgd2024 bool) bool {
 	if cmsintegrationcommon.IsJGD2024Asset(url) {
 		return jgd2024
 	}
-	return !jgd2024 || isCRSIndependentAsset(url)
-}
-
-// isCRSIndependentAsset reports whether the asset has no heights, so that it is the same
-// in every CRS. That is MVT, whose name has "_mvt" or "_dm_geometric_attributes".
-func isCRSIndependentAsset(url string) bool {
-	name := strings.TrimSuffix(path.Base(url), path.Ext(url))
-	return strings.Contains(name, "_mvt") || strings.Contains(name, "_dm_geometric_attributes")
+	return !jgd2024 || cmsintegrationcommon.IsCRSIndependentAsset(url)
 }
 
 func mergePlateau(ctx context.Context, m MergeContext, jgd2024 bool) (string, []string, error) {
