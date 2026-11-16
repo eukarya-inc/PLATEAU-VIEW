@@ -27,6 +27,17 @@ resource "google_cloud_run_v2_service" "cms_worker" {
         value = "decompress"
       }
 
+      # Without these two, the worker rejects every Pub/Sub push request with 401.
+      env {
+        name  = "REEARTH_CMS_WORKER_PUBSUB_AUDIENCE"
+        value = "https://${var.domain}"
+      }
+
+      env {
+        name  = "REEARTH_CMS_WORKER_PUBSUB_SERVICEACCOUNT"
+        value = var.pubsub_push_service_account_email
+      }
+
       env {
         name  = "REEARTH_CMS_WORKER_GCP_PROJECT"
         value = data.google_project.project.name
@@ -39,7 +50,7 @@ resource "google_cloud_run_v2_service" "cms_worker" {
 
       env {
         name  = "REEARTH_CMS_WORKER_DECOMPRESSION_WORKQUEUE_DEPTH"
-        value = "https://${var.auth0_domain}"
+        value = "20000"
       }
 
       env {

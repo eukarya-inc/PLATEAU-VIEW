@@ -1,3 +1,7 @@
+# This Terraform configuration is for building PLATEAU VIEW in a simple setup to check that it works.
+# It differs from the configuration of the production environment actually in operation.
+# Review it against your own availability, security, and cost requirements before using it in production.
+
 terraform {
   required_providers {
     google = {

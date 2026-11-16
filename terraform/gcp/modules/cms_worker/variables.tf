@@ -39,6 +39,11 @@ variable "project" {
   }
 }
 
+variable "pubsub_push_service_account_email" {
+  type        = string
+  description = "Email of the service account that signs the OIDC tokens of Pub/Sub push requests to the worker."
+}
+
 variable "region" {
   type        = string
   default     = "asia-northeast1"

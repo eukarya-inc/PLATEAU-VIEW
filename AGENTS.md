@@ -29,7 +29,7 @@ This is a monorepo containing multiple interconnected services:
 /tile           # Rust-based high-performance tile server (XYZ proxy + COG rendering)
 /citygml-converter # Rust CityGML 2.0 -> 3.0 converter (CLI + Tauri UI), independent of the rest
 /worker         # Background worker applications for PLATEAU API server
-/terraform      # Infrastructure as Code (AWS/GCP)
+/terraform      # Simple setup for trying PLATEAU VIEW on AWS/GCP (NOT the production infrastructure)
 /tools          # CLI tools for data migration
 /analytics      # BigQuery / Looker Studio queries for access analytics
 /.github        # GitHub Actions workflows and scripts
@@ -166,6 +166,7 @@ The core provides an engine-agnostic map abstraction:
 - Mock authentication available for local development
 - Environment variables configured in `.env` files (not committed)
 - **When investigating or modifying `/server`**: Always read `/server/CLAUDE.md` or `/server/AGENTS.md` first before using the Explore tool or making changes. These files contain critical server-specific architecture, patterns, and development guidelines.
+- **`/terraform` is not the production infrastructure**: it is a simplified setup for building PLATEAU VIEW and checking that it works. The production environment is managed separately and differs from it. Do not infer production behavior or configuration from `/terraform`, and do not expect changes there to reach production. When a code change needs new configuration (env vars, IAM, Pub/Sub settings, etc.), still update `/terraform` so the simple setup keeps working.
 - **When investigating or modifying `/tile`**: Always read `/tile/CLAUDE.md` first. This contains Rust-specific development guidelines, environment variables, and layer type documentation.
 - **When investigating or modifying `/citygml-converter`**: Always read `/citygml-converter/AGENTS.md` first. `/citygml-converter` is a self-contained Cargo workspace that shares no code or build with the rest of the monorepo. Do not wire it into the root `package.json` workspaces or `go.work`.
 

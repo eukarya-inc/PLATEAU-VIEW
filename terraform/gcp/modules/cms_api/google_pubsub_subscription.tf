@@ -36,8 +36,11 @@ resource "google_pubsub_subscription" "cms_webhook" {
   push_config {
     push_endpoint = "https://${local.worker_domain}/api/webhook"
 
+    # The worker verifies this token: aud must match REEARTH_CMS_WORKER_PUBSUB_AUDIENCE
+    # and email must match REEARTH_CMS_WORKER_PUBSUB_SERVICEACCOUNT (see cms_worker module).
     oidc_token {
       service_account_email = google_service_account.cms_worker_m2m.email
+      audience              = "https://${local.worker_domain}"
     }
   }
 

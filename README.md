@@ -22,7 +22,7 @@ PLATEAU VIEW 5.0 は以下のシステムにより構成されます。
 - [flow](flow): PLATEAU Flow
 - [geo](geo): PLATEAU VIEW の一部機能（住所検索など）を動作させるためのサーバーアプリケーション
 - [server](server): CMS と共に動作し PLATEAU の API を提供するサーバーアプリケーション（サイドカーサーバー）
-- [terraform](terraform): PLATEAU VIEW をクラウド上に構築するための Terraform
+- [terraform](terraform): PLATEAU VIEW をクラウド上に簡易構築して動作確認するための Terraform（本番環境の構成とは異なります）
 - [tile](tile): タイルサーバー（Rust製、XYZプロキシ・COG・MapLibreレンダリング対応）
 - [tools](tools): PLATEAU CMS でのデータ登録作業や移行作業を補助する CLI ツール
 - [worker](worker): サイドカーサーバーから呼び出されバックグラウンドで非同期に実行されるワーカーアプリケーション

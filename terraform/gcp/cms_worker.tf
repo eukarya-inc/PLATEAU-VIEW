@@ -8,4 +8,6 @@ module "cms_worker" {
   domain                = local.cms_worker_domain
   image                 = "eukarya/plateauview-cms-worker"
   service_account_email = google_service_account.cms_worker.email
+
+  pubsub_push_service_account_email = module.cms_api.pubsub_push_service_account_email
 }

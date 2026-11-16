@@ -1,5 +1,8 @@
 # PLATEAU VIEW 4.0 Terraform for Google Cloud
 
+> [!IMPORTANT]
+> このディレクトリの Terraform は、PLATEAU VIEW を簡易的に構築して動作を確認するためのものです。実際に運用されている PLATEAU VIEW の本番環境の構成とは異なります。本番運用に使う場合は、可用性・セキュリティ・コストなどの要件に合わせて構成を見直してください。
+
 PLATEAU VIEW 4.0（CMS・Editor・VIEW・Flow）を Google Cloud で構築するための Terraform 用ファイルです。システム構築手順は[『実証環境構築マニュアル Series No.09』](https://www.mlit.go.jp/plateau/file/libraries/doc/plateau_doc_0009_ver03.pdf)（以下、マニュアル）も併せて参照してください。
 
 ## 1. 改訂履歴
