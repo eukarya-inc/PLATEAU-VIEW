@@ -3,11 +3,6 @@ variable "assets_bucket" {
   description = "Name of the assets' GCS bucket."
 }
 
-variable "auth0_domain" {
-  type        = string
-  description = "Domain of the Auth0 tenant."
-}
-
 variable "database_secret_id" {
   type        = string
   description = "Secret ID of the database connection URL for MongoDB"
