@@ -9,7 +9,6 @@ import (
 	"time"
 
 	cms "github.com/reearth/reearth-cms-api/go"
-	"github.com/reearth/reearthx/util"
 	"github.com/samber/lo"
 )
 
@@ -24,7 +23,9 @@ type ReposUpdateResult struct {
 
 type Repos struct {
 	updater ReposUpdater
-	locks   util.LockMap[string]
+	// locks holds a *sync.Mutex per project. Entries are never deleted: the
+	// project set is small, and deleting on unlock lets a third waiter hang.
+	locks sync.Map
 	// mu guards the maps below, which are shared by all projects.
 	mu        sync.RWMutex
 	repos     map[string]*RepoWrapper
@@ -36,7 +37,6 @@ type Repos struct {
 func NewRepos(u ReposUpdater) *Repos {
 	return &Repos{
 		updater:   u,
-		locks:     util.LockMap[string]{},
 		repos:     map[string]*RepoWrapper{},
 		warnings:  map[string][]string{},
 		updatedAt: map[string]time.Time{},
@@ -46,6 +46,14 @@ func NewRepos(u ReposUpdater) *Repos {
 func (r *Repos) Prepare(ctx context.Context, project string, year int, cms cms.Interface) error {
 	_, err := r.Update(ctx, project)
 	return err
+}
+
+// lock locks the project's mutex and returns its unlock function.
+func (r *Repos) lock(project string) func() {
+	m, _ := r.locks.LoadOrStore(project, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 func (r *Repos) Repo(project string) *RepoWrapper {
@@ -74,8 +82,7 @@ func (r *Repos) UpdateAll(ctx context.Context) error {
 
 // Update updates the project's repo if it's not updated recently. If false is returned, it means the repo is not updated.
 func (r *Repos) Update(ctx context.Context, project string) (bool, error) {
-	r.locks.Lock(project)
-	defer r.locks.Unlock(project)
+	defer r.lock(project)()
 
 	// avoid too frequent updates
 	updated := r.UpdatedAt(project)
@@ -143,8 +150,7 @@ func (r *Repos) getNow() time.Time {
 // SetRepo directly sets a repo for a project without going through the updater.
 // This is useful for loading cached data.
 func (r *Repos) SetRepo(project string, repo Repo, warnings []string) {
-	r.locks.Lock(project)
-	defer r.locks.Unlock(project)
+	defer r.lock(project)()
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
