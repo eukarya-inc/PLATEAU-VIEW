@@ -20,7 +20,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=cache,target=/root/.yarn,sharing=locked \
     yarn build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 WORKDIR /usr/share/nginx/html
 
 # Quite the Nginx startup logs.
