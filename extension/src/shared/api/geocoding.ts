@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Area } from "../states/address";
 import { usePlateauApiUrl } from "../states/environmentVariables";
@@ -15,6 +15,11 @@ export function useGeocodingLazy(): [
   const [plateauApiUrl] = usePlateauApiUrl();
   const [data, setData] = useState<GeocodingResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  // Only the latest location matters. Abort the request in flight so that it
+  // stops occupying the server and cannot overwrite a newer result.
+  const controllerRef = useRef<AbortController>();
+
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
   const fetchAreas = useCallback(
     async (params: { longitude: number; latitude: number; includeRadii?: boolean }) => {
@@ -27,20 +32,29 @@ export function useGeocodingLazy(): [
         url.searchParams.set("includeRadii", "true");
       }
 
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
       setLoading(true);
 
       try {
-        const response = await fetch(url.toString());
+        const response = await fetch(url.toString(), { signal: controller.signal });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const result = (await response.json()) as GeocodingResponse;
-        setData(result);
+        if (!controller.signal.aborted) {
+          setData(result);
+        }
       } catch (err) {
+        if (controller.signal.aborted) return;
         console.error("Geocoding error:", err);
         setData(null);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     },
     [plateauApiUrl],

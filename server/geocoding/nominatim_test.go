@@ -112,3 +112,33 @@ func TestNominatimClient_Fetch(t *testing.T) {
 		})
 	}
 }
+
+func TestNominatimClient_Fetch_RateLimit(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		_, _ = w.Write([]byte(`{"address": null}`))
+	}))
+	defer server.Close()
+
+	client := NewNominatimClient(nil, server.URL, "test-agent")
+
+	_, err := client.Fetch(context.Background(), 139.7671, 35.6812)
+	assert.NoError(t, err)
+
+	// The second request within the same second must not reach Nominatim.
+	_, err = client.Fetch(context.Background(), 139.7671, 35.6812)
+	assert.ErrorIs(t, err, ErrNominatimRateLimited)
+	assert.Equal(t, 1, requests)
+}
+
+func TestNominatimClient_Fetch_TooManyRequests(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := NewNominatimClient(nil, server.URL, "test-agent")
+	_, err := client.Fetch(context.Background(), 139.7671, 35.6812)
+	assert.ErrorIs(t, err, ErrNominatimRateLimited)
+}

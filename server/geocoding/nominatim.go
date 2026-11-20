@@ -3,20 +3,33 @@ package geocoding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/eukarya-inc/jpareacode"
+	"golang.org/x/time/rate"
 )
 
 const DefaultNominatimURL = "https://nominatim.openstreetmap.org/reverse"
+
+// ErrNominatimRateLimited indicates that a request was not sent to Nominatim
+// because it would exceed the allowed rate, or that Nominatim refused it with
+// 429.
+var ErrNominatimRateLimited = errors.New("nominatim rate limit exceeded")
+
+// nominatimRateLimit follows the usage policy of the public Nominatim server
+// (https://operations.osmfoundation.org/policies/nominatim/): at most one
+// request per second. It is enforced per server instance.
+const nominatimRateLimit = rate.Limit(1)
 
 type NominatimClient struct {
 	httpClient *http.Client
 	url        string
 	userAgent  string
+	limiter    *rate.Limiter
 }
 
 type nominatimResponse struct {
@@ -49,10 +62,17 @@ func NewNominatimClient(httpClient *http.Client, url, userAgent string) *Nominat
 		httpClient: httpClient,
 		url:        url,
 		userAgent:  userAgent,
+		limiter:    rate.NewLimiter(nominatimRateLimit, 1),
 	}
 }
 
 func (c *NominatimClient) Fetch(ctx context.Context, lon, lat float64) (*GSIResult, error) {
+	// Fail fast instead of queueing. When GSI is down every request falls
+	// back here, and queued requests would only wait until they time out.
+	if !c.limiter.Allow() {
+		return nil, ErrNominatimRateLimited
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -76,6 +96,9 @@ func (c *NominatimClient) Fetch(ctx context.Context, lon, lat float64) (*GSIResu
 		_ = resp.Body.Close()
 	}()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("%w: status code %d", ErrNominatimRateLimited, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}

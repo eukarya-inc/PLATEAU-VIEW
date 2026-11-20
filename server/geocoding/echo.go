@@ -74,6 +74,10 @@ func Echo(g *echo.Group, conf *HandlerConfig) error {
 					if ctx.Err() != nil {
 						return nil
 					}
+					if errors.Is(err, ErrNominatimRateLimited) {
+						log.Warnfc(ctx, "geocoding: Nominatim fallback skipped (lon=%v, lat=%v): %v", lon, lat, err)
+						return echo.NewHTTPError(http.StatusServiceUnavailable, "geocoding services are temporarily unavailable")
+					}
 					log.Errorfc(ctx, "geocoding: Nominatim fallback also failed (lon=%v, lat=%v): %v", lon, lat, err)
 					return echo.NewHTTPError(http.StatusBadGateway, "geocoding services are temporarily unavailable")
 				}

@@ -7,6 +7,8 @@ import type { Address } from "../../../shared/states/address";
 
 export type ReverseGeocoderResult = Address<true>;
 
+const GEOCODING_DEBOUNCE_MS = 300;
+
 export function useReverseGeocoder(): ReverseGeocoderResult | undefined {
   const [coords, setCoords] = useState<{
     longitude?: number;
@@ -29,14 +31,15 @@ export function useReverseGeocoder(): ReverseGeocoderResult | undefined {
     }
   }, [data]);
 
+  // "cameramove" fires on every frame while the camera moves, so wait until
+  // the camera settles instead of requesting an address for each frame.
   useEffect(() => {
-    if (coords.longitude !== undefined && coords.latitude !== undefined) {
-      getAreas({
-        longitude: coords.longitude,
-        latitude: coords.latitude,
-        includeRadii: true,
-      });
-    }
+    const { longitude, latitude } = coords;
+    if (longitude === undefined || latitude === undefined) return;
+    const timer = window.setTimeout(() => {
+      void getAreas({ longitude, latitude, includeRadii: true });
+    }, GEOCODING_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [coords, getAreas]);
 
   const updateFovInfo = useCallback(() => {
