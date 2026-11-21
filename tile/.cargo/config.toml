@@ -1,0 +1,5 @@
+# `cargo test --target wasm32-unknown-unknown -p terrain-core` runs the tests
+# under Node through wasm-bindgen's test runner (install the
+# wasm-bindgen-cli version that Cargo.lock pins for `wasm-bindgen`).
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"
