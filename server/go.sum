@@ -122,10 +122,10 @@ github.com/eukarya-inc/japan-geoid-go v1.0.0 h1:5aiQN7VT251clb/1qdJ8brQUYsfZTap6
 github.com/eukarya-inc/japan-geoid-go v1.0.0/go.mod h1:P59z8MaVqGCorPf0A7XdydXIpO8oL7Ywt+2ATX02BfU=
 github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a h1:ZEntf2oouZdXmtmcuUbA00RNzaiGzJPaK/vQFqPqZE0=
 github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a/go.mod h1:thkfAUkPUNwQq/0zySwRf9sQ/8hIFtUMLOfDsiZcI5I=
-github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124142548-a834e69b63ae h1:cDqpsB7c0XYvIqjHdL/Ghoyx9sgzidCddZTGOCF/9oE=
-github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124142548-a834e69b63ae/go.mod h1:LR/gnvhq7hcVGFn7YCslEYSN60ejiJrhHULeouEkfiQ=
-github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124142548-a834e69b63ae h1:MxIxkBra6xoenfcXok90La6jh/dPGa0P2V1lIETS6qs=
-github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124142548-a834e69b63ae/go.mod h1:vwAGswAHlvRtkj22wCb6bZ/yVsmzYKebKqRpjYBysU4=
+github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124143940-b39f7811f3a5 h1:ihV8v5gzlnHW8FLCCwti6Y/cChbyR2WFuWyyc6LwHlo=
+github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124143940-b39f7811f3a5/go.mod h1:LR/gnvhq7hcVGFn7YCslEYSN60ejiJrhHULeouEkfiQ=
+github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124143940-b39f7811f3a5 h1:k3ArhCjL+2f7kui8ydLkygphMROOrshJVjNLXneERnM=
+github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124143940-b39f7811f3a5/go.mod h1:ni5IYVkxn6E1kLUKwKZ/ZBPCS4JmLI+2F6Xb1vg/xxg=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
@@ -256,8 +256,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/ravilushqa/otelgqlgen v0.17.0 h1:bLwQfKqtj9P24QpjM2sc1ipBm5Fqv2u7DKN5LIpj3g8=
 github.com/ravilushqa/otelgqlgen v0.17.0/go.mod h1:orOIikuYsay1y3CmLgd5gsHcT9EsnXwNKmkAplzzYXQ=
-github.com/reearth/mokuji/go v0.2.0 h1:6h6WoqZRdol8nENA+k0fw16uFA1rmWrlGtBRvWBR68Y=
-github.com/reearth/mokuji/go v0.2.0/go.mod h1:zWZKq/rgodhEOfw7XsDA275ed6f7JYaBGVm0We6qP8E=
+github.com/reearth/mokuji/go v0.2.1 h1:vkjvWAqQaiJR24Afjlf80vTis9lKQEgEvm/i0VlEa4I=
+github.com/reearth/mokuji/go v0.2.1/go.mod h1:zWZKq/rgodhEOfw7XsDA275ed6f7JYaBGVm0We6qP8E=
 github.com/reearth/reearth-cms-api/go v0.0.0-20251208103137-789348003578 h1:xAgiRIMnDEqpZfNEgfi7269MriFiGsnTUHICLP8/p1I=
 github.com/reearth/reearth-cms-api/go v0.0.0-20251208103137-789348003578/go.mod h1:cCLCXiJ8JzvkzvrSVZ1hDmL7uePWwn4g6eRESSgbqDI=
 github.com/reearth/reearthx v0.0.0-20250514022647-16f9d767d93f h1:JFE7ZaFYWIduMUpwZEx1RfgzC+F3IHuVqtOj+/ZGDnE=

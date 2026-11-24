@@ -12,8 +12,8 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eukarya-inc/japan-geoid-go v1.0.0
 	github.com/eukarya-inc/jpareacode v1.0.1-0.20240314080116-ae89cfd85c6a
-	github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124142548-a834e69b63ae
-	github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124142548-a834e69b63ae
+	github.com/eukarya-inc/plateau-spec/plateaudoc v0.0.0-20261124143940-b39f7811f3a5
+	github.com/eukarya-inc/plateau-spec/plateaudocsearch v0.0.0-20261124143940-b39f7811f3a5
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/hasura/go-graphql-client v0.14.3
@@ -105,7 +105,7 @@ require (
 	github.com/paulmach/protoscan v0.2.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/ravilushqa/otelgqlgen v0.17.0 // indirect
-	github.com/reearth/mokuji/go v0.2.0 // indirect
+	github.com/reearth/mokuji/go v0.2.1 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
