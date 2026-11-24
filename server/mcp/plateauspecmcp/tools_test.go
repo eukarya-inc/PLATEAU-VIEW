@@ -215,3 +215,14 @@ func (c *mockPlateaudocsClient) GetMarkdown(_ context.Context, docType, path str
 	}
 	return "", nil
 }
+
+func TestNormalizePath(t *testing.T) {
+	for in, want := range map[string]string{
+		"toc4_01_01":                    "toc4_01_01",
+		"toc4_01_01.md":                 "toc4_01_01",
+		"/plateaudocument/toc1":         "toc1",
+		"/plateaudocument02/tocC_02_01": "tocC_02_01",
+	} {
+		assert.Equal(t, want, normalizePath(in), in)
+	}
+}

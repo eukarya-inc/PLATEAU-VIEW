@@ -145,11 +145,14 @@ func getPathID(path string) string {
 	return path
 }
 
-// normalizePath removes leading slash and document type prefix
+// normalizePath removes leading slash, document type prefix and ".md" suffix.
+// Search results carry paths such as "toc4_01_01.md", while plateaudoc
+// appends ".md" itself.
 func normalizePath(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimPrefix(path, "plateaudocument/")
 	path = strings.TrimPrefix(path, "plateaudocument02/")
+	path = strings.TrimSuffix(path, ".md")
 	return path
 }
 
