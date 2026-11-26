@@ -62,14 +62,12 @@ export const makePropertyForFeatureInspector = ({
   layer,
   builtin,
   featureType,
-  sortRootPropertyNames,
   version,
 }: {
   featureInspector?: RootLayerForDataset["featureInspector"];
   layer: LayerModel | undefined;
   features: Pick<Feature, "properties">[];
   builtin?: boolean;
-  sortRootPropertyNames?: (names: string[]) => string[];
   featureType: string;
   version: number;
 }) => {
@@ -142,17 +140,12 @@ export const makePropertyForFeatureInspector = ({
   const rawBuiltInRootPropertyNames = intersection(
     features.flatMap(f => Object.keys(f.properties ?? {})),
   );
-  const sortedRawBuiltInRootPropertyNames = sortRootPropertyNames
-    ? sortRootPropertyNames(rawBuiltInRootPropertyNames)
-    : rawBuiltInRootPropertyNames;
   const rawBuiltInRootProperties = !shouldUseSettingProperty
     ? features
         .map(f =>
           layer
             ? getRootFields(
-                Object.fromEntries(
-                  sortedRawBuiltInRootPropertyNames.map(n => [n, f.properties[n]]),
-                ),
+                Object.fromEntries(rawBuiltInRootPropertyNames.map(n => [n, f.properties[n]])),
                 version,
                 datasetType,
                 {

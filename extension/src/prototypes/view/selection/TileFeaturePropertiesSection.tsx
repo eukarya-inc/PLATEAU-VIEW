@@ -2,7 +2,6 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { intersectionBy, uniqBy } from "lodash-es";
 import { useMemo, type FC } from "react";
 
-import { useOptionalAtomValue } from "../../../shared/hooks";
 import {
   ancestorsKey,
   makePropertyForFeatureInspector,
@@ -11,9 +10,8 @@ import {
 import { TILESET_FEATURE } from "../../../shared/reearth/layers";
 import { Feature } from "../../../shared/reearth/types/layer";
 import { findRootLayerAtom, rootLayersLayersAtom } from "../../../shared/states/rootLayer";
-import { BuildingLayerModel, RootLayerForDataset } from "../../../shared/view-layers";
+import { RootLayerForDataset } from "../../../shared/view-layers";
 import { LayerModel, useFindLayer } from "../../layers";
-import { isNotNullish } from "../../type-helpers";
 import { ParameterList, PropertyParameterItem } from "../../ui-components";
 import { type SCREEN_SPACE_SELECTION, type SelectionGroup } from "../states/selection";
 
@@ -55,9 +53,6 @@ export const TileFeaturePropertiesSection: FC<TileFeaturePropertiesSectionProps>
     }, [] as { features: Pick<Feature, "properties">[]; layer?: LayerModel; rootLayer?: RootLayerForDataset }[]);
   }, [values, findLayer, findRootLayer, rootLayersLayers]);
 
-  const tilesetLayer = layers[0].layer as BuildingLayerModel | undefined;
-  const tilesetProperties = useOptionalAtomValue(tilesetLayer?.propertiesAtom);
-
   const featureType = useMemo(() => layers[0].features[0]?.properties["feature_type"], [layers]);
   const ancestorsFeatureType = useMemo(
     () =>
@@ -75,15 +70,6 @@ export const TileFeaturePropertiesSection: FC<TileFeaturePropertiesSectionProps>
           layer,
           featureInspector: rootLayer?.featureInspector,
           builtin: true,
-          sortRootPropertyNames: names => {
-            const properties = tilesetProperties?.value;
-            const propertyKeys = properties?.map(p => p.name) ?? [];
-            const restNames = names.filter(n => !propertyKeys?.includes(n));
-            const sortedNames = propertyKeys
-              .map(p => names.find(n => n === p))
-              .filter(isNotNullish);
-            return [...sortedNames, ...restNames];
-          },
           featureType,
           version: plateauSpecMajorVersion,
         }),
@@ -91,7 +77,7 @@ export const TileFeaturePropertiesSection: FC<TileFeaturePropertiesSectionProps>
     }, [] as Feature["properties"][]);
 
     return intersectionBy(properties, "name");
-  }, [layers, tilesetProperties, plateauSpecMajorVersion]);
+  }, [layers, plateauSpecMajorVersion]);
 
   return (
     <ParameterList>
