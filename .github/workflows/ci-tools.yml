@@ -9,17 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@v2.20.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: actions/checkout@v6.0.2
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@v2.9.1
         with:
           workspaces: tools -> tools/plateau-view-tool/target
-      - uses: giraffate/clippy-action@13b9d32482f25d29ead141b79e7e04e7900281e0 # v1.0.1
+      - uses: giraffate/clippy-action@v1.0.1
         with:
           reporter: 'github-pr-review'
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -49,14 +50,15 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@v2.20.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: actions/checkout@v6.0.2
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           targets: ${{ matrix.platform.target }}
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@v2.9.1
         with:
           workspaces: tools -> tools/plateau-view-tool/target
       - name: Build binary
@@ -65,7 +67,7 @@ jobs:
           CARGO_PROFILE_RELEASE_STRIP: "true"
         run: cargo build --locked --release --target ${{ matrix.platform.target }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.platform.name }}
           path: tools/plateau-view-tool/target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
@@ -77,15 +79,15 @@ jobs:
     if: inputs.release_tools == 'true'
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@v2.20.1
         with:
           egress-policy: audit
       - name: Set up git config
         run: |
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/download-artifact@v8.0.1
         with:
           path: tools-artifacts
       - name: Pack tools
@@ -100,7 +102,7 @@ jobs:
           git push -f --tags
       - run: tree tools-artifacts
       - name: Update Github Release with artifacts
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+        uses: ncipollo/release-action@v1.21.0
         with:
           artifacts: tools-artifacts/tools/*
           tag: tools
