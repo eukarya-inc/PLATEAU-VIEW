@@ -64,11 +64,11 @@ use crate::terrain::{
 };
 
 /// Credit line the quantized-mesh mirror's `layer.json` is rewritten to. The
-/// mirror has no config source to derive one from, so it keeps the line every
-/// terrain endpoint used before attribution became per source (PLATEAU +
-/// Mapterhorn + 国土地理院). DEM sources derive theirs instead — see
-/// [`crate::terrain::attribution`].
-const MIRROR_ATTRIBUTION_HTML: &str = r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://mapterhorn.com/" target="_blank">Mapterhorn</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#;
+/// mirror has no config source to derive one from, so the line is fixed:
+/// PLATEAU + 国土地理院. The mirrored tiles were built from GSI's DEM, not from
+/// Mapterhorn, so Mapterhorn is not credited. DEM sources derive theirs
+/// instead — see [`crate::terrain::attribution`].
+const MIRROR_ATTRIBUTION_HTML: &str = r#"<a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a> | <a href="https://www.gsi.go.jp/" target="_blank">国土地理院</a>"#;
 
 /// Output encoding for the elevation raster endpoints.
 #[derive(Debug, Clone, Copy)]

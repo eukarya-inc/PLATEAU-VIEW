@@ -168,7 +168,7 @@ What that gives the sources served today (`DEM_URL` = Mapterhorn):
 |--------|---------------|
 | `dem`, `plateau-terrain-experimental` (shared base + COGs) | `PLATEAU \| Mapterhorn \| 国土地理院` (unchanged) |
 | `plateau-terrain-jgd2024` (`"base": "sealevel"` + `heightCorrection`) | `PLATEAU \| 国土地理院（基盤地図情報 数値標高モデル、標高補正パラメータを適用して加工）` |
-| `/terrain/layer.json` from the quantized-mesh mirror | `PLATEAU \| Mapterhorn \| 国土地理院` (fixed; the mirror has no config source) |
+| `/terrain/layer.json` from the quantized-mesh mirror | `PLATEAU \| 国土地理院` (fixed; the mirror has no config source, and its tiles were built from GSI's DEM, not Mapterhorn) |
 
 The attribution is metadata only: it never enters a tile body, an ETag or a cache key, so changing it needs no cache flush. `/tiles/{name}/tilejson.json` honours the same source-level `"attribution"` field and otherwise keeps the PLATEAU credit.
 
@@ -357,7 +357,7 @@ Routing once `TERRAIN_MIRROR_URL` is set:
 | `/terrain/dem/{z}/{x}/{y}.terrain`         | DEM pipeline (Mapterhorn etc.) — used for side-by-side validation |
 | `/terrain/{other}/...`                     | DEM, looked up under the source name in the config JSON |
 
-The mirror handler stamps `Content-Encoding: gzip` and the standard quantized-mesh `Content-Type` on every tile response and rewrites `attribution` + `tiles` on the upstream `layer.json` so the credit line and tile template match the DEM pipeline over the Mapterhorn base (fixed `PLATEAU | Mapterhorn | 国土地理院` — the mirror has no config source to derive one from; relative `{z}/{x}/{y}.terrain`). `/terrarium/...` and `/mapbox/...` raster endpoints are unaffected — they still go through the DEM pipeline.
+The mirror handler stamps `Content-Encoding: gzip` and the standard quantized-mesh `Content-Type` on every tile response and rewrites `attribution` + `tiles` on the upstream `layer.json` with a fixed credit line (`PLATEAU | 国土地理院` — the mirror has no config source to derive one from, and its tiles were built from GSI's DEM, not Mapterhorn) and a relative `{z}/{x}/{y}.terrain` tile template. `/terrarium/...` and `/mapbox/...` raster endpoints are unaffected — they still go through the DEM pipeline.
 
 ### Persistent Cache Configuration
 
