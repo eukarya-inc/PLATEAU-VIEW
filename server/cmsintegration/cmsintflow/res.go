@@ -108,6 +108,12 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	// check if conversion has no assets
 	if id.Type == cmsintegrationcommon.ReqTypeConv && len(dataAssets) == 0 {
 		log.Infofc(ctx, "no assets returned from flow for conversion")
+		if id.CRS != "" {
+			// a conversion started by /reconvert ends as failed, so that it does not stay 実行中
+			_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "Flowから変換結果のアセットが返されませんでした。%sFlowのログを確認してください。%s", res.IDsMessage(), logurls)
+			_ = s.ClearFlowRunID(ctx, id.ItemID)
+			return nil
+		}
 		_ = s.CMS.CommentToItem(ctx, id.ItemID, fmt.Sprintf("Flowから変換結果のアセットが返されませんでした。%sFlowのログを確認してください。", res.IDsMessage()))
 		return nil
 	}
@@ -177,6 +183,21 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 		if err != nil {
 			log.Infofc(ctx, "failed to get asset names: itemID=%s, err=%v", id.ItemID, err)
 			return fmt.Errorf("failed to get asset names: %w", err)
+		}
+
+		// A conversion started for a CRS (/reconvert) must not replace the assets of another
+		// one, e.g. when the Flow workflow does not output JGD2024 yet.
+		if id.CRS != "" {
+			got, err := cmsintegrationcommon.ConvertedCRS(dataAssets, names)
+			if err == nil && got != id.CRS {
+				err = fmt.Errorf("expected %s, got %s", id.CRS, lo.Ternary(got == "", "no assets with heights", string(got)))
+			}
+			if err != nil {
+				log.Infofc(ctx, "early return: converted assets are not of the expected CRS: %v", err)
+				_ = s.Fail(ctx, id.ItemID, cmsintegrationcommon.ReqType(id.Type), "変換結果の測地系が指定（%s）と一致しないか確かめられないため、アイテムに反映しませんでした。（%v）%s%s", id.CRS, err, res.IDsMessage(), logurls)
+				_ = s.ClearFlowRunID(ctx, id.ItemID)
+				return nil
+			}
 		}
 
 		if featureType.UseGroups {
@@ -252,7 +273,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	if shouldStartConv {
 		log.Infofc(ctx, "trigger conv after QC success")
 		rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv); err != nil {
+		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, id.CRS); err != nil {
 			log.Errorfc(ctx, "failed to trigger conv: %v", err)
 			return fmt.Errorf("failed to send request to flow: %w", err)
 		}

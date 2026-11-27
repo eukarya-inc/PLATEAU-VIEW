@@ -92,7 +92,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		log.Debugfc(ctx, "plateau specs: count=%d", len(specs))
 
 		log.Infofc(ctx, "sending request to flow: project=%s, model=%s, item=%s", w.ProjectID(), modelName, mainItem.ID)
-		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), ""); err != nil {
+		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), "", ""); err != nil {
 			log.Errorfc(ctx, "failed to trigger flow: %v", err)
 			return nil
 		}
@@ -153,6 +153,9 @@ func Handler(conf Config, g *echo.Group) error {
 		var req ReconvertRequest
 		if err := c.Bind(&req); err != nil {
 			return c.JSON(http.StatusBadRequest, "invalid payload")
+		}
+		if req.CRS == "" {
+			req.CRS = c.QueryParam("crs")
 		}
 
 		res, err := reconvert(ctx, s, &conf, req)

@@ -22,6 +22,8 @@ func sendRequestToFlow(
 	featureTypes plateaucms.PlateauFeatureTypeList,
 	specs plateaucms.PlateauSpecList,
 	overrideReqType cmsintegrationcommon.ReqType,
+	// expectedCRS is the CRS the converted assets must have; see ID.CRS. Empty means any.
+	expectedCRS cmsintegrationcommon.CRS,
 ) error {
 	ctx = log.WithPrefixMessage(ctx, "flow: ")
 
@@ -196,6 +198,7 @@ func sendRequestToFlow(
 		ProjectID:   projectID,
 		FeatureType: featureType.Code,
 		Type:        ty,
+		CRS:         expectedCRS,
 	}.Sign(conf.Secret)
 
 	// request to flow

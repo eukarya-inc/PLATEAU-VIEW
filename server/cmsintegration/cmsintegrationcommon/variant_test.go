@@ -160,3 +160,26 @@ func TestAssetNames(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]string{"a": "a.zip", "b": "https://example.com/b.zip"}, names)
 }
+
+func TestConvertedCRS(t *testing.T) {
+	names := map[string]string{
+		"a": "13100_bldg_lod1_3dtiles.zip",
+		"b": "13100_bldg_lod1_3dtiles_jgd2024.zip",
+		"m": "13100_tran_mvt.zip",
+	}
+	crs, err := ConvertedCRS([]string{"a", "m"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, CRSJGD2011, crs)
+	crs, err = ConvertedCRS([]string{"b", "m"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, CRSJGD2024, crs)
+	crs, err = ConvertedCRS([]string{"m"}, names)
+	assert.NoError(t, err)
+	assert.Equal(t, CRS(""), crs)
+
+	c, ok := ParseCRS(" jgd2024 ")
+	assert.True(t, ok)
+	assert.Equal(t, CRSJGD2024, c)
+	_, ok = ParseCRS("EPSG:6697")
+	assert.False(t, ok)
+}

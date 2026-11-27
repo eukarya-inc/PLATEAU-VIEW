@@ -118,7 +118,7 @@ func TestReconvert_convertedItem(t *testing.T) {
 		httpmock.NewJsonResponderOrPanic(200, map[string]any{}))
 
 	s, c := newReconvertFixture("成功", plateaucms.ConverterFlow)
-	res, err := reconvert(context.Background(), s, &Config{FlowToken: "token"}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main"})
+	res, err := reconvert(context.Background(), s, &Config{FlowToken: "token"}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
 	require.NoError(t, err)
 
 	// conv_status goes 成功 → 未実行 → 実行中, and only the conversion trigger is called (no QC)
@@ -132,7 +132,7 @@ func TestReconvert_notFlow(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	s, c := newReconvertFixture("成功", plateaucms.ConverterFME)
-	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main"})
+	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
 
 	// nothing is requested and conv_status is not touched
 	assert.ErrorIs(t, err, ErrReconvertNotSupported)
@@ -150,14 +150,14 @@ func TestReconvert_flowDisabledForFeature(t *testing.T) {
 			FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "bldg", FlowConvTrigger: "conv", FlowDisabled: true}},
 		}},
 	}
-	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main"})
+	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
 	assert.ErrorIs(t, err, ErrReconvertNotSupported)
 	assert.Empty(t, c.statuses)
 }
 
 func TestReconvert_running(t *testing.T) {
 	s, c := newReconvertFixture("実行中", plateaucms.ConverterFlow)
-	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main"})
+	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
 	assert.ErrorIs(t, err, ErrReconvertRunning)
 	assert.Empty(t, c.statuses)
 }
@@ -166,4 +166,13 @@ func TestReconvert_invalidRequest(t *testing.T) {
 	s, _ := newReconvertFixture("", plateaucms.ConverterFlow)
 	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "bldg", ItemID: "main"})
 	assert.Error(t, err)
+}
+
+func TestReconvert_crsRequired(t *testing.T) {
+	s, c := newReconvertFixture("成功", plateaucms.ConverterFlow)
+	for _, crs := range []string{"", "EPSG:6697"} {
+		_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: crs})
+		assert.ErrorIs(t, err, ErrReconvertInvalidRequest)
+	}
+	assert.Empty(t, c.statuses)
 }

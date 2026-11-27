@@ -22,6 +22,10 @@ type ReconvertRequest struct {
 	// Model is the key of the feature model, such as "plateau-bldg".
 	Model  string `json:"model"`
 	ItemID string `json:"itemId"`
+	// CRS is the CRS the converted 3D Tiles must have: JGD2011 or JGD2024. A result of another
+	// CRS, or with no assets that have heights (MVT only), is not merged into the item, so it
+	// never replaces the assets of another CRS.
+	CRS string `json:"crs"`
 }
 
 type ReconvertResult struct {
@@ -41,14 +45,15 @@ var ErrReconvertRunning = errors.New("qc or conversion is running")
 var ErrReconvertNotSupported = errors.New("the item is not converted with flow")
 
 // ErrReconvertInvalidRequest is returned when the request lacks a field.
-var ErrReconvertInvalidRequest = errors.New("projectId, itemId and model (" + cmsintegrationcommon.ModelPrefix + "*) are required")
+var ErrReconvertInvalidRequest = errors.New("projectId, itemId, model (" + cmsintegrationcommon.ModelPrefix + "*) and crs (JGD2011 or JGD2024) are required")
 
 // reconvert starts the conversion of the item. Starting a conversion through the webhook would
 // need its status to be changed by someone other than this server's integration, since the
 // webhook ignores the events the server causes itself, and would also need skip_qc_conv to be
 // rewritten to skip QC. This calls the same request path directly instead.
 func reconvert(ctx context.Context, s *Services, conf *Config, req ReconvertRequest) (*ReconvertResult, error) {
-	if req.ProjectID == "" || req.ItemID == "" || !strings.HasPrefix(req.Model, cmsintegrationcommon.ModelPrefix) {
+	crs, ok := cmsintegrationcommon.ParseCRS(req.CRS)
+	if req.ProjectID == "" || req.ItemID == "" || !strings.HasPrefix(req.Model, cmsintegrationcommon.ModelPrefix) || !ok {
 		return nil, ErrReconvertInvalidRequest
 	}
 
@@ -93,7 +98,7 @@ func reconvert(ctx context.Context, s *Services, conf *Config, req ReconvertRequ
 	}
 
 	modelName := strings.TrimPrefix(req.Model, cmsintegrationcommon.ModelPrefix)
-	reqErr := sendRequestToFlow(ctx, s, conf, req.ProjectID, modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv)
+	reqErr := sendRequestToFlow(ctx, s, conf, req.ProjectID, modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, crs)
 
 	status, err := s.convStatus(ctx, mainItem)
 	if err != nil {

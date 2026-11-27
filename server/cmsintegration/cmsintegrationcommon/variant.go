@@ -172,6 +172,36 @@ func MergeConvertedItems(existing []FeatureItemDatum, converted map[string][]str
 	return res, nil
 }
 
+// CRS is the CRS of the heights of converted assets.
+type CRS string
+
+const (
+	CRSJGD2011 CRS = "JGD2011"
+	CRSJGD2024 CRS = "JGD2024"
+)
+
+// ParseCRS reads a CRS name such as "JGD2024" (case-insensitive).
+func ParseCRS(s string) (CRS, bool) {
+	switch c := CRS(strings.ToUpper(strings.TrimSpace(s))); c {
+	case CRSJGD2011, CRSJGD2024:
+		return c, true
+	}
+	return "", false
+}
+
+// ConvertedCRS returns the CRS of the converted assets that have heights, read from their
+// names. It is empty when none of them has heights (MVT only).
+func ConvertedCRS(converted []string, names map[string]string) (CRS, error) {
+	v, err := convertedCRS(converted, names)
+	if err != nil || !v.heights {
+		return "", err
+	}
+	if v.jgd2024 {
+		return CRSJGD2024, nil
+	}
+	return CRSJGD2011, nil
+}
+
 // convertedCRS reads the CRS of the converted assets. MVT is left out of the check because
 // it has no heights and so no `_jgd2024` suffix.
 func convertedCRS(converted []string, names map[string]string) (v convertedVariant, _ error) {

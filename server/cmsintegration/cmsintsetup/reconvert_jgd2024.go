@@ -551,7 +551,13 @@ func (r *reconverter) convStatus(ctx context.Context, item *cms.Item) (string, e
 }
 
 func (r *reconverter) start(ctx context.Context, t ReconvertTarget) error {
-	body, err := json.Marshal(cmsintflow.ReconvertRequest{ProjectID: t.ProjectID, Model: t.Model, ItemID: t.ItemID})
+	body, err := json.Marshal(cmsintflow.ReconvertRequest{
+		ProjectID: t.ProjectID,
+		Model:     t.Model,
+		ItemID:    t.ItemID,
+		// a result that is not JGD2024 is not merged, so the JGD2011 assets are never replaced
+		CRS: string(cmsintegrationcommon.CRSJGD2024),
+	})
 	if err != nil {
 		return err
 	}
