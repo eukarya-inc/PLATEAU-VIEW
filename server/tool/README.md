@@ -445,7 +445,7 @@ gcloud auth application-default login
 go run . reconvert-jgd2024 -impersonate-service-account <SA_EMAIL> -limit 1
 ```
 
-`-id-token`に渡すトークンは、`gcloud auth print-identity-token --impersonate-service-account=<SA_EMAIL> --audiences=https://api.plateauview.mlit.go.jp --include-email`で作れます。`--include-email`がないと、メールアドレスを確かめられないので拒否されます。
+`-id-token`には、ほかの方法で作ったIDトークンを渡せます。audienceはサーバーのURLにして、メールアドレス（`email`と`email_verified`）を含めてください。含まれていないと拒否されます。なお、`gcloud auth print-identity-token --impersonate-service-account`はアクセストークンも取得するので、`roles/iam.serviceAccountOpenIdTokenCreator`だけでは使えません。
 
 ---
 
