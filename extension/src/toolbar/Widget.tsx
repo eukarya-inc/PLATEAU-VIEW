@@ -65,6 +65,7 @@ type OptionalProps = {
   pedestrian?: CameraPosition;
   siteUrl?: string;
   terrainUrl?: string;
+  plateauCrs?: string;
 };
 
 type Props = WidgetProps<DefaultProps, OptionalProps>;
@@ -108,7 +109,8 @@ export const Widget: FC<Props> = memo(function WidgetPresenter({ widget, inEdito
         customMenuLogo={widget.property.optional?.menuLogo}
         customPedestrian={widget.property.optional?.pedestrian}
         customSiteUrl={widget.property.optional?.siteUrl}
-        terrainUrl={widget.property.optional?.terrainUrl}>
+        terrainUrl={widget.property.optional?.terrainUrl}
+        plateauCrs={widget.property.optional?.plateauCrs}>
         <InitializeApp />
         <AppFrame header={<AppHeader arURL={widget.property.default.arURL} />} />
         {/* TODO(ReEarth): Support initial layer loading(Splash screen) */}

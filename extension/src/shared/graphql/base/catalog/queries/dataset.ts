@@ -1,7 +1,7 @@
 import { gql } from "../__gen__/gql";
 
 export const DATASETS = gql(`
-query Datasets($input: DatasetsInput!) {
+query Datasets($input: DatasetsInput!, $crs: Crs) {
   datasets(input: $input) {
     ...DatasetFragment
   }
@@ -9,7 +9,7 @@ query Datasets($input: DatasetsInput!) {
 `);
 
 export const DATASET_BY_ID = gql(`
-query DatasetById($id: ID!) {
+query DatasetById($id: ID!, $crs: Crs) {
   node(id: $id) {
     ... on Dataset {
       ...DatasetFragment
@@ -19,7 +19,7 @@ query DatasetById($id: ID!) {
 `);
 
 export const DATASETS_BY_IDS = gql(`
-query DatasetsByIds($ids: [ID!]!) {
+query DatasetsByIds($ids: [ID!]!, $crs: Crs) {
   nodes(ids: $ids) {
     ... on Dataset {
       ...DatasetFragment

@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 
 import { SAMPLE_DATA_CITY_CODE_SUFFIX } from "../../../constants";
+import { hasItemsToShow } from "../../../plateau/datasetItemId";
+import { usePlateauCrs } from "../../../states/environmentVariables";
 import { AREAS, AREA_DATASETS } from "../../base/catalog/queries/area";
 import { AreasInput, DatasetsInput } from "../../types/catalog";
 
@@ -23,8 +25,8 @@ export const useAreas = (input?: AreasInput, options?: Options) => {
       data: data.data
         ? {
             ...data.data,
-            areas: data.data.areas.filter(a =>
-              !(a.code as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX),
+            areas: data.data.areas.filter(
+              a => !(a.code as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX),
             ),
           }
         : undefined,
@@ -36,10 +38,12 @@ export const useAreas = (input?: AreasInput, options?: Options) => {
 };
 
 export const useAreaDatasets = (code: string, input?: DatasetsInput, options?: Options) => {
+  const [crs] = usePlateauCrs();
   const { data, ...rest } = useQuery(AREA_DATASETS, {
     variables: {
       code,
       input: input ?? {},
+      crs,
     },
     skip: options?.skip,
   });
@@ -47,13 +51,14 @@ export const useAreaDatasets = (code: string, input?: DatasetsInput, options?: O
   const nextDatasets = useMemo(
     () =>
       data?.area?.datasets
+        .filter(d => !crs || hasItemsToShow(d))
         .map(d =>
           d.cityCode && (d.cityCode as string).endsWith(SAMPLE_DATA_CITY_CODE_SUFFIX)
             ? { ...d, cityCode: null, city: null }
             : d,
         )
         .sort((a, b) => a.type.order - b.type.order),
-    [data],
+    [data, crs],
   );
 
   return {

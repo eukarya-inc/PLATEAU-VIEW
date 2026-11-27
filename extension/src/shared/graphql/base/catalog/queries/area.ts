@@ -11,7 +11,7 @@ query Areas($input: AreasInput!) {
 `);
 
 export const AREA_DATASETS = gql(`
-query AreaDatasets($code: AreaCode!, $input: DatasetsInput!) {
+query AreaDatasets($code: AreaCode!, $input: DatasetsInput!, $crs: Crs) {
   area(code: $code) {
     id
     code

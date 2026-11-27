@@ -13,6 +13,7 @@ import {
   templateClient,
 } from "../api/clients";
 import { catalogClient, createCatalogClient } from "../graphql/clients";
+import { Crs } from "../graphql/types/catalog";
 import { CameraPosition } from "../reearth/types";
 import {
   useCityCode,
@@ -37,7 +38,12 @@ import {
   useDatasetAttributesURL,
   useCityGMLApiUrl,
   useTerrainUrl,
+  usePlateauCrs,
 } from "../states/environmentVariables";
+
+const CRS_VALUES: readonly string[] = Object.values(Crs);
+const parseCrs = (value: string | undefined): Crs | undefined =>
+  value && CRS_VALUES.includes(value) ? (value as Crs) : undefined;
 
 type Props = {
   inEditor?: boolean;
@@ -65,6 +71,9 @@ type Props = {
   customPedestrian?: CameraPosition;
   customSiteUrl?: string;
   terrainUrl?: string;
+  // Height CRS of the PLATEAU 3D Tiles (a Crs value such as "JGD2024"). Unset or unknown
+  // values leave it to the data catalog's default CRS.
+  plateauCrs?: string;
   // Notification setting
   isEnable?: boolean;
   content?: string;
@@ -96,6 +105,7 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
   customPedestrian,
   customSiteUrl,
   terrainUrl,
+  plateauCrs,
   geojsonURL,
   isEnable,
   content,
@@ -243,6 +253,16 @@ export const WidgetContext: FC<PropsWithChildren<Props>> = ({
       setTerrainUrlState(terrainUrl);
     }
   }, [terrainUrl, terrainUrlState, setTerrainUrlState]);
+
+  // Same presence guard as terrainUrl: only the widget that carries the CRS setting writes it.
+  // Every catalog query that reads dataset items passes this atom as $crs.
+  const [plateauCrsState, setPlateauCrsState] = usePlateauCrs();
+  useEffect(() => {
+    const crs = parseCrs(plateauCrs);
+    if (crs && crs !== plateauCrsState) {
+      setPlateauCrsState(crs);
+    }
+  }, [plateauCrs, plateauCrsState, setPlateauCrsState]);
 
   const [datasetAttributesURLState, setDatasetAttributesURLState] = useDatasetAttributesURL();
   useEffect(() => {

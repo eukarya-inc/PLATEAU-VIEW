@@ -1,5 +1,6 @@
 import { atom, useAtom } from "jotai";
 
+import type { Crs } from "../graphql/types/catalog";
 import type { CameraPosition } from "../reearth/types";
 
 // default settings
@@ -58,6 +59,11 @@ export const useDatasetAttributesURL = () => useAtom(datasetAttributesURL);
 
 const terrainUrl = atom<string | undefined>(undefined);
 export const useTerrainUrl = () => useAtom(terrainUrl);
+
+// The height CRS of the PLATEAU 3D Tiles this project shows. undefined lets the data catalog
+// use its default CRS.
+const plateauCrs = atom<Crs | undefined>(undefined);
+export const usePlateauCrs = () => useAtom(plateauCrs);
 
 // notification setting
 export const isEnableAtom = atom(false);

@@ -1,5 +1,15 @@
 import { gql } from "../__gen__";
 
+export const DATASET_ITEM_FRAGMENT = gql(`
+  fragment DatasetItemFragment on DatasetItem {
+    id
+    format
+    name
+    url
+    layers
+  }
+`);
+
 export const DATASET_FRAGMENT = gql(`
   fragment DatasetFragment on Dataset {
     id
@@ -33,18 +43,28 @@ export const DATASET_FRAGMENT = gql(`
       category
       order
     }
-    items {
-      id
-      format
-      name
-      url
-      layers
-    }
     admin
     ... on PlateauDataset {
+      # The 3D Tiles of a PLATEAU dataset come in one variant per height CRS. $crs picks
+      # which one the project shows; null is the server's default CRS. Only
+      # PlateauDataset.items takes it, so items is selected per concrete type: arguments
+      # on the Dataset interface field would conflict with this one.
+      items(crs: $crs) {
+        ...DatasetItemFragment
+      }
       subname
       plateauSpecMinor {
         majorVersion
+      }
+    }
+    ... on RelatedDataset {
+      items {
+        ...DatasetItemFragment
+      }
+    }
+    ... on GenericDataset {
+      items {
+        ...DatasetItemFragment
       }
     }
   }

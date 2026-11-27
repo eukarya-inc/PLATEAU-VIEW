@@ -1,4 +1,5 @@
 import { ComponentTemplate, EmphasisPropertyTemplate, Setting } from "../../shared/api/types";
+import { findSettingForItem } from "../../shared/plateau/datasetItemId";
 
 import { EditorTreeItemType } from "./ui-components";
 
@@ -96,7 +97,9 @@ export function hasBeenEdited(
   dataId: string,
   type = "general" || "fieldComponents" || "featureInspector",
 ) {
-  const setting = settings.find(s => s.datasetId === datasetId && s.dataId === dataId);
+  // The viewer also uses a setting stored under the ID of another variant of the same choice
+  // (e.g. the JGD2011 item when the project shows JGD2024), so it counts as edited here too.
+  const setting = findSettingForItem(settings, datasetId, dataId);
   if (!setting) return false;
   if (type === "general") {
     return (

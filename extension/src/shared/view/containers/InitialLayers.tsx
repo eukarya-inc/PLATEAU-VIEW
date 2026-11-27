@@ -183,7 +183,11 @@ export const InitialLayers: FC = () => {
     skip: !!shareId && !isSharedDataLoaded && !sharedRootLayers?.length,
   });
 
-  const initialDatasets = useMemo(() => query.data?.nodes?.filter(isNotNullish) ?? [], [query]);
+  // A dataset can have no item in the CRS this project shows; it has nothing to display.
+  const initialDatasets = useMemo(
+    () => query.data?.nodes?.filter(isNotNullish).filter(d => (d.items?.length ?? 0) > 0) ?? [],
+    [query],
+  );
 
   const initialLayers: InitialLayerParams = useMemo(() => {
     if (!sharedRootLayers?.length) return defaultLayerParams;

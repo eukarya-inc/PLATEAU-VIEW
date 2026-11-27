@@ -2,6 +2,7 @@
   "possibleTypes": {
     "Area": [
       "City",
+      "GlobalArea",
       "Prefecture",
       "Ward"
     ],
@@ -26,6 +27,7 @@
       "GenericDataset",
       "GenericDatasetItem",
       "GenericDatasetType",
+      "GlobalArea",
       "PlateauDataset",
       "PlateauDatasetItem",
       "PlateauDatasetType",

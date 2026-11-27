@@ -18,6 +18,7 @@ import {
 import { DEFAULT_PLATEAU_SPEC_VERSION } from "../constants";
 import { DatasetFragmentFragment, DatasetItem, DatasetType } from "../graphql/types/catalog";
 import { REEARTH_DATA_FORMATS } from "../plateau/constants";
+import { findDatasetItemById, findSettingForItem } from "../plateau/datasetItemId";
 import { CameraPosition } from "../reearth/types";
 import { sharedStoreAtomWrapper } from "../sharedAtoms";
 import { CURRENT_COMPONENT_GROUP_ID, CURRENT_DATA_ID } from "../states/rootLayer";
@@ -117,17 +118,10 @@ const findComponentGroupIds = (
 };
 
 const findSetting = (settings: Setting[], currentDataId: string | undefined) => {
-  const result: (Setting | undefined)[] = new Array(2); // [found setting, default setting];
-  for (const setting of settings) {
-    if (setting.dataId === currentDataId) {
-      result[0] = setting;
-    }
-    if (setting.dataId === DEFAULT_SETTING_DATA_ID) {
-      result[1] = setting;
-    }
-  }
-
-  const [setting, defaultSetting] = result;
+  // The setting of the item, or else the one of the same choice stored under the ID of
+  // another variant (CRS or attribute set). Settings here are of one dataset already.
+  const setting = findSettingForItem(settings, undefined, currentDataId);
+  const defaultSetting = settings.find(s => s.dataId === DEFAULT_SETTING_DATA_ID);
 
   const fieldComponents = setting?.fieldComponents;
   const hasGroups = fieldComponents?.groups?.some(g => !!g.components.length);
@@ -199,8 +193,10 @@ const findEmphasisProperties = (
   return template?.type === "emphasis" ? template.properties : undefined;
 };
 
+// An ID that names no item of the list (e.g. a choice the project's CRS does not have) falls
+// back to the first item, instead of a layer with no data.
 const findData = (dataList: DatasetItem[], currentDataId: string | undefined) =>
-  currentDataId ? dataList.find(d => d.id === currentDataId) : dataList[0];
+  findDatasetItemById(dataList, currentDataId) ?? dataList[0];
 
 const createViewLayerWithComponentGroup = (
   datasetId: string,
@@ -326,7 +322,12 @@ export const createRootLayerForDatasetAtom = (
 
   const initialSettings = params.settings;
   const initialTemplates = params.templates;
-  const initialCurrentDataId = params.currentDataId ?? dataList[0].id;
+  // A stored ID (initial layer setting, share link) may name the item of another CRS than
+  // the one this project shows; keep the ID of the item that is actually in the list.
+  const initialCurrentDataId =
+    findDatasetItemById(dataList, params.currentDataId)?.id ??
+    dataList[0]?.id ??
+    params.currentDataId;
   const initialCurrentGroupId = params.currentGroupId;
   const initialHidden = !!params.hidden;
   const rootLayerAtom = atom<RootLayerForDataset>(
@@ -385,7 +386,12 @@ export const createRootLayerForDatasetAtom = (
 
   const currentDataIdAtomAtom = atom(
     get => get(currentDataIdAtom),
-    (get, set, update: string | undefined) => {
+    (get, set, rawUpdate: string | undefined) => {
+      // The shared store may restore an ID written for another CRS; see initialCurrentDataId.
+      const update =
+        rawUpdate === undefined
+          ? undefined
+          : findDatasetItemById(dataList, rawUpdate)?.id ?? dataList[0]?.id ?? rawUpdate;
       const currentDataId = get(currentDataIdAtom);
       if (currentDataId === update) return;
       // set current group id when data id changes

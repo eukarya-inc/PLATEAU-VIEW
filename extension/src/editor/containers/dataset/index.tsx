@@ -12,6 +12,7 @@ import { DEFAULT_SETTING_DATA_ID } from "../../../shared/api/constants";
 import { Setting } from "../../../shared/api/types";
 import { useDatasetById } from "../../../shared/graphql";
 import { DatasetFragmentFragment } from "../../../shared/graphql/types/catalog";
+import { findSettingForItem } from "../../../shared/plateau/datasetItemId";
 import { updateSettingAtom } from "../../../shared/states/setting";
 import { generateID } from "../../../shared/utils/id";
 import { useCityOrPlateauDataset } from "../../hooks/useIsCityOrPlateauDataset";
@@ -56,6 +57,29 @@ export type DraftSetting = Omit<Setting, "id"> & {
 };
 
 export type UpdateSetting = React.Dispatch<React.SetStateAction<DraftSetting | undefined>>;
+
+// The draft starts from the setting of the item. When there is none but the viewer uses the
+// setting of another variant of the same choice (another CRS or attribute set), the draft
+// starts from a copy of it, saved as a new setting of this item so the other one is kept.
+const draftFromSettings = (
+  settings: Setting[],
+  datasetId: string,
+  dataId: string,
+): DraftSetting => {
+  const setting = findSettingForItem(settings, datasetId, dataId);
+  if (setting?.dataId === dataId) return setting;
+  if (setting) {
+    const { id: _id, ...rest } = cloneDeep(setting);
+    return { ...rest, dataId };
+  }
+  return {
+    datasetId,
+    dataId,
+    general: {},
+    fieldComponents: {},
+    featureInspector: {},
+  };
+};
 
 export const EditorDatasetSection: FC<EditorDatasetSectionProps> = ({ cache, editorNoticeRef }) => {
   const [contentType, setContentType] = useState<EditorDatasetConentType>();
@@ -199,13 +223,7 @@ export const EditorDatasetSection: FC<EditorDatasetSectionProps> = ({ cache, edi
         ? undefined
         : cacheSetting
         ? cloneDeep(cacheSetting)
-        : settings.find(s => s.datasetId === dataset.id && s.dataId === dataId) ?? {
-            datasetId: dataset.id,
-            dataId,
-            general: {},
-            fieldComponents: {},
-            featureInspector: {},
-          },
+        : draftFromSettings(settings, dataset.id, dataId),
     );
   }, [dataId, dataset, settings, cache]);
 

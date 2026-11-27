@@ -170,6 +170,17 @@ const yml = {
                 description:
                   "Cesium ion の代わりに任意の quantized-mesh 地形 (layer.json) を読み込みます。CORS 許可が必要です。",
               },
+              {
+                id: "plateauCrs",
+                type: "string",
+                title: "PLATEAU 3D Tiles の高さの測地系",
+                description:
+                  "表示する 3D Tiles の版を選びます。選んだ測地系の版がないデータは表示されません（別の測地系の版で代用しません）。未設定のときは、データカタログの既定の測地系（現在は JGD2011）になります。",
+                choices: [
+                  { key: "JGD2011", label: "JGD2011（測地成果2011）" },
+                  { key: "JGD2024", label: "JGD2024（測地成果2024）" },
+                ],
+              },
             ],
           },
         ],

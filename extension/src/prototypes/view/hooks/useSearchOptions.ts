@@ -261,7 +261,8 @@ export function useSearchOptions(options?: SearchOptionsParams): SearchOptions {
           const type =
             datasetTypeLayers[dataset.type.code as PlateauDatasetType] ?? datasetTypeLayers.usecase;
           const municipalityCode = datasetOption.dataset.wardCode;
-          if (type == null) {
+          // A dataset can have no item in the CRS this project shows.
+          if (type == null || !datasetOption.dataset.items.length) {
             return;
           }
           const filteredSettings = settings.filter(s => s.datasetId === dataset.id);
