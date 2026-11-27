@@ -3,6 +3,7 @@ package cmsintsetup
 import (
 	"net/http"
 
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/serviceauth"
 	"github.com/k0kubun/pp/v3"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearthx/log"
@@ -13,7 +14,11 @@ func init() {
 }
 
 type Config struct {
-	Token            string
+	// Host is the URL of this server, the audience of the ID tokens of ServiceAccounts.
+	Host string
+	// ServiceAccounts may call the setup routes with Google ID tokens. The routes reject every
+	// request when it is empty.
+	ServiceAccounts  []string
 	CMSURL           string
 	CMSToken         string
 	CMSSystemProject string
@@ -28,14 +33,7 @@ func Handler(conf Config, g *echo.Group) error {
 		return err
 	}
 
-	auth := func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if conf.Token == "" || c.Request().Header.Get("Authorization") != "Bearer "+conf.Token {
-				return c.JSON(http.StatusUnauthorized, "invalid token")
-			}
-			return next(c)
-		}
-	}
+	auth := serviceauth.Middleware(conf.Host, conf.ServiceAccounts, nil)
 
 	// A subgroup keeps the auth off other routes registered later on the same group.
 	g = g.Group("", auth)

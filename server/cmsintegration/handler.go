@@ -14,6 +14,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintsetup"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/dataconv"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/geospatialjpv3"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/serviceauth"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
 	"github.com/reearth/reearthx/log"
@@ -58,8 +59,10 @@ func compatHandler(conf Config, g *echo.Group) error {
 	}
 
 	g.POST("/notify_fme", v2)
-	g.POST("/publish_to_geospatialjp", geo)
-	g.POST("/dataconv", echo.WrapHandler(dataconv))
+	// operation routes: called with Google ID tokens of the admin service accounts
+	auth := serviceauth.Middleware(conf.Host, conf.AdminServiceAccounts, nil)
+	g.POST("/publish_to_geospatialjp", geo, auth)
+	g.POST("/dataconv", echo.WrapHandler(dataconv), auth)
 	return nil
 }
 
@@ -168,7 +171,6 @@ func geospatialjpv2Config(conf Config) geospatialjpv2.Config {
 		CkanPrivate:         conf.CkanPrivate,
 		DisablePublication:  conf.DisableGeospatialjpPublication,
 		DisableCatalogCheck: conf.DisableGeospatialjpCatalogCheck,
-		PublicationToken:    conf.APIToken,
 		// EnablePulicationOnWebhook: true,
 	}
 }
@@ -197,7 +199,6 @@ func dataConvConfig(conf Config) dataconv.Config {
 		Disable:  conf.DisableDataConv,
 		CMSBase:  conf.CMSBaseURL,
 		CMSToken: conf.CMSToken,
-		APIToken: conf.APIToken,
 		// CMSModel: conf.CMSModel,
 	}
 }
@@ -218,7 +219,8 @@ func flowConfig(conf Config) cmsintflow.Config {
 
 func setupConfig(conf Config) cmsintsetup.Config {
 	return cmsintsetup.Config{
-		Token:            conf.APIToken,
+		Host:             conf.Host,
+		ServiceAccounts:  conf.AdminServiceAccounts,
 		CMSURL:           conf.CMSBaseURL,
 		CMSToken:         conf.CMSToken,
 		CMSSystemProject: conf.CMSSystemProject,

@@ -17,7 +17,6 @@ type Config struct {
 	CMSToken string
 	// optional
 	CMSModel string
-	APIToken string
 }
 
 func WebhookHandler(conf Config) (cmswebhook.Handler, error) {

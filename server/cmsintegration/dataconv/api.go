@@ -3,7 +3,6 @@ package dataconv
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 )
 
 func Handler(conf Config) (http.Handler, error) {
@@ -11,17 +10,12 @@ func Handler(conf Config) (http.Handler, error) {
 	if err != nil || s == nil {
 		return nil, err
 	}
-	return handler(s, conf.APIToken)
+	return handler(s)
 }
 
-func handler(s *Service, token string) (http.Handler, error) {
+// handler serves the data conversion API. The route that serves it authenticates the caller.
+func handler(s *Service) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// authorization
-		if token == "" || strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != token {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
 		// json from response body
 		resp := struct {
 			IDs     []string `json:"ids"`

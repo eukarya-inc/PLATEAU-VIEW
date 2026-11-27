@@ -184,7 +184,6 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		DisableGeospatialjpPublication:    c.Geospatialjp_Publication_Disable,
 		DisableGeospatialjpCatalogCheck:   c.Geospatialjp_CatalocCheck_Disable,
 		DisableDataConv:                   c.DataConv_Disable,
-		APIToken:                          c.Sidebar_Token,
 		AdminServiceAccounts:              c.Admin_ServiceAccounts,
 		GeospatialjpBuildType:             c.Geospatialjp_BuildType,
 		GeospatialjpCloudRunJobsJobName:   c.Geospatialjp_JobName,

@@ -19,29 +19,13 @@ func TestHandler(t *testing.T) {
 		cms:  &cmsMock{},
 		conf: Config{CMSModel: defaultCMSModel},
 	}
-	h, err := handler(s, "token")
+	h, err := handler(s)
 	assert.NoError(t, err)
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "/", strings.NewReader("{}"))
-	h.ServeHTTP(w, r)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Equal(t, "Unauthorized\n", w.Body.String())
-
-	w = httptest.NewRecorder()
-	r = httptest.NewRequest("POST", "/", strings.NewReader(`{"ids": ["id1", "id2"], "project": "project"}`))
+	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"ids": ["id1", "id2"], "project": "project"}`))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer token")
 	h.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, `["id1","id2"]`+"\n", w.Body.String())
-
-	h, err = handler(s, "")
-	assert.NoError(t, err)
-
-	w = httptest.NewRecorder()
-	r = httptest.NewRequest("POST", "/", strings.NewReader(`{"ids": ["id1"], "project": "project"}`))
-	r.Header.Set("Content-Type", "application/json")
-	h.ServeHTTP(w, r)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

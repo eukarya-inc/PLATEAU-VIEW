@@ -13,7 +13,8 @@ func TestHandler_AuthScope(t *testing.T) {
 	e := echo.New()
 	g := e.Group("")
 	assert.NoError(t, Handler(Config{
-		Token:            "token",
+		Host:             "https://api.example.com",
+		ServiceAccounts:  []string{"operator@p.iam.gserviceaccount.com"},
 		CMSURL:           "https://example.com",
 		CMSToken:         "cmstoken",
 		CMSSystemProject: "system",

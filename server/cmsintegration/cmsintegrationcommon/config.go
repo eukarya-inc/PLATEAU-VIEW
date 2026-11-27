@@ -2,10 +2,9 @@ package cmsintegrationcommon
 
 type Config struct {
 	// general
-	Host     string
-	Secret   string
-	Debug    bool
-	APIToken string
+	Host   string
+	Secret string
+	Debug  bool
 	// AdminServiceAccounts may call the routes authenticated with Google ID tokens.
 	AdminServiceAccounts []string
 	// CMS

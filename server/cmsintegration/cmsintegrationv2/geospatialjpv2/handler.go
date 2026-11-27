@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 	cms "github.com/reearth/reearth-cms-api/go"
@@ -18,13 +17,9 @@ func Handler(conf Config) (echo.HandlerFunc, error) {
 	}
 
 	return func(c echo.Context) error {
-		if conf.DisablePublication || conf.PublicationToken == "" {
+		// the route that serves this authenticates the caller
+		if conf.DisablePublication {
 			return rerror.ErrNotFound
-		}
-
-		token := strings.TrimPrefix(c.Request().Header.Get("Authorization"), "Bearer ")
-		if conf.PublicationToken != token {
-			return c.JSON(http.StatusUnauthorized, "unauthorized")
 		}
 
 		b := struct {
