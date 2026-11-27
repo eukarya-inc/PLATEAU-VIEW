@@ -399,6 +399,8 @@ PLATEAUのプロジェクト（workspacesモデルの`datacatalog_project_alias`
 
 ユースケースと関連データセットは対象外です。
 
+JGD2024の3D Tiles（ファイル名に`_jgd2024`）は、どのアイテムでもFlowの出力です。変換ツールの設定（`converter`）は書き換えないので、FMEを指定したアイテムでは、JGD2011の3D TilesはFMEの出力のまま残ります。
+
 #### 使い方
 
 ```bash

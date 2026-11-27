@@ -245,7 +245,11 @@ func sendRequestToFlow(
 	}
 
 	// post a comment to the item
-	if err = s.CMS.CommentToItem(ctx, mainItem.ID, fmt.Sprintf("Flowでの%s（v%d）を開始しました。", ty.Title(), specv)); err != nil {
+	comment := fmt.Sprintf("Flowでの%s（v%d）を開始しました。", ty.Title(), triggerSpec.MajorVersion)
+	if reconvert != nil {
+		comment += fmt.Sprintf("%sで再変換します。", reconvert.CRS)
+	}
+	if err = s.CMS.CommentToItem(ctx, mainItem.ID, comment); err != nil {
 		return fmt.Errorf("failed to add comment: %w", err)
 	}
 
