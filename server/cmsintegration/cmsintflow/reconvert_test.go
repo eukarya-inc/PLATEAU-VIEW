@@ -127,32 +127,76 @@ func TestReconvert_convertedItem(t *testing.T) {
 	assert.Equal(t, 1, httpmock.GetTotalCallCount())
 }
 
-func TestReconvert_notFlow(t *testing.T) {
+// A reconversion uses Flow even when the converter is FME, as PLATEAU asked for the
+// items converted with FME to get Flow's JGD2024 3D Tiles as well.
+func TestReconvert_fmeConverter(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder("POST", "https://flow.example.com/api/triggers/conv/run",
+		httpmock.NewJsonResponderOrPanic(200, map[string]any{}))
 
-	s, c := newReconvertFixture("成功", plateaucms.ConverterFME)
-	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
-
-	// nothing is requested and conv_status is not touched
-	assert.ErrorIs(t, err, ErrReconvertNotSupported)
-	assert.Empty(t, c.statuses)
-	assert.Equal(t, 0, httpmock.GetTotalCallCount())
+	for _, converter := range []string{plateaucms.ConverterFME, plateaucms.ConverterFMEFlow} {
+		s, _ := newReconvertFixture("成功", converter)
+		if converter == plateaucms.ConverterFMEFlow {
+			s.PCMS = reconvertPCMS{
+				featureTypes: plateaucms.PlateauFeatureTypeList{{Code: "bldg", QC: true, Conv: true}},
+				specs: []plateaucms.PlateauSpec{{
+					MajorVersion: 4,
+					Converter:    plateaucms.ConverterFMEFlow,
+					FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "bldg", FlowConvTrigger: "conv", FlowDisabled: true}},
+				}},
+			}
+		}
+		res, err := reconvert(context.Background(), s, &Config{FlowToken: "token"}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
+		require.NoError(t, err, converter)
+		assert.True(t, res.Started, converter)
+	}
+	assert.Equal(t, 2, httpmock.GetTotalCallCount())
 }
 
-func TestReconvert_flowDisabledForFeature(t *testing.T) {
-	s, c := newReconvertFixture("成功", plateaucms.ConverterFMEFlow)
+// Spec 4 has no Flow triggers, and is converted with the workflow of spec 5.
+func TestReconvert_triggerOfNewerSpec(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder("POST", "https://flow5.example.com/api/triggers/conv5/run",
+		httpmock.NewJsonResponderOrPanic(200, map[string]any{}))
+
+	s, _ := newReconvertFixture("成功", plateaucms.ConverterFME)
 	s.PCMS = reconvertPCMS{
 		featureTypes: plateaucms.PlateauFeatureTypeList{{Code: "bldg", QC: true, Conv: true}},
-		specs: []plateaucms.PlateauSpec{{
-			MajorVersion: 4,
-			Converter:    plateaucms.ConverterFMEFlow,
-			FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "bldg", FlowConvTrigger: "conv", FlowDisabled: true}},
-		}},
+		specs: []plateaucms.PlateauSpec{
+			{MajorVersion: 4, Converter: plateaucms.ConverterFME},
+			{MajorVersion: 5, Converter: plateaucms.ConverterFlow, FlowURL: "https://flow5.example.com",
+				FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "bldg", FlowConvTrigger: "conv5"}}},
+		},
+	}
+	res, err := reconvert(context.Background(), s, &Config{FlowToken: "token"}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
+	require.NoError(t, err)
+	assert.True(t, res.Started)
+	assert.Equal(t, 1, httpmock.GetTotalCallCount())
+}
+
+func TestReconvert_noTrigger(t *testing.T) {
+	s, c := newReconvertFixture("成功", plateaucms.ConverterFlow)
+	s.PCMS = reconvertPCMS{
+		featureTypes: plateaucms.PlateauFeatureTypeList{{Code: "bldg", QC: true, Conv: true}},
+		specs:        []plateaucms.PlateauSpec{{MajorVersion: 4, Converter: plateaucms.ConverterFlow}},
 	}
 	_, err := reconvert(context.Background(), s, &Config{}, ReconvertRequest{ProjectID: "p", Model: "plateau-bldg", ItemID: "main", CRS: "JGD2024"})
 	assert.ErrorIs(t, err, ErrReconvertNotSupported)
 	assert.Empty(t, c.statuses)
+}
+
+func TestReconvertTriggerSpec(t *testing.T) {
+	specs := plateaucms.PlateauSpecList{
+		{MajorVersion: 3},
+		{MajorVersion: 4, FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "tran", FlowConvTrigger: "t4"}}},
+		{MajorVersion: 5, FlowTriggers: []plateaucms.FlowTrigger{{FeatureType: "bldg", FlowConvTrigger: "b5"}, {FeatureType: "tran", FlowConvTrigger: "t5"}}},
+	}
+	assert.Equal(t, 5, ReconvertTriggerSpec(specs, 4, "bldg").MajorVersion)
+	assert.Equal(t, 4, ReconvertTriggerSpec(specs, 4, "tran").MajorVersion)
+	assert.Equal(t, 5, ReconvertTriggerSpec(specs, 5, "tran").MajorVersion)
+	assert.Nil(t, ReconvertTriggerSpec(specs, 4, "luse"))
 }
 
 func TestReconvert_running(t *testing.T) {

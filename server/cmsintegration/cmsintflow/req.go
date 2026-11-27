@@ -22,8 +22,8 @@ func sendRequestToFlow(
 	featureTypes plateaucms.PlateauFeatureTypeList,
 	specs plateaucms.PlateauSpecList,
 	overrideReqType cmsintegrationcommon.ReqType,
-	// expectedCRS is the CRS the converted assets must have; see ID.CRS. Empty means any.
-	expectedCRS cmsintegrationcommon.CRS,
+	// reconvert is set for a conversion started by /reconvert. nil for every other request.
+	reconvert *reconvertOptions,
 ) error {
 	ctx = log.WithPrefixMessage(ctx, "flow: ")
 
@@ -140,8 +140,23 @@ func sendRequestToFlow(
 		return fmt.Errorf("spec not found for version: %d", specv)
 	}
 
+	// A reconversion always uses Flow, with the trigger of the newest spec that has one when
+	// the item's spec has none (see ReconvertTriggerSpec).
+	triggerSpec := spec
+	if reconvert != nil {
+		triggerSpec = ReconvertTriggerSpec(specs, specv, featureType.Code)
+		if triggerSpec == nil {
+			_ = s.Fail(ctx, mainItem.ID, ty, "Flowの変換用トリガーIDが、どの仕様書の版にも設定されていません（地物型%s）。", featureType.Code)
+			return fmt.Errorf("no flow conversion trigger for %s", featureType.Code)
+		}
+		log.Infofc(ctx, "reconvert: use flow trigger of spec %d for spec %d", triggerSpec.MajorVersion, specv)
+	}
+
 	// check effective converter (with override priority)
 	effectiveConverter := cmsintegrationcommon.GetEffectiveConverter(item, cityItem, spec.Converter)
+	if reconvert != nil {
+		effectiveConverter = plateaucms.ConverterFlow
+	}
 	log.Debugfc(ctx, "effective converter: %s (item=%s, city=%s, spec=%s)", effectiveConverter, item.Converter, cityItem.Converter, spec.Converter)
 
 	// check if Flow is enabled
@@ -168,10 +183,10 @@ func sendRequestToFlow(
 	var triggerID string
 	switch ty {
 	case cmsintegrationcommon.ReqTypeQC:
-		triggerID = spec.GetFlowQCTrigger(featureType.Code)
+		triggerID = triggerSpec.GetFlowQCTrigger(featureType.Code)
 		qc = true
 	case cmsintegrationcommon.ReqTypeConv:
-		triggerID = spec.GetFlowConvTrigger(featureType.Code)
+		triggerID = triggerSpec.GetFlowConvTrigger(featureType.Code)
 	}
 	log.Debugfc(ctx, "trigger id: %s (ty=%s, specv=%d, qc=%v)", triggerID, ty, specv, qc)
 	if triggerID == "" {
@@ -198,12 +213,12 @@ func sendRequestToFlow(
 		ProjectID:   projectID,
 		FeatureType: featureType.Code,
 		Type:        ty,
-		CRS:         expectedCRS,
+		CRS:         reconvert.crs(),
 	}.Sign(conf.Secret)
 
 	// request to flow
 	notificationURL := resultURL(conf, sig)
-	flowBaseURL := spec.GetEffectiveFlowURL(conf.FlowBaseURL)
+	flowBaseURL := triggerSpec.GetEffectiveFlowURL(conf.FlowBaseURL)
 	log.Infofc(ctx, "requesting to flow: triggerID=%s, baseURL=%s, notificationURL=%s, cityGMLURL=%s", triggerID, flowBaseURL, notificationURL, cityGMLAsset.URL)
 	res, err := s.Flow.Request(ctx, FlowRequest{
 		TriggerID:       triggerID,
@@ -235,4 +250,37 @@ func sendRequestToFlow(
 	}
 
 	return nil
+}
+
+// reconvertOptions are the options of a conversion started by /reconvert.
+type reconvertOptions struct {
+	// CRS is the CRS the converted assets must have; see ID.CRS.
+	CRS cmsintegrationcommon.CRS
+}
+
+func (o *reconvertOptions) crs() cmsintegrationcommon.CRS {
+	if o == nil {
+		return ""
+	}
+	return o.CRS
+}
+
+// ReconvertTriggerSpec returns the spec whose Flow conversion trigger a reconversion of a
+// feature type of spec specv uses: that spec when it has a trigger, or else the newest spec
+// that has one. Specs 4 and 5 are converted with the same workflows, while spec 4 has no Flow
+// triggers configured because its regular conversions run on FME.
+func ReconvertTriggerSpec(specs plateaucms.PlateauSpecList, specv int, featureType string) *plateaucms.PlateauSpec {
+	if s := specs.FindByVersion(specv); s != nil && s.GetFlowConvTrigger(featureType) != "" {
+		return s
+	}
+	var res *plateaucms.PlateauSpec
+	for i := range specs {
+		if specs[i].GetFlowConvTrigger(featureType) == "" {
+			continue
+		}
+		if res == nil || specs[i].MajorVersion > res.MajorVersion {
+			res = &specs[i]
+		}
+	}
+	return res
 }

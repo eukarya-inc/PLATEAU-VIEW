@@ -99,7 +99,7 @@ func TestSendRequestToFlow_qc(t *testing.T) {
 		CMS:  initMockCMS(items, assets),
 		Flow: NewFlow(nil, "https://flow.example.com", "token"),
 	}
-	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, "", "")
+	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, "", nil)
 
 	// assert
 	assert.NoError(t, err)
@@ -186,7 +186,7 @@ func TestSendRequestToFlow_conv(t *testing.T) {
 		CMS:  initMockCMS(items, assets),
 		Flow: NewFlow(nil, "https://flow.example.com", "token"),
 	}
-	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, cmsintegrationcommon.ReqTypeConv, "")
+	err := sendRequestToFlow(ctx, s, conf, projectID, modelName, items["main"], featureTypes, specs, cmsintegrationcommon.ReqTypeConv, nil)
 
 	// assert
 	assert.NoError(t, err)
@@ -230,7 +230,7 @@ func TestSendRequestToFlow_qc_unsupported(t *testing.T) {
 	s := &Services{
 		CMS: initMockCMS(nil, nil),
 	}
-	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "", "")
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "", nil)
 
 	// assert
 	assert.NoError(t, err)
@@ -277,7 +277,7 @@ func TestSendRequestToFlow_conv_running(t *testing.T) {
 	s := &Services{
 		CMS: initMockCMS(nil, nil),
 	}
-	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "", "")
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, item, featureTypes, specs, "", nil)
 
 	// assert
 	assert.NoError(t, err)
@@ -338,7 +338,7 @@ func TestSendRequestToFlow_flow_disabled(t *testing.T) {
 		CMS:  initMockCMS(items, assets),
 		Flow: NewFlow(nil, "https://flow.example.com", "token"),
 	}
-	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, items["main"], featureTypes, specs, "", "")
+	err := sendRequestToFlow(ctx, s, nil, projectID, modelName, items["main"], featureTypes, specs, "", nil)
 
 	// assert - should be skipped because Flow is not enabled
 	assert.NoError(t, err)

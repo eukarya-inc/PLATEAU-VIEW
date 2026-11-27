@@ -273,7 +273,7 @@ func receiveResultFromFlow(ctx context.Context, s *Services, conf *Config, res F
 	if shouldStartConv {
 		log.Infofc(ctx, "trigger conv after QC success")
 		rewriteQCStatus(mainItem, cmsintegrationcommon.ConvertionStatusSuccess)
-		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, id.CRS); err != nil {
+		if err := sendRequestToFlow(ctx, s, conf, id.ProjectID, featureType.Code, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, reconvertOptionsOf(id)); err != nil {
 			log.Errorfc(ctx, "failed to trigger conv: %v", err)
 			return fmt.Errorf("failed to send request to flow: %w", err)
 		}
@@ -329,4 +329,12 @@ func (s *Services) abortResult(ctx context.Context, id ID, res FlowResult, cause
 		return errors.Join(cause, fmt.Errorf("failed to record failure: %w", err))
 	}
 	return cause
+}
+
+// reconvertOptionsOf returns the reconvert options of a request signed into id, or nil.
+func reconvertOptionsOf(id ID) *reconvertOptions {
+	if id.CRS == "" {
+		return nil
+	}
+	return &reconvertOptions{CRS: id.CRS}
 }

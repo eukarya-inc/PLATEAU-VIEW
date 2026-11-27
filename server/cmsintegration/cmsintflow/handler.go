@@ -92,7 +92,7 @@ func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 		log.Debugfc(ctx, "plateau specs: count=%d", len(specs))
 
 		log.Infofc(ctx, "sending request to flow: project=%s, model=%s, item=%s", w.ProjectID(), modelName, mainItem.ID)
-		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), "", ""); err != nil {
+		if err := sendRequestToFlow(ctx, s, &conf, w.ProjectID(), modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), "", nil); err != nil {
 			log.Errorfc(ctx, "failed to trigger flow: %v", err)
 			return nil
 		}

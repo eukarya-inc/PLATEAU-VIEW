@@ -391,7 +391,9 @@ PLATEAUのプロジェクト（workspacesモデルの`datacatalog_project_alias`
   - 公開中とは、都市の`city_public`がオン、または`<地物型>_public`がオンで地物アイテムの`status`が`確認可能`のもの
 - `plateau-features`で変換ありの地物型
 - CityGMLがある
-- 仕様書が第4版以降で、そのアイテムの変換ツールがFlowになっている（`plateau-spec`の変換トリガーがある）
+- 仕様書が第4版以降
+  - 都市やアイテムの変換ツール（`converter`）の指定によらず、Flowで変換します
+  - そのアイテムの版に、`plateau-spec`でFlowの変換トリガーが設定されていないときは、トリガーが設定されている一番新しい版のものを使います（第4版は第5版と同じワークフローで変換できるため）
 - `data`にJGD2024のアセット（ファイル名に`_jgd2024`）がまだない
 - `data`に3D Tilesがある。MVTは高さを持たず測地系によらないので、MVTだけのアイテムは変換しません
 

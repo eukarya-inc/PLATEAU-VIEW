@@ -98,7 +98,7 @@ func reconvert(ctx context.Context, s *Services, conf *Config, req ReconvertRequ
 	}
 
 	modelName := strings.TrimPrefix(req.Model, cmsintegrationcommon.ModelPrefix)
-	reqErr := sendRequestToFlow(ctx, s, conf, req.ProjectID, modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, crs)
+	reqErr := sendRequestToFlow(ctx, s, conf, req.ProjectID, modelName, mainItem, featureTypes, plateaucms.PlateauSpecList(specs), cmsintegrationcommon.ReqTypeConv, &reconvertOptions{CRS: crs})
 
 	status, err := s.convStatus(ctx, mainItem)
 	if err != nil {
@@ -187,8 +187,10 @@ func checkFlowConversion(ctx context.Context, s *Services, model string, fi *cms
 	return nil
 }
 
-// FlowConversionError reports why the conversion of the feature item would not be requested
-// to Flow, following the same rules as sendRequestToFlow. It returns nil when it would be.
+// FlowConversionError reports why a reconversion of the feature item would not be requested
+// to Flow, following the same rules as sendRequestToFlow with reconvert options: the converter
+// setting is ignored, and the trigger may come from a newer spec (ReconvertTriggerSpec).
+// It returns nil when it would be requested.
 func FlowConversionError(model string, fi *cmsintegrationcommon.FeatureItem, city *cmsintegrationcommon.CityItem, featureTypes plateaucms.PlateauFeatureTypeList, specs plateaucms.PlateauSpecList) error {
 	if fi.CityGML == "" || fi.City == "" {
 		return errors.New("no city or no citygml")
@@ -209,20 +211,12 @@ func FlowConversionError(model string, fi *cmsintegrationcommon.FeatureItem, cit
 	if specv == 0 {
 		specv = city.SpecMajorVersionInt()
 	}
-	spec := specs.FindByVersion(specv)
-	if spec == nil {
+	if specs.FindByVersion(specv) == nil {
 		return fmt.Errorf("no plateau spec for version %d", specv)
 	}
-
-	converter := cmsintegrationcommon.GetEffectiveConverter(fi, city, spec.Converter)
-	if !plateaucms.IsFlowEnabledConverter(converter) {
-		return fmt.Errorf("converter is %q", converter)
-	}
-	if converter == plateaucms.ConverterFMEFlow && !spec.ShouldUseFlow(ft.Code) {
-		return fmt.Errorf("feature type %s does not use flow in spec %d", ft.Code, specv)
-	}
-	if spec.GetFlowConvTrigger(ft.Code) == "" {
-		return fmt.Errorf("no flow conversion trigger for %s in spec %d", ft.Code, specv)
+	// a reconversion always uses Flow, whatever the converter of the item, the city or the spec
+	if ReconvertTriggerSpec(specs, specv, ft.Code) == nil {
+		return fmt.Errorf("no flow conversion trigger for %s in any spec", ft.Code)
 	}
 	return nil
 }
