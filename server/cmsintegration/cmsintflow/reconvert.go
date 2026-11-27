@@ -56,7 +56,7 @@ func reconvert(ctx context.Context, s *Services, conf *Config, req ReconvertRequ
 	if err != nil {
 		return nil, fmt.Errorf("failed to get item: %w", err)
 	}
-	mainItem, err := s.GetMainItemWithMetadata(ctx, item)
+	mainItem, err := s.itemWithMetadata(ctx, item)
 	if err != nil {
 		return nil, err
 	}
@@ -123,15 +123,25 @@ func reconvert(ctx context.Context, s *Services, conf *Config, req ReconvertRequ
 	return res, reqErr
 }
 
+// itemWithMetadata returns the item with its metadata fields. The integration API returns them
+// in metadataFields of the item. Webhook payloads instead carry the main and the metadata item
+// separately, linked by their IDs.
+func (s *Services) itemWithMetadata(ctx context.Context, item *cms.Item) (*cms.Item, error) {
+	if item.MetadataItemID == nil && item.OriginalItemID == nil {
+		return item, nil
+	}
+	return s.GetMainItemWithMetadata(ctx, item)
+}
+
 func (s *Services) convStatus(ctx context.Context, mainItem *cms.Item) (string, error) {
-	if mainItem.MetadataItemID == nil {
-		return "", errors.New("item has no metadata item")
-	}
-	m, err := s.CMS.GetItem(ctx, *mainItem.MetadataItemID, false)
+	item, err := s.CMS.GetItem(ctx, mainItem.ID, false)
 	if err != nil {
-		return "", fmt.Errorf("failed to get metadata item: %w", err)
+		return "", fmt.Errorf("failed to get item: %w", err)
 	}
-	if t := m.FieldByKey("conv_status").GetValue().Tag(); t != nil {
+	if item, err = s.itemWithMetadata(ctx, item); err != nil {
+		return "", err
+	}
+	if t := item.MetadataFieldByKey("conv_status").GetValue().Tag(); t != nil {
 		return t.Name, nil
 	}
 	return "", nil

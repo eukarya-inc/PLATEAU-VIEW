@@ -534,15 +534,17 @@ func (r *reconverter) convert(ctx context.Context, t ReconvertTarget) ReconvertR
 	}
 }
 
+// convStatus reads conv_status of an item got from the integration API, which has its metadata
+// in metadataFields.
 func (r *reconverter) convStatus(ctx context.Context, item *cms.Item) (string, error) {
-	if item.MetadataItemID == nil {
-		return "", errors.New("no metadata item")
+	if len(item.MetadataFields) == 0 && item.MetadataItemID != nil {
+		m, err := r.s.CMS.GetItem(ctx, *item.MetadataItemID, false)
+		if err != nil {
+			return "", err
+		}
+		item = &cms.Item{MetadataFields: m.Fields}
 	}
-	m, err := r.s.CMS.GetItem(ctx, *item.MetadataItemID, false)
-	if err != nil {
-		return "", err
-	}
-	if tag := m.FieldByKey("conv_status").GetValue().Tag(); tag != nil {
+	if tag := item.MetadataFieldByKey("conv_status").GetValue().Tag(); tag != nil {
 		return tag.Name, nil
 	}
 	return "", nil

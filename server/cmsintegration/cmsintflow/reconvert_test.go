@@ -39,21 +39,19 @@ func (m *reconvertCMS) GetItem(ctx context.Context, id string, asset bool) (*cms
 	if i, ok := m.items[id]; ok {
 		c := *i
 		c.Fields = append([]*cms.Field(nil), i.Fields...)
+		c.MetadataFields = append([]*cms.Field(nil), i.MetadataFields...)
 		return &c, nil
 	}
 	return nil, errors.New("not found")
 }
 
 func (m *reconvertCMS) UpdateItem(ctx context.Context, id string, fields, metadataFields []*cms.Field) (*cms.Item, error) {
-	meta := m.items[*m.items[id].MetadataItemID]
+	item := m.items[id]
 	for _, f := range metadataFields {
 		if f.Key == "conv_status" {
 			if name, ok := f.Value.(string); ok {
 				m.statuses = append(m.statuses, name)
-				// the metadata item holds its values in Fields
-				i := &cms.Item{MetadataFields: meta.Fields}
-				setMetadataTag(i, "conv_status", name)
-				meta.Fields = i.MetadataFields
+				setMetadataTag(item, "conv_status", name)
 			}
 		}
 	}
@@ -71,24 +69,23 @@ func (m *reconvertCMS) Asset(ctx context.Context, id string) (*cms.Asset, error)
 	return nil, errors.New("not found")
 }
 
+// newReconvertFixture returns an item in the shape the integration API returns it: the metadata
+// is in metadataFields and there is no metadata item ID.
 func newReconvertFixture(convStatus string, converter string) (*Services, *reconvertCMS) {
-	metaID := "meta"
-	mainID := "main"
 	var metaFields []*cms.Field
 	if convStatus != "" {
 		metaFields = append(metaFields, &cms.Field{Key: "conv_status", Type: "tag", Value: map[string]any{"name": convStatus}})
 	}
 	c := &reconvertCMS{
 		items: map[string]*cms.Item{
-			mainID: {
-				ID:             mainID,
-				MetadataItemID: &metaID,
+			"main": {
+				ID: "main",
 				Fields: []*cms.Field{
 					{Key: "city", Value: "city"},
 					{Key: "citygml", Value: "citygml"},
 				},
+				MetadataFields: metaFields,
 			},
-			metaID: {ID: metaID, OriginalItemID: &mainID, Fields: metaFields},
 			"city": {
 				Fields: []*cms.Field{
 					{Key: "spec", Value: "v4.1"},
