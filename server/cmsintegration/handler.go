@@ -212,6 +212,7 @@ func flowConfig(conf Config) cmsintflow.Config {
 		FlowBaseURL:      conf.FlowBaseURL,
 		FlowToken:        conf.FlowToken,
 		Secret:           conf.Secret,
+		ServiceAccounts:  conf.AdminServiceAccounts,
 	}
 }
 

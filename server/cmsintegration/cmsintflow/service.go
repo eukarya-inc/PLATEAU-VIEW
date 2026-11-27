@@ -25,6 +25,9 @@ type Config struct {
 	FlowBaseURL      string
 	FlowToken        string
 	Secret           string
+	// ServiceAccounts may call /reconvert with a Google ID token issued for Host.
+	// The route rejects every request when it is empty.
+	ServiceAccounts []string
 }
 
 type Services struct {

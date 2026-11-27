@@ -33,38 +33,41 @@ func init() {
 const configPrefix = "REEARTH_PLATEAUVIEW"
 
 type Config struct {
-	Port                               uint     `default:"8080" envconfig:"PORT"`
-	Host                               string   `default:"http://localhost:8080"`
-	GOOGLE_CLOUD_PROJECT               string   `envconfig:"GOOGLE_CLOUD_PROJECT" pp:",omitempty"`
-	GOOGLE_CLOUD_REGION                string   `envconfig:"GOOGLE_CLOUD_REGION" pp:",omitempty"`
-	Debug                              bool     `pp:",omitempty"`
-	Origin                             []string `pp:",omitempty"`
-	Secret                             string   `pp:",omitempty"`
-	Job                                string   `pp:",omitempty"`
-	CMS_Webhook_Secret                 string   `pp:",omitempty"`
-	CMS_BaseURL                        string   `pp:",omitempty"`
-	CMS_Token                          string   `pp:",omitempty"`
-	CMS_IntegrationID                  string   `pp:",omitempty"`
-	CMS_PlateauProject                 string   `pp:",omitempty"`
-	CMS_SystemProject                  string   `pp:",omitempty"`
-	CMS_TokenProject                   string   `pp:",omitempty"`
-	FME_BaseURL                        string   `pp:",omitempty"`
-	FME_BaseURL_V2                     string   `pp:",omitempty"`
-	FME_URL_V3                         string   `pp:",omitempty"`
-	FME_Mock                           bool     `pp:",omitempty"`
-	FME_Token                          string   `pp:",omitempty"`
-	FME_SkipQualityCheck               bool     `pp:",omitempty"`
-	Ckan_BaseURL                       string   `pp:",omitempty"`
-	Ckan_Org                           string   `pp:",omitempty"`
-	Ckan_Token                         string   `pp:",omitempty"`
-	Ckan_Private                       bool     `pp:",omitempty"`
-	SDK_Token                          string   `pp:",omitempty"`
-	SendGrid_APIKey                    string   `pp:",omitempty"`
-	Opinion_From                       string   `pp:",omitempty"`
-	Opinion_FromName                   string   `pp:",omitempty"`
-	Opinion_To                         string   `pp:",omitempty"`
-	Opinion_ToName                     string   `pp:",omitempty"`
-	Sidebar_Token                      string   `pp:",omitempty"`
+	Port                 uint     `default:"8080" envconfig:"PORT"`
+	Host                 string   `default:"http://localhost:8080"`
+	GOOGLE_CLOUD_PROJECT string   `envconfig:"GOOGLE_CLOUD_PROJECT" pp:",omitempty"`
+	GOOGLE_CLOUD_REGION  string   `envconfig:"GOOGLE_CLOUD_REGION" pp:",omitempty"`
+	Debug                bool     `pp:",omitempty"`
+	Origin               []string `pp:",omitempty"`
+	Secret               string   `pp:",omitempty"`
+	Job                  string   `pp:",omitempty"`
+	CMS_Webhook_Secret   string   `pp:",omitempty"`
+	CMS_BaseURL          string   `pp:",omitempty"`
+	CMS_Token            string   `pp:",omitempty"`
+	CMS_IntegrationID    string   `pp:",omitempty"`
+	CMS_PlateauProject   string   `pp:",omitempty"`
+	CMS_SystemProject    string   `pp:",omitempty"`
+	CMS_TokenProject     string   `pp:",omitempty"`
+	FME_BaseURL          string   `pp:",omitempty"`
+	FME_BaseURL_V2       string   `pp:",omitempty"`
+	FME_URL_V3           string   `pp:",omitempty"`
+	FME_Mock             bool     `pp:",omitempty"`
+	FME_Token            string   `pp:",omitempty"`
+	FME_SkipQualityCheck bool     `pp:",omitempty"`
+	Ckan_BaseURL         string   `pp:",omitempty"`
+	Ckan_Org             string   `pp:",omitempty"`
+	Ckan_Token           string   `pp:",omitempty"`
+	Ckan_Private         bool     `pp:",omitempty"`
+	SDK_Token            string   `pp:",omitempty"`
+	SendGrid_APIKey      string   `pp:",omitempty"`
+	Opinion_From         string   `pp:",omitempty"`
+	Opinion_FromName     string   `pp:",omitempty"`
+	Opinion_To           string   `pp:",omitempty"`
+	Opinion_ToName       string   `pp:",omitempty"`
+	Sidebar_Token        string   `pp:",omitempty"`
+	// Admin_ServiceAccounts are the emails of the service accounts allowed to call the
+	// operation routes that authenticate with Google ID tokens, such as /reconvert.
+	Admin_ServiceAccounts              []string `pp:",omitempty"`
 	Share_Disable                      bool     `pp:",omitempty"`
 	CMSINT_TaskImage                   string   `pp:",omitempty"`
 	Geospatialjp_Publication_Disable   bool     `pp:",omitempty"`
@@ -78,7 +81,6 @@ type Config struct {
 	Geospatialjp_CloudBuildDiskSizeGb  int64    `pp:",omitempty"`
 	DataConv_Disable                   bool     `pp:",omitempty"`
 	DataCatalog_DisableCache           bool     `pp:",omitempty"`
-	DataCatalog_CacheUpdateKey         string   `pp:",omitempty"`
 	DataCatalog_CacheUpdateURL         string   `pp:",omitempty"`
 	DataCatalog_PlaygroundEndpoint     string   `pp:",omitempty"`
 	DataCatalog_CacheTTL               int      `pp:",omitempty"`
@@ -141,7 +143,6 @@ func (c *Config) secrets() []*string {
 		&c.SDK_Token,
 		&c.SendGrid_APIKey,
 		&c.Sidebar_Token,
-		&c.DataCatalog_CacheUpdateKey,
 		&c.DataCatalog_GeocodingAppID,
 		&c.Flow_Token,
 		&c.Proxy_ODPT_ConsumerKey,
@@ -184,6 +185,7 @@ func (c *Config) CMSIntegration() cmsintegration.Config {
 		DisableGeospatialjpCatalogCheck:   c.Geospatialjp_CatalocCheck_Disable,
 		DisableDataConv:                   c.DataConv_Disable,
 		APIToken:                          c.Sidebar_Token,
+		AdminServiceAccounts:              c.Admin_ServiceAccounts,
 		GeospatialjpBuildType:             c.Geospatialjp_BuildType,
 		GeospatialjpCloudRunJobsJobName:   c.Geospatialjp_JobName,
 		GeospatialjpCloudBuildMachineType: c.Geospatialjp_CloudBuildMachineType,
@@ -227,7 +229,7 @@ func (c *Config) DataCatalog() datacatalog.Config {
 	return datacatalog.Config{
 		Config:               c.plateauCMS(),
 		Host:                 c.Host,
-		CacheUpdateKey:       c.DataCatalog_CacheUpdateKey,
+		AdminServiceAccounts: c.Admin_ServiceAccounts,
 		PlaygroundEndpoint:   c.DataCatalog_PlaygroundEndpoint,
 		GraphqlMaxComplexity: c.DataCatalog_GQL_MaxComplexity,
 		DisableCache:         c.DataCatalog_DisableCache,

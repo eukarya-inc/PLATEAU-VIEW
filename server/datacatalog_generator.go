@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,13 +17,15 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
 	cms "github.com/reearth/reearth-cms-api/go"
 	"github.com/reearth/reearthx/log"
+	"google.golang.org/api/idtoken"
 )
 
 type DatacatalogGeneratorOptions struct {
 	OutputToStdout bool
 	OutputURL      string // gs://bucket/path for GCS
-	UpdateCacheURL string // URL to call update-cache API after generation
-	UpdateCacheKey string // Key for update-cache API authentication
+	// UpdateCacheURL is the update-cache API called after generation. It is called with a Google
+	// ID token of the service account the generator runs as, issued for the URL's origin.
+	UpdateCacheURL string
 }
 
 type DatacatalogGenerator struct {
@@ -32,7 +34,6 @@ type DatacatalogGenerator struct {
 	outputToStdout bool
 	outputURL      string
 	updateCacheURL string
-	updateCacheKey string
 }
 
 func NewDatacatalogGenerator(config *Config, opts DatacatalogGeneratorOptions) *DatacatalogGenerator {
@@ -41,7 +42,6 @@ func NewDatacatalogGenerator(config *Config, opts DatacatalogGeneratorOptions) *
 		outputToStdout: opts.OutputToStdout,
 		outputURL:      opts.OutputURL,
 		updateCacheURL: opts.UpdateCacheURL,
-		updateCacheKey: opts.UpdateCacheKey,
 	}
 }
 
@@ -370,21 +370,26 @@ func (g *DatacatalogGenerator) NotifyUpdateCache(ctx context.Context) error {
 
 	log.Infof("Calling update-cache API: %s", g.updateCacheURL)
 
-	body := map[string]string{}
-	if g.updateCacheKey != "" {
-		body["key"] = g.updateCacheKey
-	}
-
-	jsonBody, err := json.Marshal(body)
+	// the server checks the ID token against its own URL (REEARTH_PLATEAUVIEW_HOST)
+	u, err := url.Parse(g.updateCacheURL)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
+		return fmt.Errorf("invalid update-cache URL: %w", err)
+	}
+	ts, err := idtoken.NewTokenSource(ctx, u.Scheme+"://"+u.Host)
+	if err != nil {
+		return fmt.Errorf("failed to get an id token source for update-cache: %w", err)
+	}
+	token, err := ts.Token()
+	if err != nil {
+		return fmt.Errorf("failed to get an id token for update-cache: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.updateCacheURL, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.updateCacheURL, bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Do(req)

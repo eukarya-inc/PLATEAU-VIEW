@@ -24,6 +24,8 @@ func Main(conf *Config, args []string) {
 		err = copyRelatedItems(conf, args)
 	case "migrate-v1":
 		err = migrateV1(conf, args)
+	case "reconvert-jgd2024":
+		err = reconvertJGD2024(conf, args)
 	case "upload-assets":
 		err = uploadAssets(conf, args)
 	case "help":

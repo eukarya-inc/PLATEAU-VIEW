@@ -15,8 +15,9 @@ import (
 type Config struct {
 	plateaucms.Config
 	// v3
-	Host                 string
-	CacheUpdateKey       string
+	Host string
+	// AdminServiceAccounts may call /update-cache with a Google ID token issued for Host.
+	AdminServiceAccounts []string
 	PlaygroundEndpoint   string
 	GraphqlMaxComplexity int
 	ErrorOnInit          bool

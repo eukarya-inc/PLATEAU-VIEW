@@ -42,7 +42,6 @@ func main() {
 		outputToStdout      = flag.Bool("stdout", false, "Output JSON to stdout instead of file (use with --generate-datacatalog)")
 		outputURL           = flag.String("output", "", "Output cache to specified URL (gs://bucket/path for GCS)")
 		updateCacheURL      = flag.String("update-cache-url", "", "URL to call update-cache API after generation (e.g., https://example.com/datacatalog/update-cache)")
-		updateCacheKey      = flag.String("update-cache-key", "", "Key for update-cache API authentication")
 		exportAssetIndex    = flag.String("export-asset-index", "", "Export the CMS asset index (NDJSON, one row per asset UUID) for specified projects and exit")
 		sourceURL           = flag.String("source", "", "Datacatalog cache to read (gs://bucket/path or local dir) instead of CMS (use with --export-asset-index)")
 		help                = flag.Bool("help", false, "Show help message")
@@ -135,10 +134,6 @@ func main() {
 		if effectiveUpdateCacheURL == "" {
 			effectiveUpdateCacheURL = conf.DataCatalog_CacheUpdateURL
 		}
-		effectiveUpdateCacheKey := *updateCacheKey
-		if effectiveUpdateCacheKey == "" {
-			effectiveUpdateCacheKey = conf.DataCatalog_CacheUpdateKey
-		}
 
 		if !*outputToStdout {
 			if effectiveUpdateCacheURL != "" {
@@ -156,7 +151,6 @@ func main() {
 				OutputToStdout: *outputToStdout,
 				OutputURL:      *outputURL,
 				UpdateCacheURL: effectiveUpdateCacheURL,
-				UpdateCacheKey: effectiveUpdateCacheKey,
 			})
 			skipped, err := generator.Generate(project)
 			if err != nil {
@@ -284,7 +278,6 @@ func printHelp() {
 	fmt.Println("  --stdout                           Output JSON to stdout instead of file (warnings to stderr)")
 	fmt.Println("  --output <url>                     Output cache to specified URL (gs://bucket/path for GCS)")
 	fmt.Println("  --update-cache-url <url>           URL to call update-cache API after generation (env: REEARTH_PLATEAUVIEW_DATACATALOG_CACHEUPDATEURL)")
-	fmt.Println("  --update-cache-key <key>           Key for update-cache API authentication (env: REEARTH_PLATEAUVIEW_DATACATALOG_CACHEUPDATEKEY)")
 	fmt.Println("  --export-asset-index [projects]    Export NDJSON with one row per CMS asset UUID to <output>/asset-index/assets.ndjson (no value for all v3 projects)")
 	fmt.Println("  --source <url>                     Read the datacatalog cache (gs://bucket/path or local dir) instead of CMS (use with --export-asset-index)")
 	fmt.Println("  --help                             Show this help message")

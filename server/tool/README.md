@@ -10,6 +10,7 @@ PLATEAU VIEWサーバーのCMS連携・データ移行ツール集です。
 - `copy-related`: 関連データセットアイテムをプロジェクト間でコピー
 - `upload-assets`: アセットファイルを一括アップロード
 - `migrate-v1`: PLATEAU VIEW v1からのデータ移行
+- `reconvert-jgd2024`: 公開中の3D TilesをJGD2024で変換しなおす
 
 ## 使い方
 
@@ -378,6 +379,74 @@ go run . migrate-v1 \
   -wetrun
 ```
 
+### 5. reconvert-jgd2024
+
+公開中の地物アイテムを、Flowでもう一度変換します。Flowのトリガーが出力するJGD2024の3D Tilesが、既存のJGD2011の3D Tilesと並んでアイテムの`data`に追加されます。JGD2011の3D Tilesは残ります。
+
+#### 対象
+
+PLATEAUのプロジェクト（workspacesモデルの`datacatalog_project_alias`が`plateau-<年度>`で、スキーマがv3のもの）から、次の条件を満たすアイテムを選びます。
+
+- 都市・地物型ごとに、公開中のアイテムのうち、最新年度のもの。データカタログが配信するのはこのアイテムです
+  - 公開中とは、都市の`city_public`がオン、または`<地物型>_public`がオンで地物アイテムの`status`が`確認可能`のもの
+- `plateau-features`で変換ありの地物型
+- CityGMLがある
+- 仕様書が第4版以降で、そのアイテムの変換ツールがFlowになっている（`plateau-spec`の変換トリガーがある）
+- `data`にJGD2024のアセット（ファイル名に`_jgd2024`）がまだない
+- `data`に3D Tilesがある。MVTは高さを持たず測地系によらないので、MVTだけのアイテムは変換しません
+
+ユースケースと関連データセットは対象外です。
+
+#### 使い方
+
+```bash
+# 対象の一覧と、対象外にした理由を表示する
+go run . reconvert-jgd2024 -dryrun
+
+# 1件だけ変換する
+go run . reconvert-jgd2024 -limit 1 -concurrency 1
+```
+
+| オプション | 説明 | デフォルト |
+|---------|------|-----------|
+| `-projects` | `<年度>=<プロジェクトID>`のカンマ区切り。空のときはworkspacesから探す | - |
+| `-years` | workspacesから探すプロジェクトの年度（カンマ区切り） | すべて |
+| `-cities` | 都市コード（カンマ区切り） | すべて |
+| `-features` | 地物型（カンマ区切り） | すべて |
+| `-limit` | 起動する変換の最大数 | 0（無制限） |
+| `-concurrency` | 同時に実行する変換の数 | 2 |
+| `-max-failures` | この数だけ失敗したら、新しい変換を起動しない | 3 |
+| `-server` | PLATEAU VIEWサーバーのURL。IDトークンのaudienceにもなる | `https://api.plateauview.mlit.go.jp` |
+| `-impersonate-service-account` | 自分の認証情報で、このサービスアカウントのIDトークンを作る | - |
+| `-id-token` | 代わりに使うIDトークン（1時間で失効） | 環境変数`RECONVERT_ID_TOKEN` |
+| `-state` | 結果を記録するJSON Linesファイル | `reconvert-jgd2024.jsonl` |
+| `-poll` | 実行中の変換を確認する間隔 | 30s |
+| `-timeout` | 1件の変換を待つ時間 | 6h |
+| `-dryrun` | 変換せずに対象を表示する | false |
+
+変換は、サーバーの`POST /reconvert`で1件ずつ起動し、`conv_status`が`成功`か`エラー`になるまで待ちます。成功したら、`data`にJGD2024のアセットが増えたかを確かめます。
+
+途中で止めても、変換はFlowとサーバーで最後まで進みます。もう一度実行すると、JGD2024のアセットがあるアイテムは飛ばされるので、続きから変換されます。
+
+変換を起動できなかったときは、`conv_status`を元の値に戻し、理由をアイテムのコメントに残します。Flowが結果を返さなかった変換は`実行中`のまま残り、次の実行でも飛ばされます。そのようなアイテムは、`conv_status`を手で戻してください。
+
+#### 認証
+
+`/reconvert`は、許可したサービスアカウントのGoogle IDトークンで認証します。
+
+- サーバーの環境変数`REEARTH_PLATEAUVIEW_ADMIN_SERVICEACCOUNTS`に、許可するサービスアカウントのメールアドレスをカンマ区切りで設定します。空のときは、すべてのリクエストを拒否します。
+- IDトークンのaudienceは、サーバーの`REEARTH_PLATEAUVIEW_HOST`です。
+- 許可するのは、このツール専用の、IAMロールを何も持たないサービスアカウントにしてください。トークンが漏れても、できるのは変換の起動だけになります。
+- 手元で実行するときは`-impersonate-service-account`を指定します。そのサービスアカウントに対する`roles/iam.serviceAccountOpenIdTokenCreator`（IDトークンだけを作れるロール）が必要です。`roles/iam.serviceAccountTokenCreator`はアクセストークンも作れるので、使わないでください。
+- Cloud Run Jobで実行するときは、Jobのサービスアカウントのトークンが使われます。そのサービスアカウントも許可リストに入れてください。
+
+```bash
+gcloud auth application-default login
+go run . reconvert-jgd2024 -impersonate-service-account <SA_EMAIL> -limit 1
+```
+
+`-id-token`に渡すトークンは、`gcloud auth print-identity-token --impersonate-service-account=<SA_EMAIL> --audiences=https://api.plateauview.mlit.go.jp --include-email`で作れます。`--include-email`がないと、メールアドレスを確かめられないので拒否されます。
+
 ---
 
 ## トラブルシューティング
@@ -457,6 +526,7 @@ iconv -f SHIFT-JIS -t UTF-8 input.csv > output.csv
 - 各ツールの実装:
   - `setup-city-items.go` → `../cmsintegration/cmsintsetup/setup_cities.go`
   - `copy-related-items.go` → `../cmsintegration/cmsintsetup/copy_related.go`
+  - `reconvert-jgd2024.go` → `../cmsintegration/cmsintsetup/reconvert_jgd2024.go`（サーバー側は`../cmsintegration/cmsintflow/reconvert.go`）
   - `upload-assets.go`
   - `migrate-v1.go`
 

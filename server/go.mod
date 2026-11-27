@@ -41,6 +41,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.27
 	github.com/vincent-petithory/dataurl v1.0.0
 	golang.org/x/net v0.47.0
+	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.19.0
 	google.golang.org/api v0.233.0
 	google.golang.org/grpc v1.72.0
@@ -139,7 +140,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/image v0.27.0 // indirect
 	golang.org/x/mod v0.30.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/tools v0.39.0 // indirect
 	gonum.org/v1/plot v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20250512202823-5a2f75b736a9 // indirect

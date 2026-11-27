@@ -1,13 +1,17 @@
 package cmsintflow
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/cmsintegration/cmsintegrationcommon"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/serviceauth"
 	"github.com/k0kubun/pp/v3"
 	"github.com/labstack/echo/v4"
 	"github.com/reearth/reearth-cms-api/go/cmswebhook"
@@ -19,6 +23,8 @@ func init() {
 }
 
 const handlerPath = "/notify_flow"
+
+const reconvertPath = "/reconvert"
 
 func WebhookHandler(conf Config) (cmswebhook.Handler, error) {
 	s, err := NewServices(conf)
@@ -132,6 +138,41 @@ func Handler(conf Config, g *echo.Group) error {
 		log.Infofc(ctx, "done: id=%s", id)
 		return nil
 	})
+
+	auth := serviceauth.Middleware(conf.Host, conf.ServiceAccounts, nil)
+
+	// POST /reconvert runs the conversion of a feature item again. It is called by the
+	// reconvert-jgd2024 tool, one item at a time.
+	g.POST(reconvertPath, func(c echo.Context) error {
+		// The work goes on when the client goes away, since stopping between the status updates
+		// and the request to Flow would leave the item 未実行 or 実行中 with no run.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request().Context()), 2*time.Minute)
+		defer cancel()
+		ctx = log.WithPrefixMessage(ctx, "cmsintflow reconvert: ")
+
+		var req ReconvertRequest
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, "invalid payload")
+		}
+
+		res, err := reconvert(ctx, s, &conf, req)
+		switch {
+		case errors.Is(err, ErrReconvertInvalidRequest):
+			return c.JSON(http.StatusBadRequest, err.Error())
+		case errors.Is(err, ErrReconvertRunning):
+			return c.JSON(http.StatusConflict, err.Error())
+		case errors.Is(err, ErrReconvertNotSupported):
+			return c.JSON(http.StatusUnprocessableEntity, err.Error())
+		case err != nil:
+			log.Errorfc(ctx, "item=%s: %v", req.ItemID, err)
+			if res == nil {
+				return c.JSON(http.StatusInternalServerError, err.Error())
+			}
+		}
+
+		log.Infofc(ctx, "item=%s: started=%v, conv_status=%s", res.ItemID, res.Started, res.ConvStatus)
+		return c.JSON(http.StatusOK, res)
+	}, auth)
 
 	return nil
 }

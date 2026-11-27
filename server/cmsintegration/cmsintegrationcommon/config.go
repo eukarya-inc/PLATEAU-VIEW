@@ -6,6 +6,8 @@ type Config struct {
 	Secret   string
 	Debug    bool
 	APIToken string
+	// AdminServiceAccounts may call the routes authenticated with Google ID tokens.
+	AdminServiceAccounts []string
 	// CMS
 	CMSBaseURL       string
 	CMSToken         string

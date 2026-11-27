@@ -7,6 +7,7 @@ import (
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/datacatalogmcp"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/datacatalog/plateauapi"
 	"github.com/eukarya-inc/PLATEAU-VIEW/server/plateaucms"
+	"github.com/eukarya-inc/PLATEAU-VIEW/server/serviceauth"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -61,10 +62,12 @@ func echov3(conf Config, g *echo.Group, pcms *plateaucms.CMS) (func(ctx context.
 	// warning API
 	plateauapig.GET("/:pid/warnings", h.WarningHandler)
 
-	// cache update API: rebuilds every loaded project's catalog from the CMS. A scheduler outside this
-	// repository calls it periodically (every 10 minutes or so, as it is configured), so what the CMS
-	// integrations write back to the CMS shows on the public routes at the next rebuild, not at once.
-	g.POST("/update-cache", h.UpdateCacheHandler)
+	// cache update API: rebuilds every loaded project's catalog from the CMS. The data catalog
+	// generator job calls it after each run (the job is started every few minutes by a scheduler
+	// outside this repository), so what the CMS integrations write back to the CMS shows on the
+	// public routes at the next rebuild, not at once. It is called with a Google ID token of the
+	// job's service account, which has to be in AdminServiceAccounts.
+	g.POST("/update-cache", h.UpdateCacheHandler, serviceauth.Middleware(conf.Host, conf.AdminServiceAccounts, nil))
 
 	// Data catalog MCP API
 	mcpService := datacatalogmcp.NewService(h, conf.Host)

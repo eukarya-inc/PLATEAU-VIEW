@@ -35,7 +35,6 @@ type ReposHandler struct {
 	reposv2            *datacatalogv2adapter.Repos
 	pcms               *plateaucms.CMS
 	gqlComplexityLimit int
-	cacheUpdateKey     string
 	geocodingAppID     string
 	cityConcurrency    int
 	maxCities          int
@@ -97,7 +96,6 @@ func NewReposHandler(conf Config, pcms *plateaucms.CMS) (*ReposHandler, error) {
 		reposv2:            reposv2,
 		pcms:               pcms,
 		gqlComplexityLimit: conf.GraphqlMaxComplexity,
-		cacheUpdateKey:     conf.CacheUpdateKey,
 		geocodingAppID:     conf.GeocodingAppID,
 		cityConcurrency:    conf.CityConcurrency,
 		maxCities:          conf.MaxCities,
@@ -287,18 +285,6 @@ func (h *ReposHandler) CityGMLFiles(admin bool) echo.HandlerFunc {
 
 func (h *ReposHandler) UpdateCacheHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-
-	if h.cacheUpdateKey != "" {
-		b := struct {
-			Key string `json:"key"`
-		}{}
-		if err := c.Bind(&b); err != nil {
-			return echo.ErrUnauthorized
-		}
-		if b.Key != h.cacheUpdateKey {
-			return echo.ErrUnauthorized
-		}
-	}
 
 	metadata, err := h.pcms.AllMetadata(ctx, true)
 	if err != nil {

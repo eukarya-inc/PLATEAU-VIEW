@@ -139,7 +139,7 @@ func SetupCityItems(ctx context.Context, s *Services, inp SetupCityItemsInput, o
 	}
 
 	// existing city items are indexed by city code to make the setup safe to run again
-	existingCities, err := listModelItems(ctx, s.CMS, cityModel)
+	existingCities, err := listModelItems(ctx, s.CMS, cityModel, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get city items: %w", err)
 	}
@@ -306,7 +306,7 @@ func (c *cityChildren) find(ctx context.Context, key, cityID string) (string, er
 	items, ok := c.itemsByModel[modelID]
 	if !ok {
 		var err error
-		items, err = listModelItems(ctx, c.cms, modelID)
+		items, err = listModelItems(ctx, c.cms, modelID, false)
 		if err != nil {
 			return "", fmt.Errorf("failed to get %s items: %w", key, err)
 		}
@@ -366,11 +366,12 @@ func cityRef(city *cms.Item, key string) string {
 	return ""
 }
 
-func listModelItems(ctx context.Context, c cms.Interface, modelID string) ([]*cms.Item, error) {
+// listModelItems returns every item of the model. With asset, asset fields hold asset objects instead of IDs.
+func listModelItems(ctx context.Context, c cms.Interface, modelID string, asset bool) ([]*cms.Item, error) {
 	const perPage = 100
 	var res []*cms.Item
 	for page := 1; ; page++ {
-		items, err := c.GetItemsPartially(ctx, modelID, page, perPage, false)
+		items, err := c.GetItemsPartially(ctx, modelID, page, perPage, asset)
 		if err != nil {
 			return nil, err
 		}
