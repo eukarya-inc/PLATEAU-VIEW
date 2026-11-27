@@ -36,8 +36,15 @@ impl TestServer {
             .await
             .expect("Failed to write config");
 
-        // Find an available port
-        let port = portpicker::pick_unused_port().expect("No available port");
+        // Bind an OS-assigned port up front and keep the listener, so no other
+        // test can take the port between choosing it and binding it.
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind listener");
+        let port = listener
+            .local_addr()
+            .expect("listener has no address")
+            .port();
         let addr = format!("127.0.0.1:{port}");
         let base_url = format!("http://{addr}");
 
@@ -68,11 +75,6 @@ impl TestServer {
 
         // Create shutdown channel
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
-        // Start server in background
-        let listener = TcpListener::bind(&addr)
-            .await
-            .expect("Failed to bind listener");
 
         tokio::spawn(async move {
             use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -124,7 +126,15 @@ impl TestServer {
             .await
             .expect("Failed to write config");
 
-        let port = portpicker::pick_unused_port().expect("No available port");
+        // Bind an OS-assigned port up front and keep the listener, so no other
+        // test can take the port between choosing it and binding it.
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind listener");
+        let port = listener
+            .local_addr()
+            .expect("listener has no address")
+            .port();
         let addr = format!("127.0.0.1:{port}");
         let base_url = format!("http://{addr}");
 
@@ -152,10 +162,6 @@ impl TestServer {
         let app = create_router(state, None);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
-        let listener = TcpListener::bind(&addr)
-            .await
-            .expect("Failed to bind listener");
 
         tokio::spawn(async move {
             use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -204,7 +210,15 @@ impl TestServer {
             .await
             .expect("Failed to write config");
 
-        let port = portpicker::pick_unused_port().expect("No available port");
+        // Bind an OS-assigned port up front and keep the listener, so no other
+        // test can take the port between choosing it and binding it.
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind listener");
+        let port = listener
+            .local_addr()
+            .expect("listener has no address")
+            .port();
         let addr = format!("127.0.0.1:{port}");
         let base_url = format!("http://{addr}");
 
@@ -232,10 +246,6 @@ impl TestServer {
         let app = create_router(state, None);
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
-        let listener = TcpListener::bind(&addr)
-            .await
-            .expect("Failed to bind listener");
 
         tokio::spawn(async move {
             use hyper_util::rt::{TokioExecutor, TokioIo};

@@ -86,7 +86,6 @@ maplibre = ["maplibre_native"]
 tokio-test = "0.4"
 tempfile = "3"
 wiremock = "0.6"
-portpicker = "0.1"
 tiff = "0.9"
 
 [profile.release]

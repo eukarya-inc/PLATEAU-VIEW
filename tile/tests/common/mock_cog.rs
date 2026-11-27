@@ -33,7 +33,15 @@ struct ServerState {
 impl MockCogServer {
     /// Start a new mock COG server.
     pub async fn start() -> Self {
-        let port = portpicker::pick_unused_port().expect("No available port");
+        // Bind an OS-assigned port up front and keep the listener, so no other
+        // test can take the port between choosing it and binding it.
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind listener");
+        let port = listener
+            .local_addr()
+            .expect("listener has no address")
+            .port();
         let addr = format!("127.0.0.1:{port}");
         let base_url = format!("http://{addr}");
 
@@ -46,10 +54,6 @@ impl MockCogServer {
             .with_state(Arc::new(state));
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
-        let listener = TcpListener::bind(&addr)
-            .await
-            .expect("Failed to bind listener");
 
         tokio::spawn(async move {
             axum::serve(listener, app)
