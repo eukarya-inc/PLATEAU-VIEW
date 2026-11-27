@@ -109,7 +109,7 @@ resource "google_cloud_run_v2_service" "plateauview_api" {
 
       env {
         name  = "REEARTH_PLATEAUVIEW_FLOW_TOKEN"
-        value = random_password.plateauview_env["REEARTH_PLATEUVIEW_FLOW_TOKEN"].result
+        value = random_password.plateauview_env["REEARTH_PLATEAUVIEW_FLOW_TOKEN"].result
       }
 
       env {

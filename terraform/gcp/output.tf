@@ -33,11 +33,6 @@ output "plateauview_sdk_token" {
   sensitive = true
 }
 
-output "plateauview_setup_token" {
-  value     = module.plateauview_api.plateauview_setup_token
-  sensitive = true
-}
-
 
 output "plateauview_sidebar_token" {
   value     = module.plateauview_api.plateauview_sidebar_token

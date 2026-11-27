@@ -151,7 +151,6 @@ plateauview_flow_token = "*"
 plateauview_flow_url = "*"
 plateauview_geo_url = "*"
 plateauview_sdk_token = <sensitive>
-plateauview_setup_token = "*"
 plateauview_sidebar_token = <sensitive>
 plateauview_sidecar_url = "*"
 plateauview_tiles_url = "*"
@@ -173,7 +172,6 @@ terraform output <確認したいOutput>
 | `plateauview_flow_url`           | PLATEAU Flow の URL                                                                                                     |
 | `plateauview_geo_url`            | タイルなどを変換・処理するサーバーの URL                                                                                |
 | `plateauview_sdk_token`          | PLATEAU SDK 用のトークン。SDK の UI で設定する（詳しくはマニュアルを参照）                                              |
-| `plateauview_setup_token`        | PLATEAU CMS セットアップ用のトークン              |
 | `plateauview_sidebar_token`      | ビューワのサイドバー用の API トークン。エディタ上でサイドバーウィジェットの設定から設定する（詳しくはマニュアルを参照） |
 | `plateauview_sidecar_url`        | サイドカーサーバーの URL。エディタ上でサイドバーウィジェットの設定から設定する（詳しくはマニュアルを参照）              |
 | `plateauview_tiles_url`          | タイル配信サーバーの URL                                                                                                |
@@ -211,7 +209,7 @@ Terraform のの `plateauview_cms_url` の URL（`https://cms.${DOMAIN}`）か�
 先ほど作成したインテグレーションの詳細画面でインテグレーショントークンをコピーし、以下の `${PLATEAUVIEW_CMS_TOKEN}` に貼り付けて以下のコマンドを実行する。
 
 ```console
-echo -n "${PLATEAUVIEW_CMS_TOKEN}" | gcloud secrets versions add plateau-view-REEARTH_PLATEUVIEW_CMS_TOKEN --data-file=-
+echo -n "${PLATEAUVIEW_CMS_TOKEN}" | gcloud secrets versions add plateau-view-REEARTH_PLATEAUVIEW_CMS_TOKEN --data-file=-
 ```
 
 環境変数の変更を適用するため、もう一度 Cloud Run をデプロイしてください。
